@@ -344,20 +344,10 @@ class Module:
                     hook(self, args, kwargs, output)
                 else:
                     hook(self, args, output)
-            except (
-                ArithmeticError,
-                AssertionError,
-                AttributeError,
-                BufferError,
-                EOFError,
-                ImportError,
-                LookupError,
-                OSError,
-                RuntimeError,
-                StopIteration,
-                TypeError,
-                ValueError,
-            ) as err:  # arbitrary user callback; reference warns too
+            # A user callback may raise any class, its own included, and
+            # whatever escapes here replaces the forward error (LCD-464);
+            # the reference catches Exception at this site too.
+            except Exception as err:
                 warnings.warn(
                     f"forward hook {hook!r} with always_call=True raised {err!r}; "
                     "it was suppressed because forward() had already raised",

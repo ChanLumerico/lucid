@@ -57,6 +57,11 @@
    "date": "2026-10-17",
    "reason": "LCD-469: gate holes closed \u2014 counters:any (DS-16), lizard function-length-excess / function-ccn-excess (DS-29), engine:unbound (DS-24), vulture contract recorded (whitelist AST hash, ignore names/decorators) and whitelist pruned 103->88 exposing ParamGroupDict + coatnet resample_rel_pos (DS-18); engine test-only allowlist recorded. Records existing debt only; production code unchanged.",
    "by": "chanlee"
+  },
+  {
+   "date": "2026-10-17",
+   "reason": "LCD-464: user-callback isolation in _call_always_forward_hooks (except Exception, as the reference) \u2014 orchestrator-approved",
+   "by": "chanlee"
   }
  ],
  "counts": {
@@ -1486,6 +1491,9 @@
    },
    "B912": {
     "lucid/optim/optimizer.py": 1
+   },
+   "BLE001": {
+    "lucid/nn/module.py": 1
    },
    "C901": {
     "lucid/_ops/__init__.py": 2,

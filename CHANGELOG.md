@@ -880,6 +880,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - carry requires_grad and dtype as the reference does (LCD-486)
 
+- let no always_call hook error mask the forward error (LCD-464)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

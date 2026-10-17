@@ -198,6 +198,52 @@ def test_a_failing_always_call_hook_does_not_skip_the_next_one(first_is_global):
     assert calls == ["failing", "next"]
 
 
+class _HookError(Exception):
+    """A user's own exception class, which no enumeration of builtins names."""
+
+
+# Every ``Exception`` a hook can raise: a user's class, and builtins outside
+# any short list (LCD-464 — an enumerated tuple let these replace the error).
+_HOOK_ERRORS = [_HookError, NameError, MemoryError, SystemError, UserWarning]
+
+
+@pytest.mark.parametrize("error", _HOOK_ERRORS, ids=lambda e: e.__name__)
+def test_no_always_call_hook_error_masks_the_forward_error(error):
+    def hook(mod, args, out):
+        raise error("hook failed")
+
+    model = nn.Linear(2, 2)
+    model.register_forward_hook(hook, always_call=True)
+    with pytest.warns(RuntimeWarning, match="hook failed"):
+        with pytest.raises(lucid._C.engine.ShapeMismatch):
+            model(lucid.zeros(3, 5))
+
+
+@pytest.mark.parity
+def test_the_reference_also_reraises_the_forward_error(ref):
+    def hook(mod, args, out):
+        raise _HookError("hook failed")
+
+    model = ref.nn.Linear(2, 2)
+    model.register_forward_hook(hook, always_call=True)
+    with pytest.warns(UserWarning, match="hook failed"):
+        with pytest.raises(RuntimeError):
+            model(ref.zeros(3, 5))
+
+
+@pytest.mark.parametrize("error", [KeyboardInterrupt, SystemExit])
+def test_an_interrupt_from_an_always_call_hook_is_not_swallowed(error):
+    # Not an ``Exception``: the caller asked to stop, so it wins over the
+    # forward error rather than becoming a warning.
+    def hook(mod, args, out):
+        raise error()
+
+    model = _Fails()
+    model.register_forward_hook(hook, always_call=True)
+    with pytest.raises(error):
+        model(_x())
+
+
 # ── backward hooks ────────────────────────────────────────────────────────────
 
 
