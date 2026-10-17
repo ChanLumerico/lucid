@@ -296,6 +296,26 @@ public:
     // Marks this tensor as a detached alias; see :func:`is_detached_alias`.
     void set_detached_alias(bool v) noexcept { detached_alias_ = v; }
 
+    // Predicate: was this tensor made, through any chain of views, from a
+    // live leaf that requires grad?
+    //
+    // A write through such a view moves the leaf's values, so autograd
+    // refuses it as it refuses a write to the leaf itself.  Only the bases
+    // the chain passes through count, as in the reference: writing the
+    // leaf's own base, or a view made beside the leaf, is allowed.  A
+    // detached alias ends the chain, since its writes are untracked.
+    bool views_grad_leaf() const;
+
+    // Predicate: does a write into this tensor's family re-derive this
+    // member's graph (inplace::rebase_views)?
+    //
+    // Not for a detached alias, which autograd does not follow, and not for
+    // a leaf that requires grad: gradient accumulates there, so the leaf
+    // keeps its place and only its values move.
+    bool rederived_by_family_writes() const noexcept {
+        return !detached_alias_ && !(is_leaf() && requires_grad());
+    }
+
     // The other live members of this tensor's view family.
     //
     // Returns
@@ -1061,6 +1081,10 @@ private:
     // the family whose writes autograd does not follow.  See
     // is_detached_alias().
     bool detached_alias_ = false;
+    // The bases this view was made from, through every view in between,
+    // that were alive when it was made; empty for a tensor that is no view.
+    // A view of a detached alias records none.  See views_grad_leaf().
+    std::vector<std::weak_ptr<TensorImpl>> view_ancestors_;
 
     // Writes ``src``'s values into the shared buffer.  False when this
     // tensor no longer is the buffer or ``src`` does not match it.

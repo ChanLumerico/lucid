@@ -432,18 +432,14 @@ SlotWrite gradient_slot_write(const Storage& storage, long members) {
 
 // A leaf's values are where its gradient accumulates.  A write through one
 // of its views moves them as surely as a write to the leaf itself, which
-// refuse_on_leaf refuses while autograd records.  is_leaf(), not a missing
-// grad_fn: a leaf used in a graph holds an AccumulateGrad.  A detached alias
-// (``.data``) is exempt — its writes are untracked by design — and so is a
-// detached member, which no autograd reads.  The caller checks the writer
-// itself and the grad mode.
-void refuse_write_to_leaf_view(const std::vector<std::shared_ptr<TensorImpl>>& views,
-                               const char* name) {
-    for (const auto& m : views)
-        if (!m->is_detached_alias() && m->requires_grad() && m->is_leaf())
-            ErrorBuilder(name).fail("a view of a leaf tensor that requires grad cannot be "
-                                    "modified in place — wrap the call in no_grad, or use "
-                                    "the out-of-place form");
+// refuse_on_leaf refuses while autograd records (views_grad_leaf says which
+// tensors are such views).  The caller checks the writer itself — a
+// detached alias (``.data``) writes untracked — and the grad mode.
+void refuse_write_to_leaf_view(const TensorImpl& t, const char* name) {
+    if (t.views_grad_leaf())
+        ErrorBuilder(name).fail("a view of a leaf tensor that requires grad cannot be "
+                                "modified in place — wrap the call in no_grad, or use "
+                                "the out-of-place form");
 }
 
 // After a write autograd re-derives the members of the written tensor's
@@ -458,7 +454,7 @@ void refuse_strided_rederive(const TensorImpl& t,
     bool involved = graph || t.requires_grad() || t.grad_fn();
     bool strided = !t.is_contiguous();
     for (const auto& m : views) {
-        if (m->is_detached_alias())
+        if (!m->rederived_by_family_writes())
             continue;
         involved = involved || m->requires_grad() || m->grad_fn();
         strided = strided || !m->is_contiguous();
@@ -665,7 +661,7 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
     if (gradient_slot_write(storage_, members) == SlotWrite::kRefused)
         refuse_shared_gradient_write(name);
     if (GradMode::is_enabled() && !is_detached_alias())
-        refuse_write_to_leaf_view(live_views(), name);
+        refuse_write_to_leaf_view(*this, name);
     auto& dst = std::get<CpuStorage>(storage_);
     const auto& from = std::get<CpuStorage>(src.storage_);
     // The op handed back this very buffer (a no-op for this dtype): the
@@ -709,7 +705,7 @@ void TensorImpl::write_gpu_member(const TensorImpl& src, const char* name, bool 
     const bool graph = src.requires_grad() || src.grad_fn();
     if (!raw && GradMode::is_enabled() && !is_detached_alias()) {
         const auto views = live_views();
-        refuse_write_to_leaf_view(views, name);
+        refuse_write_to_leaf_view(*this, name);
         refuse_strided_rederive(*this, views, graph, name);
     }
     const auto& value = std::get<GpuStorage>(src.readable());
@@ -763,6 +759,7 @@ void TensorImpl::leave_family() {
         packed_root_.reset();
     }
     family_.reset();
+    view_ancestors_.clear();
     // The family's counter folds into this tensor's own, so version() does
     // not move backwards (drop_shared does the same).
     if (carried > 0)
@@ -1835,10 +1832,11 @@ void TensorImpl::assign_from(const TensorImpl& other, const char* name) {
         const bool source_graph = other.grad_fn() || other.requires_grad();
         bool refuse = source_graph;
         if (!is_detached_alias()) {
+            refuse_write_to_leaf_view(*this, name);
             bool involved = source_graph || requires_grad() || grad_fn();
             bool views = false;
             for (const auto& m : live_views()) {
-                if (m->is_detached_alias())
+                if (!m->rederived_by_family_writes())
                     continue;
                 views = true;
                 involved = involved || m->requires_grad() || m->grad_fn();
@@ -1953,8 +1951,28 @@ void TensorImpl::add_to_family(const std::shared_ptr<TensorImpl>& base,
             base->family_->root = base->storage_;
     }
     view->family_ = base->family_;
+    // Every base on the way, not just this one: the views in between are
+    // often temporaries (``w[0:2][0]``), and the leaf behind them still
+    // takes the write.
+    if (!base->is_detached_alias()) {
+        auto& chain = view->view_ancestors_;
+        chain.reserve(base->view_ancestors_.size() + 1);
+        for (const auto& w : base->view_ancestors_)
+            if (!w.expired())
+                chain.push_back(w);
+        chain.push_back(base);
+    }
     std::lock_guard<std::mutex> lock(view->family_->mu);
     view->family_->members.push_back(view);
+}
+
+// is_leaf(), not a missing grad_fn: a leaf used in a graph holds an
+// AccumulateGrad.
+bool TensorImpl::views_grad_leaf() const {
+    return std::any_of(view_ancestors_.begin(), view_ancestors_.end(), [](const auto& w) {
+        const auto m = w.lock();
+        return m && !m->is_detached_alias() && m->requires_grad() && m->is_leaf();
+    });
 }
 
 std::shared_ptr<TensorImpl> TensorImpl::make_block_view(const std::shared_ptr<TensorImpl>& base,

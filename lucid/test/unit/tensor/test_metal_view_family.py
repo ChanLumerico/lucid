@@ -79,11 +79,13 @@ def test_parameter_of_a_live_tensor_writes_into_it(device: str) -> None:
     with lucid.no_grad():
         p.add_(2.0)
     assert _flat(x) == [2.0] * 6
-    # x is a view of the leaf p now: a recorded write to it is refused.
+    # p was made from x, so x is its base, not a view of it: a recorded write
+    # to x goes through, as the reference's does.  One through a view of p is
+    # what is refused.
+    x.mul_(5.0)
+    assert _flat(p) == [10.0] * 6
     with pytest.raises(RuntimeError, match="view of a leaf"):
-        x.mul_(5.0)
-    with lucid.no_grad():
-        x.mul_(5.0)
+        p[0].mul_(5.0)
     assert _flat(p) == [10.0] * 6
 
 

@@ -383,11 +383,9 @@ void rebase_views(const TensorImplPtr& a) {
     };
 
     for (const auto& m : a->live_views()) {
-        if (m->is_detached_alias())
-            continue;
         // A leaf keeps its place: it is where gradient accumulates, and its
         // AccumulateGrad is a grad_fn this must not cut.
-        if (m->is_leaf() && m->requires_grad())
+        if (!m->rederived_by_family_writes())
             continue;
         const Footprint fm = footprint(*m);
         if (!fm.first || fm.n == 0)

@@ -113,8 +113,9 @@ inline TensorImplPtr snapshot(const TensorImplPtr& a, const TensorImplPtr& other
 //   written slice.  When ``a`` does not require grad, that part just stops
 //   passing gradient back.
 //
-// A leaf that requires grad never gets here: ``write_through`` refuses a
-// write to its family while autograd records.
+// A leaf that requires grad keeps its place and only its values move: the
+// write was into its base or beside it, since ``write_through`` refuses one
+// through a view of it while autograd records.
 LUCID_API void rebase_views(const TensorImplPtr& a);
 
 // Move ``out``'s place in the autograd graph onto ``a``.
