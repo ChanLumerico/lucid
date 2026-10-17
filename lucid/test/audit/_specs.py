@@ -1472,6 +1472,25 @@ def _ctc_resized(call: Call, array: np.ndarray) -> Call:
     return rebuilt
 
 
+def _bounds_resized(call: Call, array: np.ndarray) -> Call:
+    """``x.clamp_(lo, hi)``: a tensor bound of the receiver's shape follows it.
+
+    An in-place op cannot grow its receiver, so a resized ``x`` against
+    bounds of the old shape is refused for a result that no longer fits:
+    the probe's refusal, not the op's (LCD-532, once LCD-519 made
+    ``clamp_`` refuse as ``add_`` does).
+    """
+    if not 0 <= call.primary < len(call.args):
+        return call.with_primary(array)
+    shape = tuple(call.args[call.primary].shape)
+    bounds = tuple(
+        index
+        for index, arg in enumerate(call.args)
+        if index != call.primary and tuple(getattr(arg, "shape", (None,))) == shape
+    )
+    return Call(call.args, call.kwargs, call.primary, call.note, bounds).resized(array)
+
+
 #: Keyed by qualified name; consulted by :func:`invocations`, which sets
 #: the rule on every candidate it yields for that symbol.
 _JOINT_RESIZE: dict[str, Callable[[Call, np.ndarray], Call]] = {
@@ -1482,6 +1501,10 @@ _JOINT_RESIZE: dict[str, Callable[[Call, np.ndarray], Call]] = {
     "lucid.linalg.ldl_solve": _linear_system_resized,
     "lucid.nn.utils.pack_padded_sequence": _padded_batch_resized,
     "F.ctc_loss": _ctc_resized,
+    "Tensor.clamp_": _bounds_resized,
+    "Tensor.clamp_min_": _bounds_resized,
+    "Tensor.clamp_max_": _bounds_resized,
+    "Tensor.clip_": _bounds_resized,
 }
 
 

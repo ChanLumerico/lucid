@@ -78,8 +78,24 @@ def test_a_resized_solve_keeps_its_sides_and_pivots_coherent(qualname: str) -> N
         fn(*resized.args, **call.kwargs)
 
 
+#: An in-place clamp cannot grow its receiver, so its tensor bounds shrink
+#: with it (LCD-532, once LCD-519 made ``clamp_`` refuse as ``add_`` does).
+_CLAMPS_IN_PLACE = (
+    "Tensor.clamp_",
+    "Tensor.clamp_min_",
+    "Tensor.clamp_max_",
+    "Tensor.clip_",
+)
+
+
 @pytest.mark.parametrize(
-    "qualname", (*_SOLVES, "lucid.nn.utils.pack_padded_sequence", "F.ctc_loss")
+    "qualname",
+    (
+        *_SOLVES,
+        "lucid.nn.utils.pack_padded_sequence",
+        "F.ctc_loss",
+        *_CLAMPS_IN_PLACE,
+    ),
 )
 def test_the_edge_axis_answers_ops_with_joint_operands(qualname: str) -> None:
     finding = EdgeAxis().run(_symbol(qualname), Context())
