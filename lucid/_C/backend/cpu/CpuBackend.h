@@ -1350,7 +1350,7 @@ public:
             if (x == -1.0)
                 return -std::numeric_limits<double>::infinity();
             if (x == 0.0)
-                return 0.0;
+                return x;
             double s = (x > 0) ? 1.0 : -1.0;
             double ax = std::abs(x);
             double ln1 = std::log(1.0 - ax * ax);

@@ -140,10 +140,6 @@ def _placements() -> list[tuple[str, str, list[pytest.MarkDecorator]]]:
     return [("float32", "cpu", []), ("float64", "cpu", []), ("float32", "metal", metal)]
 
 
-#: Where the sign of a zero is not compared yet; each has a strict xfail below.
-_UNSIGNED_ZERO = {("erfinv", "cpu")}
-
-
 def _cases() -> list[object]:
     return [
         pytest.param(name, dtype, dev, marks=marks, id=f"{name}-{dtype}-{dev}")
@@ -186,15 +182,9 @@ def test_values_match_the_reference(
                 assert _same(w, ref_value, dtype), f"reference changed at {x}: {w}"
             assert _same(g, ours, dtype), f"{name}({x}): {g} — {why}"
             continue
-        same = _same if (name, dev) in _UNSIGNED_ZERO else _same_signed
-        assert same(g, w, dtype), f"{name}({x}) {dtype} {dev}: {g} != {w}"
+        assert _same_signed(g, w, dtype), f"{name}({x}) {dtype} {dev}: {g} != {w}"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="FOUND with LCD-98: the CPU erfinv kernel returns +0 for -0 (its "
-    "zero early return in CpuBackend.h, which LCD-206/244 holds)",
-)
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_cpu_erfinv_keeps_the_sign_of_minus_zero(dtype: str) -> None:
     v = lucid.erfinv(lucid.tensor([-0.0], dtype=getattr(lucid, dtype))).item()
