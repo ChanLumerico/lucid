@@ -4,11 +4,55 @@ Kept apart from ``_detection`` (box ops, NMS, anchors, RoI ops) because
 it is the *output contract* rather than an algorithm: one place decides the
 keys and dtypes, so the detectors cannot drift apart again.  They did —
 several returned float32 class ids built with ``lucid.full(..., float(c))``.
+The input side of the same contract — one target dict, or one proposal
+set, per image — is checked here too (:func:`check_per_image`).
 """
+
+from collections.abc import Sized
 
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike
+
+
+def check_per_image(owner: str, batch: int, **per_image: Sized | None) -> None:
+    """Refuse a per-image input (``targets``, ``proposals``) of the wrong length.
+
+    Detectors walk the batch and these lists in step.  A short list made
+    some index past its end and others pair images up short — training
+    silently on part of the batch — and a long one was cut without a word.
+    Called first in ``forward``, so a refused call changes no state (BN
+    running statistics included).
+
+    Parameters
+    ----------
+    owner : str
+        The model, named in the message.
+    batch : int
+        Number of images in the input batch.
+    **per_image : Sized or None
+        Each per-image argument by its name; ``None`` (not given) is skipped.
+
+    Raises
+    ------
+    ValueError
+        When a given argument's length is not ``batch``.
+
+    Examples
+    --------
+    >>> from lucid.models._utils._detection_results import check_per_image
+    >>> check_per_image("detector", 2, targets=[{}, {}], proposals=None)
+    >>> check_per_image("detector", 2, targets=[{}])
+    Traceback (most recent call last):
+        ...
+    ValueError: detector got 2 images but 1 entries in targets; targets holds one entry per image
+    """
+    for name, items in per_image.items():
+        if items is not None and len(items) != batch:
+            raise ValueError(
+                f"{owner} got {batch} images but {len(items)} entries in {name}; "
+                f"{name} holds one entry per image"
+            )
 
 
 def detection_result(

@@ -70,8 +70,10 @@ from lucid.models.vision.yolo._v3 import (
     _gt_rows,
     _ignore_mask,
     _postprocess_detections,
+    _scale_priors,
 )
 from lucid.models._utils._common import apply_overrides
+from lucid.models._utils._detection_results import check_per_image
 
 _IGNORE_IOU_THRESH = 0.7
 
@@ -193,6 +195,15 @@ class YOLOV4Config(ModelConfig):
     def __post_init__(self) -> None:
         object.__setattr__(self, "anchors", tuple(tuple(a) for a in self.anchors))
         object.__setattr__(self, "strides", tuple(self.strides))
+        # v4 matches each GT against the priors of one scale at a time, so a
+        # prior outside the three masks would never be used — the count must
+        # be exactly nine, not merely enough.
+        if len(self.anchors) != 9 or len(self.strides) != 3:
+            raise ValueError(
+                f"YOLOV4Config needs 9 anchors and 3 strides — three priors at "
+                f"each of P3, P4, P5 — but got {len(self.anchors)} anchors and "
+                f"{len(self.strides)} strides {self.strides}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -718,6 +729,17 @@ def _ciou_loss(pred_boxes: Tensor, gt_boxes: Tensor) -> Tensor:
 # ---------------------------------------------------------------------------
 
 
+# yolov4.cfg's ``mask =`` per [yolo] layer, in ``strides`` order (P3 first).
+_V4_ANCHOR_MASKS: tuple[tuple[int, ...], ...] = ((0, 1, 2), (3, 4, 5), (6, 7, 8))
+
+
+def _v4_scales(
+    config: YOLOV4Config,
+) -> list[tuple[tuple[int, ...], list[tuple[float, float]], int]]:
+    """The config's priors and strides per head, coarse to fine (P5 first)."""
+    return _scale_priors(config.anchors, _V4_ANCHOR_MASKS, config.strides)
+
+
 def _yolov4_loss(
     raw_preds: list[Tensor],
     targets: list[dict[str, Tensor]],
@@ -736,20 +758,14 @@ def _yolov4_loss(
     B = int(raw_preds[0].shape[0])
     C = config.num_classes
     nA = 3
-    anchors_all = config.anchors
-
-    # Scale order: index 0 = P5 (large anchors), 1 = P4, 2 = P3 (small)
-    scale_anchor_idx = [(6, 7, 8), (3, 4, 5), (0, 1, 2)]
-    strides = [config.strides[2], config.strides[1], config.strides[0]]
 
     total_loss: list[Tensor] = []
 
-    for raw, anchor_idx_triple, stride in zip(
-        raw_preds, scale_anchor_idx, strides, strict=True
-    ):
+    # Three heads, and the config holds exactly three strides — same length
+    # by construction.
+    for raw, (_, anchors_wh, stride) in zip(raw_preds, _v4_scales(config), strict=True):
         fH = int(raw.shape[2])
         fW = int(raw.shape[3])
-        anchors_wh = [anchors_all[i] for i in anchor_idx_triple]
 
         raw_r = raw.reshape(B, nA, 5 + C, fH, fW).permute(0, 1, 3, 4, 2)
         # The ignore mask compares the boxes this head actually predicts —
@@ -1019,6 +1035,7 @@ class YOLOV4ForObjectDetection(ObjectDetectionModel):
               ``loss``      : loss scalar when targets provided.
         """
         cfg = self._cfg
+        check_per_image(type(self).__name__, int(x.shape[0]), targets=targets)
 
         # Backbone
         p3, p4, p5 = self.backbone(x)
@@ -1034,20 +1051,12 @@ class YOLOV4ForObjectDetection(ObjectDetectionModel):
         # raw_preds order: P5, P4, P3 (coarse→fine)
         raw_preds = [p5_raw, p4_raw, p3_raw]
 
-        anchors_all = cfg.anchors
-        scale_anchors = [
-            [anchors_all[6], anchors_all[7], anchors_all[8]],
-            [anchors_all[3], anchors_all[4], anchors_all[5]],
-            [anchors_all[0], anchors_all[1], anchors_all[2]],
-        ]
-        scale_strides = [cfg.strides[2], cfg.strides[1], cfg.strides[0]]
-
         all_logits: list[Tensor] = []
         all_boxes: list[Tensor] = []
         all_conf: list[Tensor] = []
 
-        for raw_pred, anch_wh, stride in zip(
-            raw_preds, scale_anchors, scale_strides, strict=True
+        for raw_pred, (_, anch_wh, stride) in zip(
+            raw_preds, _v4_scales(cfg), strict=True
         ):
             logits_s, boxes_s, conf_s = _decode_predictions(raw_pred, anch_wh, stride)
             all_logits.append(logits_s)

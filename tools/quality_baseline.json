@@ -715,8 +715,8 @@
     "lucid/models/vision/xception/_model.py": 4,
     "lucid/models/vision/yolo/_v1.py": 5,
     "lucid/models/vision/yolo/_v2.py": 7,
-    "lucid/models/vision/yolo/_v3.py": 14,
-    "lucid/models/vision/yolo/_v4.py": 14,
+    "lucid/models/vision/yolo/_v3.py": 11,
+    "lucid/models/vision/yolo/_v4.py": 12,
     "lucid/models/vision/yolo/_weights.py": 3,
     "lucid/models/vision/zfnet/_model.py": 6,
     "lucid/nn/__init__.py": 3,
@@ -1168,7 +1168,6 @@
     "lucid/models/vision/efficientnet/_model.py": 1,
     "lucid/models/vision/mask_rcnn/_model.py": 1,
     "lucid/models/vision/mobilenet_v3/_model.py": 1,
-    "lucid/models/vision/yolo/_v3.py": 1,
     "lucid/nn/module.py": 1
    },
    "B009": {

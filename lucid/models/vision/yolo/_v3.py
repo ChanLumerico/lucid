@@ -62,6 +62,7 @@ from lucid.models._utils._detection import (
     box_iou,
 )
 from lucid.models._utils._detection_results import (
+    check_per_image,
     detection_result,
     empty_detection_result,
 )
@@ -125,17 +126,23 @@ class YOLOV3Config(ModelConfig):
     YOLOv3 (Redmon & Farhadi, 2018) uses a Darknet-53 backbone with three
     detection scales at strides 8, 16, and 32 (P3/P4/P5).  Each scale has 3
     hand-picked COCO anchors for small, medium, and large objects respectively.
+    YOLOv3-Tiny shares this config with its own table — six anchors, strides
+    16 and 32 — which :func:`yolo_v3_tiny` supplies.
 
     Args:
         num_classes:   Number of foreground classes (COCO default = 80).
         in_channels:   Input image channels.
-        anchors:       9 (width, height) anchor pairs in pixels, 3 per scale.
-                       Order: P3 (small), P4 (medium), P5 (large).
-        strides:       Feature-map strides for P3, P4, P5.
+        anchors:       (width, height) anchor priors in pixels — every prior a
+                       ground-truth box is matched against.
+        strides:       Feature-map stride of each detection scale, fine to
+                       coarse (P3, P4, P5 for the full model).
         score_thresh:  Minimum objectness × class score to keep a detection.
         nms_thresh:    IoU threshold for per-class NMS.
         lambda_coord:  Box regression loss weight.
         lambda_noobj:  Objectness loss weight for negative anchors.
+        anchor_masks:  Indices into ``anchors`` predicted at each scale, in
+                       ``strides`` order — the cfg's ``mask =`` per ``[yolo]``
+                       layer.  Must hold one mask per stride.
 
     Examples
     --------
@@ -168,15 +175,78 @@ class YOLOV3Config(ModelConfig):
         (373.0, 326.0),
     )
 
-    strides: tuple[int, int, int] = (8, 16, 32)
+    strides: tuple[int, ...] = (8, 16, 32)
     score_thresh: float = 0.5
     nms_thresh: float = 0.5
     lambda_coord: float = 5.0
     lambda_noobj: float = 0.5
+    # Appended last: the released constructor binds the fields above by
+    # position.
+    anchor_masks: tuple[tuple[int, ...], ...] = ((0, 1, 2), (3, 4, 5), (6, 7, 8))
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "anchors", tuple(tuple(a) for a in self.anchors))
         object.__setattr__(self, "strides", tuple(self.strides))
+        object.__setattr__(
+            self, "anchor_masks", tuple(tuple(m) for m in self.anchor_masks)
+        )
+        _check_scale_table(
+            type(self).__name__, self.anchors, self.strides, self.anchor_masks
+        )
+
+
+def _check_scale_table(
+    owner: str,
+    anchors: tuple[tuple[float, float], ...],
+    strides: tuple[int, ...],
+    anchor_masks: tuple[tuple[int, ...], ...],
+) -> None:
+    """Reject a per-scale prior table whose parts disagree.
+
+    The heads, the decode and the loss all walk this table scale by scale;
+    a stride without a mask, or a mask naming a prior that does not exist,
+    would otherwise surface far from the config as a ``zip`` length error
+    or an ``IndexError`` mid-loss.
+    """
+    if len(anchor_masks) != len(strides):
+        raise ValueError(
+            f"{owner}: {len(strides)} strides {strides} but {len(anchor_masks)} "
+            f"anchor masks {anchor_masks}; each detection scale needs one stride "
+            "and one anchor mask"
+        )
+    for mask in anchor_masks:
+        if not mask:
+            raise ValueError(f"{owner}: anchor mask is empty in {anchor_masks}")
+        if any(not 0 <= i < len(anchors) for i in mask):
+            raise ValueError(
+                f"{owner}: anchor mask {mask} indexes outside the "
+                f"{len(anchors)} anchors (valid indices 0..{len(anchors) - 1})"
+            )
+
+
+def _scale_priors(
+    anchors: tuple[tuple[float, float], ...],
+    anchor_masks: tuple[tuple[int, ...], ...],
+    strides: tuple[int, ...],
+) -> list[tuple[tuple[int, ...], list[tuple[float, float]], int]]:
+    """``(mask, anchor (w, h) list, stride)`` per scale, coarse to fine.
+
+    The config lists scales fine to coarse (P3 first); the heads emit
+    coarse to fine (P5 first), as darknet's ``[yolo]`` layers do.  Every
+    consumer reads the table through here so the two orders cannot drift.
+    """
+    table = zip(anchor_masks, strides, strict=True)
+    return [(m, [anchors[i] for i in m], s) for m, s in reversed(list(table))]
+
+
+def _require_scales(model: str, n_heads: int, strides: tuple[int, ...]) -> None:
+    """Refuse a config whose scale count is not this network's head count."""
+    if len(strides) != n_heads:
+        raise ValueError(
+            f"{model} predicts at {n_heads} scales but its config describes "
+            f"{len(strides)} (strides={strides}); pass one stride and one "
+            "anchor mask per head"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -190,8 +260,9 @@ _NEG_FILL: float = -1e30
 
 # YOLOv3-Tiny is clustered separately from the full model — six priors, not
 # nine, and not a subset of them (yolov3-tiny.cfg:
-# ``anchors = 10,14, 23,27, 37,58, 81,82, 135,169, 344,319``).  The stride-32
-# head takes mask 3,4,5 and the stride-16 head mask 0,1,2.
+# ``anchors = 10,14, 23,27, 37,58, 81,82, 135,169, 344,319``).  It predicts
+# at strides 16 and 32 only; the stride-16 head takes mask 0,1,2 and the
+# stride-32 head mask 3,4,5.
 _TINY_ANCHORS: tuple[tuple[float, float], ...] = (
     (10.0, 14.0),
     (23.0, 27.0),
@@ -200,6 +271,8 @@ _TINY_ANCHORS: tuple[tuple[float, float], ...] = (
     (135.0, 169.0),
     (344.0, 319.0),
 )
+_TINY_STRIDES: tuple[int, ...] = (16, 32)
+_TINY_ANCHOR_MASKS: tuple[tuple[int, ...], ...] = ((0, 1, 2), (3, 4, 5))
 
 
 class _ConvBnLeaky(nn.Module):
@@ -587,10 +660,11 @@ def _yolov3_loss(
     """Compute YOLOv3 multi-scale detection loss.
 
     Args:
-        raw_preds: 3 raw tensors per scale (P5, P4, P3), each
-                   (B, nA*(5+C), H_l, W_l).
+        raw_preds: One raw tensor per scale, coarse to fine (P5, P4, P3 for
+                   the full model), each (B, nA*(5+C), H_l, W_l).
         targets:   List of B target dicts (boxes xyxy pixels, labels ints).
-        config:    Model configuration.
+        config:    Model configuration — its anchors, masks and strides are
+                   the table the heads were built and decoded from.
 
     Returns:
         Scalar loss tensor.
@@ -599,24 +673,20 @@ def _yolov3_loss(
     n_pos = 0.0
     n_cells = 0.0
     C = config.num_classes
-    nA = 3  # anchors per scale
-    anchors_all = config.anchors  # 9 anchor pairs
-
-    # Map scale index → anchor subset and stride
-    # scale 0 = P5 (large), scale 1 = P4 (medium), scale 2 = P3 (small)
-    # Anchors are stored small→large: indices 0-2 = P3, 3-5 = P4, 6-8 = P5
-    scale_anchor_idx = [(6, 7, 8), (3, 4, 5), (0, 1, 2)]
-    strides = [config.strides[2], config.strides[1], config.strides[0]]
+    anchors_all = config.anchors
+    scales = _scale_priors(config.anchors, config.anchor_masks, config.strides)
 
     localisation: list[Tensor] = []
     objectness: list[Tensor] = []
 
-    for scale_i, (raw, anchor_idx_triple, stride) in enumerate(
-        zip(raw_preds, scale_anchor_idx, strides, strict=True)
+    # The model refused a config whose scale count is not its head count, so
+    # the two lists are the same length by construction.
+    for raw, (anchor_idx_triple, anchors_wh, stride) in zip(
+        raw_preds, scales, strict=True
     ):
         fH = int(raw.shape[2])
         fW = int(raw.shape[3])
-        anchors_wh = [anchors_all[i] for i in anchor_idx_triple]
+        nA = len(anchor_idx_triple)
 
         # Reshape raw → (B, nA, 5+C, fH, fW) → (B, nA, fH, fW, 5+C)
         raw_r = raw.reshape(B, nA, 5 + C, fH, fW).permute(0, 1, 3, 4, 2)
@@ -681,11 +751,11 @@ def _yolov3_loss(
 
                     # Paper §2.1: "our system only assigns one bounding box
                     # prior for each ground truth object".  The argmax runs
-                    # over ALL nine priors, so a GT becomes a positive only at
-                    # the one scale that owns its best prior — picking a best
-                    # anchor per scale instead would force a large object to be
-                    # regressed by a 10x13 prior on the stride-8 map, whose
-                    # log-space target is pure noise.
+                    # over ALL priors (nine; six for Tiny), so a GT becomes a
+                    # positive only at the one scale that owns its best prior —
+                    # picking a best anchor per scale instead would force a
+                    # large object to be regressed by a 10x13 prior on the
+                    # stride-8 map, whose log-space target is pure noise.
                     best_iou = -1.0
                     best_global = 0
                     for a_i, (aw, ah) in enumerate(anchors_all):
@@ -789,6 +859,41 @@ def _yolov3_loss(
     loc = lucid.cat(localisation).sum() / max(1.0, n_pos)
     obj = lucid.cat(objectness).sum() / max(1.0, n_cells)
     return loc + obj
+
+
+def _yolov3_output(
+    raw_preds: list[Tensor],
+    targets: list[dict[str, Tensor]] | None,
+    config: YOLOV3Config,
+) -> ObjectDetectionOutput:
+    """Decode every scale's raw head output, and score it when given targets.
+
+    Shared by YOLOv3 and YOLOv3-Tiny: the two differ only in their heads and
+    in the per-scale table their config carries, which this reads for both
+    the decode and the loss.
+    """
+    all_logits: list[Tensor] = []
+    all_boxes: list[Tensor] = []
+    all_conf: list[Tensor] = []
+    scales = _scale_priors(config.anchors, config.anchor_masks, config.strides)
+    # One raw tensor per head; the model checked its head count against the
+    # config's scale count when it was built.
+    for raw_pred, (_, anch_wh, stride) in zip(raw_preds, scales, strict=True):
+        logits_s, boxes_s, conf_s = _decode_predictions(raw_pred, anch_wh, stride)
+        all_logits.append(logits_s)
+        all_boxes.append(boxes_s)
+        all_conf.append(conf_s)
+
+    loss: Tensor | None = None
+    if targets is not None:
+        loss = _yolov3_loss(raw_preds, targets, config)
+
+    return ObjectDetectionOutput(
+        logits=lucid.cat(all_logits, dim=1),  # (B, total_anchors, C)
+        pred_boxes=lucid.cat(all_boxes, dim=1),  # (B, total_anchors, 4)
+        loss=loss,
+        objectness=lucid.cat(all_conf, dim=1),  # (B, total_anchors)
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -942,9 +1047,11 @@ class YOLOV3ForObjectDetection(ObjectDetectionModel):
 
     def __init__(self, config: YOLOV3Config) -> None:
         super().__init__(config)
+        _require_scales("YOLOv3", 3, config.strides)
         self._cfg = config
         C = config.num_classes
-        nA = 3  # anchors per scale
+        # Anchors per head, P3/P4/P5 — three each in the paper's table.
+        nA3, nA4, nA5 = (len(m) for m in config.anchor_masks)
 
         # Backbone
         self.backbone = _Darknet53(config.in_channels)
@@ -955,19 +1062,19 @@ class YOLOV3ForObjectDetection(ObjectDetectionModel):
         #   p5     : 1024ch (stride-32 — after the 4× 1024 residual stage)
 
         # P5 head (1024ch input): compress mid_ch=512
-        self.p5_compress, self.p5_predict = _make_detection_head(1024, 512, nA, C)
+        self.p5_compress, self.p5_predict = _make_detection_head(1024, 512, nA5, C)
         # p5_compress output: 512ch
 
         # Upsample + concat: p5_up (256ch) + p4_raw (512ch) = 768ch, matching
         # darknet's route layer that joins the upsample with layer 61.
         self.p5_to_p4_conv = _ConvBnLeaky(512, 256, 1)  # 512→256
-        self.p4_compress, self.p4_predict = _make_detection_head(256 + 512, 256, nA, C)
+        self.p4_compress, self.p4_predict = _make_detection_head(256 + 512, 256, nA4, C)
         # p4_compress output: 256ch
 
         # Upsample + concat: p4_up (128ch) + p3_raw (256ch) = 384ch (route with
         # layer 36).
         self.p4_to_p3_conv = _ConvBnLeaky(256, 128, 1)  # 256→128
-        self.p3_compress, self.p3_predict = _make_detection_head(128 + 256, 128, nA, C)
+        self.p3_compress, self.p3_predict = _make_detection_head(128 + 256, 128, nA3, C)
 
     @override
     def forward(
@@ -988,7 +1095,7 @@ class YOLOV3ForObjectDetection(ObjectDetectionModel):
               ``loss``      : loss scalar when targets provided.
         """
         cfg = self._cfg
-        int(x.shape[0])
+        check_per_image(type(self).__name__, int(x.shape[0]), targets=targets)
 
         # Backbone
         p3_raw, p4_raw, p5 = self.backbone(x)
@@ -1017,45 +1124,7 @@ class YOLOV3ForObjectDetection(ObjectDetectionModel):
 
         # raw_preds order: P5, P4, P3 (from coarse to fine)
         raw_preds = [p5_raw, p4_raw_pred, p3_raw_pred]
-
-        # Anchor subsets: scale 0=P5(large), 1=P4(medium), 2=P3(small)
-        anchors_all = cfg.anchors
-        scale_anchors = [
-            [anchors_all[6], anchors_all[7], anchors_all[8]],
-            [anchors_all[3], anchors_all[4], anchors_all[5]],
-            [anchors_all[0], anchors_all[1], anchors_all[2]],
-        ]
-        scale_strides = [cfg.strides[2], cfg.strides[1], cfg.strides[0]]
-
-        # Decode all scales
-        all_logits: list[Tensor] = []
-        all_boxes: list[Tensor] = []
-
-        all_conf: list[Tensor] = []
-
-        for raw_pred, anch_wh, stride in zip(
-            raw_preds, scale_anchors, scale_strides, strict=True
-        ):
-            logits_s, boxes_s, conf_s = _decode_predictions(raw_pred, anch_wh, stride)
-            all_logits.append(logits_s)
-            all_boxes.append(boxes_s)
-            all_conf.append(conf_s)
-
-        logits = lucid.cat(all_logits, dim=1)  # (B, total_anchors, C)
-        pred_boxes = lucid.cat(all_boxes, dim=1)  # (B, total_anchors, 4)
-        objectness = lucid.cat(all_conf, dim=1)  # (B, total_anchors)
-
-        # Loss
-        loss: Tensor | None = None
-        if targets is not None:
-            loss = _yolov3_loss(raw_preds, targets, cfg)
-
-        return ObjectDetectionOutput(
-            logits=logits,
-            pred_boxes=pred_boxes,
-            loss=loss,
-            objectness=objectness,
-        )
+        return _yolov3_output(raw_preds, targets, cfg)
 
     def postprocess(
         self,
@@ -1095,10 +1164,11 @@ class YOLOV3TinyForObjectDetection(ObjectDetectionModel):
     Parameters
     ----------
     config : YOLOV3Config
-        Frozen architecture spec.  ``config.anchors`` is used when it holds
-        exactly six priors; otherwise the cfg's own six Tiny anchors are
-        used, since the full model's nine are clustered for a different
-        network.
+        Frozen architecture spec describing exactly two scales.
+        :func:`yolo_v3_tiny` supplies ``yolov3-tiny.cfg``'s table: six
+        anchors, strides ``(16, 32)``, masks ``((0, 1, 2), (3, 4, 5))``.
+        The default :class:`YOLOV3Config` describes the full model's three
+        scales and is refused with a ``ValueError``.
 
     Attributes
     ----------
@@ -1142,30 +1212,28 @@ class YOLOV3TinyForObjectDetection(ObjectDetectionModel):
 
     def __init__(self, config: YOLOV3Config) -> None:
         super().__init__(config)
+        # The full model's default table is three scales; this network has
+        # two heads, and its decode and loss walk the config's table — a
+        # mismatch is refused here rather than as a zip error mid-loss.
+        _require_scales("YOLOv3-Tiny", 2, config.strides)
         self._cfg = config
         C = config.num_classes
-        nA = 3
-
-        # ``YOLOV3Config`` defaults to the full model's nine priors, which are
-        # not this variant's — slicing them was giving Tiny the wrong boxes.
-        # A caller who supplies exactly six is taken at their word.
-        self._tiny_anchors: tuple[tuple[float, float], ...] = (
-            config.anchors if len(config.anchors) == 6 else _TINY_ANCHORS
-        )
+        # Anchors per head, stride 16 then stride 32.
+        nA4, nA5 = (len(m) for m in config.anchor_masks)
 
         self.backbone = _Darknet53Tiny(config.in_channels)
 
         # P5 head.  The backbone already ends with the cfg's ``conv 256 1x1``
         # bottleneck, so this is the remaining ``conv 512 3x3`` -> ``conv 255
         # 1x1`` pair.
-        self.p5_compress, self.p5_predict = _make_tiny_detection_head(256, 512, nA, C)
+        self.p5_compress, self.p5_predict = _make_tiny_detection_head(256, 512, nA5, C)
 
         # P4 branch: the cfg routes off the *256ch bottleneck*, not the 512ch
         # expansion — ``conv 128 1x1`` -> upsample -> route(concat layer 8,
         # 256ch) = 384ch -> ``conv 256 3x3`` -> ``conv 255 1x1``.
         self.p5_to_p4_conv = _ConvBnLeaky(256, 128, 1)
         self.p4_compress, self.p4_predict = _make_tiny_detection_head(
-            256 + 128, 256, nA, C
+            256 + 128, 256, nA4, C
         )
 
     @override
@@ -1174,9 +1242,7 @@ class YOLOV3TinyForObjectDetection(ObjectDetectionModel):
         x: Tensor,
         targets: list[dict[str, Tensor]] | None = None,
     ) -> ObjectDetectionOutput:
-        cfg = self._cfg
-        anchors_all = self._tiny_anchors
-
+        check_per_image(type(self).__name__, int(x.shape[0]), targets=targets)
         p4_raw, p5 = self.backbone(x)
 
         p5_feat = self.p5_compress(p5)
@@ -1191,41 +1257,8 @@ class YOLOV3TinyForObjectDetection(ObjectDetectionModel):
         p4_feat = self.p4_compress(p4_cat)
         p4_raw_pred = self.p4_predict(p4_feat)
 
-        raw_preds = [p5_raw_pred, p4_raw_pred]
-        # yolov3-tiny.cfg masks: 3,4,5 on the stride-32 head, 0,1,2 on the
-        # stride-16 head.
-        scale_anchors = [
-            [anchors_all[3], anchors_all[4], anchors_all[5]],
-            [anchors_all[0], anchors_all[1], anchors_all[2]],
-        ]
-        scale_strides = [cfg.strides[2], cfg.strides[1]]
-
-        all_logits: list[Tensor] = []
-        all_boxes: list[Tensor] = []
-        all_conf: list[Tensor] = []
-
-        for raw_pred, anch_wh, stride in zip(
-            raw_preds, scale_anchors, scale_strides, strict=True
-        ):
-            logits_s, boxes_s, conf_s = _decode_predictions(raw_pred, anch_wh, stride)
-            all_logits.append(logits_s)
-            all_boxes.append(boxes_s)
-            all_conf.append(conf_s)
-
-        logits = lucid.cat(all_logits, dim=1)
-        pred_boxes = lucid.cat(all_boxes, dim=1)
-        objectness = lucid.cat(all_conf, dim=1)
-
-        loss: Tensor | None = None
-        if targets is not None:
-            loss = _yolov3_loss(raw_preds, targets, cfg)
-
-        return ObjectDetectionOutput(
-            logits=logits,
-            pred_boxes=pred_boxes,
-            loss=loss,
-            objectness=objectness,
-        )
+        # Coarse to fine, as the config's table is walked.
+        return _yolov3_output([p5_raw_pred, p4_raw_pred], targets, self._cfg)
 
     def postprocess(
         self,
@@ -1252,7 +1285,11 @@ class YOLOV3TinyForObjectDetection(ObjectDetectionModel):
 # ---------------------------------------------------------------------------
 
 _CFG_V3 = YOLOV3Config()
-_CFG_V3_TINY = YOLOV3Config()
+_CFG_V3_TINY = YOLOV3Config(
+    anchors=_TINY_ANCHORS,
+    strides=_TINY_STRIDES,
+    anchor_masks=_TINY_ANCHOR_MASKS,
+)
 
 
 @register_model(
