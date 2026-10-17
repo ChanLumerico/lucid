@@ -39,7 +39,13 @@ from lucid._dispatch import (
     _unwrap_or_scalar,
 )
 from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
-from lucid._ops._dims import _dim_size, _to_axes, _wrap_dim, _wrap_dims
+from lucid._ops._dims import (
+    _dim_size,
+    _require_real_axis,
+    _to_axes,
+    _wrap_dim,
+    _wrap_dims,
+)
 from lucid._ops._reduce import _reduction_axes
 from lucid._types import Scalar, TensorOrScalar
 
@@ -416,6 +422,9 @@ def _chunk_adapter(a_impl: _Impl, chunks: int, dim: int = 0) -> list[_Impl]:
             f"chunk expects `chunks` to be greater than 0, got: {count}"
         )
     d = _wrap_dim(int(dim), len(a_impl.shape), "chunk")
+    _require_real_axis(
+        len(a_impl.shape), "chunk expects at least a 1-dimensional tensor"
+    )
     size = _dim_size(a_impl.shape, d)
     if size % count == 0:
         return _C_engine.chunk(a_impl, count, d)
@@ -872,10 +881,13 @@ def _split_pieces(
     TypeError
         A size that is not an integer (a ``bool`` included).
     lucid._C.engine.InvalidArgument
-        A negative size, a zero ``split_size`` on a non-empty axis, or a
-        size list that does not sum to the axis.
+        A 0-d tensor, a negative size, a zero ``split_size`` on a non-empty
+        axis, or a size list that does not sum to the axis.
     """
     wrapped = _wrap_dim(int(dim), len(x_impl.shape), "split")
+    _require_real_axis(
+        len(x_impl.shape), "split expects at least a 1-dimensional tensor"
+    )
     axis_size = _dim_size(x_impl.shape, wrapped)
     if isinstance(sections, bool):
         raise TypeError(

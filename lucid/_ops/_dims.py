@@ -16,6 +16,8 @@ import operator
 from collections.abc import Sequence
 from typing import SupportsIndex
 
+from lucid._C import engine as _C_engine
+
 
 def _to_axes(dim: object, name: str, what: str = "dim") -> list[int]:
     """``dim`` — ``None``, an index or a sequence of them — as engine axes.
@@ -97,3 +99,21 @@ def _wrap_dims(dims: Sequence[int], ndim: int, op: str) -> list[int]:
 def _dim_size(shape: Sequence[int], wrapped: int) -> int:
     """The extent of the wrapped axis: 1 for a 0-d tensor's notional one."""
     return int(shape[wrapped]) if shape else 1
+
+
+def _require_real_axis(ndim: int, message: str) -> None:
+    """Refuse a 0-d tensor for an op that cuts its axis into pieces.
+
+    A 0-d tensor's notional axis (:func:`_wrap_dim`) holds its one element,
+    but there is nothing to cut it into: the reference refuses ``split``,
+    ``chunk`` and ``tensor_split`` of one with a ``RuntimeError``.  It is
+    asked after the dim is wrapped, so a dim past the notional axis stays
+    an ``IndexError``, as every other op answers it.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        ``ndim`` is 0.
+    """
+    if not ndim:
+        raise _C_engine.InvalidArgument(message)

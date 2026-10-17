@@ -3,13 +3,14 @@ miscellaneous fillers (``rot90``, ``vander``, ``take_along_dim``).
 """
 
 import itertools
-from typing import Sequence, TYPE_CHECKING
+import operator
+from typing import Sequence, SupportsIndex, TYPE_CHECKING
 
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._globals import get_default_device
 from lucid._types import DTypeLike, DeviceLike
-from lucid._ops._dims import _dim_size, _to_axes, _wrap_dim
+from lucid._ops._dims import _dim_size, _require_real_axis, _to_axes, _wrap_dim
 from lucid._ops.composite._shared import _swap_dims
 from lucid._tensor._indexing import (
     _broadcast_shape,
@@ -568,10 +569,41 @@ def atleast_3d(*tensors: Tensor) -> Tensor | tuple[Tensor, ...]:
 # ── Splits ─────────────────────────────────────────────────────────────────
 
 
+def _section_count(indices_or_sections: object, op: str) -> int | None:
+    """``indices_or_sections`` as a section count, or ``None`` for cut indices.
+
+    A count is any integer — a NumPy one or a 0-d integer tensor too — and
+    indices are a sequence or a 1-D tensor.  Only a Python ``int`` used to
+    count: ``np.int64(3)`` and ``tensor(3)`` were read as the one index 3.
+
+    Raises
+    ------
+    TypeError
+        A ``bool``, or neither an integer nor a sequence of them.
+    """
+    if isinstance(indices_or_sections, int) and not isinstance(
+        indices_or_sections, bool
+    ):
+        return indices_or_sections
+    if isinstance(indices_or_sections, lucid.Tensor):
+        return None if indices_or_sections.ndim else operator.index(indices_or_sections)
+    if isinstance(indices_or_sections, Sequence):
+        return None
+    if isinstance(indices_or_sections, SupportsIndex) and not isinstance(
+        indices_or_sections, bool
+    ):
+        return operator.index(indices_or_sections)
+    raise TypeError(
+        f"{op}(): indices_or_sections must be an int or a sequence of ints, "
+        f"got {indices_or_sections!r}"
+    )
+
+
 def _split_along(
     x: Tensor,
     indices_or_sections: int | Sequence[int],
     dim: int,
+    op: str = "tensor_split",
 ) -> list[Tensor]:
     """The pieces of ``x`` for a section count or a list of cut indices.
 
@@ -587,20 +619,29 @@ def _split_along(
 
     Raises
     ------
+    IndexError
+        ``dim`` is past the last axis (a 0-d tensor's notional one included).
     lucid._C.engine.InvalidArgument
-        A section count that is not positive.
+        A 0-d ``x``, or a section count that is not positive.
     """
-    dim = _wrap_dim(dim, x.ndim, "split")
+    dim = _wrap_dim(dim, x.ndim, op)
+    _require_real_axis(
+        x.ndim,
+        f"{op} expected at least a 1-dimensional tensor, but got a tensor "
+        "with 0 dims",
+    )
     n = _dim_size(x.shape, dim)
-    if isinstance(indices_or_sections, int):
-        k = indices_or_sections
+    k = _section_count(indices_or_sections, op)
+    if k is not None:
         if k <= 0:
             raise _C_engine.InvalidArgument(
                 f"number of sections must be larger than 0, got {k}"
             )
         base, extra = divmod(n, k)
         return lucid.split(x, [base + 1] * extra + [base] * (k - extra), dim)
-    indices = _to_axes(indices_or_sections, "tensor_split", "indices_or_sections")
+    if isinstance(indices_or_sections, lucid.Tensor):
+        indices_or_sections = indices_or_sections.tolist()
+    indices = _to_axes(indices_or_sections, op, "indices_or_sections")
     cuts = [min(max(i + n if i < 0 else i, 0), n) for i in indices]
     spans = list(itertools.pairwise([0, *cuts, n]))
     if all(start <= stop for start, stop in spans):
@@ -608,21 +649,55 @@ def _split_along(
     return [lucid.narrow(x, dim, start, max(stop - start, 0)) for start, stop in spans]
 
 
+def _split_evenly_along(
+    op: str,
+    input: Tensor,
+    indices_or_sections: int | Sequence[int],
+    min_ndim: int,
+    dim: int,
+) -> list[Tensor]:
+    """``vsplit`` / ``hsplit`` / ``dsplit``: :func:`_split_along` with their checks.
+
+    A section count must divide the axis, as the reference requires: it
+    gave ragged pieces instead (``vsplit(zeros(4, 2), 3)`` was 2, 1, 1),
+    which is ``tensor_split``'s reading.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        ``input`` has fewer than ``min_ndim`` dimensions, or a section count
+        does not divide its axis.
+    """
+    if input.ndim < min_ndim:
+        raise _C_engine.InvalidArgument(
+            f"{op} requires a tensor with at least {min_ndim} dimension"
+            f"{'s' if min_ndim > 1 else ''}, but got a tensor with {input.ndim} "
+            "dimensions"
+        )
+    k = _section_count(indices_or_sections, op)
+    size = int(input.shape[dim])
+    if k is not None and (k == 0 or size % k):
+        raise _C_engine.InvalidArgument(
+            f"{op} attempted to split along dimension {dim}, but the size of the "
+            f"dimension {size} is not divisible by the split_size {k}"
+        )
+    return _split_along(input, indices_or_sections, dim, op)
+
+
 def vsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
     r"""Split a tensor along its first (vertical) axis.
 
     NumPy-style vertical split: cuts the input into pieces along axis 0.
-    With an integer ``k``, the tensor is divided into ``k`` near-equal
-    pieces; with a sequence of indices, the cuts occur at those positions.
+    With an integer ``k``, the tensor is divided into ``k`` equal pieces;
+    with a sequence of indices, the cuts occur at those positions.
 
     Parameters
     ----------
     input : Tensor
-        Input tensor with at least 1 dimension.
+        Input tensor with at least 2 dimensions.
     indices_or_sections : int | Sequence[int]
-        - ``int``: number of equal-sized splits. If the axis length is
-          not divisible, the first ``axis_len % k`` pieces get one extra
-          element.
+        - ``int``: number of equal-sized splits; it must divide the axis
+          length (:func:`tensor_split` takes one that does not).
         - ``Sequence[int]``: cut indices along axis 0.
 
     Returns
@@ -632,14 +707,13 @@ def vsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tens
 
     Raises
     ------
-    ValueError
-        If ``x.ndim < 1``.
+    lucid._C.engine.InvalidArgument
+        If ``input.ndim < 2``, or a section count does not divide axis 0.
 
     Notes
     -----
-    For a tensor of shape :math:`(N, \dots)` split into ``k`` near-equal
-    pieces, each piece has shape :math:`(\lceil N/k \rceil, \dots)` or
-    :math:`(\lfloor N/k \rfloor, \dots)`.
+    For a tensor of shape :math:`(N, \dots)` split into ``k`` pieces, each
+    piece has shape :math:`(N/k, \dots)`.
 
     Examples
     --------
@@ -648,9 +722,7 @@ def vsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tens
     >>> [s.shape for s in lucid.vsplit(x, 2)]
     [(2, 3), (2, 3)]
     """
-    if input.ndim < 1:
-        raise ValueError("vsplit requires at least 1-D input")
-    return _split_along(input, indices_or_sections, 0)
+    return _split_evenly_along("vsplit", input, indices_or_sections, 2, 0)
 
 
 def hsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
@@ -665,9 +737,8 @@ def hsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tens
     input : Tensor
         Input tensor.  At least 1-D.
     indices_or_sections : int | Sequence[int]
-        - ``int``: number of (near-)equal-sized splits.  If the axis
-          length is not divisible by ``k``, the first ``axis_len % k``
-          pieces get one extra element.
+        - ``int``: number of equal-sized splits; it must divide the axis
+          length (:func:`tensor_split` takes one that does not).
         - ``Sequence[int]``: cut indices along the split axis (axis 1
           for rank :math:`\geq 2`, axis 0 for 1-D).
 
@@ -676,6 +747,11 @@ def hsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tens
     list[Tensor]
         Sub-tensors whose concatenation along the split axis reproduces
         ``input``.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        If ``input`` is 0-d, or a section count does not divide the axis.
 
     Notes
     -----
@@ -703,7 +779,8 @@ def hsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tens
     >>> [s.shape for s in lucid.hsplit(v, 3)]
     [(2,), (2,), (2,)]
     """
-    return _split_along(input, indices_or_sections, 0 if input.ndim == 1 else 1)
+    dim = 0 if input.ndim == 1 else 1
+    return _split_evenly_along("hsplit", input, indices_or_sections, 1, dim)
 
 
 def dsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
@@ -717,7 +794,8 @@ def dsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tens
     input : Tensor
         Input tensor with at least 3 dimensions.
     indices_or_sections : int | Sequence[int]
-        - ``int``: number of equal-sized splits along axis 2.
+        - ``int``: number of equal-sized splits along axis 2; it must
+          divide the axis length.
         - ``Sequence[int]``: cut indices along axis 2.
 
     Returns
@@ -727,14 +805,13 @@ def dsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tens
 
     Raises
     ------
-    ValueError
-        If ``x.ndim < 3``.
+    lucid._C.engine.InvalidArgument
+        If ``input.ndim < 3``, or a section count does not divide axis 2.
 
     Notes
     -----
-    For a tensor of shape :math:`(\dots, D)` split into ``k`` near-equal
-    pieces along the last (depth) axis, each piece has shape
-    :math:`(\dots, \lceil D/k \rceil)` or :math:`(\dots, \lfloor D/k \rfloor)`.
+    For a tensor of shape :math:`(\dots, D, \dots)` split into ``k`` pieces
+    along axis 2, each piece has shape :math:`(\dots, D/k, \dots)`.
 
     Examples
     --------
@@ -743,9 +820,7 @@ def dsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tens
     >>> [s.shape for s in lucid.dsplit(x, 2)]
     [(2, 3, 2), (2, 3, 2)]
     """
-    if input.ndim < 3:
-        raise ValueError("dsplit requires at least 3-D input")
-    return _split_along(input, indices_or_sections, 2)
+    return _split_evenly_along("dsplit", input, indices_or_sections, 3, 2)
 
 
 def tensor_split(
@@ -802,7 +877,8 @@ def tensor_split(
     Raises
     ------
     lucid._C.engine.InvalidArgument
-        If ``indices_or_sections`` is an integer that is not positive.
+        If ``input`` is 0-d, or ``indices_or_sections`` is an integer that
+        is not positive.
 
     Examples
     --------

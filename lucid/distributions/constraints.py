@@ -721,10 +721,7 @@ class _Cat(Constraint):
     ) -> None:
         """Store the per-slice constraints, concatenation axis, and slice lengths."""
         self.cseq = list(cseq)
-        self._explicit_lengths = lengths is not None
-        if lengths is None:
-            lengths = [1] * len(self.cseq)
-        self.lengths = list(lengths)
+        self.lengths = [1] * len(self.cseq) if lengths is None else list(lengths)
         if len(self.lengths) != len(self.cseq):
             raise ValueError(
                 f"cat: lengths ({len(self.lengths)}) must match cseq ({len(self.cseq)})"
@@ -740,15 +737,9 @@ class _Cat(Constraint):
             raise ValueError(
                 f"cat: dim {self.dim} out of range for value with {value.ndim} dimensions"
             )
-        lengths = self.lengths
-        if not self._explicit_lengths:
-            total = int(value.shape[self.dim])
-            n = len(self.cseq)
-            if total != n and n > 0 and total % n == 0:
-                lengths = [total // n] * n
         checks: list[Tensor] = []
         start = 0
-        for constr, length in zip(self.cseq, lengths, strict=True):
+        for constr, length in zip(self.cseq, self.lengths, strict=True):
             v = value.narrow(self.dim, start, length)
             checks.append(constr.check(v))
             start = start + length

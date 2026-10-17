@@ -1646,7 +1646,7 @@ class CatTransform(Transform):
     r"""Apply different transforms to contiguous partitions along an axis.
 
     Splits the input along ``dim`` into contiguous chunks of size
-    ``lengths[i]`` (or equal partitions if ``lengths`` is ``None``),
+    ``lengths[i]`` (one element each if ``lengths`` is ``None``),
     applies the :math:`i`-th transform to the :math:`i`-th chunk, and
     concatenates the results back along the same axis.  Differs from
     :class:`StackTransform` in that each partition can have a different
@@ -1659,14 +1659,16 @@ class CatTransform(Transform):
     dim : int, optional
         Concatenation dimension.  Default ``0``.
     lengths : list[int], optional
-        Length of each partition.  If ``None`` the axis size must be
-        divisible by ``len(transforms)`` and equal partitions are used.
+        Length of each partition.  Default ``None``: one per transform, so
+        ``dim`` holds ``len(transforms)`` elements.  ``dim`` must hold
+        ``sum(lengths)`` of them, as the reference requires.
 
     Raises
     ------
     ValueError
-        If ``transforms`` is empty, or if the axis size is not divisible
-        by ``len(transforms)`` when ``lengths`` is ``None``.
+        If ``transforms`` is empty, or ``lengths`` is not one per transform.
+    lucid._C.engine.InvalidArgument
+        When applied, if ``dim`` does not hold ``sum(lengths)`` elements.
 
     Notes
     -----
@@ -1720,7 +1722,9 @@ class CatTransform(Transform):
             )
         self.transforms = list(transforms)
         self.dim = dim
-        self.lengths = lengths
+        # The reference's default: one element per transform, which ``dim``
+        # then has to hold — not equal parts of whatever it holds.
+        self.lengths = [1] * len(transforms) if lengths is None else list(lengths)
         self.event_dim = max(t.event_dim for t in transforms)
 
     @override
@@ -1740,28 +1744,15 @@ class CatTransform(Transform):
         )
 
     def _split(self, x: Tensor) -> list[Tensor]:
-        """Split ``x`` along ``self.dim`` according to ``self.lengths``.
-
-        If ``self.lengths`` is ``None``, the axis size must be divisible by
-        the number of transforms — partitions of equal length are used.
+        """Split ``x`` along ``self.dim`` into pieces of ``self.lengths``.
 
         Raises
         ------
-        ValueError
-            If the axis size is not divisible by ``len(self.transforms)``
-            when ``self.lengths`` is ``None``.
+        lucid._C.engine.InvalidArgument
+            If ``dim`` does not hold ``sum(self.lengths)`` elements — the
+            check :func:`lucid.split` makes of a size list.
         """
-        if self.lengths is None:
-            total = x.shape[self.dim]
-            n = len(self.transforms)
-            if total % n != 0:
-                raise ValueError(
-                    f"CatTransform: dim {self.dim} size {total} not divisible by {n}."
-                )
-            lengths = [total // n] * n
-        else:
-            lengths = self.lengths
-        return list(x.split(lengths, dim=self.dim))
+        return list(x.split(self.lengths, dim=self.dim))
 
     @override
     def _call(self, x: Tensor) -> Tensor:

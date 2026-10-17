@@ -12,6 +12,7 @@ import pytest
 
 import lucid
 import lucid.distributions as D
+from lucid._C import engine as _C_engine
 
 # ── AbsTransform ──────────────────────────────────────────────────────────────
 
@@ -190,11 +191,13 @@ class TestCatTransform:
         x_back = t._inverse(y)
         assert lucid.allclose(x, x_back, atol=1e-5)
 
-    def test_equal_lengths_inferred(self) -> None:
+    def test_default_lengths_are_one_per_transform(self) -> None:
+        """The reference's default (LCD-495), not equal parts of the axis."""
         t = D.CatTransform([D.ExpTransform(), D.ExpTransform()], dim=-1)
-        x = lucid.randn(6)
-        y = t(x)
-        assert y.shape == (6,)
+        assert t.lengths == [1, 1]
+        assert t(lucid.randn(2)).shape == (2,)
+        with pytest.raises(_C_engine.InvalidArgument, match="sum exactly to 6"):
+            t(lucid.randn(6))
 
 
 # ── StudentT rsample ──────────────────────────────────────────────────────────
