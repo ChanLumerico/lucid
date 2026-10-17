@@ -157,7 +157,9 @@ def advance_bn_counters(targets: list[tuple[Module, int]]) -> None:
     """Advance observed BatchNorm counters after a successful executable run.
 
     This runs outside the traced graph so failed executions leave every live
-    counter unchanged.
+    counter unchanged.  Each counter advances in place, as the eager layer's
+    does: rebinding the buffer to ``counter + count`` left a reference taken
+    earlier — a ``state_dict()``, a hook — at the old count (LCD-503).
 
     Args:
         targets: Observed ``(module, call_count)`` pairs from
@@ -166,4 +168,4 @@ def advance_bn_counters(targets: list[tuple[Module, int]]) -> None:
     for module, count in targets:
         counter = module._buffers["num_batches_tracked"]
         assert counter is not None
-        module._buffers["num_batches_tracked"] = counter + count
+        counter.add_(count)

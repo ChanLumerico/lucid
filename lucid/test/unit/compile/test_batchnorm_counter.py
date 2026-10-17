@@ -39,6 +39,51 @@ def test_only_executed_batchnorm_advances_once_per_step(entry: str) -> None:
         assert model.unused.num_batches_tracked.item() == 0
 
 
+class _Head(lucid.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = lucid.nn.Linear(4, 3)
+        self.bn = lucid.nn.BatchNorm1d(3)
+
+    @override
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:  # type: ignore[override]
+        return self.bn(self.fc(x))
+
+
+@pytest.mark.parametrize(
+    "entry, device",
+    [
+        ("make", "cpu"),
+        ("make", "metal"),
+        ("fused", "metal"),
+        ("direct", "metal"),
+    ],
+)
+def test_the_counter_advances_in_the_tensor_a_holder_already_has(
+    entry: str, device: str
+) -> None:
+    # The compiled step rebound the buffer to ``counter + count``: the live
+    # attribute counted, a reference taken before the step stayed at 0
+    # (LCD-503).  The eager layer counts in place.  A CPU make_step runs
+    # eager, which pins that side of the rule.
+    model = _Head().to(device).train()
+    counter = model.bn.num_batches_tracked
+    held = model.state_dict()["bn.num_batches_tracked"]
+    x = lucid.randn(8, 4, device=device)
+    loss = lambda out: out.square().mean()
+    if entry == "fused":
+        step = fused_step(model, loss, lucid.optim.SGD(model.parameters(), lr=0.01))
+    elif entry == "make":
+        step = make_step(model, loss)
+    else:
+        step = lambda value: compiled_step(model, value, loss)
+    for expected in range(1, 4):
+        step(x).item()
+        assert model.bn.num_batches_tracked is counter
+        assert counter.item() == expected
+        assert held.item() == expected
+
+
 def test_counter_plan_counts_repeated_nodes_not_registered_layers() -> None:
     from lucid._dispatch import _unwrap
     from lucid.compile._core.bn_runstats import bn_counter_targets, advance_bn_counters
