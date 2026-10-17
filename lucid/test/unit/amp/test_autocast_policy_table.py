@@ -274,6 +274,9 @@ _CASES: dict[str, _Case] = {
     "arccos": _Case(lambda lib, F, m: lib.arccos(m(4))),
     "arcsin": _Case(lambda lib, F, m: lib.arcsin(m(4))),
     "batch_norm": _Case(_bn(train=True, rank=4)),
+    "batch_norm1d": _Case(_bn(train=True, rank=3)),
+    "batch_norm3d": _Case(_bn(train=True, rank=5)),
+    "batch_norm_eval": _Case(_bn(train=False, rank=4)),
     "cosh": _Case(lambda lib, F, m: lib.cosh(m(4))),
     "cosine_similarity": _Case(lambda lib, F, m: F.cosine_similarity(m(2, 4), m(2, 4))),
     "erfinv": _Case(lambda lib, F, m: lib.erfinv(m(4))),
@@ -308,6 +311,11 @@ _CASES: dict[str, _Case] = {
     "bilinear_layer": _Case(lambda lib, F, m: F.bilinear(m(2, 3), m(2, 4), m(5, 3, 4))),
     "concatenate": _Case(lambda lib, F, m: lib.cat([m(4), m(4)])),
     "cross": _Case(lambda lib, F, m: lib.linalg.cross(m(3), m(3))),
+    "dot_1d": _Case(
+        lambda lib, F, m: lib.linalg.dot(m(4), m(4)),
+        lambda lib, F, m: lib.dot(m(4), m(4)),
+    ),
+    "index_copy": _Case(lambda lib, F, m: lib.index_copy(m(4), 0, m.ints([0, 2]), m(2))),
     "index_put": _Case(
         lambda lib, F, m: lib.index_put(m(4), (m.ints([0, 2, 1]),), m(3)),
         lambda lib, F, m: m(4).index_put((m.ints([0, 2, 1]),), m(3)),
@@ -484,6 +492,20 @@ def test_a_row_not_wired_yet(name: str) -> None:
             assert got == _want(name, device, autocast_dt, input_dt), (device, input_dt)
 
 
+@pytest.mark.parametrize(("device", "autocast_dt"), _SETTINGS)
+@pytest.mark.parametrize("name", ["cube", "cube_root"])
+def test_an_engine_only_row_gives_its_dtype(name: str, device: str, autocast_dt: str) -> None:
+    """``cube`` and ``cube_root`` have no public spelling; they follow ``pow``."""
+    engine_dtype = {"float32": _C_engine.F32, "float16": _C_engine.F16, "bfloat16": _C_engine.BF16}
+    for input_dt in _INPUTS:
+        dtype = getattr(lucid, autocast_dt if input_dt == "half" else "float32")
+        x = lucid.rand(4, device=device).to(dtype)
+        with autocast(device_type=device, dtype=getattr(lucid, autocast_dt)):
+            out = getattr(_C_engine, name)(x._impl)
+        want = _want(name, device, autocast_dt, input_dt)
+        assert out.dtype == engine_dtype[want], input_dt
+
+
 def test_the_not_wired_list_holds_only_rows() -> None:
     rows = _rows()
     for name in _NOT_WIRED:
@@ -560,13 +582,28 @@ def _ref_device(ref: ModuleType, device: str) -> str:
     return "cpu"
 
 
+# The rows that depart from the reference on purpose (``AmpPolicyTable.def``
+# says why).  Strict, so a row that rejoins the reference flips its test.
+_DEVIATIONS = {
+    ("batch_norm_eval", "cpu", "half"): "LCD-487: CPU eval batch_norm has no half kernel",
+}
+
+
 @pytest.mark.parity
 @pytest.mark.parametrize("input_dt", _INPUTS)
 @pytest.mark.parametrize(("device", "autocast_dt"), _SETTINGS)
 @pytest.mark.parametrize("name", sorted(_CASES) + sorted(_KEEP_CASES))
 def test_the_dtype_matches_the_reference(
-    ref: ModuleType, name: str, device: str, autocast_dt: str, input_dt: str
+    ref: ModuleType,
+    request: pytest.FixtureRequest,
+    name: str,
+    device: str,
+    autocast_dt: str,
+    input_dt: str,
 ) -> None:
+    deviation = _DEVIATIONS.get((name, device, input_dt))
+    if deviation is not None:
+        request.applymarker(pytest.mark.xfail(strict=True, reason=deviation))
     case = _CASES.get(name) or _KEEP_CASES[name]
     got = _run_lucid(case, device, autocast_dt, input_dt)
 
