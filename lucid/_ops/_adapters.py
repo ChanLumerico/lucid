@@ -85,12 +85,11 @@ def _keep_engine_signature(
 
 
 #: The engine ops that compute a half tensor against a 0-d float32 operand
-#: in float32 (op-math); the reference does so for these three only.
+#: in float32 (op-math); the reference does so for mul, div and floor
+#: division only.  ``div`` has an adapter of its own (``_make_div_adapter``).
 _OPMATH_OPS = (
     _C_engine.mul,
     _C_engine.mul_,
-    _C_engine.div,
-    _C_engine.div_,
     _C_engine.floordiv,
 )
 
@@ -108,7 +107,6 @@ _BINARY_SIGNATURE = inspect.Signature(
 def _make_arith_adapter(
     engine_fn: Callable[[_Impl, _Impl], _Impl],
     *,
-    floating: bool = False,
     inplace: bool = False,
 ) -> Callable[[_Impl, _Impl], _Impl]:
     """Wrap a binary engine function with scalars and dtype promotion.
@@ -119,7 +117,7 @@ def _make_arith_adapter(
     the pair meets at the dtype :mod:`lucid._promotion` gives it.  Two tensors
     of one dtype pass straight through.
 
-    Used by the arithmetic ops (add/sub/mul/div/pow/maximum/minimum,
+    Used by the arithmetic ops (add/sub/mul/pow/maximum/minimum,
     floor_divide) and by the elementwise binaries the reference framework
     also accepts a scalar for: the comparisons, fmod/remainder, and the
     bitwise and shift ops.  Those return their own dtype — Bool for a
@@ -130,16 +128,12 @@ def _make_arith_adapter(
     ``_outer_adapter`` instead; the others have dtype constraints of their
     own that the engine enforces.
 
-    ``floating`` adds true division's rule on top: a common dtype that is
-    integral or bool becomes the default float dtype, as it does for ``/``.
-    mul, div and floor division — in place or not — hand a half tensor's
-    scalar partner over unrounded, for the engine's op-math.
+    mul and floor division — in place or not — hand a half tensor's scalar
+    partner over unrounded, for the engine's op-math.  ``div`` and ``div_``,
+    whose ``rounding_mode`` picks the kernel, have :func:`_make_div_adapter`.
 
     ``inplace`` marks the trailing-underscore form, which writes the result
-    back into ``input``.  Beside ``floating`` it refuses an integral one: the
-    quotient is floating, and an integer tensor cannot hold it in place.
-    ``div_`` used to floor-divide in silence where the reference refuses —
-    and where ``/=`` already refused.
+    back into ``input``: a result dtype that ``input`` cannot hold is refused.
     """
     name = getattr(engine_fn, "__name__", "_arith_adapter")
 
@@ -154,9 +148,7 @@ def _make_arith_adapter(
             scalar = _scalar_power(input, other)
             if scalar is not None:
                 return scalar
-        a, b = _binary_operands(
-            input, other, true_div=floating, opmath=opmath, inplace=inplace
-        )
+        a, b = _binary_operands(input, other, opmath=opmath, inplace=inplace)
         if subtracts:
             _refuse_bool_subtraction(a, b)
         return engine_fn(a, b)

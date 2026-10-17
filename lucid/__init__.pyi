@@ -1170,10 +1170,10 @@ def mul(input: Tensor, other: Tensor | Scalar) -> Tensor:
     Tensor([...])
     """
     ...
-def div(input: Tensor, other: Tensor | Scalar) -> Tensor:
-    r"""    Element-wise true division with broadcasting and dtype promotion.
+def div(input: Tensor, other: Tensor | Scalar, *, rounding_mode: str | None = ...) -> Tensor:
+    r"""    Element-wise division with broadcasting and dtype promotion, rounded as asked.
     
-    Computes ``input / other`` element-wise. Integer operands are promoted to a floating-point dtype. Division by zero produces ``+/-inf`` or ``NaN`` according to IEEE 754.
+    Computes ``input / other`` element-wise.  With ``rounding_mode=None`` (true division) integer operands are promoted to a floating-point dtype, and division by zero produces ``+/-inf`` or ``NaN`` according to IEEE 754.  ``rounding_mode="trunc"`` rounds the quotient toward zero and ``"floor"`` toward negative infinity (:func:`lucid.floor_divide`); both keep an integer dtype for integer operands.
     
     Parameters
     ----------
@@ -1183,6 +1183,8 @@ def div(input: Tensor, other: Tensor | Scalar) -> Tensor:
         Right operand. Broadcasts against ``input`` following the standard
         broadcasting rules; Python scalars are promoted to a tensor of matching
         dtype.
+    rounding_mode : {None, "trunc", "floor"}, optional
+        How the quotient is rounded.  Default ``None``: not at all.
     
     Returns
     -------
@@ -1190,15 +1192,29 @@ def div(input: Tensor, other: Tensor | Scalar) -> Tensor:
         Element-wise result with shape ``broadcast(input.shape, other.shape)`` and
         dtype determined by the usual type-promotion rules.
     
+    Raises
+    ------
+    RuntimeError
+        An integer zero divisor with a ``rounding_mode``, on the CPU.  Metal
+        gives -1 there without a device sync.
+    NotImplementedError
+        A bool or complex operand with a ``rounding_mode``.
+    lucid._C.engine.InvalidArgument
+        Any other ``rounding_mode``.
+    
     Notes
     -----
     Mathematical definition:
     
     .. math::
     
-        \text{out}_i = \frac{\text{input}_i}{\text{other}_i}
+        \text{out}_i = \frac{\text{input}_i}{\text{other}_i}, \quad
+        \operatorname{trunc}\left(\frac{\text{input}_i}{\text{other}_i}\right), \quad
+        \left\lfloor \frac{\text{input}_i}{\text{other}_i} \right\rfloor
     
-    Autograd: :math:`\partial \text{out}/\partial \text{input} = 1/\text{other}`, :math:`\partial \text{out}/\partial \text{other} = -\text{input}/\text{other}^{2}`.
+    for ``None``, ``"trunc"`` and ``"floor"``.  ``"floor"`` is the exact floor of the real quotient; ``"trunc"`` truncates the rounded float quotient, so ``1.0 / 0.1`` truncates to ``10`` while it floors to ``9``, as in the reference.  An integer quotient is exact in both modes.
+    
+    Autograd: :math:`\partial \text{out}/\partial \text{input} = 1/\text{other}`, :math:`\partial \text{out}/\partial \text{other} = -\text{input}/\text{other}^{2}`; a rounded quotient has a zero gradient.
     
     Examples
     --------
@@ -1206,6 +1222,10 @@ def div(input: Tensor, other: Tensor | Scalar) -> Tensor:
     >>> a = lucid.tensor([1.0, 2.0, 3.0])
     >>> b = lucid.tensor([4.0, 5.0, 6.0])
     >>> lucid.div(a, b)
+    Tensor([...])
+    >>> lucid.div(lucid.tensor([7, -7]), 2, rounding_mode="trunc")
+    Tensor([...])
+    >>> lucid.div(lucid.tensor([7, -7]), 2, rounding_mode="floor")
     Tensor([...])
     """
     ...
@@ -5813,7 +5833,7 @@ def count_nonzero(input: Tensor, dim: _int | Sequence[_int] | None = ...) -> Ten
 def cov(input: Tensor, *, correction: _int = ...) -> Tensor: ...
 def diag_embed(input: Tensor, offset: _int = ..., dim1: _int = ..., dim2: _int = ...) -> Tensor: ...
 def digamma(input: Tensor) -> Tensor: ...
-def divide(input: Tensor, other: Tensor | Scalar) -> Tensor: ...
+def divide(input: Tensor, other: Tensor | Scalar, *, rounding_mode: str | None = ...) -> Tensor: ...
 def dsplit(input: Tensor, indices_or_sections: _int | Sequence[_int]) -> list[Tensor]: ...
 def dstack(tensors: Sequence[Tensor]) -> Tensor: ...
 def erfc(input: Tensor) -> Tensor: ...

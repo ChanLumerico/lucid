@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 from lucid._C import engine as _C_engine
 from lucid._ops import _adapters as A  # accessor for every signature-normaliser
+from lucid._ops._division import _make_div_adapter
 from lucid._ops._reduce import _std_adapter, _var_adapter
 
 
@@ -168,7 +169,7 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("round_",      _R.round_,      1, inplace=True, method_name="round_"),
 
     # ── binary ─────────────────────────────────────────────────────────────
-    # add/sub/mul/div/pow/maximum/minimum are wrapped with _make_arith_adapter
+    # add/sub/mul/pow/maximum/minimum are wrapped with _make_arith_adapter
     # so that mixed-dtype operands (e.g. float32 × bool) are automatically
     # promoted to their common type before entering the C++ kernel — matching
     # the reference framework's type-promotion semantics.
@@ -179,7 +180,9 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("add",      A._make_arith_adapter(_R.add),      2, method_name="add",      free_fn_name="add"),
     OpEntry("sub",      A._make_arith_adapter(_R.sub),      2, method_name="sub",      free_fn_name="sub"),
     OpEntry("mul",      A._make_arith_adapter(_R.mul),      2, method_name="mul",      free_fn_name="mul"),
-    OpEntry("div",      A._make_arith_adapter(_R.div, floating=True), 2, method_name="div",      free_fn_name="div"),
+    # div adds ``rounding_mode``: "floor" is floor_divide's path, "trunc"
+    # rounds toward zero (``lucid._ops._division``).
+    OpEntry("div",      _make_div_adapter(), 2, method_name="div",      free_fn_name="div"),
     OpEntry("pow",      A._make_arith_adapter(_R.pow),      2, method_name="pow",      free_fn_name="pow"),
     OpEntry("maximum",  A._make_arith_adapter(_R.maximum),  2, method_name="maximum",  free_fn_name="maximum"),
     OpEntry("minimum",  A._make_arith_adapter(_R.minimum),  2, method_name="minimum",  free_fn_name="minimum"),
@@ -195,8 +198,7 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("add_",     A._make_arith_adapter(_R.add_, inplace=True),     2, inplace=True, method_name="add_"),
     OpEntry("sub_",     A._make_arith_adapter(_R.sub_, inplace=True),     2, inplace=True, method_name="sub_"),
     OpEntry("mul_",     A._make_arith_adapter(_R.mul_, inplace=True),     2, inplace=True, method_name="mul_"),
-    OpEntry("div_",     A._make_arith_adapter(_R.div_, floating=True, inplace=True), 2,
-            inplace=True, method_name="div_"),
+    OpEntry("div_",     _make_div_adapter(inplace=True), 2, inplace=True, method_name="div_"),
     OpEntry("pow_",     A._make_arith_adapter(_R.pow_, inplace=True),     2, inplace=True, method_name="pow_"),
     OpEntry("maximum_", A._make_arith_adapter(_R.maximum_, inplace=True), 2, inplace=True, method_name="maximum_"),
     OpEntry("minimum_", A._make_arith_adapter(_R.minimum_, inplace=True), 2, inplace=True, method_name="minimum_"),

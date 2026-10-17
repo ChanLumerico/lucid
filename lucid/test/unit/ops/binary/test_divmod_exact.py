@@ -36,11 +36,16 @@ from lucid.test._fixtures.devices import device_dtype_params, metal_available
 
 Op = Callable[[lucid.Tensor, lucid.Tensor | float], lucid.Tensor]
 
-#: Every spelling of the family.  ``div(rounding_mode=...)`` is not one
-#: Lucid has yet.
+#: Every spelling of the family — ``div``'s rounding modes (LCD-485) too:
+#: ``"floor"`` is ``floor_divide``'s path, ``"trunc"`` rounds toward zero.
 OPS: dict[str, Op] = {
     "floordiv": lambda a, b: a // b,
     "floor_divide": lucid.floor_divide,
+    "div_floor": lambda a, b: lucid.div(a, b, rounding_mode="floor"),
+    "Tensor.div_floor": lambda a, b: a.div(b, rounding_mode="floor"),
+    "div_trunc": lambda a, b: lucid.div(a, b, rounding_mode="trunc"),
+    "Tensor.div_trunc": lambda a, b: a.div(b, rounding_mode="trunc"),
+    "divide_trunc": lambda a, b: lucid.divide(a, b, rounding_mode="trunc"),
     "mod": lambda a, b: a % b,
     "remainder": lucid.remainder,
     "fmod": lucid.fmod,
@@ -48,6 +53,11 @@ OPS: dict[str, Op] = {
 _KIND = {
     "floordiv": "floor",
     "floor_divide": "floor",
+    "div_floor": "floor",
+    "Tensor.div_floor": "floor",
+    "div_trunc": "trunc",
+    "Tensor.div_trunc": "trunc",
+    "divide_trunc": "trunc",
     "mod": "remainder",
     "remainder": "remainder",
     "fmod": "fmod",
@@ -69,6 +79,9 @@ def _wrap(v: int, bits: int) -> int:
 def _int_oracle(kind: str, a: int, b: int, bits: int) -> int:
     if kind == "floor":
         return _wrap(a // b, bits)
+    if kind == "trunc":
+        q = abs(a) // abs(b)
+        return _wrap(-q if (a < 0) != (b < 0) else q, bits)
     if kind == "remainder":
         return a % b
     r = abs(a) % abs(b)
@@ -120,7 +133,8 @@ def test_integer_zero_divisor_on_metal_is_defined_and_unsynced(
 ) -> None:
     """Metal reads nothing back.
 
-    ``a // 0`` is -1; ``a % 0`` and ``fmod(a, 0)`` are ``a``.
+    ``a // 0`` and its truncated form are -1; ``a % 0`` and ``fmod(a, 0)``
+    are ``a``.
     """
     if not metal_available():
         pytest.skip("Metal unavailable")
@@ -132,7 +146,7 @@ def test_integer_zero_divisor_on_metal_is_defined_and_unsynced(
     out = OPS[op](a, b)
     lucid.eval(out)
     assert _C_engine.host_sync_count() == before
-    at_zero = [-1] * len(nums) if _KIND[op] == "floor" else nums
+    at_zero = [-1] * len(nums) if _KIND[op] in ("floor", "trunc") else nums
     at_three = [_int_oracle(_KIND[op], x, 3, _BITS[dtype]) for x in nums]
     assert out.tolist() == [at_three, at_zero]
 
@@ -176,6 +190,11 @@ def _ref_op(ref: ModuleType, op: str) -> Callable[..., object]:
     ops: dict[str, Callable[..., object]] = {
         "floordiv": lambda a, b: a // b,
         "floor_divide": ref.floor_divide,
+        "div_floor": lambda a, b: ref.div(a, b, rounding_mode="floor"),
+        "Tensor.div_floor": lambda a, b: ref.div(a, b, rounding_mode="floor"),
+        "div_trunc": lambda a, b: ref.div(a, b, rounding_mode="trunc"),
+        "Tensor.div_trunc": lambda a, b: ref.div(a, b, rounding_mode="trunc"),
+        "divide_trunc": lambda a, b: ref.div(a, b, rounding_mode="trunc"),
         "mod": lambda a, b: a % b,
         "remainder": ref.remainder,
         "fmod": ref.fmod,
@@ -184,6 +203,11 @@ def _ref_op(ref: ModuleType, op: str) -> Callable[..., object]:
 
 
 _HALF = (lucid.float16, lucid.bfloat16)
+
+#: ``trunc`` reads the rounded quotient, and the CPU's float64 division
+#: (``vDSP_vdivD``) is not correctly rounded: ``1.0 / 0.001`` is
+#: ``999.9999999999999``, which truncates to 999 where the reference has 1000.
+_F64_CPU_DIV = "LCD-506: CPU float64 div is not correctly rounded"
 
 
 def _half_oracle(ref: ModuleType, op: str, a: object, b: object, rdt: object) -> object:
@@ -215,13 +239,21 @@ def _assert_same_floats(got: lucid.Tensor, want: object) -> None:
 @pytest.mark.parametrize("op", sorted(OPS))
 @pytest.mark.parametrize(("device", "dtype"), device_dtype_params(_FLOAT_DTYPES))
 def test_float_results_match_the_reference(
-    ref: ModuleType, device: str, dtype: lucid.dtype, op: str
+    request: pytest.FixtureRequest,
+    ref: ModuleType,
+    device: str,
+    dtype: lucid.dtype,
+    op: str,
 ) -> None:
+    if device == "cpu" and dtype == lucid.float64 and _KIND[op] == "trunc":
+        request.applymarker(pytest.mark.xfail(strict=True, reason=_F64_CPU_DIV))
     pairs = [(a, b) for a in _FLOAT_NUMS for b in _FLOAT_DENS]
     nums, dens = [a for a, _ in pairs], [b for _, b in pairs]
     rdt = _ref_dtype(ref, dtype)
     ra, rb = ref.tensor(nums, dtype=rdt), ref.tensor(dens, dtype=rdt)
-    if dtype in _HALF:
+    # A truncated quotient is the rounded 16-bit quotient's ``trunc``, not
+    # the exact one's, so the reference's own 16-bit kernel is the oracle.
+    if dtype in _HALF and _KIND[op] != "trunc":
         want = _half_oracle(ref, op, ra, rb, rdt)
     else:
         want = _ref_op(ref, op)(ra, rb)
@@ -233,7 +265,7 @@ def test_float_results_match_the_reference(
 
 
 @pytest.mark.parametrize("divisor", [2.0, -0.3, 1e-3, _INF, -_INF, 0.0])
-@pytest.mark.parametrize("op", ["floordiv", "mod"])
+@pytest.mark.parametrize("op", ["floordiv", "div_floor", "div_trunc", "mod"])
 @pytest.mark.parametrize(
     ("device", "dtype"), device_dtype_params([lucid.float16, lucid.bfloat16])
 )
@@ -242,15 +274,20 @@ def test_half_tensor_over_a_number(
 ) -> None:
     """A half tensor and a Python number.
 
-    ``//`` reads the number as float32 (op-math); ``%`` rounds it into the
-    tensor's dtype first, as the reference does for every op but mul, div
-    and floor division.
+    ``//`` and both rounding divisions read the number as float32
+    (op-math); ``%`` rounds it into the tensor's dtype first, as the
+    reference does for every op but mul, div and floor division.  A
+    truncated quotient is truncated in float32 and rounded once, which is
+    the reference's own kernel on the number.
     """
     nums = [0.0, -0.0, 1.0, -1.0, 7.5, -7.5, 1000.0, -3.0, 0.1]
     rdt = _ref_dtype(ref, dtype)
-    as_dtype = ref.float32 if op == "floordiv" else rdt
-    den = ref.full((len(nums),), divisor, dtype=as_dtype)
-    want = _half_oracle(ref, op, ref.tensor(nums, dtype=rdt), den, rdt)
+    if _KIND[op] == "trunc":
+        want = _ref_op(ref, op)(ref.tensor(nums, dtype=rdt), divisor)
+    else:
+        as_dtype = ref.float32 if _KIND[op] == "floor" else rdt
+        den = ref.full((len(nums),), divisor, dtype=as_dtype)
+        want = _half_oracle(ref, op, ref.tensor(nums, dtype=rdt), den, rdt)
     out = OPS[op](lucid.tensor(nums, dtype=dtype, device=device), divisor)
     assert out.dtype == dtype
     _assert_same_floats(out, want)

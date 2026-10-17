@@ -232,12 +232,14 @@ def multiply(input: Tensor, other: Tensor | Scalar) -> Tensor:
     return input * other
 
 
-def divide(input: Tensor, other: Tensor | Scalar) -> Tensor:
-    r"""Element-wise true division.
+def divide(
+    input: Tensor, other: Tensor | Scalar, *, rounding_mode: str | None = None
+) -> Tensor:
+    r"""Element-wise division — :func:`lucid.div` under its longer name.
 
-    Verbose alias of the ``/`` operator. Always performs floating-point
-    division — integer operands are promoted to a floating dtype before
-    the division so that the result preserves fractional parts.
+    ``rounding_mode=None`` is the ``/`` operator: integer operands are
+    promoted to a floating dtype.  ``"trunc"`` rounds the quotient toward
+    zero and ``"floor"`` toward negative infinity, keeping an integer dtype.
 
     Parameters
     ----------
@@ -245,34 +247,32 @@ def divide(input: Tensor, other: Tensor | Scalar) -> Tensor:
         Numerator.
     other : Tensor | Scalar
         Denominator.
+    rounding_mode : {None, "trunc", "floor"}, optional
+        How the quotient is rounded.  Default ``None``: not at all.
 
     Returns
     -------
     Tensor
-        Element-wise quotient of the broadcast shape of ``input`` and ``other``,
-        in a floating-point dtype.
+        Element-wise quotient of the broadcast shape of ``input`` and ``other``.
 
     Notes
     -----
-    Mathematical definition:
-
     .. math::
 
         \text{out}_i = \frac{a_i}{b_i}
 
-    Division by zero produces :math:`\pm\infty` (or NaN for ``0/0``)
-    rather than raising. Gradients are
-    :math:`\partial / \partial a = 1/b` and
-    :math:`\partial / \partial b = -a / b^{2}`.
+    Division by zero gives :math:`\pm\infty` (NaN for ``0/0``).  The gradients
+    are :math:`1/b` and :math:`-a / b^{2}`, and zero for a rounded quotient.
 
     Examples
     --------
     >>> import lucid
-    >>> a = lucid.tensor([6.0, 9.0])
-    >>> lucid.divide(a, 3.0)
+    >>> lucid.divide(lucid.tensor([6.0, 9.0]), 3.0)
     tensor([2., 3.])
+    >>> lucid.divide(lucid.tensor([7, -7]), 2, rounding_mode="trunc")
+    tensor([3, -3], dtype=lucid.int64)
     """
-    return input / other
+    return lucid.div(input, other, rounding_mode=rounding_mode)
 
 
 def true_divide(input: Tensor, other: Tensor | Scalar) -> Tensor:
