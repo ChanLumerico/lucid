@@ -18,6 +18,11 @@ from lucid._tensor.tensor import Tensor as _T
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._dtype import _ENGINE_TO_DTYPE, _resolve_dtype_name, to_engine_dtype
+from lucid.serialization._storage_plan import (
+    _StoragePlan,
+    _build_storage_plan,
+    _contiguous_stride,
+)
 
 # ── Allowed types for weights_only=True ──────────────────────────────────────
 
@@ -66,258 +71,6 @@ _SAFE_CLASSES = frozenset(
 )
 
 
-def _collect_tensors(obj: object, seen: set[int], out: list[_T]) -> None:
-    """Collect every reachable :class:`Tensor` in ``obj`` in traversal order."""
-    oid = id(obj)
-    if oid in seen:
-        return
-    if isinstance(obj, _T):
-        seen.add(oid)
-        out.append(obj)
-        return
-    if isinstance(obj, dict):
-        seen.add(oid)
-        for k, v in obj.items():
-            _collect_tensors(k, seen, out)
-            _collect_tensors(v, seen, out)
-        return
-    if isinstance(obj, (list, tuple, set, frozenset)):
-        seen.add(oid)
-        for item in obj:
-            _collect_tensors(item, seen, out)
-        return
-    if not isinstance(obj, type):
-        d = getattr(obj, "__dict__", None)
-        if isinstance(d, dict):
-            seen.add(oid)
-            _collect_tensors(d, seen, out)
-
-
-def _apply_metal_link(cur_p: _T, view_shape: tuple[int, ...], lnk: Any) -> _T:
-    """Apply a single Metal ``_Link`` step onto CPU probe tensor ``cur_p``."""
-    if lnk.kind == 1:
-        return cur_p[lnk.key]
-    if lnk.kind == 2:
-        return cur_p.reshape(view_shape)
-    if lnk.kind == 3:
-        assert lnk.replay is not None
-        op_name, args, kwargs, piece = lnk.replay
-        attr = getattr(cur_p, op_name)
-        out = attr(*args, **kwargs) if callable(attr) else attr
-        res = out[piece] if piece is not None else out
-        assert isinstance(res, _T)
-        return res
-    return cur_p
-
-
-def _resolve_view_geometry(
-    t: _T,
-) -> tuple[_T, list[int], list[int], int]:
-    """Return ``(root_tensor, shape, stride_elems, rel_offset_elems)`` for ``t``."""
-    chain: list[tuple[tuple[int, ...], Any]] = []
-    root = t
-    cur_link = root.__dict__.get("_metal_view")
-    while (
-        cur_link is not None
-        and cur_link.base is not None
-        and cur_link.kind in (0, 1, 2, 3)
-    ):
-        chain.append((tuple(int(d) for d in root.shape), cur_link))
-        root = cur_link.base
-        cur_link = root.__dict__.get("_metal_view")
-
-    if not chain:
-        return root, [int(d) for d in t.shape], [int(s) for s in t.stride()], 0
-
-    probe = _wrap(
-        _C_engine.zeros(
-            [int(d) for d in root.shape], _C_engine.Dtype.I8, _C_engine.Device.CPU
-        )
-    )
-    cur_p = probe
-    for view_shape, lnk in reversed(chain):
-        cur_p = _apply_metal_link(cur_p, view_shape, lnk)
-
-    rel_offset = (
-        0 if cur_p.numel() == 0 else int(cur_p.data_ptr()) - int(probe.data_ptr())
-    )
-    return (
-        root,
-        [int(d) for d in cur_p.shape],
-        [int(s) for s in cur_p.stride()],
-        rel_offset,
-    )
-
-
-def _scatter_strided_bytes(
-    buf: bytearray,
-    raw: bytes,
-    shape: list[int],
-    stride_elems: list[int],
-    offset_elems: int,
-    itemsize: int,
-) -> None:
-    """Scatter row-major ``raw`` bytes of a non-contiguous tensor into ``buf``."""
-    ndim = len(shape)
-    if ndim == 0:
-        start = offset_elems * itemsize
-        buf[start : start + itemsize] = raw[:itemsize]
-        return
-    numel = 1
-    for d in shape:
-        numel *= d
-    coords = [0] * ndim
-    for idx in range(numel):
-        pos = offset_elems
-        for d in range(ndim):
-            pos += coords[d] * stride_elems[d]
-        dst = pos * itemsize
-        src = idx * itemsize
-        buf[dst : dst + itemsize] = raw[src : src + itemsize]
-        for d in range(ndim - 1, -1, -1):
-            coords[d] += 1
-            if coords[d] < shape[d]:
-                break
-            coords[d] = 0
-
-
-def _extract_metal_cluster_bytes(
-    cluster_lo: int,
-    cluster_hi: int,
-    itemsize: int,
-    cluster_items: list[tuple[int, int, int, list[int], list[int], _T, _T]],
-) -> bytes:
-    """Extract raw storage bytes for a cluster of Metal tensors."""
-    nbytes = cluster_hi - cluster_lo
-    for _lo, _hi, _fa, _sh, _st, t, rt in cluster_items:
-        for c in (t, rt):
-            if "_metal_view" in c.__dict__ or not c.is_contiguous():
-                continue
-            c_lo = int(c.data_ptr())
-            c_hi = c_lo + c.numel() * itemsize
-            if c_lo <= cluster_lo and c_hi >= cluster_hi:
-                raw = bytes(c._impl.to_bytes())
-                rel = cluster_lo - c_lo
-                return (
-                    raw
-                    if (rel == 0 and len(raw) == nbytes)
-                    else raw[rel : rel + nbytes]
-                )
-
-    buf = bytearray(nbytes)
-    for _lo, _hi, f_addr, sh, st, t, _rt in cluster_items:
-        off_elems = (f_addr - cluster_lo) // itemsize
-        raw = bytes(t._impl.to_bytes())
-        if t.is_contiguous():
-            start = off_elems * itemsize
-            buf[start : start + len(raw)] = raw
-        else:
-            _scatter_strided_bytes(buf, raw, sh, st, off_elems, itemsize)
-    return bytes(buf)
-
-
-def _extract_cpu_cluster_bytes(
-    cluster_lo: int,
-    cluster_hi: int,
-    itemsize: int,
-    cluster_items: list[tuple[int, int, int, list[int], list[int], _T, _T]],
-) -> bytes:
-    """Extract raw storage bytes for a cluster of CPU tensors."""
-    import ctypes
-
-    nbytes = cluster_hi - cluster_lo
-    for _lo, hi, f_addr, _sh, _st, t, _rt in cluster_items:
-        if (
-            f_addr == cluster_lo
-            and hi == cluster_hi
-            and t.is_contiguous()
-            and t.numel() * itemsize == nbytes
-        ):
-            return bytes(t._impl.to_bytes())
-    return ctypes.string_at(cluster_lo, nbytes)
-
-
-def _tensor_span(
-    t: _T,
-) -> tuple[int, int, int, list[int], list[int], _T, _T]:
-    """Compute ``(lo_addr, hi_addr, first_addr, shape, stride_elems, t, root)``."""
-    root, shape, stride_elems, rel_off = _resolve_view_geometry(t)
-    itemsize = int(root.element_size())
-    first_addr = int(root.data_ptr()) + rel_off * itemsize
-    min_off = sum(
-        (d - 1) * s for d, s in zip(shape, stride_elems, strict=True) if d > 1 and s < 0
-    )
-    max_off = sum(
-        (d - 1) * s for d, s in zip(shape, stride_elems, strict=True) if d > 1 and s > 0
-    )
-    lo_addr = first_addr + min_off * itemsize
-    hi_addr = first_addr + (max_off + 1) * itemsize
-    return lo_addr, hi_addr, first_addr, shape, stride_elems, t, root
-
-
-def _merge_overlapping_spans(
-    items: list[tuple[int, int, int, list[int], list[int], _T, _T]],
-) -> list[tuple[int, int, list[tuple[int, int, int, list[int], list[int], _T, _T]]]]:
-    """Merge sorted ``(lo, hi, ...)`` entries with overlapping byte intervals."""
-    clusters: list[
-        tuple[int, int, list[tuple[int, int, int, list[int], list[int], _T, _T]]]
-    ] = []
-    for entry in sorted(items, key=lambda x: (x[0], x[1])):
-        lo, hi = entry[0], entry[1]
-        if clusters and lo < clusters[-1][1]:
-            prev_lo, prev_hi, prev_list = clusters[-1]
-            clusters[-1] = (prev_lo, max(prev_hi, hi), prev_list + [entry])
-        else:
-            clusters.append((lo, hi, [entry]))
-    return clusters
-
-
-_SpanItem = tuple[int, int, int, list[int], list[int], _T, _T]
-_TensorMeta = dict[int, tuple[list[int], list[int], int, int]]
-
-
-def _build_storage_plan(
-    container: object,
-) -> tuple[list[_T], _TensorMeta, dict[int, bytes]]:
-    """Analyse all tensors in ``container`` for shared storage spans."""
-    tensors: list[_T] = []
-    _collect_tensors(container, set(), tensors)
-    keep_alive: list[_T] = list(tensors)
-    tensor_meta: _TensorMeta = {}
-    storage_blobs: dict[int, bytes] = {}
-    next_sid = 0
-    by_group: dict[tuple[str, str], list[_SpanItem]] = {}
-
-    for t in tensors:
-        if t.numel() == 0:
-            _rt, shape, stride_elems, _off = _resolve_view_geometry(t)
-            tensor_meta[id(t)] = (shape, stride_elems, 0, next_sid)
-            storage_blobs[next_sid] = b""
-            next_sid += 1
-        else:
-            span = _tensor_span(t)
-            if span[6] is not t:
-                keep_alive.append(span[6])
-            key = ("metal" if t.is_metal else "cpu", t.dtype._name)
-            by_group.setdefault(key, []).append(span)
-
-    for (dev_str, dtype_name), items in by_group.items():
-        eng_dtype = to_engine_dtype(_resolve_dtype_name(dtype_name))
-        itemsize = _ENGINE_TO_DTYPE[eng_dtype].itemsize
-        extract = (
-            _extract_cpu_cluster_bytes
-            if dev_str == "cpu"
-            else _extract_metal_cluster_bytes
-        )
-        for lo, hi, cluster in _merge_overlapping_spans(items):
-            storage_blobs[next_sid] = extract(lo, hi, itemsize, cluster)
-            for _lo, _hi, f_addr, sh, st, t, _rt in cluster:
-                tensor_meta[id(t)] = (sh, st, (f_addr - lo) // itemsize, next_sid)
-            next_sid += 1
-
-    return keep_alive, tensor_meta, storage_blobs
-
-
 def _wrap_loaded_impl(
     impl: _C_engine.TensorImpl, is_param: bool, requires_grad: bool
 ) -> _T:
@@ -342,16 +95,10 @@ def _wrap_loaded_impl(
 @final
 class _LucidPickler(pickle.Pickler):
     def __init__(
-        self,
-        file: io.BytesIO,
-        protocol: int | None = None,
-        *,
-        tensor_meta: dict[int, tuple[list[int], list[int], int, int]] | None = None,
-        storage_blobs: dict[int, bytes] | None = None,
+        self, file: io.BytesIO, protocol: int | None, *, plan: _StoragePlan
     ) -> None:
         super().__init__(file, protocol=protocol)
-        self._tensor_meta = tensor_meta or {}
-        self._storage_blobs = storage_blobs or {}
+        self._plan = plan
         self._emitted_tensors: dict[int, int] = {}
         self._emitted_storages: set[int] = set()
 
@@ -366,16 +113,19 @@ class _LucidPickler(pickle.Pickler):
 
         tid = len(self._emitted_tensors)
         self._emitted_tensors[oid] = tid
-        meta = self._tensor_meta.get(oid)
+        meta = self._plan.meta.get(oid)
         if meta is not None:
             shape, stride_elems, offset_elems, sid = meta
             raw_bytes: bytes | None = None
             if sid not in self._emitted_storages:
                 self._emitted_storages.add(sid)
-                raw_bytes = self._storage_blobs[sid]
+                raw_bytes = self._plan.blobs[sid]
         else:
+            # A tensor the plan did not reach (inside an object's custom
+            # reduce, say) is written dense: ``to_bytes`` packs it row-major,
+            # whatever its own strides.
             shape = [int(d) for d in obj.shape]
-            stride_elems = [int(s) for s in obj.stride()]
+            stride_elems = _contiguous_stride(shape)
             offset_elems = 0
             sid = -1 - tid
             raw_bytes = bytes(obj._impl.to_bytes())
@@ -443,7 +193,14 @@ def _load_v3_11tuple(
     itemsize = _ENGINE_TO_DTYPE[eng_dtype].itemsize
     base_impl = storages.get(int(sid))
     if base_impl is None:
-        assert isinstance(raw_bytes, (bytes, bytearray))
+        # The first record of a storage carries its bytes; a later one names
+        # it by id.  Anything else is a damaged file, refused here before
+        # the engine is handed a length it would misread.
+        if not isinstance(raw_bytes, (bytes, bytearray)) or len(raw_bytes) % itemsize:
+            raise pickle.UnpicklingError(
+                f"tensor record {tid}: storage {sid} has no bytes, or a byte "
+                f"count that is not a multiple of {dtype_name}'s {itemsize}"
+            )
         base_impl = _C_engine.TensorImpl.from_bytes(
             bytes(raw_bytes),
             [len(raw_bytes) // itemsize],
@@ -561,6 +318,14 @@ def save(
     That attribute is detected, packed alongside ``obj`` in the
     container, and reattached on :func:`load`.
 
+    Every tensor comes back with exactly the values it held.  Tensors
+    saved together that share a storage — a tensor and its views, or
+    overlapping views — are written once and share it again after
+    :func:`load`; a tensor that shares with nothing else saved is written
+    dense, so a view saved alone does not carry the rest of its base.  On
+    Metal only the views taken through Lucid's view ops are known to
+    share; two tensors that merely read the same buffer are saved apart.
+
     Examples
     --------
     >>> import lucid
@@ -572,14 +337,9 @@ def save(
     if sd_metadata is not None:
         container["_state_dict_metadata"] = sd_metadata
 
-    keep_alive, tensor_meta, storage_blobs = _build_storage_plan(container)
+    keep_alive, plan = _build_storage_plan(container)
     buf = io.BytesIO()
-    pickler = _LucidPickler(
-        buf,
-        protocol=pickle_protocol,
-        tensor_meta=tensor_meta,
-        storage_blobs=storage_blobs,
-    )
+    pickler = _LucidPickler(buf, pickle_protocol, plan=plan)
     pickler.dump(container)
     del keep_alive
     data = buf.getvalue()

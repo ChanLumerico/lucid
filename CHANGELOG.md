@@ -814,6 +814,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - check per-stage and per-image lengths at the boundary
 
+- save Metal views by their own values (LCD-460)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
