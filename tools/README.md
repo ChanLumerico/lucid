@@ -18,9 +18,10 @@ Python is `lucid/` minus `lucid/test/`; C++ is `lucid/_C/`.
 | collector | measures | defect class |
 |---|---|---|
 | `ruff` | the project's lint config plus `B BLE S110 TRY PGH C90 PLR0911/0912/0915 ERA ARG SIM RET PIE PERF UP RUF100` (`TRY003` off) | D1, D3, D4, D7, style |
-| `counters` | `type: ignore[code]` per code (a bare ignore is `type-ignore-bare`), `cast(`, `noqa[CODE]`, lines over the file cap (1500 py / 3000 C++) | D1, D3 |
-| `lizard` | functions over 100 lines or CCN 15 (py + C++); `_`-internal Python functions over 7 parameters | D3 |
+| `counters` | `type: ignore[code]` per code (a bare ignore is `type-ignore-bare`), `cast(`, `noqa[CODE]`, `Any` as a name (`any`: annotations, `typing.Any` and the import alike), lines over the file cap (1500 py / 3000 C++) | D1, D3 |
+| `lizard` | functions over 100 lines or CCN 15 (py + C++), and per file how far over (`function-length-excess` / `function-ccn-excess`: the sum of `max(0, value − limit)`); `_`-internal Python functions over 7 parameters | D3 |
 | `vulture` | dead code at 60 % confidence; scans tests as users of the API, counts only production files | D7 |
+| `engine` | functions of `lucid/_C/engine.pyi` (top level and submodules, `nn.bce_loss`) that no production module reaches through an engine-rooted path (`_C_engine.x`, an alias such as `_R = _C_engine`, `from lucid._C.engine import x`, `getattr(_C_engine, "x")`); bindings for tests and tools are listed in `config.ENGINE_TEST_ONLY_BINDINGS`. `python -m tools.quality_gate.collectors.bindings` lists them | D7 |
 | `jscpd` | clone pairs of 8+ lines / 50+ tokens (py + C++), via `npx jscpd@5.4.0` | D2 |
 | `mypy` | the documented `mypy --strict lucid/` verbatim (`config.MYPY_COMMAND`) plus `warn-unused-ignores`, `ignore-without-code`, `redundant-cast`, `redundant-expr`, `truthy-bool`, `possibly-undefined`; every file it reports counts, including the `tools/` modules `lucid/` imports | D1, D4 |
 | `semgrep` | Lucid rules in `tools/semgrep/rules/` (none until DS-4) | D5 |
@@ -28,8 +29,11 @@ Python is `lucid/` minus `lucid/test/`; C++ is `lucid/_C/`.
 
 Deliberately off: `FBT` and public-API `PLR0913` (signatures follow the
 reference framework's), `TRY003` (a library's exceptions carry their own
-messages). The thresholds live in `tools/quality_gate/config.py` and are
-recorded in the baseline. The tool versions are pinned in the `quality`
+messages). The thresholds live in `tools/quality_gate/config.py`, and
+`config.contract()` records them in the baseline per collector, together
+with what else a count depends on: the vulture whitelist (a hash of its
+AST), the ignored decorators and the engine allowlist (see "The rules it
+enforces"). The tool versions are pinned in the `quality`
 dependency group in `pyproject.toml` (`pip install --group quality`),
 because a different version counts differently.
 
@@ -75,7 +79,27 @@ gate could not measure. A tool that crashes is never read as "no findings".
   branch trade a cheap removal for a new finding elsewhere.
 - **Counts, not sites.** Moving a finding within a file is free. Swapping
   one finding for another of the same rule in the same file is not
-  detected. That is the price of not churning on every edit.
+  detected. That is the price of not churning on every edit. Swapping
+  across rules is: a `type: ignore` traded for an `Any` lowers one key and
+  raises another, and the raise fails (DS-16).
+- **The contract may not change silently.** A looser threshold, a new
+  whitelist name or a new ignored decorator lowers counts without
+  removing any slop. Before DS-18 such an edit reached the baseline as a
+  plain `--update`. Now `check`, `--update` and `--diff` refuse a baseline
+  whose recorded contract differs for a collector they run, and name the
+  entry. Only `--rebaseline --reason` records a new contract, so such an
+  edit ships with one (orchestrator only). A rebaseline narrowed with
+  `--collectors` records the contract of the collectors it measured and
+  keeps the rest as recorded, so it cannot bless another collector's
+  change. Comments and layout in the whitelist are free; its names are not.
+- **A whitelist entry hides its name everywhere.** vulture keeps one global
+  set of used names, so `_.type_as` keeps every dead `type_as` in
+  `lucid/` alive, not just the one it was written for. An entry is
+  therefore admitted only when vulture needs it (a run without it reports
+  a production definition: `test_every_whitelist_entry_is_needed`) and
+  something outside Python's view reaches that definition, named on the
+  same line. A name Python already uses needs no entry; an unused one
+  belongs in a deletion.
 
 ### Where it runs
 
@@ -181,10 +205,14 @@ package's own suite.
    is cheap enough for pre-commit, and `default` (a default collector runs
    in both `--full` and `--diff`; there is no CI-only set). Register it in
    `all_collectors()`.
-2. Map its rules to a defect class in `config._CLASS_RULES`.
+2. Map its rules to a defect class in `config._CLASS_RULES`, and put the
+   settings its counts depend on in `config.contract()` under its `name`.
 3. Its existing findings raise counts, so the orchestrator runs
    `--rebaseline --reason "<collector> added"` in the same commit.
 4. Seed a regression for it in `tools/test_quality_gate.py`.
 
 Tests: `.venv/bin/python3 -m pytest tools/test_quality_gate.py` (scratch git
-repositories; the jscpd case skips without Node).
+repositories; the jscpd case skips without Node;
+`test_every_whitelist_entry_is_needed` runs vulture over the real `lucid/`).
+The dead-code collectors' and the contract's unit tests are in
+`lucid/test/unit/test_quality_gate_deadcode.py` and run with the suite.

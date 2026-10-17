@@ -1,7 +1,9 @@
-"""Lucid's own counters: suppressions, casts, and file size over the cap.
+"""Lucid's own counters: suppressions, casts, ``Any``, and file size over the cap.
 
-Read with ``tokenize`` so a ``cast(`` or ``type: ignore`` inside a string or
-docstring is not counted; only real comments and real calls are.
+Read with ``tokenize`` so a ``cast(``, ``Any`` or ``type: ignore`` inside a
+string or docstring is not counted; only real comments, calls and names are.
+``Any`` is counted as a name, so ``typing.Any`` and its import count too:
+trading a ``type: ignore`` for an ``Any`` is laundering, not a fix (DS-16).
 """
 
 import io
@@ -38,6 +40,8 @@ def count_python(text: str) -> dict[str, int]:
             if tok.type == tokenize.COMMENT:
                 for rule in _comment_rules(tok.string):
                     counts[rule] += 1
+            elif tok.type == tokenize.NAME and tok.string == "Any":
+                counts["any"] += 1
             elif (
                 tok.type == tokenize.OP
                 and tok.string == "("
@@ -64,7 +68,7 @@ class CountersCollector(Collector):
 
     @override
     def version(self) -> str:
-        return "1"
+        return "2"  # 2: counts `Any`
 
     @override
     def collect(self, scope: Scope) -> Counts:

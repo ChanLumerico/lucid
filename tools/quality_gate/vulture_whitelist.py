@@ -1,10 +1,18 @@
 """Names vulture cannot see used, listed so they are not counted as dead.
 
-vulture reads this file as Python and treats every name in it as used.
-Add a name here only when something outside Python's view calls it — the
-C++ engine through pybind11, a lookup by string, a protocol the runtime
-invokes — and say which on the same line.  A name that is merely unused
-belongs in a deletion, not here.
+vulture reads this file as Python and treats every name in it as used — in
+*every* module: its used-name set is global, so an entry also hides any dead
+symbol of the same name elsewhere.  An entry therefore has to earn its place:
+
+- vulture needs it: without it, a production definition is reported;
+- something outside Python's view reaches that definition — the C++ engine
+  through pybind11, a lookup by string, a protocol the runtime invokes, a
+  test or tool that probes the public surface by name — named on its line.
+
+A name that is merely unused belongs in a deletion, not here, and a name
+Python code already uses needs no entry.  The file is part of the gate's
+contract (``config.contract``): adding or removing a name is
+``--rebaseline --reason``, while comments and layout are free.
 
 Dunders are already ignored by the gate (``--ignore-names "__*__"``).
 """
@@ -28,17 +36,6 @@ _._FloatConvT  # cast("_FloatConvT", mod) in lucid/nn/quantized/conv_transpose.p
 _._FloatLinear  # cast("_FloatLinear", mod) in lucid/nn/quantized/{,dynamic/}linear.py
 _._FloatEmbedding  # cast("_FloatEmbedding", mod) in lucid/nn/quantized/sparse.py
 
-# ── Top-level lazy group loaders (invoked via _GROUP_LOADERS in __getattr__) ─
-_._load_factories  # lucid/__init__.py lazy loader for _FACTORY_NAMES
-_._load_ops  # lucid/__init__.py lazy loader for _OPS_NAMES
-_._load_scatter  # lucid/__init__.py lazy loader for _SCATTER_NAMES
-_._load_grad  # lucid/__init__.py lazy loader for _GRAD_NAMES
-_._load_predicates  # lucid/__init__.py lazy loader for _PREDICATE_NAMES
-_._load_serialization  # lucid/__init__.py lazy loader for _SERIALIZATION_NAMES
-_._load_composite_ops  # lucid/__init__.py lazy loader for _COMPOSITE_NAMES_CACHED
-_._load_method_aliases  # lucid/__init__.py lazy loader for _METHOD_ALIASES
-_._load_type_aliases  # lucid/__init__.py lazy loader for _TYPE_ALIAS_NAMES
-
 # ── GenieConfig fields read dynamically via getattr(self, f"{stack}_...") ─
 _.tokenizer_encoder_head_dim  # GenieConfig.attention_head_dim / __post_init__
 _.tokenizer_decoder_head_dim  # GenieConfig.attention_head_dim / __post_init__
@@ -49,7 +46,7 @@ _.action_decoder_layers  # _STTransformer.__init__ / GenieConfig.__post_init__
 _.action_decoder_heads  # _STTransformer.__init__ / GenieConfig.attention_head_dim
 _.action_decoder_head_dim  # GenieConfig.attention_head_dim / __post_init__
 
-# ── WeightsEnum members (resolved by name / iterated via WeightsEnum) ─────
+# ── WeightsEnum members, reached by tag through weights.resolve_weights ──
 _.ALIEN  # DIAMOND_Weights member in lucid/models/generative/diamond/_weights.py
 _.AMIDAR  # DIAMOND_Weights member in lucid/models/generative/diamond/_weights.py
 _.ASSAULT  # DIAMOND_Weights member in lucid/models/generative/diamond/_weights.py
@@ -101,11 +98,8 @@ _.time_ms  # OpEvent.time_ms property in lucid/profiler/__init__.py
 _.key_averages  # Profiler.key_averages in lucid/profiler/__init__.py
 _.export_chrome_trace  # Profiler.export_chrome_trace in lucid/profiler/__init__.py
 _.smallest_normal  # finfo.smallest_normal field in lucid/_dtype.py
-_.ParamGroupDict  # optimizer ParamGroupDict TypedDict in lucid/_types.py
-_.maximize  # ParamGroupDict.maximize key in lucid/_types.py
 
 # ── Public distributions / models / tokenizer / transforms surface ────────
-_.has_enumerate_support  # Distribution.has_enumerate_support class attribute
 _.open_unit_interval  # lucid.distributions.constraints.open_unit_interval
 _.greater_than  # lucid.distributions.constraints.greater_than
 _.less_than  # lucid.distributions.constraints.less_than
@@ -117,7 +111,6 @@ _.compute_model_summary  # called by tools/build_model_summaries.py
 _.world_model_loss  # DIAMONDModel.world_model_loss in lucid/models/generative/diamond/_model.py
 _.infer_actions  # GenieModel.infer_actions in lucid/models/generative/genie/_model.py
 _.get_output_embeddings  # TransformerModel.get_output_embeddings in lucid/models/text/transformer/_model.py
-_.resample_rel_pos  # CoAtNet relative-position resize in lucid/models/vision/coatnet/_model.py
 _.stage_features  # ConvNeXt.stage_features property in lucid/models/vision/convnext/_model.py
 _.decoder_hidden_states  # Seq2SeqLMOutput field in lucid/models/_output.py
 _.decoder_attentions  # Seq2SeqLMOutput field in lucid/models/_output.py

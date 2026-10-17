@@ -2,7 +2,7 @@
 
 A collector is *local* when a file's count depends on that file alone
 (ruff, the counters, lizard): the pre-commit fast path can then measure only
-the changed files.  The cross-file ones (vulture, jscpd, mypy) always
+the changed files.  The cross-file ones (vulture, engine, jscpd, mypy) always
 measure the whole tree; of those only jscpd is cheap enough for ``--fast``.
 """
 
@@ -54,6 +54,7 @@ def run_tool(
 
 
 def all_collectors() -> list[Collector]:
+    from tools.quality_gate.collectors.bindings import EngineBindingsCollector
     from tools.quality_gate.collectors.clang_tidy import ClangTidyCollector
     from tools.quality_gate.collectors.complexity import LizardCollector
     from tools.quality_gate.collectors.counters import CountersCollector
@@ -68,6 +69,7 @@ def all_collectors() -> list[Collector]:
         CountersCollector(),
         LizardCollector(),
         VultureCollector(),
+        EngineBindingsCollector(),
         JscpdCollector(),
         MypyCollector(),
         SemgrepCollector(),

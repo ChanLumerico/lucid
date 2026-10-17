@@ -94,6 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - lucid.stft / istft and the *_window factories (LCD-109)
 
+- close four ratchet holes (LCD-469)
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

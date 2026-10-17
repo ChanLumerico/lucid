@@ -114,6 +114,30 @@ def _warn_versions(baseline: Baseline, collectors: Iterable[Collector]) -> None:
             )
 
 
+def contract_drift(baseline: Baseline, collectors: Iterable[Collector]) -> list[str]:
+    """The contract entries of *collectors* the baseline recorded otherwise (or not at all)."""
+    contract = config.contract()
+    drift: list[str] = []
+    for c in collectors:
+        for key, value in contract.get(c.name, {}).items():
+            if key not in baseline.thresholds:
+                drift.append(f"{c.name:9s} {key}: not recorded -> {value!r}")
+            elif baseline.thresholds[key] != value:
+                drift.append(f"{c.name:9s} {key}: {baseline.thresholds[key]!r} -> {value!r}")
+    return drift
+
+
+def _print_drift(drift: list[str]) -> None:
+    print(f"\n✗ the gate's contract differs from the one the baseline records ({len(drift)}):")
+    for line in drift:
+        print(f"    {line}")
+    print(
+        "  Counts taken under another contract are not comparable, so a change to\n"
+        "  config.py, the vulture whitelist or an allowlist ships with (orchestrator only)\n"
+        '    .venv/bin/python3 -m tools.quality_gate --rebaseline --reason "<why>"'
+    )
+
+
 def check(
     root: Path,
     collectors: list[Collector],
@@ -125,6 +149,9 @@ def check(
     baseline_path = root / config.BASELINE_PATH
     baseline = load_baseline(baseline_path)
     _warn_versions(baseline, collectors)
+    if drift := contract_drift(baseline, collectors):
+        _print_drift(drift)
+        return 1
     run = measure(root, collectors, files, workdir)
     before, stale = _baseline_view(root, baseline, run.measured)
     delta = Delta(before, restrict(run.counts, run.measured))
@@ -160,6 +187,10 @@ def update(root: Path, collectors: list[Collector], files: list[str] | None, wor
     """Lower the baseline to the measured counts; refuse if any count rose."""
     baseline_path = root / config.BASELINE_PATH
     baseline = load_baseline(baseline_path)
+    if drift := contract_drift(baseline, collectors):
+        # A looser contract lowers counts; recording that as a decrease is DS-18.
+        _print_drift(drift)
+        return 1
     run = measure(root, collectors, files, workdir)
     since = baseline_commit(root)
     moved = renames(root, since) if since else {}
@@ -185,6 +216,19 @@ def update(root: Path, collectors: list[Collector], files: list[str] | None, wor
     return 0
 
 
+def _recorded_contract(recorded: dict[str, object], ran: list[Collector]) -> dict[str, object]:
+    """The contract a rebaseline writes: current for the collectors it measured and
+    for entries not yet recorded, as recorded for the rest — a narrowed
+    ``--collectors`` run must not bless another collector's changed contract."""
+    contract = config.contract()
+    measured = {c.name for c in ran}
+    return {
+        key: value if name in measured or key not in recorded else recorded[key]
+        for name, entries in contract.items()
+        for key, value in entries.items()
+    }
+
+
 def rebaseline(root: Path, collectors: list[Collector], reason: str, workdir: Path) -> int:
     """Write the measured counts as they are — raises included.  Orchestrator only."""
     if not reason.strip():
@@ -197,7 +241,7 @@ def rebaseline(root: Path, collectors: list[Collector], reason: str, workdir: Pa
     baseline.counts = {**kept, **{k: n for k, n in run.counts.items() if n > 0}}
     for c in collectors:
         baseline.tools[c.name] = c.version()
-    baseline.thresholds = config.thresholds()
+    baseline.thresholds = _recorded_contract(baseline.thresholds, collectors)
     baseline.rebaselines.append(rebaseline_entry(reason))
     save_baseline(baseline_path, baseline)
     print_delta(f"REBASELINE ({reason})", Delta(old, restrict(run.counts, run.measured)))
@@ -263,11 +307,15 @@ def diff(root: Path, collectors: list[Collector], ref: str, workdir: Path) -> in
     slack = sum(b - a for b, a in over.decreases.values())
     if slack:
         print(f"  note: the baseline can be lowered by {slack} (run --update)")
-    bad = len(delta.increases) + len(over.increases)
+    drift = contract_drift(baseline, collectors)
+    if drift:
+        _print_drift(drift)
+    bad = len(delta.increases) + len(over.increases) + len(drift)
     verdict = "✗" if bad else "✓"
     print(
         f"RESULT {verdict}: {len(delta.increases)} increase(s) vs {ref}, "
-        f"{len(over.increases)} over baseline, {len(delta.decreases)} decrease(s)"
+        f"{len(over.increases)} over baseline, {len(delta.decreases)} decrease(s), "
+        f"{len(drift)} contract change(s)"
     )
     return 1 if bad else 0
 

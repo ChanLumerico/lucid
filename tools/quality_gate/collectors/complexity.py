@@ -1,4 +1,9 @@
-"""lizard: long, branchy, and over-parameterised functions in Python and C++."""
+"""lizard: long, branchy, and over-parameterised functions in Python and C++.
+
+``function-length`` / ``function-ccn`` count the functions over a limit;
+``function-length-excess`` / ``function-ccn-excess`` add up how far over
+they are, so an already-long function cannot grow unseen (DS-29).
+"""
 
 import re
 from typing import override
@@ -8,6 +13,14 @@ import lizard
 from tools.quality_gate import config
 from tools.quality_gate.collectors import Collector
 from tools.quality_gate.core import Counts, Scope
+
+_RULES = (
+    "function-length",
+    "function-ccn",
+    "internal-args",
+    "function-length-excess",
+    "function-ccn-excess",
+)
 
 
 def _short_name(name: str) -> str:
@@ -29,12 +42,16 @@ class LizardCollector(Collector):
         for path in scope.files:
             info = lizard.analyze_file(str(scope.root / path))
             is_py = path.endswith(".py")
-            rules = {"function-length": 0, "function-ccn": 0, "internal-args": 0}
+            rules = dict.fromkeys(_RULES, 0)
             for fn in info.function_list:
-                if fn.length > config.FUNCTION_LENGTH_MAX:
+                long_by = fn.length - config.FUNCTION_LENGTH_MAX
+                branchy_by = fn.cyclomatic_complexity - config.FUNCTION_CCN_MAX
+                if long_by > 0:
                     rules["function-length"] += 1
-                if fn.cyclomatic_complexity > config.FUNCTION_CCN_MAX:
+                    rules["function-length-excess"] += long_by
+                if branchy_by > 0:
                     rules["function-ccn"] += 1
+                    rules["function-ccn-excess"] += branchy_by
                 if (
                     is_py
                     and _short_name(fn.name).startswith("_")

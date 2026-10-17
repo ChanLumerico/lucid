@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from tools.quality_gate import config
 from tools.quality_gate.collectors.counters import count_python
 from tools.quality_gate.core import Baseline, MergeRefused, merge_baselines
 from tools.quality_gate.unlaunder import strip_ignores, strip_transitional, unwrap_casts
@@ -52,6 +53,10 @@ def test_counters_read_comments_and_calls_not_strings() -> None:
         "s = 'cast(int, y)  # type: ignore[override]'\n"
         "w = f(1)  # noqa: BLE001, S110\n"
         "v = 2  # noqa\n"
+        "import typing\n"
+        "from typing import Any\n"
+        "a: Any = typing.Any  # Any in a comment is not counted\n"
+        "t = 'Any'\n"
     )
     assert count_python(src) == {
         "cast": 1,
@@ -61,6 +66,7 @@ def test_counters_read_comments_and_calls_not_strings() -> None:
         "noqa[BLE001]": 1,
         "noqa[S110]": 1,
         "noqa-bare": 1,
+        "any": 3,
     }
 
 
@@ -170,6 +176,7 @@ SEEDS = {
     "long-function": "\n\ndef long() -> int:\n    n = 0\n"
     + "    n += 1\n" * 200
     + "    return n\n",
+    "any": "\nfrom typing import Any\n\nv: Any = 1\n",
 }
 
 
@@ -190,6 +197,156 @@ def test_diff_reports_the_increase_against_a_ref(repo: Path, seed: str) -> None:
     assert out.returncode == 1, out.stdout + out.stderr
     assert "SLOP DELTA vs HEAD~1" in out.stdout
     assert "← INCREASE" in out.stdout
+
+
+def test_trading_a_type_ignore_for_any_is_an_increase(repo: Path) -> None:
+    """DS-16: 3681fd918 swapped 17 ``type: ignore`` for ``Any`` and the gate,
+    which did not count ``Any``, read the swap as a decrease."""
+    (repo / "lucid" / "pkg" / "other.py").write_text(
+        CLEAN + "from typing import Any\n\nx: Any = 1\n"
+    )
+    out = gate(repo, "--fast")
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "+ counters  any " in out.stdout and "lucid/pkg/other.py  0 -> 2" in out.stdout
+    assert "- counters  type-ignore[misc]" in out.stdout
+
+
+def _function(lines: int, branches: int) -> str:
+    body = "    if n:\n        n += 1\n" * branches + "    n += 1\n" * lines
+    return f"def big(n: int) -> int:\n{body}    return n\n"
+
+
+@pytest.mark.parametrize(
+    ("rule", "before", "after"),
+    [
+        ("function-length-excess", _function(150, 0), _function(170, 0)),
+        ("function-ccn-excess", _function(0, 20), _function(0, 25)),
+    ],
+)
+def test_an_already_long_function_may_not_grow(
+    repo: Path, rule: str, before: str, after: str
+) -> None:
+    """DS-29: counting the functions over a limit missed `_build_plan` growing
+    425 -> 480 lines; the excess over the limit is what may not rise."""
+    (repo / "lucid" / "pkg" / "big.py").write_text(before)
+    assert gate(repo, "--rebaseline", "--reason", "t", "--collectors", FAST).returncode == 0
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "a long function")
+    (repo / "lucid" / "pkg" / "big.py").write_text(after)
+    # FAST alone: the repeated lines would be a jscpd clone besides.
+    out = gate(repo, "--fast", "--collectors", FAST)
+    assert out.returncode == 1, out.stdout + out.stderr
+    rises = [line.split()[2] for line in out.stdout.splitlines() if line.startswith("    + ")]
+    assert rises == [rule], out.stdout  # the count of long functions did not move
+    git(repo, "commit", "-qam", "grow it")
+    diff = gate(repo, "--diff", "HEAD~1", "--collectors", FAST)
+    assert diff.returncode == 1 and rule in diff.stdout, diff.stdout
+
+
+ENGINE_STUB = """\
+def cube(x: int) -> int: ...
+def cube_root(x: int) -> int: ...
+
+class _nn_namespace:
+    @staticmethod
+    def bce_loss(x: int) -> int: ...
+nn: _nn_namespace
+"""
+
+ENGINE_USER = """\
+from lucid._C import engine as _C_engine
+
+
+def f(x: int) -> int:
+    return _C_engine.cube(_C_engine.cube_root(_C_engine.nn.bce_loss(x)))
+"""
+
+
+def test_dropping_the_last_caller_of_a_binding_is_an_increase(tmp_path: Path) -> None:
+    """DS-24: a binding whose last production caller goes is a dead entry point."""
+    root = tmp_path / "repo"
+    (root / "lucid" / "_C").mkdir(parents=True)
+    (root / "tools").mkdir()
+    (root / "lucid" / "_C" / "engine.pyi").write_text(ENGINE_STUB)
+    (root / "lucid" / "use.py").write_text(ENGINE_USER)
+    git(root, "init", "-q", "-b", "main")
+    done = gate(root, "--rebaseline", "--reason", "t", "--collectors", "engine")
+    assert done.returncode == 0, done.stdout + done.stderr
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+    assert gate(root, "--full", "--collectors", "engine").returncode == 0
+    (root / "lucid" / "use.py").write_text(ENGINE_USER.replace("_C_engine.cube_root(", "("))
+    out = gate(root, "--full", "--collectors", "engine")
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "+ engine    unbound" in out.stdout and "lucid/_C/engine.pyi  0 -> 1" in out.stdout
+    git(root, "commit", "-qam", "drop a caller")
+    assert gate(root, "--diff", "HEAD~1", "--collectors", "engine").returncode == 1
+
+
+def _tamper_contract(root: Path, key: str, value: object) -> Path:
+    """Record *value* for *key*, as a baseline written under another contract would."""
+    path = root / "tools" / "quality_baseline.json"
+    data = json.loads(path.read_text())
+    data["thresholds"][key] = value
+    path.write_text(json.dumps(data, indent=1) + "\n")
+    git(root, "commit", "-qam", f"baseline recorded under another {key}")
+    return path
+
+
+def test_a_contract_change_needs_a_rebaseline(repo: Path) -> None:
+    """DS-18: an edit that changes what the counts mean (a threshold, the
+    vulture whitelist, an allowlist) may not reach the baseline as --update."""
+    path = _tamper_contract(repo, "function_length_max", 90)
+    out = gate(repo, "--fast")
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "contract differs" in out.stdout and "function_length_max: 90 -> 100" in out.stdout
+    before = path.read_text()
+    assert gate(repo, "--update", "--fast").returncode == 1
+    assert path.read_text() == before
+    diff = gate(repo, "--diff", "HEAD", "--collectors", FAST)
+    assert diff.returncode == 1 and "1 contract change(s)" in diff.stdout, diff.stdout
+    # Only the collector the setting belongs to is held to it ...
+    assert gate(repo, "--fast", "--collectors", "ruff,counters").returncode == 0
+    # ... and a rebaseline that did not measure it leaves its record alone.
+    assert gate(repo, "--rebaseline", "--reason", "t", "--collectors", "ruff").returncode == 0
+    assert json.loads(path.read_text())["thresholds"]["function_length_max"] == 90
+    assert gate(repo, "--rebaseline", "--reason", "t", "--collectors", FAST).returncode == 0
+    assert json.loads(path.read_text())["thresholds"]["function_length_max"] == 100
+    assert gate(repo, "--fast").returncode == 0
+
+
+def test_a_whitelist_change_holds_vulture_runs_only(repo: Path) -> None:
+    _tamper_contract(repo, "vulture_whitelist_ast_sha256", "0" * 16)
+    assert gate(repo, "--fast").returncode == 0  # pre-commit does not run vulture
+    for mode in ("--full", "--update"):
+        out = gate(repo, mode, "--collectors", "vulture")
+        assert out.returncode == 1, out.stdout + out.stderr
+        assert "vulture_whitelist_ast_sha256: '0000000000000000' ->" in out.stdout
+
+
+def test_every_whitelist_entry_is_needed() -> None:
+    """DS-18: vulture's used-name set is global, so an entry for a name Python
+    code already uses hides nothing today and a namesake's death tomorrow.
+    Every entry must be one vulture would report without the whitelist."""
+    cmd = [
+        sys.executable,
+        "-m",
+        "vulture",
+        "lucid",
+        f"--min-confidence={config.VULTURE_MIN_CONFIDENCE}",
+        "--ignore-names=" + ",".join(config.VULTURE_IGNORE_NAMES),
+        "--ignore-decorators=" + ",".join(config.VULTURE_IGNORE_DECORATORS),
+    ]
+    out = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, check=False)
+    assert out.returncode in (0, 3), out.stderr
+    reported = {
+        line.split("'")[1]
+        for line in out.stdout.splitlines()
+        if line.startswith("lucid/") and not line.startswith("lucid/test/") and "'" in line
+    }
+    tree = ast.parse(config.VULTURE_WHITELIST.read_text())
+    entries = {n.attr for n in ast.walk(tree) if isinstance(n, ast.Attribute)}
+    assert entries and not entries - reported, sorted(entries - reported)
 
 
 def test_new_file_may_not_start_over_the_loc_cap(repo: Path) -> None:
