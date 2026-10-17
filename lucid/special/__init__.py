@@ -909,7 +909,7 @@ def polygamma(n: int, x: Tensor) -> Tensor:
     n = int(n)
     if n < 0:
         raise ValueError(f"polygamma: n must be ≥ 0, got {n}")
-    return _polygamma(n, _real(x))
+    return _polygamma(n, x)
 
 
 # ── Spherical Bessel ───────────────────────────────────────────────────────
@@ -973,27 +973,25 @@ def spherical_bessel_j0(x: Tensor) -> Tensor:
 def _ortho_poly(
     x: Tensor,
     n: int,
-    p0: Tensor,
-    p1: Tensor,
-    advance: Callable[[Tensor, Tensor, int], Tensor],
+    first: Callable[[Tensor], Tensor],
+    advance: Callable[[Tensor, Tensor, Tensor, int], Tensor],
 ) -> Tensor:
     """Generic orthogonal-polynomial recurrence driver.
 
-    ``advance(p_n, p_nm1, k)`` returns ``P_{k+1}`` given ``P_k`` and
-    ``P_{k-1}``.  ``k`` is the index of ``p_n`` (so ``advance`` is called
-    with ``k = 1, 2, ..., n-1`` to step from ``P_1`` to ``P_n``).
+    ``P_0`` is 1 and ``first(x)`` is ``P_1``; ``advance(x, p_n, p_nm1, k)``
+    returns ``P_{k+1}`` given ``P_k`` and ``P_{k-1}``.  ``k`` is the index
+    of ``p_n`` (so ``advance`` is called with ``k = 1, 2, ..., n-1`` to step
+    from ``P_1`` to ``P_n``).  An integer or bool ``x`` is evaluated at the
+    default float (:func:`_real`), as the reference evaluates it.
     """
     if n < 0:
         raise ValueError("orthogonal polynomial order must be >= 0")
+    x = _real(x)
     if n == 0:
-        return p0
-    if n == 1:
-        return p1
-    p_prev: Tensor = p0
-    p_curr: Tensor = p1
+        return lucid.ones_like(x)
+    p_prev, p_curr = lucid.ones_like(x), first(x)
     for k in range(1, n):
-        p_next = advance(p_curr, p_prev, k)
-        p_prev, p_curr = p_curr, p_next
+        p_prev, p_curr = p_curr, advance(x, p_curr, p_prev, k)
     return p_curr
 
 
@@ -1038,9 +1036,7 @@ def chebyshev_polynomial_t(x: Tensor, n: int) -> Tensor:
     >>> chebyshev_polynomial_t(lucid.tensor([-1.0, 0.0, 0.5, 1.0]), n=3)
     tensor([-1., -0., -1., 1.])
     """
-    p0 = lucid.ones_like(x)
-    p1 = x
-    return _ortho_poly(x, n, p0, p1, lambda p, q, _k: 2 * x * p - q)
+    return _ortho_poly(x, n, lambda v: v, lambda v, p, q, _k: 2 * v * p - q)
 
 
 def chebyshev_polynomial_u(x: Tensor, n: int) -> Tensor:
@@ -1083,9 +1079,7 @@ def chebyshev_polynomial_u(x: Tensor, n: int) -> Tensor:
     >>> chebyshev_polynomial_u(lucid.tensor([-1.0, 0.0, 0.5, 1.0]), n=3)
     tensor([-4., -0., -1., 4.])
     """
-    p0 = lucid.ones_like(x)
-    p1 = 2 * x
-    return _ortho_poly(x, n, p0, p1, lambda p, q, _k: 2 * x * p - q)
+    return _ortho_poly(x, n, lambda v: 2 * v, lambda v, p, q, _k: 2 * v * p - q)
 
 
 def chebyshev_polynomial_v(x: Tensor, n: int) -> Tensor:
@@ -1132,9 +1126,7 @@ def chebyshev_polynomial_v(x: Tensor, n: int) -> Tensor:
     >>> chebyshev_polynomial_v(lucid.tensor([-1.0, 0.0, 1.0]), n=2)
     tensor([5., -1., 1.])
     """
-    p0 = lucid.ones_like(x)
-    p1 = 2 * x - 1
-    return _ortho_poly(x, n, p0, p1, lambda p, q, _k: 2 * x * p - q)
+    return _ortho_poly(x, n, lambda v: 2 * v - 1, lambda v, p, q, _k: 2 * v * p - q)
 
 
 def chebyshev_polynomial_w(x: Tensor, n: int) -> Tensor:
@@ -1182,9 +1174,7 @@ def chebyshev_polynomial_w(x: Tensor, n: int) -> Tensor:
     >>> chebyshev_polynomial_w(lucid.tensor([-1.0, 0.0, 1.0]), n=2)
     tensor([1., -1., 5.])
     """
-    p0 = lucid.ones_like(x)
-    p1 = 2 * x + 1
-    return _ortho_poly(x, n, p0, p1, lambda p, q, _k: 2 * x * p - q)
+    return _ortho_poly(x, n, lambda v: 2 * v + 1, lambda v, p, q, _k: 2 * v * p - q)
 
 
 def shifted_chebyshev_polynomial_t(x: Tensor, n: int) -> Tensor:
@@ -1363,14 +1353,8 @@ def hermite_polynomial_h(x: Tensor, n: int) -> Tensor:
     >>> hermite_polynomial_h(lucid.tensor([-1.0, 0.0, 1.0]), n=3)
     tensor([4., -0., -4.])
     """
-    p0 = lucid.ones_like(x)
-    p1 = 2 * x
     return _ortho_poly(
-        x,
-        n,
-        p0,
-        p1,
-        lambda p, q, k: 2 * x * p - 2 * float(k) * q,
+        x, n, lambda v: 2 * v, lambda v, p, q, k: 2 * v * p - 2 * float(k) * q
     )
 
 
@@ -1416,15 +1400,7 @@ def hermite_polynomial_he(x: Tensor, n: int) -> Tensor:
     >>> hermite_polynomial_he(lucid.tensor([-1.0, 0.0, 1.0]), n=3)
     tensor([2., -0., -2.])
     """
-    p0 = lucid.ones_like(x)
-    p1 = x
-    return _ortho_poly(
-        x,
-        n,
-        p0,
-        p1,
-        lambda p, q, k: x * p - float(k) * q,
-    )
+    return _ortho_poly(x, n, lambda v: v, lambda v, p, q, k: v * p - float(k) * q)
 
 
 def legendre_polynomial_p(x: Tensor, n: int) -> Tensor:
@@ -1468,14 +1444,11 @@ def legendre_polynomial_p(x: Tensor, n: int) -> Tensor:
     >>> legendre_polynomial_p(lucid.tensor([-1.0, 0.0, 0.5, 1.0]), n=3)
     tensor([-1., -0., -0.4375, 1.])
     """
-    p0 = lucid.ones_like(x)
-    p1 = x
     return _ortho_poly(
         x,
         n,
-        p0,
-        p1,
-        lambda p, q, k: ((2 * k + 1) * x * p - float(k) * q) / float(k + 1),
+        lambda v: v,
+        lambda v, p, q, k: ((2 * k + 1) * v * p - float(k) * q) / float(k + 1),
     )
 
 
@@ -1521,14 +1494,11 @@ def laguerre_polynomial_l(x: Tensor, n: int) -> Tensor:
     >>> laguerre_polynomial_l(lucid.tensor([0.0, 1.0, 2.0]), n=2)
     tensor([1., -0.5, -1.])
     """
-    p0 = lucid.ones_like(x)
-    p1 = 1 - x
     return _ortho_poly(
         x,
         n,
-        p0,
-        p1,
-        lambda p, q, k: ((2 * k + 1 - x) * p - float(k) * q) / float(k + 1),
+        lambda v: 1 - v,
+        lambda v, p, q, k: ((2 * k + 1 - v) * p - float(k) * q) / float(k + 1),
     )
 
 

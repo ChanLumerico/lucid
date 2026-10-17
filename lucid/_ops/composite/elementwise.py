@@ -12,7 +12,6 @@ Three subgroups:
 """
 
 import math
-import math as _math
 from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
@@ -1214,7 +1213,7 @@ def erfc(input: Tensor) -> Tensor:
     Parameters
     ----------
     input : Tensor
-        Real-valued input.
+        Real-valued input; a bool or integer one is taken at the default float.
 
     Returns
     -------
@@ -1227,6 +1226,7 @@ def erfc(input: Tensor) -> Tensor:
     >>> abs(lucid.erfc(lucid.tensor(4.0)).item() - 1.5417e-08) < 1e-12
     True
     """
+    input = _real(input)
     if input.dtype == lucid.float64:
         return _erfc_double(input)
     # ``where`` rather than ``abs``: the gradient of ``abs`` at 0 is 0,
@@ -1265,7 +1265,7 @@ def _erfc_double(x: Tensor) -> Tensor:
     frac = lucid.zeros_like(far)
     for k in range(60, 0, -1):
         frac = (0.5 * k) / (far + frac)
-    tail = lucid.exp(-far * far) / (_math.sqrt(_math.pi) * (far + frac))
+    tail = lucid.exp(-far * far) / (math.sqrt(math.pi) * (far + frac))
     value = lucid.where(z < 3.0, head, tail)
     return lucid.where(x >= 0.0, value, 2.0 - value)
 
@@ -1399,7 +1399,7 @@ def gcd(input: Tensor, other: Tensor) -> Tensor:
         Same shape and dtype as ``input``.  Each element is
         ``math.gcd(input_i, other_i)``.
     """
-    return _per_element(_math.gcd, input, other)
+    return _per_element(math.gcd, input, other)
 
 
 def lcm(input: Tensor, other: Tensor) -> Tensor:
@@ -1420,7 +1420,7 @@ def lcm(input: Tensor, other: Tensor) -> Tensor:
         Same shape and dtype as ``input``.  Each element is
         ``math.lcm(input_i, other_i)``.
     """
-    return _per_element(_math.lcm, input, other)
+    return _per_element(math.lcm, input, other)
 
 
 # ── Log-gamma and Digamma ─────────────────────────────────────────────────

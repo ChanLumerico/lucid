@@ -13,6 +13,7 @@ plumbing.
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from lucid import _dispatch
 from lucid._C import engine as _C_engine
 from lucid._ops import _adapters as A  # accessor for every signature-normaliser
 from lucid._ops._division import _make_div_adapter
@@ -97,6 +98,43 @@ def _bind_leading(
     return tuple(filled), rest
 
 
+_Unary = Callable[[_C_engine.TensorImpl], _C_engine.TensorImpl]
+
+
+def _float_valued(engine_fn: _Unary, *, engine_promotes: bool = True) -> _Unary:
+    """``engine_fn``, a unary op whose answer is floating, taking a bool or
+    integer operand at the default float (:func:`lucid._dispatch._float_operand`).
+
+    The entry's free function and its Tensor method both call this, so
+    ``lucid.exp2(i)`` and ``i.exp2()`` cast alike.
+
+    ``engine_promotes`` says the engine op makes that cast itself when the
+    target is float32 — its kernel's schema guard turns a bool or integer
+    operand into float32 — so while the default float is float32 the operand
+    goes straight through and the dtype is not read: a dtype read costs about
+    a third of a small unary call, the flag test a hundredth.  It is False
+    for the engine compositions that build the answer from other ops without
+    that guard — ``exp2`` multiplied an integer by a ``log 2`` truncated to
+    0, ``log1p`` refused to mix int and float — which take the cast on every
+    call.
+    """
+    if engine_promotes:
+
+        def _op(input: _C_engine.TensorImpl, /) -> _C_engine.TensorImpl:
+            if _dispatch._DEFAULT_FLOAT_IS_F32:
+                return engine_fn(input)
+            return engine_fn(_dispatch._float_operand(input))
+
+    else:
+
+        def _op(input: _C_engine.TensorImpl, /) -> _C_engine.TensorImpl:
+            return engine_fn(_dispatch._float_operand(input))
+
+    A._keep_engine_signature(_op, engine_fn)
+    _op.__qualname__ = _op.__name__
+    return _op
+
+
 _R = _C_engine  # shorthand
 
 # fmt: off
@@ -105,27 +143,27 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("neg",       _R.neg,       1, method_name="neg",       free_fn_name="neg"),
     OpEntry("abs",       _R.abs,       1, method_name="abs",       free_fn_name="abs"),
     OpEntry("sign",      _R.sign,      1, method_name="sign",      free_fn_name="sign"),
-    OpEntry("exp",       _R.exp,       1, method_name="exp",       free_fn_name="exp"),
-    OpEntry("log",       _R.log,       1, method_name="log",       free_fn_name="log"),
-    OpEntry("log2",      _R.log2,      1, method_name="log2",      free_fn_name="log2"),
-    OpEntry("sqrt",      _R.sqrt,      1, method_name="sqrt",      free_fn_name="sqrt"),
+    OpEntry("exp",       _float_valued(_R.exp),       1, method_name="exp",       free_fn_name="exp"),
+    OpEntry("log",       _float_valued(_R.log),       1, method_name="log",       free_fn_name="log"),
+    OpEntry("log2",      _float_valued(_R.log2),      1, method_name="log2",      free_fn_name="log2"),
+    OpEntry("sqrt",      _float_valued(_R.sqrt),      1, method_name="sqrt",      free_fn_name="sqrt"),
     # rsqrt: not in engine — implemented in Python as reciprocal(sqrt(x))
     OpEntry("square",    _R.square,    1, method_name="square",    free_fn_name="square"),
-    OpEntry("reciprocal",_R.reciprocal,1, method_name="reciprocal",free_fn_name="reciprocal"),
+    OpEntry("reciprocal",_float_valued(_R.reciprocal),1, method_name="reciprocal",free_fn_name="reciprocal"),
     OpEntry("floor",     _R.floor,     1, method_name="floor",     free_fn_name="floor"),
     OpEntry("ceil",      _R.ceil,      1, method_name="ceil",      free_fn_name="ceil"),
     OpEntry("round",     _R.round,     1, method_name="round",     free_fn_name="round"),
-    OpEntry("sin",       _R.sin,       1, method_name="sin",       free_fn_name="sin"),
-    OpEntry("cos",       _R.cos,       1, method_name="cos",       free_fn_name="cos"),
-    OpEntry("tan",       _R.tan,       1, method_name="tan",       free_fn_name="tan"),
-    OpEntry("arcsin",    _R.arcsin,    1, method_name="arcsin",    free_fn_name="arcsin"),
-    OpEntry("arccos",    _R.arccos,    1, method_name="arccos",    free_fn_name="arccos"),
-    OpEntry("arctan",    _R.arctan,    1, method_name="arctan",    free_fn_name="arctan"),
-    OpEntry("sinh",      _R.sinh,      1, method_name="sinh",      free_fn_name="sinh"),
-    OpEntry("cosh",      _R.cosh,      1, method_name="cosh",      free_fn_name="cosh"),
-    OpEntry("tanh",      _R.tanh,      1, method_name="tanh",      free_fn_name="tanh"),
+    OpEntry("sin",       _float_valued(_R.sin),       1, method_name="sin",       free_fn_name="sin"),
+    OpEntry("cos",       _float_valued(_R.cos),       1, method_name="cos",       free_fn_name="cos"),
+    OpEntry("tan",       _float_valued(_R.tan),       1, method_name="tan",       free_fn_name="tan"),
+    OpEntry("arcsin",    _float_valued(_R.arcsin),    1, method_name="arcsin",    free_fn_name="arcsin"),
+    OpEntry("arccos",    _float_valued(_R.arccos),    1, method_name="arccos",    free_fn_name="arccos"),
+    OpEntry("arctan",    _float_valued(_R.arctan),    1, method_name="arctan",    free_fn_name="arctan"),
+    OpEntry("sinh",      _float_valued(_R.sinh),      1, method_name="sinh",      free_fn_name="sinh"),
+    OpEntry("cosh",      _float_valued(_R.cosh),      1, method_name="cosh",      free_fn_name="cosh"),
+    OpEntry("tanh",      _float_valued(_R.tanh),      1, method_name="tanh",      free_fn_name="tanh"),
     OpEntry("relu",      _R.relu,      1, method_name="relu",      free_fn_name="relu"),
-    OpEntry("sigmoid",   _R.sigmoid,   1, method_name="sigmoid",   free_fn_name="sigmoid"),
+    OpEntry("sigmoid",   _float_valued(_R.sigmoid),   1, method_name="sigmoid",   free_fn_name="sigmoid"),
     OpEntry("silu",      _R.silu,      1, method_name="silu",      free_fn_name="silu"),
     # ``_R.gelu_exact``, not ``_R.gelu``.  The engine's ``gelu`` is the tanh
     # approximation, and ``F.gelu``'s default is the exact erf form — so
@@ -228,8 +266,8 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["dim"]),
     OpEntry("cummin", _R.cummin, 1, method_name="cummin", free_fn_name="cummin",
             extra_kwargs=["dim"]),
-    OpEntry("erf",    _R.erf,    1, method_name="erf",    free_fn_name="erf"),
-    OpEntry("erfinv", _R.erfinv, 1, method_name="erfinv", free_fn_name="erfinv"),
+    OpEntry("erf",    _float_valued(_R.erf),    1, method_name="erf",    free_fn_name="erf"),
+    OpEntry("erfinv", _float_valued(_R.erfinv), 1, method_name="erfinv", free_fn_name="erfinv"),
     OpEntry("trace",  _R.trace,  1, method_name="trace",  free_fn_name="trace"),
 
     # ── shape / layout ─────────────────────────────────────────────────────
@@ -338,7 +376,7 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["dim"]),
 
     # ── rsqrt / std (engine-native) ────────────────────────────────────────
-    OpEntry("rsqrt", _R.rsqrt, 1, method_name="rsqrt", free_fn_name="rsqrt"),
+    OpEntry("rsqrt", _float_valued(_R.rsqrt), 1, method_name="rsqrt", free_fn_name="rsqrt"),
     OpEntry("std",   _std_adapter,   1, method_name="std",   free_fn_name="std",
             extra_kwargs=["dim", "keepdim", "correction", "unbiased"]),
 
@@ -381,9 +419,9 @@ _REGISTRY: list[OpEntry] = [
     # underlying primitive backward nodes; no new schemas are registered.
 
     # ── elementwise math compositions (unary) ───────────────────────────────
-    OpEntry("log10", _R.log10, 1, method_name="log10", free_fn_name="log10"),
-    OpEntry("log1p", _R.log1p, 1, method_name="log1p", free_fn_name="log1p"),
-    OpEntry("exp2",  _R.exp2,  1, method_name="exp2",  free_fn_name="exp2"),
+    OpEntry("log10", _float_valued(_R.log10), 1, method_name="log10", free_fn_name="log10"),
+    OpEntry("log1p", _float_valued(_R.log1p, engine_promotes=False), 1, method_name="log1p", free_fn_name="log1p"),
+    OpEntry("exp2",  _float_valued(_R.exp2, engine_promotes=False),  1, method_name="exp2",  free_fn_name="exp2"),
     OpEntry("trunc", _R.trunc, 1, method_name="trunc", free_fn_name="trunc"),
     OpEntry("frac",  _R.frac,  1, method_name="frac",  free_fn_name="frac"),
 
@@ -456,9 +494,9 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("ge", A._make_arith_adapter(_R.ge), 2, method_name="ge", free_fn_name="ge"),
 
     # Trig short names — share kernels with arcsin/arccos/arctan.
-    OpEntry("asin", _R.asin, 1, method_name="asin", free_fn_name="asin"),
-    OpEntry("acos", _R.acos, 1, method_name="acos", free_fn_name="acos"),
-    OpEntry("atan", _R.atan, 1, method_name="atan", free_fn_name="atan"),
+    OpEntry("asin", _float_valued(_R.asin), 1, method_name="asin", free_fn_name="asin"),
+    OpEntry("acos", _float_valued(_R.acos), 1, method_name="acos", free_fn_name="acos"),
+    OpEntry("atan", _float_valued(_R.atan), 1, method_name="atan", free_fn_name="atan"),
 
     # ``bitwise_not`` is the reference framework's name for ``invert``.
     OpEntry("bitwise_not", _R.bitwise_not, 1,

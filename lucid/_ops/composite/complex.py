@@ -14,9 +14,11 @@ the interleaved C64 storage, GPU dispatches to ``mlx::core::real`` /
 * ``view_as_complex(f32(..., 2)) -> c64(...)`` — inverse of the above.
 """
 
+import math
 from typing import TYPE_CHECKING
 
 import lucid
+from lucid._dispatch import _float_input
 from lucid._ops.composite.elementwise import _promote_pair
 from lucid._types import TensorOrScalar
 
@@ -25,22 +27,26 @@ if TYPE_CHECKING:
 
 
 def angle(input: Tensor) -> Tensor:
-    r"""Phase angle (argument) of a complex tensor.
+    r"""Phase angle (argument) of each element.
 
     Computes the polar-coordinate angle of each complex element:
-    :math:`\arg(z) = \arctan2(\Im(z), \Re(z))`.  The output is a real
-    F32 tensor in radians on the interval :math:`[-\pi, \pi]`.
+    :math:`\arg(z) = \arctan2(\Im(z), \Re(z))`, in radians on the
+    interval :math:`[-\pi, \pi]`.  A real element is a complex number on
+    the real axis: its angle is :math:`\pi` when it is negative and 0
+    otherwise, and NaN stays NaN.
 
     Parameters
     ----------
     input : Tensor
-        Complex-valued tensor (dtype must be ``complex64``).
+        Complex or real tensor.  A bool or integer one is taken at the
+        default floating dtype.
 
     Returns
     -------
     Tensor
-        Real F32 tensor with the same shape as ``input``; each element
-        contains the phase of the corresponding complex entry.
+        Real tensor with the same shape as ``input``: ``float32`` for
+        ``complex64``, ``float64`` for ``complex128``, a real input's own
+        floating dtype.
 
     Notes
     -----
@@ -60,8 +66,14 @@ def angle(input: Tensor) -> Tensor:
     >>> z = lucid.tensor([1+0j, 1+1j, 0+1j, -1+0j])
     >>> lucid.angle(z)
     tensor([0., 0.7854, 1.571, 3.142])
+    >>> lucid.angle(lucid.tensor([-2, 3]))
+    tensor([3.142, 0.])
     """
-    return lucid.atan2(lucid.imag(input), lucid.real(input))
+    x = _float_input(input)
+    if lucid.is_complex(x):
+        return lucid.atan2(lucid.imag(x), lucid.real(x))
+    half_turn = lucid.where(x < 0.0, lucid.full_like(x, math.pi), lucid.zeros_like(x))
+    return lucid.where(lucid.isnan(x), x, half_turn)
 
 
 def polar(abs: TensorOrScalar, angle: TensorOrScalar) -> Tensor:

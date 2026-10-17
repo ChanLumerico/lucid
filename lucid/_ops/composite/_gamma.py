@@ -56,8 +56,13 @@ _LANCZOS_P: list[float] = [
 
 
 def _lgamma(x: Tensor) -> Tensor:
-    """:math:`\\ln|\\Gamma(x)|` on the whole real line; float32 for 16 bits."""
-    return _in_float32(_lgamma_wide, x)
+    """:math:`\\ln|\\Gamma(x)|` on the whole real line; float32 for 16 bits.
+
+    An integer ``x`` is the default float first (:func:`_real`): the integer
+    went into the Lanczos series as itself and failed to hold its first
+    ``inf``.
+    """
+    return _in_float32(_lgamma_wide, _real(x))
 
 
 def _lgamma_wide(x: Tensor) -> Tensor:
@@ -216,8 +221,9 @@ def _polygamma(n: int, x: Tensor) -> Tensor:
 
     A 16-bit ``x`` is evaluated in float32: the recurrence's shift and the
     series cancel, and ``digamma(1.5)`` in float16 was 0.0391 for 0.0365.
+    An integer ``x`` is the default float first (:func:`_real`).
     """
-    return _in_float32(lambda v: _polygamma_wide(n, v), x)
+    return _in_float32(lambda v: _polygamma_wide(n, v), _real(x))
 
 
 def _polygamma_wide(n: int, x: Tensor) -> Tensor:
@@ -637,8 +643,8 @@ class _RegularizedGamma(Function):
 def _regularized_gamma(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
     """P(a, x) (``lower``) or Q(a, x), broadcast and promoted together.
 
-    An integer argument is promoted to float32 (:func:`_real`), and a 16-bit
-    pair is evaluated in float32 (:func:`_in_float32`): the scalar
+    An integer argument is promoted to the default float (:func:`_real`), and
+    a 16-bit pair is evaluated in float32 (:func:`_in_float32`): the scalar
     algorithm's constants — ``2**24`` to rescale the continued fraction,
     ``exp`` of ``a`` and ``x`` — are outside float16's range, and
     ``gammainc`` answered NaN there.

@@ -35,10 +35,18 @@ def _default_device_enum_cached() -> _C_engine.Device:
     return _CACHED_DEFAULT_DEVICE_ENUM
 
 
+#: Whether the default floating dtype is float32, the dtype the engine's
+#: unary kernels promote a bool or integer operand to on their own.  Kept by
+#: :func:`_invalidate_default_dtype_cache`; read by the float-valued unary
+#: ops' fast path (see :func:`_float_operand`).
+_DEFAULT_FLOAT_IS_F32: bool = True
+
+
 def _invalidate_default_dtype_cache() -> None:
     """Called by ``lucid._globals.set_default_dtype`` after a change."""
-    global _CACHED_DEFAULT_DTYPE_ENUM
+    global _CACHED_DEFAULT_DTYPE_ENUM, _DEFAULT_FLOAT_IS_F32
     _CACHED_DEFAULT_DTYPE_ENUM = None
+    _DEFAULT_FLOAT_IS_F32 = to_engine_dtype(get_default_dtype()) == _C_engine.Dtype.F32
 
 
 def _invalidate_default_device_cache() -> None:
@@ -264,6 +272,47 @@ def _is_opmath_operand(impl: _C_engine.TensorImpl) -> bool:
 
 
 _IMPL = _C_engine.TensorImpl
+
+
+def _float_operand(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
+    """``impl`` at the dtype a float-valued op computes in.
+
+    The one rule for an op whose answer is floating whatever its input —
+    ``exp``, ``sin``, ``sqrt``, ``sigmoid``, ``erf``, ``lgamma`` and the
+    rest: a bool or integer operand is cast to the default floating dtype
+    (narrowed to what its device holds, :func:`lucid._promotion.default_float`),
+    as true division does; a floating or complex one comes back as it is.
+    So ``exp2(int64)`` is ``exp2`` of the float, not of an integer the
+    composite multiplied by a truncated ``log 2``, and the answer follows
+    :func:`lucid.set_default_dtype` as the reference's does.
+
+    The registry's float-valued unary entries (``_registry._float_valued``)
+    and the Python composites (:func:`_float_input`) both cast through here.
+    The cast comes first and any autocast policy after it: an integer input
+    is made the default float, which autocast may then narrow, never the
+    reverse.
+
+    Anything that is not an engine tensor — a phantom under shadow
+    allocation, a stray Python object — is passed through for the op itself
+    to take or refuse.
+    """
+    if type(impl) is _IMPL and _promotion.is_integral(impl.dtype):
+        return _C_engine.astype(impl, _promotion.default_float(impl.device))
+    return impl
+
+
+def _float_input(x: Tensor) -> Tensor:
+    """``x`` at the dtype a float-valued op computes in — the Tensor form of
+    :func:`_float_operand`, for the ops written in Python.
+
+    Returns ``x`` itself when it needs no cast, so the common floating call
+    allocates nothing; anything without an engine tensor is returned as is.
+    """
+    impl: object = getattr(x, "_impl", None)
+    if type(impl) is not _IMPL:
+        return x
+    out = _float_operand(impl)
+    return x if out is impl else _wrap(out)
 
 
 def _tensor_operand(x: object) -> _C_engine.TensorImpl | None:

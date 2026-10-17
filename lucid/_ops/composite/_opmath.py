@@ -5,7 +5,8 @@ operands arrive in, and two kinds of operand are not fit for that:
 
 * a discrete one (:func:`_real`) — the engine's own ``real_valued``
   schemas promote an integer before the kernel sees it, but a composite
-  has no schema, so the promotion has to be asked for;
+  has no schema, so the promotion has to be asked for.  It is the one
+  every float-valued op makes, :func:`lucid._dispatch._float_input`;
 * a 16-bit float (:func:`_in_float32`) — series, continued fractions and
   polynomial fits carry constants and intermediates outside float16's
   range (``2**24`` as a rescaling threshold, ``Γ`` and ``exp`` of the
@@ -19,21 +20,38 @@ operands arrive in, and two kinds of operand are not fit for that:
 from collections.abc import Callable
 
 import lucid
+from lucid._dispatch import _float_input
 from lucid._tensor.tensor import Tensor
 
 
 def _real(x: Tensor) -> Tensor:
-    """A float view of a discrete operand.
+    """``x`` as the operand of a function of a real variable.
 
+    A bool or integer operand is cast to the default float, as every
+    float-valued op casts one (:func:`lucid._dispatch._float_input`) —
+    float32 here regardless of the default made ``gammaln`` of an int64
+    float32 under a float64 default, where the reference answers float64.
     It matters where the composition negates before it reaches a
     promoting op.  ``entr`` computes ``-x * log(x)``, and with a bool
     operand the negation runs first — MLX refuses to negate a bool and
     says to use logical_not, so the whole function failed on Metal while
     the CPU answered.  Promoting at the door removes the question.
+
+    A complex operand is refused, as the reference refuses it: the cast
+    this used to make dropped the imaginary part without a word, so
+    ``i0e(1+1j)`` answered ``i0e(1)``.
+
+    Raises
+    ------
+    TypeError
+        If ``x`` is complex.
     """
-    if lucid.is_floating_point(x):
-        return x
-    return x.to(lucid.float32)
+    x = _float_input(x)
+    if lucid.is_complex(x):
+        raise TypeError(
+            f"expected a real input to a function of a real variable, got {x.dtype}"
+        )
+    return x
 
 
 def _in_float32(fn: Callable[..., Tensor], *operands: Tensor) -> Tensor:
