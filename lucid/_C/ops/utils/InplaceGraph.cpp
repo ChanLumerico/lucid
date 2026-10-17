@@ -20,10 +20,12 @@
 #include "../../autograd/Helpers.h"
 #include "../../autograd/Node.h"
 #include "../../core/Allocator.h"
+#include "../../core/Error.h"
 #include "../../core/Shape.h"
 #include "../../kernel/BinaryKernel.h"
 #include "../composite/Indexing.h"
 #include "../gfunc/Gfunc.h"
+#include "../ufunc/Astype.h"
 #include "Concat.h"
 #include "Select.h"
 
@@ -445,6 +447,51 @@ void rebase_views(const TensorImplPtr& a) {
         if (m->retains_grad())
             retain_grad(m);
     }
+}
+
+namespace {
+
+// A dtype's rung on the ladder an in-place write may not move down — the
+// kinds ``lucid._promotion`` ranks the Python operands by.
+int kind_rank(Dtype dt) {
+    if (dt == Dtype::Bool)
+        return 0;
+    if (is_integral(dt))
+        return 1;
+    return is_complex(dt) ? 3 : 2;
+}
+
+// ``out`` at ``a``'s dtype, or the reference's refusal when the cast would
+// move down a kind (the message ``lucid._dispatch`` gives a promoted
+// operand pair).
+TensorImplPtr at_dtype_of(const TensorImplPtr& a, const TensorImplPtr& out, const char* name) {
+    const Dtype want = a->dtype();
+    if (out->dtype() == want)
+        return out;
+    if (kind_rank(out->dtype()) > kind_rank(want))
+        ErrorBuilder(name).fail("result type " + std::string(dtype_name(out->dtype())) +
+                                " can't be cast to the desired output type " +
+                                std::string(dtype_name(want)));
+    return astype_op(out, want);
+}
+
+}  // namespace
+
+TensorImplPtr write_result(const TensorImplPtr& a, TensorImplPtr out, const char* name) {
+    if (out->shape() != a->shape())
+        throw ShapeMismatch(a->shape(), out->shape(),
+                            std::string(name) + " (in-place: shape changed)");
+    out = at_dtype_of(a, out, name);
+    // Into ``a``'s Metal shared buffer instead when it has one and no graph
+    // was recorded — see TensorImpl::take_storage_from.
+    a->take_storage_from(*out, name);
+    a->set_device(out->device());
+    // Either branch moves ``a``'s version, which is what tells a node that
+    // saved ``a`` before this write that its values moved.  This op's own
+    // node is not one of them: it holds the snapshot, whose count is its own.
+    if (!adopt_graph_position(a, out))
+        detach_and_bump(a);
+    return a;
 }
 
 }  // namespace lucid::inplace

@@ -515,7 +515,6 @@
     "lucid/_C/ops/fft/Irfftn.cpp": 1,
     "lucid/_C/ops/fft/Rfftn.cpp": 1,
     "lucid/_C/ops/gfunc/Gfunc.cpp": 5,
-    "lucid/_C/ops/ufunc/Inplace.cpp": 1,
     "lucid/_C/ops/ufunc/Predicate.cpp": 1,
     "lucid/_C/ops/ufunc/Reductions.cpp": 3,
     "lucid/_C/ops/ufunc/Scan.cpp": 6,

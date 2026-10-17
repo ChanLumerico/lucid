@@ -2,24 +2,15 @@
 //
 // Implementation of all in-place unary ops.
 //
-// The anonymous-namespace helper inplace_unary<Fn> encapsulates the shared
-// write-back pattern:
-//   1. Run the corresponding out-of-place op (fwd_fn) to get a fresh tensor.
-//   2. Assert that the output shape matches the input shape (in-place ops must
-//      not change shape).
-//   3. Move the new storage, dtype, and device back into the source tensor `a`.
-//   4. Bump `a`'s version counter so autograd can detect illegal mutations.
-//
-// clip_inplace_op is handled separately because it requires two scalar
-// parameters (lo, hi) that cannot be passed through the zero-argument Fn type.
+// The anonymous-namespace helper inplace_unary<Fn> runs the out-of-place op
+// (fwd_fn) through inplace::run (ops/utils/InplaceGraph.h), which computes it
+// outside autocast and writes the result into the source tensor at its own
+// shape and dtype, moving its version and its place in the graph.
 
 #include "Inplace.h"
 
-#include <utility>
+#include <string>
 
-#include "../../core/Error.h"
-#include "../../core/ErrorBuilder.h"
-#include "../../core/GradMode.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../utils/InplaceGraph.h"
@@ -35,8 +26,8 @@ namespace lucid {
 
 namespace {
 
-// Run fwd_fn(a), verify the shape did not change, then write the result back
-// into `a` and bump its version counter.  Returns `a` (same pointer).
+// Run fwd_fn on a snapshot of `a` and write the result into `a`.  Returns `a`
+// (same pointer).
 template <typename Fn>
 TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* name) {
     Validator::input(a, std::string(name) + ".a").non_null();
@@ -45,32 +36,17 @@ TensorImplPtr inplace_unary(const TensorImplPtr& a, Fn&& fwd_fn, const char* nam
     //
     // A node that saves its input keeps a handle on the tensor it was
     // given, and graph-mode backward re-reads it — so once ``a``'s storage
-    // slot has been overwritten below, ``sin_`` differentiated through
+    // slot has been overwritten, ``sin_`` differentiated through
     // ``grad(create_graph=True)`` computed ``cos(sin(x))`` instead of
     // ``cos(x)``.  Eager ``backward()`` did not notice, because it saves a
     // Storage by value at forward time, which is why the two routes
     // disagreed and only in graph mode.
     //
     // The snapshot shares the buffer rather than copying it, and the
-    // assignment below replaces ``a``'s slot rather than the buffer, so
+    // write replaces ``a``'s slot rather than the buffer, so
     // the original values stay alive and unmutated for as long as the node
     // needs them — and nothing is allocated when no graph is built.
-    auto out = fwd_fn(inplace::snapshot(a));
-    if (out->shape() != a->shape())
-        throw ShapeMismatch(a->shape(), out->shape(),
-                            std::string(name) + " (in-place: shape changed)");
-    a->take_storage_from(*out, name);
-    a->set_dtype(out->dtype());
-    a->set_device(out->device());
-    const bool adopted = inplace::adopt_graph_position(a, out);
-    // Either branch moves ``a``'s version, which is what tells a node that
-    // saved ``a`` before this write that its values moved.  This op's own
-    // node is not one of them: it holds the snapshot taken above, whose
-    // count is its own, so the write does not read to it as tampering.
-    // With no graph position to adopt, ``a`` leaves the graph as well.
-    if (!adopted)
-        inplace::detach_and_bump(a);
-    return a;
+    return inplace::run(a, name, [&] { return fwd_fn(inplace::snapshot(a)); });
 }
 
 }  // namespace
@@ -159,38 +135,9 @@ TensorImplPtr relu_inplace_op(const TensorImplPtr& a) {
     return inplace_unary(a, &relu_op, "relu_");
 }
 
-// Clip is handled manually because the lambda would need to capture lo/hi,
-// making it incompatible with the function-pointer-based inplace_unary template.
 TensorImplPtr clip_inplace_op(const TensorImplPtr& a, double lo, double hi) {
-    Validator::input(a, "clip_.a").non_null();
-    inplace::refuse_on_leaf(a, "clip_");
-    // The op runs against a *snapshot*, not against ``a`` itself.
-    //
-    // A node that saves its input keeps a handle on the tensor it was
-    // given, and graph-mode backward re-reads it — so once ``a``'s storage
-    // slot has been overwritten below, ``sin_`` differentiated through
-    // ``grad(create_graph=True)`` computed ``cos(sin(x))`` instead of
-    // ``cos(x)``.  Eager ``backward()`` did not notice, because it saves a
-    // Storage by value at forward time, which is why the two routes
-    // disagreed and only in graph mode.
-    //
-    // The snapshot shares the buffer rather than copying it, and the
-    // assignment below replaces ``a``'s slot rather than the buffer, so
-    // the original values stay alive and unmutated for as long as the node
-    // needs them — and nothing is allocated when no graph is built.
-    auto out = clip_op(inplace::snapshot(a), lo, hi);
-    a->take_storage_from(*out, "clip_");
-    a->set_dtype(out->dtype());
-    a->set_device(out->device());
-    const bool adopted = inplace::adopt_graph_position(a, out);
-    // Either branch moves ``a``'s version, which is what tells a node that
-    // saved ``a`` before this write that its values moved.  This op's own
-    // node is not one of them: it holds the snapshot taken above, whose
-    // count is its own, so the write does not read to it as tampering.
-    // With no graph position to adopt, ``a`` leaves the graph as well.
-    if (!adopted)
-        inplace::detach_and_bump(a);
-    return a;
+    return inplace_unary(
+        a, [lo, hi](const TensorImplPtr& source) { return clip_op(source, lo, hi); }, "clip_");
 }
 
 // The same rules as the ops above, for a result computed elsewhere.

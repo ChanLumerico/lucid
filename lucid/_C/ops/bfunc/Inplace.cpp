@@ -2,12 +2,13 @@
 //
 // Implements the in-place arithmetic operators.  Each operator delegates to
 // the corresponding out-of-place forward function via the shared inplace_apply
-// helper, which validates preconditions and splices the result Storage back
-// into the original tensor.
+// helper, which validates preconditions and hands the forward to inplace::run
+// (ops/utils/InplaceGraph.h): computed outside autocast, its result is written
+// into the original tensor at that tensor's shape and dtype.
 
 #include "Inplace.h"
 
-#include <utility>
+#include <string>
 
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
@@ -31,15 +32,15 @@ namespace {
 // Preconditions checked here:
 //   1. Neither a nor b is null.
 //   2. a's buffer is not held by anything other than a and its own views —
-//      a NumPy array, a storage saved for backward.  The swap below would
+//      a NumPy array, a storage saved for backward.  The storage swap would
 //      leave that holder reading the old values without saying so.  A
 //      tensor with live views is written through instead
 //      (TensorImpl::write_through), which checks the same thing.  The
 //      gradient slot a tensor read from ``.grad`` stands for is not such a
 //      holder: that tensor holds the buffer through a pointer of its own,
 //      and its write goes into the slot's buffer (take_storage_from).
-//   3. The out-of-place result has the same shape as a (in-place ops may not
-//      change shape; this would also silently break any live views of a).
+//
+// The result keeps a's shape and dtype (inplace::write_result).
 //
 // A target whose elements overlap — an expanded view — is refused where the
 // result lands (take_storage_from), as the reference refuses it.
@@ -83,19 +84,10 @@ inplace_apply(const TensorImplPtr& a, const TensorImplPtr& b, Fn&& fwd_fn, const
     // And ``b`` may be ``a`` itself (``x.mul_(x)``), which the node must
     // read as it was too — handed ``a``, it read ``x * x`` for ``x``, and
     // held the tensor whose grad_fn it is.
-    const auto source = inplace::snapshot(a, b);
-    auto out = fwd_fn(source, b.get() == a.get() ? source : b);
-    if (out->shape() != a->shape())
-        throw ShapeMismatch(a->shape(), out->shape(),
-                            std::string(name) + " (in-place: shape changed)");
-    // Splice the new Storage and metadata back into a — into its Metal
-    // shared buffer instead when it has one and no graph was recorded.
-    a->take_storage_from(*out, name);
-    a->set_dtype(out->dtype());
-    a->set_device(out->device());
-    if (!inplace::adopt_graph_position(a, out))
-        inplace::detach_and_bump(a);
-    return a;
+    return inplace::run(a, name, [&] {
+        const auto source = inplace::snapshot(a, b);
+        return fwd_fn(source, b.get() == a.get() ? source : b);
+    });
 }
 
 }  // namespace

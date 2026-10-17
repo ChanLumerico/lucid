@@ -3,7 +3,9 @@
 ``mean`` of ``[1, 2, 3, 4]`` was 2, ``int @ float`` cast the float operand to
 int, and an in-place float op on an integer tensor (``exp_``) kept the
 integer's 8-byte strides over the new 4-byte floats, reading every other
-element — all without an error.
+element — all without an error.  That in-place op is refused now, as the
+reference refuses it: its float result cannot be cast to the integer target,
+and an in-place op does not change its target's dtype (LCD-474).
 """
 
 import math
@@ -54,8 +56,14 @@ def test_matmul_promotes_an_integer_operand(device: str) -> None:
 
 
 @pytest.mark.parametrize("device", _DEVICES)
-def test_in_place_float_op_on_integers_reads_back_right(device: str) -> None:
+def test_in_place_float_op_on_integers_is_refused_and_reads_back_unchanged(
+    device: str,
+) -> None:
     x = _ints(1, 2, 3, 4, 5, device=device)
-    x.exp_()
-    assert x.dtype == lucid.float32
-    assert x.tolist() == pytest.approx([math.exp(v) for v in range(1, 6)], rel=1e-6)
+    with pytest.raises(RuntimeError, match="can't be cast to the desired output type"):
+        x.exp_()
+    assert x.dtype == lucid.int64
+    assert x.tolist() == [1, 2, 3, 4, 5]
+    assert x.exp().tolist() == pytest.approx(
+        [math.exp(v) for v in range(1, 6)], rel=1e-6
+    )

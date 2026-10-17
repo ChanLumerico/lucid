@@ -26,7 +26,8 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, final, override
 
 import lucid
-from lucid._dispatch import _unwrap, _wrap
+from lucid import _promotion
+from lucid._dispatch import _cannot_cast_inplace, _unwrap, _wrap
 from lucid._dtype import iinfo
 from lucid._ops._dims import _wrap_dim
 import lucid._C.engine as _C_engine
@@ -107,15 +108,52 @@ def _along(index: Tensor, dim: int, shape: list[int]) -> _C_engine.TensorImpl:
     return _C_engine.broadcast_to(_C_engine.reshape(flat, along), shape)
 
 
+def _in_place_result(
+    input: Tensor, name: str, result_of: Callable[[Tensor], Tensor], base: Tensor
+) -> _C_engine.TensorImpl:
+    """``result_of(base)`` as an in-place op computes it, at ``input``'s dtype.
+
+    The rules every engine in-place op follows (``inplace::run`` in
+    ``lucid/_C/ops/utils/InplaceGraph.h``):
+
+    * autocast does not apply to an in-place op, as the reference's does not,
+      so the op computes in ``input``'s own dtype.  Run under it,
+      ``F.silu(x, inplace=True)`` of a float32 ``x`` computed in float16 and
+      the write refused the result — or, while autograd recorded, made ``x``
+      float16;
+    * a result of another dtype is cast to ``input``'s when the in-place rule
+      allows it (:func:`lucid._promotion.can_cast`) and refused otherwise.
+    """
+    guard = _C_engine.AutocastGuard(_C_engine.Dtype.F32, input._impl.device, False)
+    try:
+        result = result_of(base)
+    finally:
+        del guard  # the last reference — ~AutocastGuard restores the prior state
+    if result.shape != input.shape:
+        raise _C_engine.ShapeMismatch(
+            f"{name}: result shape {tuple(result.shape)} does not match "
+            f"destination shape {tuple(input.shape)}"
+        )
+    impl = result._impl
+    target = input._impl.dtype
+    if impl.dtype == target:
+        return impl
+    if not _promotion.can_cast(impl.dtype, target):
+        raise _cannot_cast_inplace(impl.dtype, target)
+    return _C_engine.astype(impl, target)
+
+
 def _write_inplace[T: Tensor](
     input: T, name: str, result_of: Callable[[Tensor], Tensor], *operands: Tensor
 ) -> T:
     """Run an out-of-place index op and make its result ``input``'s values.
 
-    A leaf that requires grad is refused while autograd records, as every
-    in-place op refuses it; under :func:`lucid.no_grad` it is written and
-    stays a trainable leaf.  Otherwise the result lands one of three ways,
-    the ones ``Tensor.__setitem__`` takes:
+    The op runs outside autocast and its result keeps ``input``'s dtype
+    (:func:`_in_place_result`).  A leaf that requires grad is refused while
+    autograd records, as every in-place op refuses it; under
+    :func:`lucid.no_grad` it is written and stays a trainable leaf.
+    Otherwise the result lands one of three ways, the ones
+    ``Tensor.__setitem__`` takes:
 
     * ``input`` shares its buffer with a live view: the values go into the
       buffer, where the views read them, and the engine moves ``input``
@@ -152,7 +190,8 @@ def _write_inplace[T: Tensor](
     Raises
     ------
     RuntimeError
-        If ``input`` is a leaf that requires grad and autograd is recording.
+        If ``input`` is a leaf that requires grad and autograd is recording,
+        or the result's dtype cannot be cast to ``input``'s.
     """
     records = _C_engine.grad_enabled() and (
         input.requires_grad or any(o.requires_grad for o in operands)
@@ -168,18 +207,13 @@ def _write_inplace[T: Tensor](
         snapshot = _Snapshot.apply(input)
         assert isinstance(snapshot, lucid.Tensor)
         base = snapshot
-    result = result_of(base)
-    if result.shape != input.shape:
-        raise _C_engine.ShapeMismatch(
-            f"{name}: result shape {tuple(result.shape)} does not match "
-            f"destination shape {tuple(input.shape)}"
-        )
+    result = _in_place_result(input, name, result_of, base)
     if aliased:
-        _C_engine.assign_inplace(input._impl, result._impl, name)
+        _C_engine.assign_inplace(input._impl, result, name)
     elif records:
-        _take(input, result._impl)
+        _take(input, result)
     else:
-        input._impl.assign_from(result._impl, name)
+        input._impl.assign_from(result, name)
     return input
 
 

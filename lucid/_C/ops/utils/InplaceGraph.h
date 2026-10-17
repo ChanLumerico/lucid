@@ -11,8 +11,11 @@
 
 #pragma once
 
+#include <utility>
+
 #include "../../autograd/TensorHooks.h"
 #include "../../backend/Dispatcher.h"
+#include "../../core/AmpPolicy.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
 #include "../../core/TensorImpl.h"
@@ -192,6 +195,40 @@ inline void detach_and_bump(const TensorImplPtr& a) {
             rebase_views(a);
     }
     a->bump_version();
+}
+
+// Make ``out``, an in-place op's result, the values of ``a``; return ``a``.
+//
+// Every engine in-place op's result lands here (through :func:`run`), so
+// what holds for all of them is held once:
+//
+// * the shape does not change — the live views of ``a`` read it;
+// * nor does the dtype.  ``out`` is cast to ``a``'s dtype when the
+//   reference's in-place rule allows it (``lucid._promotion.can_cast``: a
+//   write may narrow within a kind but never move down bool < integer <
+//   floating < complex), and the op is refused otherwise, ``a`` untouched.
+//   Taking ``out``'s dtype instead, ``int64.exp_()`` turned the tensor into
+//   float32 where the reference raises;
+// * ``a`` takes ``out``'s place in the graph (:func:`adopt_graph_position`),
+//   or leaves it when ``out`` has none (:func:`detach_and_bump`).
+TensorImplPtr write_result(const TensorImplPtr& a, TensorImplPtr out, const char* name);
+
+// Run an in-place op: ``forward()`` computes the result from a stand-in for
+// ``a`` (:func:`snapshot`), and :func:`write_result` makes it ``a``'s values.
+//
+// Autocast does not apply to an in-place op, as the reference's does not,
+// so the op computes in ``a``'s own dtype.  The forward used to take the
+// op's AMP policy as an out-of-place call does, and the write then gave
+// ``a`` the result's dtype: under ``autocast(metal, float16)``,
+// ``x.mul_(y)`` of two float32 tensors left ``x`` float16 (an optimiser's
+// parameter among them), and ``x.exp_()`` of a float16 ``x`` left it
+// float32.  Casting the result back keeps the dtype but not the values: the
+// float32 product would be rounded through float16 first, where the
+// reference computes it in float32.
+template <typename Fn>
+TensorImplPtr run(const TensorImplPtr& a, const char* name, Fn&& forward) {
+    const amp::AutocastGuard autocast_off(Dtype::F32, a->device(), /*enabled=*/false);
+    return write_result(a, std::forward<Fn>(forward)(), name);
 }
 
 }  // namespace lucid::inplace
