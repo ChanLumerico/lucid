@@ -2737,6 +2737,11 @@ def chunk(input: Tensor, chunks: _int, dim: _int = ...) -> list[Tensor]:
         The pieces of ``input`` in order — views of its buffer on the CPU,
         copies on metal.
     
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        ``chunks`` is not positive.
+    
     Examples
     --------
     >>> import lucid
@@ -5533,6 +5538,16 @@ def split(tensor: Tensor, split_size_or_sections: _int | list[_int], dim: _int =
     list of Tensor
         The pieces of ``tensor`` — views of its buffer on the CPU, copies on
         metal.
+    
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        A negative size, a zero integer size on a non-empty axis, or a size
+        list that does not sum to ``input.size(dim)`` — the last piece never
+        takes up a remainder or runs short.  It is both a ``ValueError`` and
+        a ``RuntimeError``.
+    TypeError
+        A size that is not an integer.
     
     Notes
     -----

@@ -2,13 +2,14 @@
 miscellaneous fillers (``rot90``, ``vander``, ``take_along_dim``).
 """
 
+import itertools
 from typing import Sequence, TYPE_CHECKING
 
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._globals import get_default_device
 from lucid._types import DTypeLike, DeviceLike
-from lucid._ops._dims import _dim_size, _wrap_dim
+from lucid._ops._dims import _dim_size, _to_axes, _wrap_dim
 from lucid._ops.composite._shared import _swap_dims
 from lucid._tensor._indexing import (
     _broadcast_shape,
@@ -572,23 +573,39 @@ def _split_along(
     indices_or_sections: int | Sequence[int],
     dim: int,
 ) -> list[Tensor]:
-    """Convert NumPy-style splits to lucid's size-list form."""
+    """The pieces of ``x`` for a section count or a list of cut indices.
+
+    Piece ``i`` of an index list is ``x[indices[i-1]:indices[i]]`` along
+    ``dim``, read as a slice: a negative index counts from the end, one past
+    either end is clamped to it, and a cut before the previous one gives an
+    empty piece while the next piece still starts at that cut — so the
+    pieces can overlap (``[5, 2]`` of 10 is 5, 0 and 8 long).  This used to
+    become a size list for :func:`lucid.split`, dropping the negative sizes,
+    and relied on ``split`` letting its last piece take up the difference;
+    ``split`` refuses sizes that do not sum to the axis now, and the slices
+    are cut here instead.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        A section count that is not positive.
+    """
     dim = _wrap_dim(dim, x.ndim, "split")
+    n = _dim_size(x.shape, dim)
     if isinstance(indices_or_sections, int):
-        n = _dim_size(x.shape, dim)
         k = indices_or_sections
+        if k <= 0:
+            raise _C_engine.InvalidArgument(
+                f"number of sections must be larger than 0, got {k}"
+            )
         base, extra = divmod(n, k)
-        sizes = [base + 1] * extra + [base] * (k - extra)
-        return lucid.split(x, sizes, dim)
-    indices = list(indices_or_sections)
-    split_sizes: list[int] = []
-    prev = 0
-    for idx in indices:
-        split_sizes.append(idx - prev)
-        prev = idx
-    split_sizes.append(_dim_size(x.shape, dim) - prev)
-    split_sizes = [s for s in split_sizes if s >= 0]
-    return lucid.split(x, split_sizes, dim)
+        return lucid.split(x, [base + 1] * extra + [base] * (k - extra), dim)
+    indices = _to_axes(indices_or_sections, "tensor_split", "indices_or_sections")
+    cuts = [min(max(i + n if i < 0 else i, 0), n) for i in indices]
+    spans = list(itertools.pairwise([0, *cuts, n]))
+    if all(start <= stop for start, stop in spans):
+        return lucid.split(x, [stop - start for start, stop in spans], dim)
+    return [lucid.narrow(x, dim, start, max(stop - start, 0)) for start, stop in spans]
 
 
 def vsplit(input: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
@@ -773,8 +790,19 @@ def tensor_split(
         \underbrace{b + 1, \dots, b + 1}_{r\text{ terms}},\;
         \underbrace{b, \dots, b}_{k - r\text{ terms}}.
 
-    Contrast with :func:`lucid.split`, which raises ``ValueError`` when
-    ``n`` is not a multiple of ``k``.
+    Contrast with :func:`lucid.split`, whose integer argument is a piece
+    size and whose size list must sum to ``n``.
+
+    With a list of indices, piece :math:`i` is the slice
+    ``x[indices[i-1]:indices[i]]`` along ``dim``: a negative index counts
+    from the end, an index past either end is clamped to it, and an index
+    below the one before it gives an empty piece, with the next piece
+    starting from that index again.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        If ``indices_or_sections`` is an integer that is not positive.
 
     Examples
     --------
@@ -784,6 +812,8 @@ def tensor_split(
     [(4,), (3,), (3,)]
     >>> [s.shape for s in lucid.tensor_split(x, [2, 5])]
     [(2,), (3,), (5,)]
+    >>> [s.shape for s in lucid.tensor_split(x, [5, 2, 12])]
+    [(5,), (0,), (8,), (0,)]
     """
     return _split_along(input, indices_or_sections, dim)
 

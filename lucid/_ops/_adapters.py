@@ -22,6 +22,7 @@ also holds ``var`` / ``std`` and the numerics they share with the norms.
 """
 
 import inspect
+import itertools
 import math
 import operator
 from typing import Callable, Sequence, TYPE_CHECKING, cast
@@ -419,7 +420,9 @@ def _chunk_adapter(a_impl: _Impl, chunks: int, dim: int = 0) -> list[_Impl]:
     """
     count = int(chunks)
     if count <= 0:
-        raise ValueError(f"chunk: chunks must be positive, got {count}")
+        raise _C_engine.InvalidArgument(
+            f"chunk expects `chunks` to be greater than 0, got: {count}"
+        )
     d = _wrap_dim(int(dim), len(a_impl.shape), "chunk")
     size = _dim_size(a_impl.shape, d)
     if size % count == 0:
@@ -857,35 +860,81 @@ def _repeat_interleave_adapter(
     return _C_engine.repeat(a_impl, int(repeats), int(dim))
 
 
+def _split_pieces(
+    x_impl: _Impl, sections: int | Sequence[int], dim: int, what: str
+) -> list[_Impl]:
+    """The pieces of ``x_impl`` along ``dim`` for a split size or size list.
+
+    The one place a split's sizes become the cut points of the engine's
+    ``split_at``, whose own check is only that each cut lies inside the
+    axis.  A size list that did not sum to the axis passed that check, and
+    the last piece took the remainder or ran short: ``[2, 3]`` of a length-6
+    axis came back ``[2, 4]``, of a length-4 one ``[2, 2]``.  So the sizes
+    are checked here, before a cut is made, as the reference checks them.
+
+    ``what`` names the size argument in a type refusal, since the free
+    function and the method spell it differently.
+
+    Raises
+    ------
+    TypeError
+        A size that is not an integer (a ``bool`` included).
+    lucid._C.engine.InvalidArgument
+        A negative size, a zero ``split_size`` on a non-empty axis, or a
+        size list that does not sum to the axis.
+    """
+    wrapped = _wrap_dim(int(dim), len(x_impl.shape), "split")
+    axis_size = _dim_size(x_impl.shape, wrapped)
+    if isinstance(sections, bool):
+        raise TypeError(
+            f"split(): {what} must be an int or a sequence of ints, got {sections!r}"
+        )
+    if not isinstance(sections, Sequence):
+        size = operator.index(sections)
+        if size < 0:
+            raise _C_engine.InvalidArgument(
+                f"split expects split_size be non-negative, but got split_size={size}"
+            )
+        if size == 0 and axis_size:
+            raise _C_engine.InvalidArgument(
+                "split_size can only be 0 if dimension size is 0, but got "
+                f"dimension size of {axis_size}"
+            )
+        if size and axis_size and axis_size % size == 0:
+            return _C_engine.split(x_impl, axis_size // size, wrapped)
+        cuts = list(range(size, axis_size, size)) if size else []
+        return _C_engine.split_at(x_impl, cuts, wrapped)
+    sizes = _int_list(sections, "split", what)
+    if any(s < 0 for s in sizes):
+        raise _C_engine.InvalidArgument(
+            "split_with_sizes expects split_sizes have only non-negative entries, "
+            f"but got split_sizes={sizes}"
+        )
+    if sum(sizes) != axis_size:
+        raise _C_engine.InvalidArgument(
+            f"split_with_sizes expects split_sizes to sum exactly to {axis_size} "
+            f"(input tensor's size at dimension {dim}), but got split_sizes={sizes}"
+        )
+    if not sizes:
+        return []
+    return _C_engine.split_at(x_impl, list(itertools.accumulate(sizes[:-1])), wrapped)
+
+
 def _split_adapter(
     x_impl: _Impl,
     split_size_or_sections: int | Sequence[int],
     dim: int = 0,
 ) -> list[_Impl]:
     """split(x, sections, dim=0) — int → pieces of that size, the last one
-    shorter when it does not divide; list → explicit sizes."""
-    dim = _wrap_dim(int(dim), len(x_impl.shape), "split")
-    axis_size = _dim_size(x_impl.shape, dim)
-    if isinstance(split_size_or_sections, int):
-        size = split_size_or_sections
-        if size <= 0:
-            raise ValueError(f"split: split_size must be positive, got {size}")
-        if axis_size and axis_size % size == 0:
-            return _C_engine.split(x_impl, axis_size // size, int(dim))
-        return _C_engine.split_at(x_impl, list(range(size, axis_size, size)), int(dim))
-    indices: list[int] = []
-    cumsum = 0
-    for s in split_size_or_sections[:-1]:
-        cumsum += int(s)
-        indices.append(cumsum)
-    return _C_engine.split_at(x_impl, indices, int(dim))
+    shorter when it does not divide; list → exactly those sizes."""
+    return _split_pieces(x_impl, split_size_or_sections, dim, "split_size_or_sections")
 
 
 def _split_method_adapter(
     x_impl: _Impl, split_size: int | Sequence[int], dim: int = 0
 ) -> list[_Impl]:
     """``Tensor.split(split_size, dim=0)`` — the method's name for the sizes."""
-    return _split_adapter(x_impl, split_size, dim)
+    return _split_pieces(x_impl, split_size, dim, "split_size")
 
 
 # ── tensordot / meshgrid / where / masked_fill / pad ─────────────────────────
