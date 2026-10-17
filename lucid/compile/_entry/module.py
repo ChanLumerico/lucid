@@ -67,9 +67,9 @@ from lucid.compile._core.fallback import (
 )
 from lucid.compile._core.signature import (
     CacheKey,
+    ParamFingerprint,
     leaf_tensors,
     model_has_active_hooks,
-    signature_of,
 )
 from lucid.nn.module import Module, _ModuleWrapper, _watch_tensors
 from lucid.nn.parameter import Parameter
@@ -263,7 +263,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
     _cache: dict[CacheKey, _CacheEntry]
     _eager_only: EagerFallbackSet
     _call_counter: dict[CacheKey, int]
-    _param_fp_cache: tuple[tuple[str, str], ...] | None
+    _param_fp: ParamFingerprint
     _step_callables: dict[int, Callable[..., Tensor]]
 
     r"""User-facing wrapper returned by :func:`lucid.compile`.
@@ -431,11 +431,11 @@ class CompiledModule[**P, R](_ModuleWrapper):
         object.__setattr__(self, "_cache", {})
         object.__setattr__(self, "_eager_only", EagerFallbackSet())
         object.__setattr__(self, "_call_counter", {})
-        # Param fingerprint cache — invalidated by train()/eval()/to()/
-        # load_state_dict() (those all call clear_cache).  Without this
-        # signature_of would walk model.parameters() on every __call__,
-        # which dominates the Python overhead for deep models.
-        object.__setattr__(self, "_param_fp_cache", None)
+        # The key's parameter fingerprint, walked again only when a parameter
+        # can have changed (and on clear_cache).  Without it signature_of
+        # would walk model.parameters() on every __call__, which dominates the
+        # Python overhead for deep models.
+        object.__setattr__(self, "_param_fp", ParamFingerprint(model))
         # Lazy training-step callables, keyed by ``id(loss_fn)``.  The
         # first ``cm.step(..., loss_fn=fn)`` call creates a make_step
         # callable and stashes it here; subsequent calls with the same
@@ -668,7 +668,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
         self._call_counter.clear()
         # Invalidate the param fingerprint cache so the next call
         # recomputes it (param dtype/device may have changed).
-        object.__setattr__(self, "_param_fp_cache", None)
+        self._param_fp.invalidate()
         # Drop the lazy training-step callables too — their internal
         # caches reference parameter impls that may have moved.
         self._step_callables.clear()
@@ -844,16 +844,9 @@ class CompiledModule[**P, R](_ModuleWrapper):
         # (e.g. an exotic input that we can't fingerprint), fall back
         # to eager without poisoning the cache.
         #
-        # Perf: cache the param fingerprint so we don't walk
-        # ``model.parameters()`` on every call.  Cache is invalidated
-        # by train()/eval()/to()/load_state_dict() via clear_cache.
+        # Perf: the param fingerprint is cached (``ParamFingerprint``) so we
+        # don't walk ``model.parameters()`` on every call.
         try:
-            fp = self._param_fp_cache
-            if fp is None:
-                from lucid.compile._core.signature import _param_fingerprint
-
-                fp = _param_fingerprint(self._model)
-                object.__setattr__(self, "_param_fp_cache", fp)
             # A symbolic (shared) executable wildcards the batch axis; static
             # keys on the concrete shape.  ``_symbolic_resolved`` is the
             # per-instance decision (None until the first trace → tentatively
@@ -863,13 +856,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
                 if self._symbolic_resolved is None
                 else self._symbolic_resolved
             )
-            key = signature_of(
-                self._model,
-                args,
-                kwargs,
-                dynamic=eff,
-                param_fingerprint=fp,
-            )
+            key = self._param_fp.key_of(args, kwargs, dynamic=eff)
         except (TypeError, AttributeError):  # fmt: skip
             return run_eager(self._model, args, kwargs)
 
@@ -886,12 +873,8 @@ class CompiledModule[**P, R](_ModuleWrapper):
             # wildcarded key above is then wrong, so re-key on the resolved
             # decision before caching.
             if self._symbolic_resolved is not None and self._symbolic_resolved != eff:
-                key = signature_of(
-                    self._model,
-                    args,
-                    kwargs,
-                    dynamic=self._symbolic_resolved,
-                    param_fingerprint=fp,
+                key = self._param_fp.key_of(
+                    args, kwargs, dynamic=self._symbolic_resolved
                 )
             if entry is None:
                 # Compile aborted — remember this signature is

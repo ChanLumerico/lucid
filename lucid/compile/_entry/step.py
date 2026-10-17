@@ -29,6 +29,7 @@ Acceptance:
 """
 
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Protocol, cast, final, override
 
@@ -207,9 +208,9 @@ def make_step(
     )
     from lucid.compile._core.fallback import EagerFallbackSet, _fallback_notice
     from lucid.compile._core.signature import (
+        ParamFingerprint,
         leaf_tensors,
         model_has_active_hooks,
-        signature_of,
     )
 
     # Symbolic-batch is NOT offered for the compiled *training* step.  Unlike the
@@ -234,6 +235,7 @@ def make_step(
     params = list(model.parameters())
     if not params:
         raise ValueError("make_step: model has no trainable parameters")
+    fingerprint = ParamFingerprint(model)  # not walked every step (LCD-489)
 
     def _compile_for(
         x_args: tuple[Tensor, ...],
@@ -535,11 +537,10 @@ def make_step(
         # Cache lookup / compile / eager-fallback decision happens
         # OUTSIDE the autograd Function so the eager path doesn't
         # accidentally end up with a "compiled" wrapper around it.
-        # Always per-shape static (use_dynamic is False — see the symbolic-batch
-        # note at the top of make_step); the batch axis stays concrete in the
-        # signature so each distinct shape gets its own fwd+bwd executable.
+        # Always per-shape static (use_dynamic is False, see the note at the top
+        # of make_step): each distinct shape gets its own fwd+bwd executable.
         try:
-            key = signature_of(model, x_args, {}, dynamic=use_dynamic)
+            key = fingerprint.key_of(x_args, {}, dynamic=use_dynamic)
         except (TypeError, AttributeError):  # fmt: skip
             key = None  # un-hashable → fresh per-call compile only
 
@@ -561,9 +562,7 @@ def make_step(
         leaves = leaf_tensors(x_args, {})
         return cast(Tensor, _CompiledStepFunction.apply([entry], *leaves, *params))
 
-    # Stash the cache / introspection handles on the returned callable
-    # so tests + telemetry can poke at them without grabbing them via
-    # closure.
+    # Handles for tests and telemetry, so they need not reach into the closure.
     step.cache = cache  # type: ignore[attr-defined]
     step.eager_only = eager_only  # type: ignore[attr-defined]
 
@@ -573,20 +572,25 @@ def make_step(
         eager_only.clear()
 
     def graph_dump() -> str:
-        """Return a JSON view of every cached signature's :class:`TraceGraph`.
-
-        Used by `tools/inspect_trace.py` and the test harness to diff
-        consecutive compiles and pinpoint divergent ops.
-        """
-        import json as _json
-
-        items = [
-            {"sig_hash": hash(k), "graph": _json.loads(e.graph_json)}
-            for k, e in cache.items()
-        ]
-        return _json.dumps(items, indent=2)
+        return _graph_dump(cache.items())
 
     step.clear_cache = clear_cache  # type: ignore[attr-defined]
     step.graph_dump = graph_dump  # type: ignore[attr-defined]
 
     return step
+
+
+def _graph_dump(entries: Iterable[tuple[object, _StepEntry]]) -> str:
+    """Return a JSON view of every cached signature's :class:`TraceGraph`.
+
+    ``step.graph_dump()`` of a :func:`make_step` callable.  Used by
+    `tools/inspect_trace.py` and the test harness to diff consecutive
+    compiles and pinpoint divergent ops.
+    """
+    import json as _json
+
+    items = [
+        {"sig_hash": hash(k), "graph": _json.loads(e.graph_json)}
+        for k, e in entries
+    ]
+    return _json.dumps(items, indent=2)

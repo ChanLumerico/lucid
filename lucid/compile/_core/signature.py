@@ -32,7 +32,9 @@ import struct
 import weakref
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, final, override
+
+from lucid.nn.module import _ModuleWrapper, _watch_tensors
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -516,6 +518,104 @@ def _param_fingerprint(model: Module) -> tuple[tuple[str, str], ...]:
         key = (str(p.dtype), str(p.device.type))
         seen[key] = seen.get(key, 0) + 1
     return tuple(sorted(seen.keys()))
+
+
+@final
+class ParamFingerprint(_ModuleWrapper):
+    """A model's :func:`_param_fingerprint`, walked again only when it can change.
+
+    The walk over every parameter cost 0.7–0.8 ms a call on bert_base, and
+    a compiled step keyed each call on it (LCD-489).  It changes when a
+    parameter is replaced.  ``.to()`` / ``.half()`` and an ``assign=True``
+    load put new tensors under the ``Parameter`` objects without a
+    ``setattr``, so the tree version cannot see them; they tell the
+    module's watchers (``_tensors_replaced``), and this watches every module
+    of the tree, a cast of one submodule included.  A ``setattr`` of a new
+    parameter or submodule moves the tree version, which is checked too.  A
+    tensor rebound by hand (``p.data = ...``) is not seen.
+
+    Parameters
+    ----------
+    model : Module
+        The model whose parameters are fingerprinted.  Held weakly: the
+        watcher lives in its owner, and must not keep the model alive.
+    """
+
+    def __init__(self, model: Module) -> None:
+        self._model: weakref.ref[Module] = weakref.ref(model)
+        self._value: tuple[tuple[str, str], ...] | None = None
+        self._version = -1
+
+    @override
+    def __reduce__(self) -> tuple[type[ParamFingerprint], tuple[Module]]:
+        # A weak reference does not pickle; a copy of its owner (a
+        # CompiledModule) fingerprints the copy of the model, walked afresh.
+        return (ParamFingerprint, (self.model,))
+
+    @property
+    @override
+    def model(self) -> Module:
+        """The fingerprinted model."""
+        model = self._model()
+        if model is None:
+            raise ReferenceError("ParamFingerprint: the model has been deleted")
+        return model
+
+    def get(self) -> tuple[tuple[str, str], ...]:
+        """The fingerprint, walking the parameters only after a change.
+
+        Returns
+        -------
+        tuple of (dtype_str, device_str)
+            What :func:`_param_fingerprint` gives for the model now.
+        """
+        from lucid.nn._tree_version import _tree_version
+
+        version = _tree_version()
+        value = self._value
+        if value is None or version != self._version:
+            model = self.model
+            # A submodule added since the last walk is watched from now on.
+            for sub in model.modules():
+                _watch_tensors(sub, self)
+            # Read before the walk, as ``_tree_walk`` does: a change made
+            # while it runs moves the version past the one stored.
+            self._version = version
+            value = self._value = _param_fingerprint(model)
+        return value
+
+    def key_of(
+        self, args: Iterable[object], kwargs: dict[str, object], *, dynamic: bool
+    ) -> CacheKey:
+        """:func:`signature_of` for a call of the model, with this fingerprint.
+
+        Parameters
+        ----------
+        args : iterable
+            The call's positional arguments, as :func:`signature_of` takes
+            them.
+        kwargs : dict
+            The call's keyword arguments.
+        dynamic : bool
+            Whether the batch axis is wildcarded.
+
+        Returns
+        -------
+        CacheKey
+            The call's key.
+        """
+        return signature_of(
+            self.model, args, kwargs, dynamic=dynamic, param_fingerprint=self.get()
+        )
+
+    def invalidate(self) -> None:
+        """Walk the parameters again on the next :meth:`get`."""
+        self._value = None
+
+    @override
+    def _tensors_replaced(self) -> None:
+        """A module of the tree had its parameters or buffers replaced."""
+        self.invalidate()
 
 
 def signature_of(

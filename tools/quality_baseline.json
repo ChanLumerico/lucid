@@ -1296,7 +1296,7 @@
     "lucid/compile/_entry/fused_step.py": 386,
     "lucid/compile/_entry/module.py": 69,
     "lucid/compile/_entry/segmented_step.py": 89,
-    "lucid/compile/_entry/step.py": 446,
+    "lucid/compile/_entry/step.py": 433,
     "lucid/compile/_optim/compiler.py": 54,
     "lucid/coreml/__init__.py": 272,
     "lucid/coreml/_build.py": 775,
