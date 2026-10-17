@@ -72,6 +72,7 @@ from lucid._C import engine as _C_engine
 from lucid._device import device as _device_cls
 from lucid._dtype import dtype as _dtype_cls
 from lucid.compile._core.bn_runstats import advance_bn_counters, bn_counter_targets
+from lucid.compile._core.signature import ParamFingerprint
 
 # Thread-local flag flipped on while ``_FusedStep._build_plan``
 # is actively tracing.  ``lucid.nn.functional.dropout`` checks it to
@@ -442,6 +443,11 @@ class _FusedStep:
         self._plans: dict[tuple[object, ...], _FusedPlan] = {}
         self._eager_only: set[tuple[object, ...]] = set()
         self._reachable: frozenset[int] | None = None
+        # Part of the plan key, as make_step's; and a plan feeds and writes the
+        # tensors it was traced with: after a ``.half()`` / ``.float()`` round
+        # trip or an ``assign=True`` load on any module of the tree, it went on
+        # training the old ones (LCD-505).
+        self._fingerprint = ParamFingerprint(model, on_replaced=self.recompile)
         # Per-call args stash so positional resolvers can pick them up.
         self._current_args: tuple[Tensor, ...] = ()
         # This call's packed scalar vectors (read by their resolvers).
@@ -598,8 +604,9 @@ class _FusedStep:
         Useful after manual surgery on the model (e.g. resizing a
         parameter buffer) where the captured tensor identities no longer
         match the live ones.  Normal training loops never need to call
-        this — freezing / unfreezing parameters and LR schedules are
-        picked up on their own.
+        this — freezing / unfreezing parameters, LR schedules, and the
+        tensors a ``.to()`` / ``.half()`` or an ``assign=True`` load
+        replaces are picked up on their own.
         """
         self._plans.clear()
         self._eager_only.clear()
@@ -613,11 +620,12 @@ class _FusedStep:
         flags: tuple[_Flags, ...],
         args: tuple[Tensor, ...] = (),
     ) -> tuple[object, ...]:
-        """Plan key: participants, structural flags, per-parameter classes, input shapes."""
+        """Plan key: participants, structural flags, per-parameter classes, inputs, params."""
         arg_sig = tuple((tuple(a.shape), a.dtype, a.device) for a in args)
         amp_active = _C_engine.amp_is_active()
         amp_sig = (amp_active, _C_engine.amp_active_dtype() if amp_active else None)
-        return (members, flags, self._copt._partition(members), arg_sig, amp_sig)
+        partition = self._copt._partition(members)
+        return (members, flags, partition, arg_sig, amp_sig, self._fingerprint.get())
 
     def _members(self) -> tuple[int, ...]:
         """Parameters that step: reach the loss and require grad (eager's rule)."""

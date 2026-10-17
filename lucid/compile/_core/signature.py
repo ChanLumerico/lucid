@@ -30,8 +30,9 @@ for ``forward(self, x, training=True)`` style guard arguments).
 
 import struct
 import weakref
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
+from types import MethodType
 from typing import TYPE_CHECKING, final, override
 
 from lucid.nn.module import _ModuleWrapper, _watch_tensors
@@ -534,23 +535,46 @@ class ParamFingerprint(_ModuleWrapper):
     parameter or submodule moves the tree version, which is checked too.  A
     tensor rebound by hand (``p.data = ...``) is not seen.
 
+    The same news reaches its owner: an executable is fed the tensors it was
+    traced with, so one traced before a replacement goes on training the old
+    ones (LCD-505).
+
     Parameters
     ----------
     model : Module
         The model whose parameters are fingerprinted.  Held weakly: the
         watcher lives in its owner, and must not keep the model alive.
+    on_replaced : callable, optional
+        Called after a module of the tree had its tensors replaced, once per
+        module told: the owner drops what it traced.  A bound method is held
+        weakly, so an owner that holds this watcher is not kept alive by it
+        — with its executables — until a cycle collection.
     """
 
-    def __init__(self, model: Module) -> None:
+    def __init__(
+        self, model: Module, on_replaced: Callable[[], object] | None = None
+    ) -> None:
         self._model: weakref.ref[Module] = weakref.ref(model)
         self._value: tuple[tuple[str, str], ...] | None = None
         self._version = -1
+        self._on_replaced: Callable[[], Callable[[], object] | None] = (
+            weakref.WeakMethod(on_replaced)
+            if isinstance(on_replaced, MethodType)
+            else lambda: on_replaced
+        )
+        self._watch(model)
 
     @override
-    def __reduce__(self) -> tuple[type[ParamFingerprint], tuple[Module]]:
+    def __reduce__(
+        self,
+    ) -> tuple[type[ParamFingerprint], tuple[Module, Callable[[], object] | None]]:
         # A weak reference does not pickle; a copy of its owner (a
         # CompiledModule) fingerprints the copy of the model, walked afresh.
-        return (ParamFingerprint, (self.model,))
+        return (ParamFingerprint, (self.model, self._on_replaced()))
+
+    def _watch(self, model: Module) -> None:
+        for sub in model.modules():
+            _watch_tensors(sub, self)
 
     @property
     @override
@@ -576,8 +600,7 @@ class ParamFingerprint(_ModuleWrapper):
         if value is None or version != self._version:
             model = self.model
             # A submodule added since the last walk is watched from now on.
-            for sub in model.modules():
-                _watch_tensors(sub, self)
+            self._watch(model)
             # Read before the walk, as ``_tree_walk`` does: a change made
             # while it runs moves the version past the one stored.
             self._version = version
@@ -616,6 +639,9 @@ class ParamFingerprint(_ModuleWrapper):
     def _tensors_replaced(self) -> None:
         """A module of the tree had its parameters or buffers replaced."""
         self.invalidate()
+        on_replaced = self._on_replaced()
+        if on_replaced is not None:
+            on_replaced()
 
 
 def signature_of(

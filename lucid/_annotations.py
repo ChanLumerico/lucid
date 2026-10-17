@@ -334,6 +334,7 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
     ),
     "lucid.compile._entry.step": (
         ("Module", "lucid.nn.module", "Module"),
+        ("Parameter", "lucid.nn.parameter", "Parameter"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
     ),
     "lucid.compile._optim.compiler": (

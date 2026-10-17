@@ -71,7 +71,7 @@ from lucid.compile._core.signature import (
     leaf_tensors,
     model_has_active_hooks,
 )
-from lucid.nn.module import Module, _ModuleWrapper, _watch_tensors
+from lucid.nn.module import Module, _ModuleWrapper
 from lucid.nn.parameter import Parameter
 
 if TYPE_CHECKING:
@@ -434,8 +434,16 @@ class CompiledModule[**P, R](_ModuleWrapper):
         # The key's parameter fingerprint, walked again only when a parameter
         # can have changed (and on clear_cache).  Without it signature_of
         # would walk model.parameters() on every __call__, which dominates the
-        # Python overhead for deep models.
-        object.__setattr__(self, "_param_fp", ParamFingerprint(model))
+        # Python overhead for deep models.  Executables pin the tensors they
+        # were traced with, so it also tells _tensors_replaced when a ``.to()``
+        # or an ``assign=True`` load replaces them, on any module of the tree
+        # — through a parent module, or on the model itself — and a cached
+        # call would go on answering with the old weights.
+        object.__setattr__(
+            self,
+            "_param_fp",
+            ParamFingerprint(model, on_replaced=self._tensors_replaced),
+        )
         # Lazy training-step callables, keyed by ``id(loss_fn)``.  The
         # first ``cm.step(..., loss_fn=fn)`` call creates a make_step
         # callable and stashes it here; subsequent calls with the same
@@ -444,11 +452,6 @@ class CompiledModule[**P, R](_ModuleWrapper):
         # a fresh closure each call would defeat the cache, which the
         # docstring warns about.
         object.__setattr__(self, "_step_callables", {})
-        # Executables pin the tensors they were traced with.  A ``.to()`` or
-        # an ``assign=True`` load reaching the model some other way — through
-        # a parent module, or on the model itself — replaces those tensors,
-        # and a cached call would go on answering with the old weights.
-        _watch_tensors(model, self)
 
     @override
     def _tensors_replaced(self) -> None:

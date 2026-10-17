@@ -49,6 +49,7 @@ class _ExecutableLike(Protocol):
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
+    from lucid.nn.parameter import Parameter
 
 __all__ = ["make_step"]
 
@@ -228,14 +229,13 @@ def make_step(
     cache: dict[Any, _StepEntry] = {}
     eager_only = EagerFallbackSet()
 
-    # Snapshot the parameter list once.  ``make_step`` is meant to be
-    # called per-model-per-training-loop, not on every step, so the
-    # parameter set is stable across calls (mutating it invalidates
-    # the cache — the caller must rebuild via a fresh ``make_step``).
+    # Taken again, and every executable dropped, when the model's tensors are
+    # replaced (_retrace_on_replace); otherwise stable across calls.
     params = list(model.parameters())
     if not params:
         raise ValueError("make_step: model has no trainable parameters")
-    fingerprint = ParamFingerprint(model)  # not walked every step (LCD-489)
+    retrace = _retrace_on_replace(model, cache.clear, params)
+    fingerprint = ParamFingerprint(model, on_replaced=retrace)  # LCD-489
 
     def _compile_for(
         x_args: tuple[Tensor, ...],
@@ -578,6 +578,27 @@ def make_step(
     step.graph_dump = graph_dump  # type: ignore[attr-defined]
 
     return step
+
+
+def _retrace_on_replace(
+    model: Module, drop_executables: Callable[[], None], params: list[Parameter]
+) -> Callable[[], None]:
+    """What a :func:`make_step` does when its model's tensors are replaced.
+
+    Each executable is fed the tensors it was traced with: after an
+    ``assign=True`` load, or a ``.half()`` / ``.float()`` round trip that
+    keys back to the first executable, the step went on training the old
+    tensors — a loss from the old weights, gradients for tensors the model no
+    longer holds (LCD-505).  So every executable is dropped, and the
+    parameters are taken again: an ``assign=True`` load puts new
+    ``Parameter`` objects in the tree.
+    """
+
+    def retrace() -> None:
+        drop_executables()
+        params[:] = model.parameters()
+
+    return retrace
 
 
 def _graph_dump(entries: Iterable[tuple[object, _StepEntry]]) -> str:

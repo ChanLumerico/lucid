@@ -914,6 +914,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - write a compiled step's outputs into the target's elements
 
+- retrace a compiled step after the model's tensors change
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
