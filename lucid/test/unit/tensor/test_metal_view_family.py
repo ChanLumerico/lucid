@@ -167,22 +167,28 @@ def test_an_optimizer_step_reaches_a_live_data_alias(
     assert _flat(p) != [1.0] * 3
 
 
+@pytest.mark.parametrize("device", DEVICES)
 @pytest.mark.parametrize("make", [optim.SGD, optim.Adam], ids=["SGD", "Adam"])
-def test_a_refused_engine_step_leaves_every_param_and_state_as_it_was(
-    make: Callable[..., optim.Optimizer],
+def test_an_engine_step_writes_a_partial_view_into_its_part_of_the_base(
+    device: str, make: Callable[..., optim.Optimizer]
 ) -> None:
-    # The partial Metal view is refused; nothing is written before it is:
-    # not the parameter ahead of it, not its own step count.
-    a = nn.Parameter(lucid.ones(3, device="metal"))
-    base = lucid.zeros(6, device="metal")
+    # A view of part of a tensor is stepped on a dense copy and written back
+    # through its geometry, on Metal into the family's root, while the
+    # parameter ahead of it steps in place.  Metal refused it until LCD-476;
+    # every layout and optimizer: optim/test_optimizer_strided_params.py.
+    a = nn.Parameter(lucid.ones(3, device=device))
+    base = lucid.arange(6.0).to(device)
     b = nn.Parameter(_view(base, [3], [1], 2))
+    dense = nn.Parameter(lucid.tensor([2.0, 3.0, 4.0], device=device))
     opt = make([a, b], lr=0.5)
-    ((a * a).sum() + (b * b).sum()).backward()
-    with pytest.raises(NotImplementedError, match="part of a tensor"):
-        opt.step()
-    assert _flat(a) == [1.0] * 3
-    assert _flat(base) == [0.0] * 6
-    assert all(not s for s in opt.state_dict()["state"].values())
+    opt_dense = make([dense], lr=0.5)
+    ((a * a).sum() + (b * b * b).sum()).backward()
+    (dense * dense * dense).sum().backward()
+    opt.step()
+    opt_dense.step()
+    assert _flat(b) == _flat(dense) != [2.0, 3.0, 4.0]
+    assert _flat(base) == [0.0, 1.0, *_flat(dense), 5.0]
+    assert _flat(a) != [1.0] * 3
 
 
 def test_a_refused_running_stat_write_leaves_both_stats_as_they_were() -> None:
