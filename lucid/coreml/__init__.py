@@ -300,6 +300,7 @@ def export(
 
     >>> import shutil, tempfile
     >>> import lucid, lucid.nn as nn, lucid.models as M, lucid.coreml as cml
+    >>> lucid.manual_seed(1)       # the error bounds below are of these weights
     >>> model = M.create_model(
     ...     "resnet_18_cls", num_classes=10,
     ...     stem_channels=8, hidden_sizes=(8, 16, 32, 64),   # narrowed, to be quick
