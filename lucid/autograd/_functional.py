@@ -612,7 +612,9 @@ def jvp(
     Computed exactly with two reverse-mode passes (the double-vjp
     trick): :math:`g(u) = J^\top u` is linear in a dummy cotangent
     :math:`u`, so its vector-Jacobian product with :math:`v` is
-    :math:`(J^\top)^\top v = J v`.  No finite differences are involved.
+    :math:`(J^\top)^\top v = J v` — or, through an op whose backward has
+    no graph mode (``LSTM``, a padded ``avg_pool``), one reverse pass per
+    output element.  No finite differences are involved.
 
     Parameters
     ----------
@@ -648,23 +650,18 @@ def jvp(
     Raises
     ------
     RuntimeError
-        The number of entries of ``v`` differs from the number of
-        inputs, ``v`` is left out and ``inputs`` is not one single-element
-        tensor, or ``strict`` refuses a result.
+        ``v`` has the wrong number of entries, or is left out when
+        ``inputs`` is not one single-element tensor, or ``strict``
+        refuses a result.
     NotImplementedError
-        ``create_graph`` is set and an op on the path has no graph-mode
-        backward, so no differentiable tangent can be built through it.
+        ``create_graph`` through an op whose backward has no graph mode.
     ShapeMismatch, DeviceMismatch
         An entry of ``v`` does not have its input's shape or device.
 
     Notes
     -----
     The complementary operation is :func:`vjp`, which computes
-    :math:`v^\top J` with one reverse pass.  This JVP costs two.  The
-    second pass differentiates the first; through an op whose backward has
-    no graph mode (``LSTM``, a padded ``avg_pool``) it cannot, and the
-    product is taken one output element at a time instead — one reverse
-    pass per element, exact all the same.
+    :math:`v^\top J` with one reverse pass.  This JVP costs two.
 
     Examples
     --------
@@ -678,6 +675,17 @@ def jvp(
     >>> tangent
     tensor([2., 0., 0.])
     """
+    return _jvp_pass(func, inputs, v, create_graph, strict)
+
+
+def _jvp_pass(
+    func: Callable[..., Tensor | tuple[Tensor, ...]],
+    inputs: Tensor | tuple[Tensor, ...],
+    v: Tensor | tuple[Tensor, ...] | None,
+    create_graph: bool,
+    strict: bool,
+) -> tuple[Tensor | tuple[Tensor, ...], Tensor | tuple[Tensor, ...]]:
+    """The body of :func:`jvp`: check, evaluate, take ``J v``, then pack."""
     inputs_t, _ = _as_tuple(inputs, "inputs", "jvp")
     _require_differentiable(inputs_t, "jvp")
     v_t = _seeds(v, inputs_t, "the input to the user-provided function is", "jvp")
