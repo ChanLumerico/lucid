@@ -237,7 +237,9 @@ def test_a_free_function_detach_is_writable_under_autograd() -> None:
     ],
     ids=["expand", "broadcast_to", "as_strided"],
 )
-@pytest.mark.parametrize("write", list(WRITES))
+# zero_ is a fill, which every element can take at once: it goes through
+# (test_fill_into_overlapping_views.py).
+@pytest.mark.parametrize("write", [w for w in WRITES if w != "zero_"])
 def test_a_write_into_overlapping_elements_is_refused_as_on_the_cpu(
     view: View, write: str
 ) -> None:

@@ -323,8 +323,13 @@ void note_inplace_write(TensorImpl& dst, const TensorImpl& src) {
 }
 
 // Two of the target's elements are one byte: a write has no single value to
-// leave there, so the reference refuses it.
-[[noreturn]] void refuse_overlapping_write(const char* name) {
+// leave there, so the reference refuses it.  ``fill_`` is the exception, as
+// it is the reference's (``zero_`` is ``fill_(0)`` on this side): it leaves
+// one value in every element, so the elements that share a byte agree.
+void refuse_ambiguous_write(const TensorImpl& t, const char* name) {
+    if (std::strcmp(name, "fill_") == 0 || t.is_contiguous() ||
+        !overlaps_itself(t.shape(), t.stride()))
+        return;
     ErrorBuilder(name).fail(
         "an in-place write into a tensor whose elements overlap (an "
         "expanded view, or unfold windows that overlap) is ambiguous — clone() first");
@@ -513,8 +518,7 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     // only in write_through: an expanded view whose base is gone has no live
     // views, so it came down to the swap below and took a dense buffer in
     // silence — ``ones(1, 3).expand(2, 3).add_(1)`` raised nothing.
-    if (!is_contiguous() && overlaps_itself(meta_.shape, meta_.stride))
-        refuse_overlapping_write(name);
+    refuse_ambiguous_write(*this, name);
     // The last Metal member left has no one to share the write with: it
     // takes the result as its own storage below, as any Metal tensor does
     // (a dtype-changing op included).
@@ -656,8 +660,7 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
     }
     if (!storage_is_cpu(storage_) || !storage_is_cpu(src.storage_))
         ErrorBuilder(name).not_implemented("writing through a view is only supported on the CPU");
-    if (overlaps_itself(meta_.shape, meta_.stride))
-        refuse_overlapping_write(name);
+    refuse_ambiguous_write(*this, name);
     const long members = family_ ? family_.use_count() : 1;
     if (gradient_slot_write(storage_, members) == SlotWrite::kRefused)
         refuse_shared_gradient_write(name);
@@ -702,8 +705,7 @@ void TensorImpl::write_gpu_member(const TensorImpl& src, const char* name, bool 
     if (src.device() != Device::GPU)
         throw DeviceMismatch(std::string(device_name(meta_.device)),
                              std::string(device_name(src.device())), name);
-    if (!is_contiguous() && overlaps_itself(meta_.shape, meta_.stride))
-        refuse_overlapping_write(name);
+    refuse_ambiguous_write(*this, name);
     const bool graph = src.requires_grad() || src.grad_fn();
     if (!raw && GradMode::is_enabled() && !is_detached_alias()) {
         const auto views = live_views();
@@ -955,8 +957,9 @@ std::vector<std::byte> contig_snapshot_cpu(const CpuStorage& s,
 // through ``stride`` from ``storage_offset``: the inverse of
 // :func:`contig_snapshot_cpu`, which is how a write reaches a view's own
 // elements rather than the buffer's first bytes.  Runs move as a memcpy
-// when the inner axis is contiguous and as typed stores otherwise; a view
-// written through has no repeated element (``overlaps_itself`` refuses one).
+// when the inner axis is contiguous and as typed stores otherwise.  A view
+// written through has a repeated element only under ``fill_``, whose packed
+// elements are all one value (refuse_ambiguous_write).
 void scatter_contig_to_strided(const std::byte* packed,
                                CpuStorage& dst,
                                const Shape& shape,
@@ -970,8 +973,8 @@ void scatter_contig_to_strided(const std::byte* packed,
 // Whether two of a view's elements are the same byte.  A zero stride on an
 // axis longer than one — an expanded view — always makes one; so do windows
 // that overlap, as an unfold with step < size gives, though every stride is
-// non-zero.  Such a view reads fine and cannot be written: a repeated element
-// has no single value to take.
+// non-zero.  Such a view reads fine, and a write into it has no single value
+// for a repeated element to take — unless it is a fill (refuse_ambiguous_write).
 bool overlaps_itself(const Shape& shape, const Stride& stride) {
     const std::size_t n = shape_numel(shape);
     if (n <= 1)
@@ -1711,24 +1714,27 @@ TensorImpl::to_string(int precision, std::size_t threshold, std::size_t edgeitem
 // Shared←CPU, CPU←Shared.  Any other cross-variant combination throws a
 // DeviceMismatch error.
 void TensorImpl::copy_from(const TensorImpl& other) {
+    copy_from_named(other, "copy_from");
+}
+
+void TensorImpl::copy_from_named(const TensorImpl& other, const char* name) {
     note_inplace_write(*this, other);
     if (other.device() != device())
         throw DeviceMismatch(std::string(device_name(meta_.device)),
-                             std::string(device_name(other.device())), "copy_from");
+                             std::string(device_name(other.device())), name);
     if (other.dtype() != dtype())
         throw DtypeMismatch(std::string(dtype_name(meta_.dtype)),
-                            std::string(dtype_name(other.dtype())), "copy_from");
+                            std::string(dtype_name(other.dtype())), name);
     if (other.shape() != shape())
-        throw ShapeMismatch(meta_.shape, other.shape(), "copy_from");
+        throw ShapeMismatch(meta_.shape, other.shape(), name);
     // A Metal family member writes into the root that every member reads.
     if (gpu_member())
-        return write_gpu_member(other, "copy_from", /*raw=*/true);
+        return write_gpu_member(other, name, /*raw=*/true);
     // A CPU view is written through its geometry: the source, packed, laid
     // into this tensor's own elements at its offset and strides.  The copy
     // below would land at the buffer's first byte.
     if (storage_is_cpu(storage_) && storage_is_cpu(other.storage_) && !is_dense()) {
-        if (overlaps_itself(meta_.shape, meta_.stride))
-            refuse_overlapping_write("copy_from");
+        refuse_ambiguous_write(*this, name);
         const auto packed = contig_snapshot_cpu(std::get<CpuStorage>(other.storage_), other.shape(),
                                                 other.stride(), other.storage_offset());
         settle_before_host_write(shared_, storage_);
@@ -1844,7 +1850,7 @@ void TensorImpl::assign_from(const TensorImpl& other, const char* name) {
                 "assigning into a tensor that shares storage with a live view is not supported "
                 "while autograd records it — clone() first, or assign under no_grad()");
     }
-    copy_from(other);
+    copy_from_named(other, name);
     if (!GradMode::is_enabled())
         return;
     if (other.grad_fn()) {
@@ -1982,8 +1988,8 @@ void TensorImpl::accumulate_grad_impl(std::shared_ptr<TensorImpl> g) {
             if (auto* owned = std::get_deleter<GradSlot>(cpu->ptr))
                 cpu->ptr = owned->buffer;
         }
-        autograd_->grad_impl = std::make_shared<TensorImpl>(
-            std::move(prev), meta_.shape, meta_.dtype, meta_.device, false);
+        autograd_->grad_impl = std::make_shared<TensorImpl>(std::move(prev), meta_.shape,
+                                                            meta_.dtype, meta_.device, false);
     }
     if (!autograd_->grad_impl) {
         autograd_->grad_impl = std::move(g);

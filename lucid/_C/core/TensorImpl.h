@@ -324,8 +324,9 @@ public:
     //     ``src`` has another shape.
     // LucidError
     //     ``src`` has another dtype, a view of a leaf that requires grad
-    //     would be modified while autograd records, the elements overlap,
-    //     or the buffer is a gradient's that something else also reads.
+    //     would be modified while autograd records, the elements overlap
+    //     and ``name`` is not ``fill_``, or the buffer is a gradient's that
+    //     something else also reads.
     // NotImplementedError
     //     The tensor is on the GPU outside a view family; or its CPU buffer
     //     is also held by something that is not one of its views — a
@@ -1064,6 +1065,11 @@ private:
     // Writes ``src``'s values into the shared buffer.  False when this
     // tensor no longer is the buffer or ``src`` does not match it.
     bool write_into_shared(const TensorImpl& src);
+
+    // copy_from, raising and refusing in the name of the op that asked:
+    // assign_from passes its caller's (``fill_`` may write an overlapping
+    // view, which a copy may not).
+    void copy_from_named(const TensorImpl& other, const char* name);
 
     // Whether this tensor reads a Metal view family's root.
     bool gpu_member() const noexcept { return family_ && family_->root.has_value(); }

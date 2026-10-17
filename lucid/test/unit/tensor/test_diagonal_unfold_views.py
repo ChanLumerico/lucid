@@ -118,7 +118,7 @@ def test_interleaving_strides_that_collide_refuse_a_write() -> None:
     base = lucid.zeros(20)
     # i = 3, j = 0 and i = 0, j = 2 both land on address 6
     with pytest.raises(Exception, match="overlap"):
-        _strided(base, [4, 3], [2, 3]).fill_(1.0)
+        _strided(base, [4, 3], [2, 3]).add_(1.0)
 
 
 def test_make_view_bounds_count_the_bases_own_offset() -> None:
@@ -136,4 +136,4 @@ def test_a_write_through_metal_diagonal_and_unfold_reaches_the_base() -> None:
     x.reshape(-1).unfold(0, 3, 3)[1].fill_(-2.0)  # windows that do not overlap
     assert x.to("cpu").tolist()[1] == [-2.0, -2.0, -2.0]
     with pytest.raises(RuntimeError, match="overlap"):
-        x.reshape(-1).unfold(0, 3, 2).fill_(0.0)
+        x.reshape(-1).unfold(0, 3, 2).add_(1.0)
