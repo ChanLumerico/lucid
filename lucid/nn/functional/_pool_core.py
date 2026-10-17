@@ -311,10 +311,13 @@ def _lp_pool(x: Tensor, norm_type: float, g: _PoolGeometry, ceil_mode: bool) -> 
     derivative is infinite; the reference does this with
     ``sign(s) * relu(|s|)``, and a ``where`` does it here, because the
     engine's ``relu`` gradient also drops a ``nan`` sum's gradient, which
-    the reference passes on.
+    the reference passes on.  ``p = inf`` is max pooling of ``|x|``: the
+    power average would take ``inf ** 0`` and give 1 everywhere.
     """
     p = float(norm_type)
     n = len(g.kernel)
+    if p == math.inf:
+        return _max_pool(_lucid.abs(x), g, ceil_mode, False)
     if not p > 0.0:
         raise ValueError(f"lp_pool{n}d: norm_type must be > 0, got {p}")
     pooled = _avg_pool(x**p, g, ceil_mode, True, None)

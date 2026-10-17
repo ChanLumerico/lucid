@@ -840,6 +840,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - exact topk selection on -inf, int32 and argmax extremes
 
+- lp_pool norm_type=inf is max pooling of |x| again
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
