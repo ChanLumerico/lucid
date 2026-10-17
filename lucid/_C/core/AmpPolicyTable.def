@@ -22,8 +22,17 @@
 // op that Lucid runs as one (``square`` and ``cube`` into ``pow``,
 // ``trace`` into ``sum``, ``cross_entropy_loss`` into ``log_softmax`` and
 // ``nll_loss``), the row carries the decomposition's effective policy.
-// ``ctc_loss`` is FP32 on Metal too: the reference has no MPS kernel for
-// it, and the CPU answer is the one it is compared against.
+// Two rows depart from the reference on purpose:
+//
+//   ctc_loss         FP32 on Metal too — the reference has no MPS kernel
+//                    for it, and the CPU answer is the one it is compared
+//                    against.
+//   batch_norm_eval  FP32 on the CPU, where the reference keeps the input:
+//                    the CPU eval kernel has no half path yet (LCD-487,
+//                    "CPU BatchNorm eval in float16/bfloat16 raises
+//                    NotImplementedError"), so a bfloat16 activation from an
+//                    autocast conv would raise.  The row goes back to KEEP
+//                    when LCD-487 lands.
 //
 // Rows are sorted by name, each name once — ``AmpPolicy.cpp`` refuses to
 // compile otherwise.  ``lucid/test/unit/amp/test_autocast_policy_table.py``
@@ -46,7 +55,7 @@ LUCID_AMP_ROW(baddbmm,                      LOWER,  LOWER)
 LUCID_AMP_ROW(batch_norm,                   FP32,   KEEP)
 LUCID_AMP_ROW(batch_norm1d,                 FP32,   KEEP)
 LUCID_AMP_ROW(batch_norm3d,                 FP32,   KEEP)
-LUCID_AMP_ROW(batch_norm_eval,              FP32,   KEEP)
+LUCID_AMP_ROW(batch_norm_eval,              FP32,   FP32)
 LUCID_AMP_ROW(bce_loss,                     KEEP,   FP32)
 LUCID_AMP_ROW(bce_with_logits,              FP32,   FP32)
 LUCID_AMP_ROW(bilinear_layer,               WIDEST, KEEP)

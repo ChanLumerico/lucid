@@ -492,13 +492,22 @@ LUCID_REGISTER_OP(HuberLossBackward)
 
 // ── CTC Loss ──────────────────────────────────────────────────────────────────
 
-TensorImplPtr ctc_loss_op(const TensorImplPtr& log_probs,
+TensorImplPtr ctc_loss_op(const TensorImplPtr& log_probs_in,
                           const TensorImplPtr& targets,
                           const TensorImplPtr& input_lengths,
                           const TensorImplPtr& target_lengths,
                           int blank,
                           bool zero_infinity) {
-    Validator::input(log_probs, "ctc_loss.log_probs").float_only().non_null();
+    Validator::input(log_probs_in, "ctc_loss.log_probs").non_null();
+    // The autocast row (float32 on both devices) casts a half input first.
+    // Without it a bfloat16 ``log_softmax`` output under a CPU autocast
+    // reached the kernel, which has no half path.  An integer input is not
+    // promoted, so the check below still refuses it.
+    const TensorImplPtr log_probs =
+        is_floating_point(log_probs_in->dtype())
+            ? promote_for_schema(CtcLossBackward::schema_v1, log_probs_in)
+            : log_probs_in;
+    Validator::input(log_probs, "ctc_loss.log_probs").float_only();
     Validator::input(targets, "ctc_loss.targets").non_null();
     Validator::input(input_lengths, "ctc_loss.input_lengths").non_null();
     Validator::input(target_lengths, "ctc_loss.target_lengths").non_null();
