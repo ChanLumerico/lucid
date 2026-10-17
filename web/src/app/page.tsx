@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { BrandMark } from "@/components/brand/Brand";
 import { FadeIn, FadeInStagger } from "@/components/motion/FadeIn";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +23,11 @@ import { cn } from "@/lib/utils";
 import { buildMeta } from "@/lib/build-meta";
 import { loadApiData, getAllModuleSlugs } from "@/lib/api-loader";
 import { isApiModule } from "@/lib/types";
+import { canonical } from "@/lib/site";
+
+export const metadata: Metadata = {
+  alternates: canonical("/"),
+};
 
 // ---------------------------------------------------------------------------
 // Static features — replaced emoji with on-brand lucide icons so the row
@@ -32,7 +39,7 @@ const FEATURES = [
     icon: Cpu,
     title: "MLX Native GPU",
     description:
-      "Metal-accelerated compute on every forward and backward pass. No CUDA, no compromise — purpose-built for Apple Silicon.",
+      "Metal-accelerated compute on every forward and backward pass. One GPU path, no compromise — purpose-built for Apple Silicon.",
   },
   {
     icon: Gauge,
@@ -42,7 +49,7 @@ const FEATURES = [
   },
   {
     icon: Workflow,
-    title: "PyTorch-compatible API",
+    title: "Familiar API",
     description:
       "Familiar interface — nn.Module, autograd, optim, DataLoader — so you can focus on the model, not the framework.",
   },
@@ -267,8 +274,8 @@ async function CodeSnippet() {
             From import to first step in 13 lines
           </h2>
           <p className="text-sm text-lucid-text-low max-w-xl">
-            A drop-in PyTorch-shaped API.  Device-aware optimisers, AMP-ready, no
-            CUDA path to keep alive.
+            The nn.Module, autograd and optimiser API you already know.
+            Device-aware optimisers, AMP-ready, one Metal path to keep alive.
           </p>
         </div>
       </FadeIn>
@@ -416,6 +423,19 @@ export default async function Home() {
 
           <div className="mx-auto max-w-4xl px-4 sm:px-6 text-center">
             <FadeIn delay={0}>
+              {/* The kit's duotone mark — its variant for hero sections —
+                  over a soft halo, the same violet glow the kit's social
+                  card sets behind the mark. */}
+              <div className="relative mx-auto mb-8 h-[72px] w-[72px] sm:h-24 sm:w-24">
+                <div
+                  className="pointer-events-none absolute -inset-10 rounded-full bg-lucid-primary/15 blur-3xl"
+                  aria-hidden="true"
+                />
+                <BrandMark variant="duotone" className="relative h-full w-full" />
+              </div>
+            </FadeIn>
+
+            <FadeIn delay={0.03}>
               <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-lucid-primary/25 bg-lucid-primary/10 px-4 py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-lucid-primary animate-pulse" />
                 <span className="text-xs font-medium text-lucid-primary tracking-wide">
@@ -434,7 +454,7 @@ export default async function Home() {
 
             <FadeIn delay={0.1}>
               <p className="mx-auto max-w-2xl text-lg sm:text-xl text-lucid-text-mid leading-relaxed mb-10">
-                MLX + Accelerate native backend. PyTorch-compatible API.
+                MLX + Accelerate native backend. A familiar nn.Module API.
                 Zero third-party dependencies in the compute path.
               </p>
             </FadeIn>

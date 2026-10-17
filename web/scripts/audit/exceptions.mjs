@@ -26,12 +26,12 @@ export const WAIVERS = [
   {
     id: "raw-hex-image-and-meta",
     contracts: ["design.no-raw-hex"],
-    scope: ["src/app/layout.tsx", "src/app/opengraph-image.tsx"],
+    scope: ["src/app/layout.tsx"],
     reason:
-      "These emit colour where CSS variables/Tailwind cannot reach: the " +
-      "<meta name=\"theme-color\"> value and the satori/ImageResponse OG-image " +
-      "renderer both require a literal hex. The value (#0d0c15) is the " +
-      "--color-lucid-bg token mirrored by hand.",
+      "The <meta name=\"theme-color\"> value is emitted where CSS variables " +
+      "cannot reach and needs a literal hex: the --color-lucid-bg token values " +
+      "(#0d0c15 / #fdfcfb) mirrored by hand. (The OG card no longer needs a " +
+      "waiver — it is the brand kit's own og-image.png.)",
   },
   {
     id: "ddpm-imagenet64-gen-learn-sigma",

@@ -184,6 +184,17 @@
   --color-lucid-info:    #3a55cc;
 }
 
+/* ── Theme-paired artwork ───────────────────────────────────────────────
+ * The brand kit draws its lockup twice — on-dark and on-light.  Both are
+ * rendered (``BrandLockup``) and this rule hides the one that doesn't match
+ * ``html[data-theme]``; no attribute counts as dark, like the token layer
+ * above.  Deliberately unlayered so no utility (``block``, ``flex``) can
+ * bring the hidden variant back. */
+:root:not([data-theme="light"]) [data-theme-only="light"],
+:root[data-theme="light"] [data-theme-only="dark"] {
+  display: none;
+}
+
 /* --- Base (inside @layer base so utilities can override) ----------------- */
 @layer base {
   *,

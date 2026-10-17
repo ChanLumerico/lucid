@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
 import { buildMeta } from "@/lib/build-meta";
+import { REPO_URL } from "@/lib/site";
+import { BrandLockup, VersionPill } from "@/components/brand/Brand";
 
 const FOOTER_LINKS = [
   {
@@ -24,7 +26,7 @@ const FOOTER_LINKS = [
   {
     title: "Resources",
     links: [
-      { label: "GitHub",         href: "https://github.com/ChanLumerico/lucid", external: true },
+      { label: "GitHub",         href: REPO_URL, external: true },
       { label: "Architecture",   href: "/architecture" },
       { label: "Changelog",      href: "/changelog" },
       { label: "BibTeX",         href: "/citations.bib", external: true },
@@ -44,13 +46,11 @@ export function Footer() {
           <div className="lg:col-span-1">
             <Link
               href="/"
-              className="inline-flex items-center gap-2 text-base font-bold text-lucid-text-high hover:text-lucid-primary transition-colors"
+              className="group -m-1.5 inline-flex items-center gap-3 rounded-md p-1.5 outline-none focus-visible:ring-2 focus-visible:ring-lucid-primary focus-visible:ring-offset-2 focus-visible:ring-offset-lucid-bg"
               aria-label="Lucid home"
             >
-              Lucid
-              <span className="rounded-md border border-lucid-primary/35 bg-lucid-primary/10 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.12em] text-lucid-primary uppercase">
-                3.0
-              </span>
+              <BrandLockup className="h-[22px] transition-opacity duration-150 group-hover:opacity-80" />
+              <VersionPill />
             </Link>
             <p className="mt-3 text-sm text-lucid-text-low leading-relaxed max-w-xs">
               Production-grade ML framework for Apple Silicon.
@@ -115,7 +115,7 @@ function BuildMetaLine() {
 
   const builtDate = built_at ? built_at.slice(0, 10) : null;
   const shaHref = git_sha_full
-    ? `https://github.com/ChanLumerico/lucid/commit/${git_sha_full}`
+    ? `${REPO_URL}/commit/${git_sha_full}`
     : null;
 
   return (

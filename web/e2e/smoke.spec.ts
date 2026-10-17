@@ -61,3 +61,41 @@ test("ToC entry click scrolls + updates the hash", async ({ page }) => {
   await tocLinks.first().click();
   await expect(page).toHaveURL(/#.+/);
 });
+
+// Brand kit wiring (scripts/sync-brand.mjs → public/brand/, linked by the root
+// layout, the manifest and BrandLockup).  A kit file that didn't sync, or a
+// link that lost its path, only shows up as a broken image or a missing icon.
+test("every head icon and the manifest resolve", async ({ page, request }) => {
+  await page.goto("/", { waitUntil: "networkidle" });
+  const hrefs = await page
+    .locator('link[rel~="icon"], link[rel="apple-touch-icon"], link[rel="manifest"]')
+    .evaluateAll((links) => links.map((l) => (l as HTMLLinkElement).href));
+  expect(hrefs.length).toBeGreaterThanOrEqual(4);
+  const manifestHref = hrefs.find((h) => h.includes("manifest"));
+  expect(manifestHref).toBeDefined();
+  const manifest = await (await request.get(manifestHref!)).json();
+  const icons = (manifest.icons as { src: string }[]).map((i) => new URL(i.src, page.url()).href);
+  for (const href of [...hrefs, ...icons]) {
+    expect((await request.get(href)).ok(), href).toBe(true);
+  }
+});
+
+test("header lockup loads and follows the site's theme toggle", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/", { waitUntil: "networkidle" });
+  const header = page.locator("header").first();
+  const onDark = header.locator('img[data-theme-only="dark"]');
+  const onLight = header.locator('img[data-theme-only="light"]');
+  const loaded = (img: typeof onDark) =>
+    img.evaluate((el) => (el as HTMLImageElement).naturalWidth);
+
+  await expect(onDark).toBeVisible();
+  await expect(onLight).toBeHidden();
+  await expect.poll(() => loaded(onDark)).toBeGreaterThan(0);
+
+  // The site's own toggle, not the OS preference, picks the variant.
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  await expect(onLight).toBeVisible();
+  await expect(onDark).toBeHidden();
+  await expect.poll(() => loaded(onLight)).toBeGreaterThan(0);
+});

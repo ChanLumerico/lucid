@@ -13,6 +13,8 @@ import { Button } from "@/components/ui/button";
 import { springs } from "@/components/motion/springs";
 import { SearchDialog } from "@/components/layout/SearchDialog";
 import { KeyboardShortcuts } from "@/components/layout/KeyboardShortcuts";
+import { BrandLockup, VersionPill } from "@/components/brand/Brand";
+import { REPO_URL } from "@/lib/site";
 
 const NAV_LINKS = [
   { href: "/docs", label: "Docs" },
@@ -37,20 +39,11 @@ function LucidLogo() {
   return (
     <Link
       href="/"
-      className="group flex items-center gap-2.5 outline-none focus-visible:ring-2 focus-visible:ring-lucid-primary focus-visible:ring-offset-2 focus-visible:ring-offset-lucid-bg rounded-md"
+      className="group -m-1.5 flex items-center gap-3 p-1.5 outline-none focus-visible:ring-2 focus-visible:ring-lucid-primary focus-visible:ring-offset-2 focus-visible:ring-offset-lucid-bg rounded-md"
       aria-label="Lucid home"
     >
-      <span className="text-[17px] font-bold tracking-tight text-lucid-text-high transition-colors duration-150 group-hover:text-lucid-primary">
-        Lucid
-      </span>
-      <span
-        className={cn(
-          "rounded-md border border-lucid-primary/35 bg-lucid-primary/10",
-          "px-1.5 py-0.5 text-[9px] font-bold tracking-[0.12em] text-lucid-primary uppercase",
-        )}
-      >
-        3.0
-      </span>
+      <BrandLockup className="h-[22px] sm:h-6 transition-opacity duration-150 group-hover:opacity-80" />
+      <VersionPill />
     </Link>
   );
 }
@@ -272,7 +265,7 @@ export function Header() {
             <ThemeToggle />
 
             <a
-              href="https://github.com/ChanLumerico/lucid"
+              href={REPO_URL}
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Lucid on GitHub"

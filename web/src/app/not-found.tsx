@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { BrandMark } from "@/components/brand/Brand";
 import { Button } from "@/components/ui/button";
 import { FadeIn } from "@/components/motion/FadeIn";
 import { NotFoundSuggestions } from "@/components/layout/NotFoundSuggestions";
@@ -21,7 +22,7 @@ export default function NotFound() {
       <main
         id="main-content"
         tabIndex={-1}
-        className="flex-1 flex items-center justify-center px-4 pt-14 focus:outline-none"
+        className="flex-1 flex items-center justify-center px-4 pt-28 pb-16 focus:outline-none"
       >
         <FadeIn>
           <div className="mx-auto max-w-md text-center">
@@ -30,6 +31,7 @@ export default function NotFound() {
               <div className="mx-auto h-[400px] w-[600px] -translate-y-1/2 rounded-full bg-lucid-primary/[0.04] blur-[100px]" />
             </div>
 
+            <BrandMark className="mx-auto mb-6 h-10 w-10" />
             <p className="mb-3 font-mono text-[11px] font-semibold tracking-widest uppercase text-lucid-text-disabled">
               404 · not found
             </p>
