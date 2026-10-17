@@ -348,15 +348,7 @@ def test_slogdet_gradient_at_a_singular_matrix_is_inf_along_the_adjugate(
 
 @pytest.mark.parametrize(
     "device",
-    [
-        pytest.param(
-            "cpu",
-            marks=pytest.mark.xfail(
-                strict=True, reason="LCD-301 CPU det loses the signed zero"
-            ),
-        ),
-        *(["metal"] if metal_available() else []),
-    ],
+    ["cpu", *(["metal"] if metal_available() else [])],
 )
 def test_slogdet_at_a_singular_matrix_keeps_the_signed_zero(device: str) -> None:
     """The reference: det = -0.0 (one row swap), so the grad is [-inf, inf, inf, -inf]."""

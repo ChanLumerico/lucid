@@ -5927,6 +5927,10 @@ public:
         std::vector<int> ipiv(n);
         int info = 0;
 
+        // A singular matrix (info > 0) still factors to the end, with an exact
+        // zero on U's diagonal: the product through it is a signed zero, as on
+        // Metal, where a literal 0 was not.  (The reference factors Aᵀ, so an
+        // asymmetric singular matrix can take the other sign there.)
         if (dt == Dtype::F32) {
             std::vector<float> l(per_mat), u(per_mat);
             const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
@@ -5936,12 +5940,8 @@ public:
                 if (info < 0)
                     check_lapack_info(info, "det");
                 float det = ipiv_sign(ipiv.data(), n);
-                if (info > 0) {
-                    det = 0.0f;
-                } else {
-                    for (int i = 0; i < n; ++i)
-                        det *= u[i * n + i];
-                }
+                for (int i = 0; i < n; ++i)
+                    det *= u[i * n + i];
                 out_p[b] = det;
             }
         } else if (dt == Dtype::F64) {
@@ -5953,12 +5953,8 @@ public:
                 if (info < 0)
                     check_lapack_info(info, "det");
                 double det = ipiv_sign(ipiv.data(), n);
-                if (info > 0) {
-                    det = 0.0;
-                } else {
-                    for (int i = 0; i < n; ++i)
-                        det *= u[i * n + i];
-                }
+                for (int i = 0; i < n; ++i)
+                    det *= u[i * n + i];
                 out_p[b] = det;
             }
         } else {
