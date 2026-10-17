@@ -267,8 +267,8 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         const Dtype buf_dt = running_mean->dtype();
         backend::IBackend& be = backend::Dispatcher::for_device(x_eff->device());
 
-        // The update runs at the dtype the forward computed in, not at the
-        // buffers'.
+        // The update runs in float32 (float64 for a float64 forward), not at
+        // the buffers' dtype nor at a half forward's.
         //
         // Two things were wrong with using ``buf_dt`` throughout.
         // ``saved_rstd_C`` is at ``eff_dt``, and passing it to ``square``
@@ -280,10 +280,16 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
         // answered, so the same call worked on one device and not the
         // other.
         //
-        // ``stat_dt`` is that float.  The buffers are read into it and the
-        // result is cast back on the way out, so the caller's storage keeps
-        // its own dtype and nothing is reinterpreted in between.
-        const Dtype stat_dt = eff_dt;
+        // And a half forward's ``rstd`` cannot be squared in half: for a
+        // batch variance near 0 it is about 1/sqrt(eps), whose square
+        // overflows float16, so ``1/rstd^2 - eps`` came out as ``-eps`` — a
+        // negative running variance, and NaN from eval() after it.
+        //
+        // ``stat_dt`` is that float.  The buffers and the saved statistics
+        // are read into it and the result is cast back on the way out, so
+        // the caller's storage keeps its own dtype and nothing is
+        // reinterpreted in between.
+        const Dtype stat_dt = (eff_dt == Dtype::F64) ? Dtype::F64 : Dtype::F32;
         auto into_stat = [&](const Storage& v, Dtype from) {
             return from == stat_dt ? v
                                    : be.cast(v, Shape{static_cast<std::int64_t>(C)}, from, stat_dt);
@@ -299,13 +305,18 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
             kept_shape.push_back(1);
         Shape stat_shape{static_cast<std::int64_t>(C)};
 
-        Storage saved_mean_C = be.reshape(bwd->saved_mean_, kept_shape, stat_shape, eff_dt);
-        Storage saved_rstd_C = be.reshape(bwd->saved_rstd_, kept_shape, stat_shape, eff_dt);
+        Storage saved_mean_C =
+            into_stat(be.reshape(bwd->saved_mean_, kept_shape, stat_shape, eff_dt), eff_dt);
+        Storage saved_rstd_C =
+            into_stat(be.reshape(bwd->saved_rstd_, kept_shape, stat_shape, eff_dt), eff_dt);
 
-        // var = 1 / rstd^2 - eps
-        Storage rstd_sq = be.square(saved_rstd_C, stat_shape, stat_dt);
-        Storage inv_rstd_sq = be.reciprocal(rstd_sq, stat_shape, stat_dt);
-        Storage var = be.add_scalar(inv_rstd_sq, stat_shape, stat_dt, -eps);
+        // var = max(rstd^-2 - eps, 0): the subtraction cancels when the
+        // variance is small beside eps, and rounding must not leave it
+        // below zero.  One pow, not a square and a reciprocal, so the clamp
+        // costs no buffer more than the step had.
+        Storage inv_rstd_sq = be.pow_scalar(saved_rstd_C, stat_shape, stat_dt, -2.0);
+        Storage var =
+            be.relu(be.add_scalar(inv_rstd_sq, stat_shape, stat_dt, -eps), stat_shape, stat_dt);
 
         auto* tracer = ::lucid::compile::current_tracer();
         const auto rm_value = tracer ? tracer->buffer_value(running_mean) : running_mean;
