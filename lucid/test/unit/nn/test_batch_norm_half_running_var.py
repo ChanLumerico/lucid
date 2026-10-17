@@ -54,13 +54,12 @@ def test_a_constant_batch_leaves_a_zero_running_variance(
     assert all(0.0 <= v <= 1e-7 for v in running), running
 
 
+@pytest.mark.parametrize("device", _DEVICES)
 @pytest.mark.parametrize("dtype", _HALF)
-def test_eval_after_a_constant_batch_is_finite(dtype: str) -> None:
-    if not metal_available():
-        pytest.skip("needs Metal (the CPU has no half-precision eval kernel)")
-    bn = _trained(1, dtype, "metal", lucid.zeros(8, 4))
+def test_eval_after_a_constant_batch_is_finite(dtype: str, device: str) -> None:
+    bn = _trained(1, dtype, device, lucid.zeros(8, 4))
     bn.eval()
-    out = bn(lucid.ones(8, 4, device="metal", dtype=getattr(lucid, dtype)))
+    out = bn(lucid.ones(8, 4, device=device, dtype=getattr(lucid, dtype)))
     assert all(math.isfinite(v) for v in _flat(out))
 
 

@@ -80,11 +80,13 @@
 #include "../Dispatcher.h"
 #include "../IBackend.h"
 #include "../LapackInfo.h"
+#include "BatchNormEval.h"
 #include "Blas.h"
 #include "CtcLoss.h"
 #include "DivMod.h"
 #include "ErfPoly.h"
 #include "GeluGrad.h"
+#include "GlobalResponseNorm.h"
 #include "GridSample.h"
 #include "Im2Col.h"
 #include "IndexBounds.h"
@@ -9690,33 +9692,24 @@ public:
                                                  int spatial,
                                                  double eps,
                                                  Dtype dt) override {
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(
+                batch_norm_eval_forward(detail::as_f32(x), detail::as_f32(mean),
+                                        detail::as_f32(var), detail::as_f32(gamma),
+                                        detail::as_f32(beta), x_shape, C, spatial, eps, Dtype::F32),
+                dt);
         const int B = static_cast<int>(x_shape[0]);
-        const auto& xs = std::get<CpuStorage>(x);
-        const auto& ms = std::get<CpuStorage>(mean);
-        const auto& vs = std::get<CpuStorage>(var);
-        const auto& gs = std::get<CpuStorage>(gamma);
-        const auto& bs = std::get<CpuStorage>(beta);
         auto rstd_cpu = alloc_cpu(static_cast<std::size_t>(C), dt);
         auto out_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
-            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const T* mp = reinterpret_cast<const T*>(ms.ptr.get());
-            const T* vp = reinterpret_cast<const T*>(vs.ptr.get());
-            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            const T* bp = reinterpret_cast<const T*>(bs.ptr.get());
-            T* yp = reinterpret_cast<T*>(out_cpu.ptr.get());
-            T* rp = reinterpret_cast<T*>(rstd_cpu.ptr.get());
-            for (int c = 0; c < C; ++c)
-                rp[c] = T{1} / static_cast<T>(std::sqrt(static_cast<double>(vp[c]) + eps));
-            for (int b = 0; b < B; ++b)
-                for (int c = 0; c < C; ++c) {
-                    const T m = mp[c], r = rp[c], g = gp[c], bb = bp[c];
-                    const T* xrow = xp + (b * C + c) * spatial;
-                    T* yrow = yp + (b * C + c) * spatial;
-                    for (int s = 0; s < spatial; ++s)
-                        yrow[s] = g * (xrow[s] - m) * r + bb;
-                }
+            auto in = [](const Storage& s) {
+                return reinterpret_cast<const T*>(std::get<CpuStorage>(s).ptr.get());
+            };
+            cpu::batch_norm_eval_forward_typed(in(x), in(mean), in(var), in(gamma), in(beta),
+                                               reinterpret_cast<T*>(out_cpu.ptr.get()),
+                                               reinterpret_cast<T*>(rstd_cpu.ptr.get()), B, C,
+                                               spatial, eps);
         };
         if (dt == Dtype::F32)
             run(float{});
@@ -9736,12 +9729,13 @@ public:
                                                   int C,
                                                   int spatial,
                                                   Dtype dt) override {
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(
+                batch_norm_eval_backward(detail::as_f32(x), detail::as_f32(mean),
+                                         detail::as_f32(gamma), detail::as_f32(rstd),
+                                         detail::as_f32(grad_out), x_shape, C, spatial, Dtype::F32),
+                dt);
         const int B = static_cast<int>(x_shape[0]);
-        const auto& xs = std::get<CpuStorage>(x);
-        const auto& ms = std::get<CpuStorage>(mean);
-        const auto& gs = std::get<CpuStorage>(gamma);
-        const auto& rs = std::get<CpuStorage>(rstd);
-        const auto& go = std::get<CpuStorage>(grad_out);
         auto dx = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
         auto dm = alloc_cpu(static_cast<std::size_t>(C), dt);
         auto dv = alloc_cpu(static_cast<std::size_t>(C), dt);
@@ -9749,35 +9743,13 @@ public:
         auto db = alloc_cpu(static_cast<std::size_t>(C), dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
-            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const T* mp = reinterpret_cast<const T*>(ms.ptr.get());
-            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            const T* rp = reinterpret_cast<const T*>(rs.ptr.get());
-            const T* gop = reinterpret_cast<const T*>(go.ptr.get());
-            T* dxp = reinterpret_cast<T*>(dx.ptr.get());
-            T* dmp = reinterpret_cast<T*>(dm.ptr.get());
-            T* dvp = reinterpret_cast<T*>(dv.ptr.get());
-            T* dgp = reinterpret_cast<T*>(dg.ptr.get());
-            T* dbp = reinterpret_cast<T*>(db.ptr.get());
-            for (int c = 0; c < C; ++c) {
-                dmp[c] = dvp[c] = dgp[c] = dbp[c] = T{0};
-                const T r = rp[c], g = gp[c], m = mp[c];
-                T sg = T{0}, sxmg = T{0};
-                for (int b = 0; b < B; ++b) {
-                    const T* xr = xp + (b * C + c) * spatial;
-                    const T* gor = gop + (b * C + c) * spatial;
-                    T* dxr = dxp + (b * C + c) * spatial;
-                    for (int s = 0; s < spatial; ++s) {
-                        dxr[s] = g * r * gor[s];
-                        sg += gor[s];
-                        sxmg += (xr[s] - m) * gor[s];
-                    }
-                }
-                dgp[c] = sxmg * r;
-                dbp[c] = sg;
-                dmp[c] = -g * r * sg;
-                dvp[c] = static_cast<T>(-0.5) * g * r * r * r * sxmg;
-            }
+            auto in = [](const Storage& s) {
+                return reinterpret_cast<const T*>(std::get<CpuStorage>(s).ptr.get());
+            };
+            auto out = [](CpuStorage& s) { return reinterpret_cast<T*>(s.ptr.get()); };
+            cpu::batch_norm_eval_backward_typed(in(x), in(mean), in(gamma), in(rstd), in(grad_out),
+                                                out(dx), out(dm), out(dv), out(dg), out(db), B, C,
+                                                spatial);
         };
         if (dt == Dtype::F32)
             run(float{});
@@ -9920,47 +9892,24 @@ public:
                                                       const Shape& x_shape,
                                                       double eps,
                                                       Dtype dt) override {
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(
+                global_response_norm_forward(detail::as_f32(x), detail::as_f32(gamma),
+                                             detail::as_f32(beta), x_shape, eps, Dtype::F32),
+                dt);
         const int B = static_cast<int>(x_shape[0]);
         const int C = static_cast<int>(x_shape[1]);
-        const int H = static_cast<int>(x_shape[2]);
-        const int W = static_cast<int>(x_shape[3]);
-        const int spatial = H * W;
-        const auto& xs = std::get<CpuStorage>(x);
-        const auto& gs = std::get<CpuStorage>(gamma);
-        const auto& bs = std::get<CpuStorage>(beta);
+        const int spatial = static_cast<int>(x_shape[2] * x_shape[3]);
         auto y_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
         auto nx_cpu = alloc_cpu(static_cast<std::size_t>(B) * C, dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
-            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            const T* bp = reinterpret_cast<const T*>(bs.ptr.get());
-            T* yp = reinterpret_cast<T*>(y_cpu.ptr.get());
-            T* nxp = reinterpret_cast<T*>(nx_cpu.ptr.get());
-            std::vector<T> Gx(static_cast<std::size_t>(B) * C);
-            for (int b = 0; b < B; ++b)
-                for (int c = 0; c < C; ++c) {
-                    T acc = T{0};
-                    const T* xr = xp + (b * C + c) * spatial;
-                    for (int s = 0; s < spatial; ++s)
-                        acc += xr[s] * xr[s];
-                    Gx[b * C + c] = static_cast<T>(std::sqrt(static_cast<double>(acc)));
-                }
-            for (int b = 0; b < B; ++b) {
-                T mean = T{0};
-                for (int c = 0; c < C; ++c)
-                    mean += Gx[b * C + c];
-                mean /= static_cast<T>(C);
-                const T denom = mean + static_cast<T>(eps);
-                for (int c = 0; c < C; ++c) {
-                    const T nx = Gx[b * C + c] / denom;
-                    nxp[b * C + c] = nx;
-                    const T* xr = xp + (b * C + c) * spatial;
-                    T* yr = yp + (b * C + c) * spatial;
-                    for (int s = 0; s < spatial; ++s)
-                        yr[s] = gp[c] * (xr[s] * nx) + bp[c] * xr[s];
-                }
-            }
+            auto in = [](const Storage& s) {
+                return reinterpret_cast<const T*>(std::get<CpuStorage>(s).ptr.get());
+            };
+            cpu::global_response_norm_forward_typed(
+                in(x), in(gamma), in(beta), reinterpret_cast<T*>(y_cpu.ptr.get()),
+                reinterpret_cast<T*>(nx_cpu.ptr.get()), B, C, spatial, eps);
         };
         if (dt == Dtype::F32)
             run(float{});
@@ -9979,89 +9928,27 @@ public:
                                                        const Shape& x_shape,
                                                        double eps,
                                                        Dtype dt) override {
+        if (detail::is_half_like(dt))
+            return detail::back_to_f16(
+                global_response_norm_backward(detail::as_f32(x), detail::as_f32(gamma),
+                                              detail::as_f32(beta), detail::as_f32(saved_Nx),
+                                              detail::as_f32(grad_out), x_shape, eps, Dtype::F32),
+                dt);
         const int B = static_cast<int>(x_shape[0]);
         const int C = static_cast<int>(x_shape[1]);
-        const int H = static_cast<int>(x_shape[2]);
-        const int W = static_cast<int>(x_shape[3]);
-        const int spatial = H * W;
-        const auto& xs = std::get<CpuStorage>(x);
-        const auto& gs = std::get<CpuStorage>(gamma);
-        const auto& bts = std::get<CpuStorage>(beta);
-        const auto& nxs = std::get<CpuStorage>(saved_Nx);
-        const auto& gos = std::get<CpuStorage>(grad_out);
+        const int spatial = static_cast<int>(x_shape[2] * x_shape[3]);
         auto dx = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
         auto dg = alloc_cpu(static_cast<std::size_t>(C), dt);
         auto db = alloc_cpu(static_cast<std::size_t>(C), dt);
         auto run = [&](auto tag) {
             using T = decltype(tag);
-            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            const T* bp = reinterpret_cast<const T*>(bts.ptr.get());
-            const T* nxp = reinterpret_cast<const T*>(nxs.ptr.get());
-            const T* gop = reinterpret_cast<const T*>(gos.ptr.get());
-            T* dxp = reinterpret_cast<T*>(dx.ptr.get());
-            T* dgp = reinterpret_cast<T*>(dg.ptr.get());
-            T* dbp = reinterpret_cast<T*>(db.ptr.get());
-            for (int c = 0; c < C; ++c) {
-                dgp[c] = dbp[c] = T{0};
-            }
-
-            std::vector<T> Gx(static_cast<std::size_t>(B) * C, T{0});
-            std::vector<T> mv(static_cast<std::size_t>(B), T{0});
-            for (int b = 0; b < B; ++b) {
-                for (int c = 0; c < C; ++c) {
-                    T acc = T{0};
-                    const T* xr = xp + (b * C + c) * spatial;
-                    for (int s = 0; s < spatial; ++s)
-                        acc += xr[s] * xr[s];
-                    Gx[b * C + c] = static_cast<T>(std::sqrt(static_cast<double>(acc)));
-                }
-                T s = T{0};
-                for (int c = 0; c < C; ++c)
-                    s += Gx[b * C + c];
-                mv[b] = s / static_cast<T>(C);
-            }
-
-            std::vector<T> A(static_cast<std::size_t>(B) * C, T{0});
-            for (int b = 0; b < B; ++b)
-                for (int c = 0; c < C; ++c) {
-                    const T* xr = xp + (b * C + c) * spatial;
-                    const T* gr = gop + (b * C + c) * spatial;
-                    T sgx = T{0};
-                    for (int s = 0; s < spatial; ++s)
-                        sgx += gr[s] * xr[s];
-                    A[b * C + c] = sgx * gp[c];
-                    dgp[c] += sgx * nxp[b * C + c];
-                    dbp[c] += sgx;
-                }
-
-            std::vector<T> dG(static_cast<std::size_t>(B) * C, T{0});
-            for (int b = 0; b < B; ++b) {
-                const T denom = mv[b] + static_cast<T>(eps);
-                const T denom2 = denom * denom;
-                T sum_AG = T{0};
-                for (int c = 0; c < C; ++c)
-                    sum_AG += A[b * C + c] * Gx[b * C + c];
-                const T common = -sum_AG / denom2 / static_cast<T>(C);
-                for (int c = 0; c < C; ++c)
-                    dG[b * C + c] = A[b * C + c] / denom + common;
-            }
-
-            for (int b = 0; b < B; ++b)
-                for (int c = 0; c < C; ++c) {
-                    const T nbc = nxp[b * C + c];
-                    const T gG = Gx[b * C + c];
-                    const T invG = (gG > T{0}) ? T{1} / gG : T{0};
-                    const T dGbc = dG[b * C + c];
-                    const T gc = gp[c];
-
-                    const T* xr = xp + (b * C + c) * spatial;
-                    const T* gr = gop + (b * C + c) * spatial;
-                    T* dxr = dxp + (b * C + c) * spatial;
-                    const T bc = bp[c];
-                    for (int s = 0; s < spatial; ++s)
-                        dxr[s] = gc * nbc * gr[s] + bc * gr[s] + dGbc * xr[s] * invG;
-                }
+            auto in = [](const Storage& s) {
+                return reinterpret_cast<const T*>(std::get<CpuStorage>(s).ptr.get());
+            };
+            auto out = [](CpuStorage& s) { return reinterpret_cast<T*>(s.ptr.get()); };
+            cpu::global_response_norm_backward_typed(in(x), in(gamma), in(beta), in(saved_Nx),
+                                                     in(grad_out), out(dx), out(dg), out(db), B, C,
+                                                     spatial, eps);
         };
         if (dt == Dtype::F32)
             run(float{});
