@@ -450,7 +450,7 @@ function buildModuleItem(slug: string): SidebarItem {
 /** Find a slug's documented parent (the longest documented prefix), excluding
  *  the bare ``lucid`` root.  Depth-1 (``lucid``) and depth-2 (``lucid.nn``,
  *  ``lucid.optim`` …) slugs are always top-level — they sit as siblings to
- *  mirror how Python's own docs (PyTorch, NumPy) lay out their first-level
+ *  mirror how the reference framework and NumPy docs lay out their first-level
  *  subpackages.  Depth-3+ slugs (``lucid.nn.functional`` etc.) nest under
  *  whichever shorter prefix is also in the slug set. */
 function findParent(slug: string, slugSet: Set<string>): string | null {

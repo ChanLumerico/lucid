@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * LayerTree — torchsummary-style expandable layer view rendered from
+ * LayerTree — model-summary-style expandable layer view rendered from
  * the cached ``model_summary`` tree on a model-factory's JSON entry.
  *
  * Visual conventions:

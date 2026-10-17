@@ -7,7 +7,7 @@
  *   - Header row (always visible) — big formatted count + exact integer.
  *     If the factory carries a layer-summary tree, a chevron on the
  *     right toggles it.
- *   - Layer tree (optional) — torchsummary-style expandable breakdown
+ *   - Layer tree (optional) — model-summary-style expandable breakdown
  *     of every submodule, with consecutive identical siblings collapsed
  *     into ``Type × N`` so deeply-repetitive architectures (ResNet
  *     stages, transformer blocks) stay readable.
