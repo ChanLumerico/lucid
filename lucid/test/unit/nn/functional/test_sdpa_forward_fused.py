@@ -5,8 +5,8 @@ materializing the ``(B, H, Lq, Lk)`` score matrix.  Checks:
 
 * **output parity** — fused metal additive/bool/causal output matches the CPU
   reference (which rolls the full softmax by hand);
-* **memory** — the fused additive forward's peak MLX allocation stays ~O(T),
-  far below the explicit O(T²) score-matrix path;
+* **memory** — the fused forward allocates its output and no ``(Lq, Lk)``
+  buffer, for every head dim MLX fuses;
 * **weights variant** — ``scaled_dot_product_attention_with_weights`` still
   returns correct dense weights on metal for none/causal/additive/bool.
 """
@@ -89,41 +89,65 @@ def test_query_broadcast_padding_mask_applied() -> None:
     np.testing.assert_allclose(out, ref, atol=1e-4, rtol=1e-3)
 
 
-def test_fused_causal_forward_is_memory_linear() -> None:
-    """The fused causal forward must not allocate the O(T²) score matrix.
+_UNFUSED_HEAD_DIM = pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "LCD-496: MLX 0.32 fuses attention only for head dims 64/80/96/128 "
+        "(Lq > 8); for any other, fast::scaled_dot_product_attention falls "
+        "back to q*scale, q@k^T, softmax and p@v and materialises the "
+        "(B, H, Lq, Lk) scores"
+    ),
+)
 
-    (Additive/bool masks are currently routed to the materialized path — the
-    fused ``mask_arr`` kernel miscomputes on lazy-graph inputs — so only the
-    mask-free / built-in-causal paths take the memory-efficient fused kernel.)
+
+@pytest.mark.parametrize("is_causal", [True, False])
+@pytest.mark.parametrize(
+    "head_dim",
+    [
+        64,
+        80,
+        96,
+        128,
+        pytest.param(16, marks=_UNFUSED_HEAD_DIM),
+        pytest.param(32, marks=_UNFUSED_HEAD_DIM),
+        pytest.param(48, marks=_UNFUSED_HEAD_DIM),
+    ],
+)
+def test_fused_forward_allocates_no_score_matrix(
+    head_dim: int, is_causal: bool
+) -> None:
+    """The fused forward allocates its output and no ``(Lq, Lk)`` buffer.
+
+    The bound is absolute.  It used to be "below the hand-rolled softmax
+    path minus one score matrix", which measured that path as much as the
+    kernel: MLX has no fused kernel for head dim 32, and the test passed only
+    while ``scores * scale`` also materialised the broadcast scale.  When
+    that copy went (LCD-299), the same 18.9 MB failed.
+
+    The GPU is synchronised before each reading.  MLX hands a command
+    buffer's temporaries back from its completion handler, after ``.item()``
+    has already returned, so a peak reset right after one is charged with
+    the previous call's scratch.
     """
     if not metal_available():
         pytest.skip("metal backend unavailable")
 
-    Bt, Ht, Tt, Dt = 1, 4, 1024, 32
-    n = Bt * Ht * Tt * Dt
-    q = _mk(0.11, "metal", n=n, shape=(Bt, Ht, Tt, Dt))
-    k = _mk(0.13, "metal", n=n, shape=(Bt, Ht, Tt, Dt))
-    v = _mk(0.17, "metal", n=n, shape=(Bt, Ht, Tt, Dt))
-    q.sum().item(), k.sum().item(), v.sum().item()  # force-eval inputs
-
-    # Fused causal path.
+    b, h, lq = 1, 4, 1024
+    q, k, v = (lucid.randn(b, h, lq, head_dim, device="metal") for _ in range(3))
+    _C_engine.synchronize_gpu()
+    before = _C_engine.metal_active_memory()
     _C_engine.metal_reset_peak_memory()
-    F.scaled_dot_product_attention(q, k, v, is_causal=True).sum().item()
-    fused_peak = _C_engine.metal_peak_memory()
 
-    # Explicit O(T²) reference: materializes the (B,H,T,T) score matrix.
-    _C_engine.metal_reset_peak_memory()
-    scores = lucid.matmul(q, k.permute([0, 1, 3, 2])) * (1.0 / math.sqrt(Dt))
-    from lucid.nn.functional.activations import softmax as _softmax
+    out = F.scaled_dot_product_attention(q, k, v, is_causal=is_causal)
+    _C_engine.synchronize_gpu()
+    extra = _C_engine.metal_peak_memory() - before
 
-    (lucid.matmul(_softmax(scores, dim=-1), v)).sum().item()
-    manual_peak = _C_engine.metal_peak_memory()
-
-    score_bytes = Bt * Ht * Tt * Tt * 4  # one (B,H,T,T) fp32 buffer
-    # Fused must save at least a full score matrix vs the manual path.
-    assert fused_peak < manual_peak - score_bytes, (
-        f"fused_peak={fused_peak} manual_peak={manual_peak} "
-        f"score_matrix={score_bytes} — O(T²) buffer not eliminated"
+    out_bytes = out.numel() * 4
+    # Any (Lq, Lk) buffer, even a one-byte mask, is at least lq * lq bytes.
+    assert extra < out_bytes + lq * lq // 2, (
+        f"head_dim={head_dim} is_causal={is_causal}: the fused forward peaked "
+        f"{extra} bytes above its inputs for a {out_bytes}-byte output; one "
+        f"(B, H, Lq, Lk) float32 score matrix is {b * h * lq * lq * 4} bytes"
     )
 
 
