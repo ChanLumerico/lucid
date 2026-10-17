@@ -222,7 +222,7 @@ public:
     // one node, distinguished by their ``grad_output_nr``.  Their gradients
     // arrive independently and at different times during the traversal, so
     // the node becomes a barrier: it parks each arriving gradient in
-    // :attr:`grad_slots_` and runs the user's ``backward`` once, with the
+    // :attr:`slots_` and runs the user's ``backward`` once, with the
     // full set, when the engine reaches it.  The topological order
     // guarantees every contributor has already run by then.
     std::vector<Shape> out_shapes;

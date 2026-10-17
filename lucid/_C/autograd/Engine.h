@@ -95,10 +95,10 @@ public:
     //     loss.
     // retain_graph : bool, optional
     //     When ``false`` (default), each node's ``release_saved()`` is
-    //     called immediately after its ``apply()`` and ``root->grad_fn``
-    //     is cleared on return, so a second ``backward()`` call is
-    //     impossible.  Pass ``true`` to preserve the graph for multiple
-    //     backward calls.
+    //     called immediately after its ``apply()``, and a second pass that
+    //     would read what was freed is refused; a graph that saved nothing
+    //     its backward reads runs again (see the multi-root overload).
+    //     Pass ``true`` to preserve the graph for multiple backward calls.
     // create_graph : bool, optional
     //     When ``true``, the backward pass itself is recorded in the
     //     autograd graph so that higher-order gradients can be taken on
@@ -121,10 +121,10 @@ public:
     // -----
     // The engine consumes nodes destructively when ``retain_graph=false``:
     // ``release_saved()`` frees the forward tensors each node had stashed
-    // for its backward formula — and, the node being impossible to run
-    // again, the tensor hooks it held — and ``clear_grad_fn()`` on ``root``
-    // severs the producer→graph reference so the chain of shared_ptrs
-    // collapses.
+    // for its backward formula — and, when the node can never run again,
+    // the tensor hooks it held — and, when that freed values an eager pass
+    // reads, ``root``'s grad_fn becomes a spent node, which severs the
+    // producer→graph reference so the chain of shared_ptrs collapses.
     //
     // Examples
     // --------

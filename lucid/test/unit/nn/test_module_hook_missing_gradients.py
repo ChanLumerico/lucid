@@ -128,7 +128,45 @@ def _double_backward(m: ModuleType, device: str) -> object:
     return [first, calls[len(first) :], _values(gg)]
 
 
+def _empty_gradient(m: ModuleType, device: str) -> object:
+    # A gradient of no elements is a gradient, not a missing one: on the CPU
+    # it owns no memory and read as None, so the hooks and the body were
+    # skipped (LCD-168).
+    seen: list[object] = []
+
+    class Double(m.nn.Module):
+        def forward(self, x: object) -> object:
+            return x * 2
+
+    mod = Double()
+    mod.register_full_backward_hook(lambda _m, gi, go: seen.append(tuple(go[0].shape)))
+    x = m.ones(0, 3, requires_grad=True, device=device)
+    mod(x).sum().backward()
+    return [seen, None if x.grad is None else tuple(x.grad.shape)]
+
+
+def _output_feeding_a_sibling_output(m: ModuleType, device: str) -> object:
+    # The output barrier handed its slot's buffer on while the slot still
+    # held it, and a later add into it changed what the full hook saw
+    # (LCD-168: [5, 5] on the CPU, [3, 3] in the reference).
+    seen: list[object] = []
+
+    class Branch(m.nn.Module):
+        def forward(self, x: object) -> object:
+            h = x * 1.0
+            return h, h * 2
+
+    mod = Branch()
+    mod.register_full_backward_hook(lambda _m, gi, go: seen.append(_values(go[0])))
+    x = m.ones(2, requires_grad=True, device=device)
+    h, y = mod(x)
+    (3 * h.sum() + y.sum()).backward()
+    return [seen, _values(x.grad)]
+
+
 _SCENARIOS: dict[str, Scenario] = {
+    "empty-gradient": _empty_gradient,
+    "output-feeding-a-sibling-output": _output_feeding_a_sibling_output,
     "full-hook-drops-one": _full_hook_drops_one,
     "full-hook-drops-all": _full_hook_drops_all,
     "full-hook-drops-under-create-graph": _full_hook_drops_under_create_graph,
