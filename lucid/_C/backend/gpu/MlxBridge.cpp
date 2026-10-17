@@ -317,11 +317,11 @@ GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype) {
 namespace {
 
 // ``first`` again, the first of ``failed`` arrays out of ``total`` whose
-// evaluation threw, with what was being run in the message.  A Lucid error
-// already names its op and keeps its class; what MLX threw (an allocation
-// past the device's buffer limit, a kernel that refused its arguments)
-// becomes a ``LucidError`` — ``InvalidArgument`` for MLX's argument
-// refusals, as the binding translator maps them everywhere else.
+// evaluation threw, with the count in front of its message.  A Lucid error
+// keeps its class; what MLX threw (an allocation past the device's buffer
+// limit, a kernel that refused its arguments) becomes a ``LucidError`` —
+// ``InvalidArgument`` for MLX's argument refusals, as the binding
+// translator maps them everywhere else.
 [[noreturn]] void
 raise_eval_failure(const std::exception_ptr& first, std::size_t failed, std::size_t total) {
     const std::string what = "metal synchronize: " + std::to_string(failed) + " of " +
@@ -329,7 +329,8 @@ raise_eval_failure(const std::exception_ptr& first, std::size_t failed, std::siz
                              " pending GPU arrays failed to evaluate; the first raised: ";
     try {
         std::rethrow_exception(first);
-    } catch (const LucidError&) {
+    } catch (LucidError& e) {
+        e.prefix_message(what);
         throw;
     } catch (const std::invalid_argument& e) {
         throw InvalidArgument(what + e.what());

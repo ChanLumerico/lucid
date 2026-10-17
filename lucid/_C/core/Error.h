@@ -88,6 +88,12 @@ public:
     // Allocation-free: the string was built at construction time.
     const char* what() const noexcept override { return msg_.c_str(); }
 
+    // Puts ``context`` in front of the message, for a layer that rethrows an
+    // error it caught (``catch (LucidError& e) { e.prefix_message(...);
+    // throw; }``) and knows what was being done when it was raised.  The
+    // class is kept, so the Python side still raises the same exception.
+    void prefix_message(const std::string& context) { msg_.insert(0, context); }
+
 protected:
     std::string msg_;
 };
