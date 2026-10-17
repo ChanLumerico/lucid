@@ -496,9 +496,9 @@ inline ::mlx::core::array gpu_scatter_add(const ::mlx::core::array& base,
     if (base.dtype() == mx::complex64) {
         auto re = mx::scatter_add(mx::real(base), idx, mx::real(upd), axes);
         auto im = mx::scatter_add(mx::imag(base), idx, mx::imag(upd), axes);
-        return mx::add(mx::astype(re, mx::complex64),
-                       mx::multiply(mx::astype(im, mx::complex64),
-                                    mx::array(mx::complex64_t{0.0f, 1.0f})));
+        return mx::add(
+            mx::astype(re, mx::complex64),
+            mx::multiply(mx::astype(im, mx::complex64), mx::array(mx::complex64_t{0.0f, 1.0f})));
     }
     return mx::scatter_add(base, idx, upd, axes);
 }
@@ -513,9 +513,9 @@ inline ::mlx::core::array gpu_scatter_add(const ::mlx::core::array& base,
     if (base.dtype() == mx::complex64) {
         auto re = mx::scatter_add(mx::real(base), idx, mx::real(upd), axis);
         auto im = mx::scatter_add(mx::imag(base), idx, mx::imag(upd), axis);
-        return mx::add(mx::astype(re, mx::complex64),
-                       mx::multiply(mx::astype(im, mx::complex64),
-                                    mx::array(mx::complex64_t{0.0f, 1.0f})));
+        return mx::add(
+            mx::astype(re, mx::complex64),
+            mx::multiply(mx::astype(im, mx::complex64), mx::array(mx::complex64_t{0.0f, 1.0f})));
     }
     return mx::scatter_add(base, idx, upd, axis);
 }

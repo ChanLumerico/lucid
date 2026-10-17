@@ -241,13 +241,12 @@ inline ::mlx::core::array scatter_add_axis_widened(const ::mlx::core::array& bas
     if (base.dtype() == mx::complex64) {
         auto re = mx::scatter_add_axis(mx::real(base), idx, mx::real(updates), axis);
         auto im = mx::scatter_add_axis(mx::imag(base), idx, mx::imag(updates), axis);
-        return mx::add(mx::astype(re, mx::complex64),
-                       mx::multiply(mx::astype(im, mx::complex64),
-                                    mx::array(mx::complex64_t{0.0f, 1.0f})));
+        return mx::add(
+            mx::astype(re, mx::complex64),
+            mx::multiply(mx::astype(im, mx::complex64), mx::array(mx::complex64_t{0.0f, 1.0f})));
     }
-    return narrow_half(
-        mx::scatter_add_axis(widen_half(base), idx, widen_half(updates), axis),
-        base.dtype());
+    return narrow_half(mx::scatter_add_axis(widen_half(base), idx, widen_half(updates), axis),
+                       base.dtype());
 }
 
 // Multi-axis ``scatter_prod`` accumulated in float32 for a half input,

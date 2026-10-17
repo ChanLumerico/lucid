@@ -36,8 +36,8 @@ inline TensorImplPtr finalize(Storage&& storage, Shape shape, Dtype dt, Device d
     return std::make_shared<TensorImpl>(std::move(storage), std::move(shape), dt, device, false);
 }
 
-Storage uniform_storage(
-    const Shape& shape, double lo, double hi, Dtype dt, Device device, Generator& gen) {
+Storage
+uniform_storage(const Shape& shape, double lo, double hi, Dtype dt, Device device, Generator& gen) {
     if (dt == Dtype::C128 && device == Device::CPU) {
         const auto n = static_cast<std::int64_t>(shape_numel(shape));
         Storage s = random_uniform_storage(Shape{2 * n}, lo, hi, Dtype::F64, device, gen);

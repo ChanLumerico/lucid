@@ -6595,7 +6595,8 @@ private:
         auto denorm_arr = [&](const ::mlx::core::array& g, int dim) {
             auto half = ::mlx::core::astype(::mlx::core::array(0.5f), mlx_dt);
             auto one = ::mlx::core::astype(::mlx::core::array(1.0f), mlx_dt);
-            auto slope = gpu::mlx_scalar(resample::unnormalize_slope<double>(dim, align_corners), mlx_dt);
+            auto slope =
+                gpu::mlx_scalar(resample::unnormalize_slope<double>(dim, align_corners), mlx_dt);
             auto scaled = ::mlx::core::multiply(::mlx::core::add(g, one), slope);
             return align_corners ? scaled : ::mlx::core::subtract(scaled, half);
         };
@@ -6754,7 +6755,8 @@ private:
         auto Wm1f = ::mlx::core::astype(::mlx::core::array(static_cast<float>(W_in - 1)), mlx_dt);
 
         auto denorm_arr = [&](const ::mlx::core::array& g, int dim) {
-            auto slope = gpu::mlx_scalar(resample::unnormalize_slope<double>(dim, align_corners), mlx_dt);
+            auto slope =
+                gpu::mlx_scalar(resample::unnormalize_slope<double>(dim, align_corners), mlx_dt);
             auto scaled = ::mlx::core::multiply(::mlx::core::add(g, one), slope);
             return align_corners ? scaled : ::mlx::core::subtract(scaled, half);
         };
@@ -6926,8 +6928,10 @@ private:
                                  ::mlx::core::multiply(::mlx::core::subtract(Id, Ic), dx_t2_b)));
             auto dix_sum = ::mlx::core::sum(dix_per, std::vector<int>{1}, false);
             auto diy_sum = ::mlx::core::sum(diy_per, std::vector<int>{1}, false);
-            auto sx = gpu::mlx_scalar(resample::unnormalize_slope<double>(W_in, align_corners), mlx_dt);
-            auto sy_arr = gpu::mlx_scalar(resample::unnormalize_slope<double>(H_in, align_corners), mlx_dt);
+            auto sx =
+                gpu::mlx_scalar(resample::unnormalize_slope<double>(W_in, align_corners), mlx_dt);
+            auto sy_arr =
+                gpu::mlx_scalar(resample::unnormalize_slope<double>(H_in, align_corners), mlx_dt);
             dgrid_x = ::mlx::core::multiply(
                 dix_sum, padding_mode == 1 ? ::mlx::core::where(clipped_x, zero, sx) : sx);
             dgrid_y = ::mlx::core::multiply(
