@@ -27,10 +27,12 @@ Only what the CPU reads in place is linked: a slice with a negative step is
 gathered into a copy there, so on Metal it is no view either.
 
 The write-back is itself an in-place write to the base, so a view of a view
-writes all the way up.  Some writes are refused, as the CPU and the reference
-refuse them: one into a view whose elements overlap (``expand``, ``unfold``
-with overlapping windows) unless it is a fill, and one into a view of a leaf
-that requires grad while autograd records.
+writes all the way up; past a base whose elements overlap (``expand``,
+``unfold`` with overlapping windows), it goes straight to the storage and the
+views between are taken again.  Some writes are refused, as the CPU and the
+reference refuse them: one into a tensor whose own elements overlap, unless
+it is a fill, and one into a view of a leaf that requires grad while
+autograd records.
 
 A view also has the layout the reference gives it: ``stride()``,
 ``storage_offset()`` and ``is_contiguous()`` say where its elements sit in
@@ -56,7 +58,7 @@ import math
 import operator
 import weakref
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, SupportsIndex
+from typing import TYPE_CHECKING, SupportsIndex, TypeIs
 
 from lucid._C import engine as _C_engine
 from lucid._tensor._view_layout import (
@@ -132,6 +134,7 @@ class _Link:
         "positions",
         "shape",
         "layout",
+        "skips",
     )
 
     def __init__(
@@ -147,6 +150,7 @@ class _Link:
         weak: bool = False,
         layout: _Layout | None = None,
         positions: Tensor | None = None,
+        skips: tuple[weakref.ref[Tensor], ...] = (),
     ) -> None:
         # A detached alias may outlive its base by a long way — a loss
         # detached into a history list — and a strong reference would keep
@@ -163,6 +167,10 @@ class _Link:
         # base, which may be gone.
         self.shape: tuple[int, ...] = tuple(base.shape)
         self.layout: _Layout | None = layout
+        # The views an ``as_strided`` window was read past, to a tensor of
+        # their chain that holds every element of it: a write through the
+        # window would reach that tensor and leave them as they were.
+        self.skips = skips
 
     @property
     def base(self) -> Tensor | None:
@@ -226,13 +234,66 @@ def _layout(t: Tensor) -> _Layout:
         return _own_layout(t)
     if link.layout is None:
         base = link.base
-        source = (
-            _layout(base)
-            if base is not None
-            else _Layout(_contiguous_stride(link.shape), 0)
-        )
+        if base is None or _ATTR not in base.__dict__ and base._impl.is_dense():
+            source = _Layout(_contiguous_stride(link.shape), 0)
+        else:
+            source = _layout(base)
         link.layout = _derived(link, source, tuple(t.shape))
     return link.layout
+
+
+# ── A reshape the CPU copies, that the engine made a view ───────────────────
+#
+# The engine reads a traced Metal view as the packed array it is, so it
+# reshapes one in place — into a member of that array's view family — where
+# the CPU, which reads it through the view's strides, copies.  An in-place
+# write through either then reached the other.  The reshape keeps sharing
+# the buffer, so the merge-heads ``attn.permute(...).reshape(b, n, e)`` stays
+# free, until the first write into the buffer through any tensor that reads
+# it, or the first view taken of the reshape: then it takes a buffer of its
+# own, as the CPU's copy was from the start.
+
+#: The flag a reshape that still shares its input's buffer carries.
+_SHARES = "_metal_shares"
+#: Each tensor that carries the flag, by ``id``.
+_SHARING: dict[int, weakref.ref[Tensor]] = {}
+
+
+def _share(out: Tensor) -> None:
+    key = id(out)
+    out.__dict__[_SHARES] = True
+    _SHARING[key] = weakref.ref(out, lambda _: _SHARING.pop(key, None))
+
+
+def _own_buffer(t: Tensor) -> None:
+    """Give ``t``, which shares a buffer, the copy the CPU gave it."""
+    import lucid
+
+    del t.__dict__[_SHARES]
+    _SHARING.pop(id(t), None)
+    impl = t._impl
+    # The copy stands in for ``t`` in the graph; under ``no_grad`` too, as
+    # ``t`` was made outside it.
+    with lucid.enable_grad():
+        own = _C_engine.contiguous(impl)
+    if impl.retains_grad:
+        own.retain_grad_()
+    t._impl = own
+
+
+def _before_write(t: Tensor) -> None:
+    """Before an in-place write into ``t``: no reshape may see it through a share."""
+    if t._impl.device.value == _GPU and t._impl.is_aliased():
+        for ref in list(_SHARING.values()):
+            shared = ref()
+            if shared is not None and _SHARES in shared.__dict__:
+                _own_buffer(shared)
+
+
+def _before_view(base: Tensor) -> None:
+    """Before a view is taken of ``base``: a view of a shared buffer is the copy's."""
+    if _SHARING and _SHARES in base.__dict__:
+        _own_buffer(base)
 
 
 def _link(view: object, base: Tensor, kind: int, **kwargs: object) -> None:
@@ -275,8 +336,12 @@ def _is_basic(part: object) -> bool:
 def _is_index_scalar(part: object) -> bool:
     if isinstance(part, int):
         return not isinstance(part, bool)
-    if isinstance(part, list) or hasattr(part, "_impl"):
-        return False
+    if (
+        isinstance(part, list)
+        or hasattr(part, "_impl")
+        or getattr(part, "ndim", 0) != 0
+    ):
+        return False  # an index tensor, list or array, which the CPU gathers by
     # The CPU's own reading of a key part decides the rest — a NumPy integer
     # is an integer to it, a NumPy bool a mask — so the two cannot disagree.
     from lucid._tensor._indexing import _token
@@ -286,11 +351,18 @@ def _is_index_scalar(part: object) -> bool:
 
 
 def _backwards(part: object) -> bool:
-    return (
-        isinstance(part, slice)
-        and part.step is not None
-        and operator.index(part.step) < 0
-    )
+    if not isinstance(part, slice) or part.step is None:
+        return False
+    step = part.step
+    if isinstance(step, int):
+        return step < 0
+    # A step that is no integer is refused by the indexing itself, in its words.
+    return _is_integer(step) and operator.index(step) < 0
+
+
+def _is_integer(value: object) -> TypeIs[SupportsIndex]:
+    # ``int`` first: a runtime protocol check costs microseconds.
+    return isinstance(value, (int, SupportsIndex))
 
 
 def _spelled_out(parts: tuple[object, ...], ndim: int) -> list[object]:
@@ -303,7 +375,7 @@ def _spelled_out(parts: tuple[object, ...], ndim: int) -> list[object]:
 
 
 def _split_at_copy(
-    key: object, ndim: int
+    key: object, t: Tensor
 ) -> tuple[tuple[object, ...], tuple[object, ...]] | None:
     """A basic key the CPU reads as a copy and then a view of it, split there.
 
@@ -318,7 +390,7 @@ def _split_at_copy(
         _is_basic(part) for part in parts
     ):
         return None
-    spelled = _spelled_out(parts, ndim)
+    spelled = _spelled_out(parts, t.ndim)
     last = max(i for i, part in enumerate(spelled) if _backwards(part))
     head, rest = tuple(spelled[: last + 1]), spelled[last + 1 :]
     if all(isinstance(part, slice) and part == slice(None) for part in rest):
@@ -327,32 +399,48 @@ def _split_at_copy(
     return head, (*[slice(None)] * kept, *rest)
 
 
+def _replayed(link: _Link, base: Tensor, shape: _Dims) -> Tensor:
+    """The view ``link`` describes, of shape ``shape``, taken again of ``base``."""
+    if link.kind == _DETACHED:
+        return base
+    if link.kind == _KEY:
+        return base[link.key]
+    if link.kind == _RESHAPE:
+        return base.reshape(shape)
+    assert link.replay is not None
+    name, args, kwargs, piece = link.replay
+    attr = getattr(base, name)
+    out: Tensor = attr(*args, **kwargs) if callable(attr) else attr
+    return out if piece is None else out[piece]
+
+
 def _positions(link: _Link) -> Tensor:
     """Where each element of the view sits in its base, flattened, on the CPU."""
     if link.positions is None:
         import lucid
 
-        assert link.replay is not None
-        numel = 1
-        for n in link.shape:
-            numel *= n
-        index = lucid.arange(numel, dtype=lucid.int64).reshape(link.shape)
+        index = lucid.arange(math.prod(link.shape), dtype=lucid.int64)
         # The same view, taken on the index: each element names its source.
-        name, args, kwargs, piece = link.replay
-        attr = getattr(index, name)
-        traced = attr(*args, **kwargs) if callable(attr) else attr
-        if piece is not None:
-            traced = traced[piece]
+        traced = _replayed(link, index.reshape(link.shape), ())
         link.positions = traced.reshape(-1)
     return link.positions
 
 
-def _overlaps(link: _Link) -> bool:
+def _self_overlaps(view: Tensor) -> bool:
+    """Whether two of ``view``'s elements are one element of its storage.
+
+    Only an ``expand``, overlapping ``unfold`` windows or an ``as_strided``
+    window make elements share, so the storage is read only below one.
+    """
     import lucid
 
-    positions = _positions(link)
-    if positions.numel() < 2:
+    link: _Link | None = view.__dict__.get(_ATTR)
+    while link is not None and not link.overlap:
+        base = link.base
+        link = None if base is None else base.__dict__.get(_ATTR)
+    if link is None or view.numel() < 2:
         return False
+    positions = _window_positions(tuple(view.shape), *_layout(view))
     ordered = lucid.sort(positions)
     return bool((ordered[1:] == ordered[:-1]).any().item())
 
@@ -365,13 +453,25 @@ _FILLS = frozenset({"fill_", "zero_"})
 
 def _check(view: Tensor, *, allow_overlap: bool = False) -> None:
     """Refuse, before anything is written, what the write-back could not honour."""
+    if _SHARING:
+        _before_write(view)
+    # As the reference refuses: a write into the written tensor's own
+    # elements that share a place, unless it leaves one value in all of them.
+    # A view of such a tensor that shares none may be written.
+    if not allow_overlap and _self_overlaps(view):
+        raise RuntimeError(
+            "an in-place write into a tensor whose elements overlap (an expanded "
+            "view, or unfold windows that overlap) is ambiguous — clone() first"
+        )
     link: _Link | None = view.__dict__.get(_ATTR)
     detached = False
     while link is not None:
-        if not allow_overlap and link.overlap and _overlaps(link):
+        if any(ref() is not None for ref in link.skips):
             raise RuntimeError(
-                "an in-place write into a tensor whose elements overlap (an expanded "
-                "view, or unfold windows that overlap) is ambiguous — clone() first"
+                "as_strided: an in-place write into a Metal window that reads "
+                "elements outside the view it was taken from, while that view "
+                "is alive, is not supported — take the window from the view's "
+                "base, or write into a clone()"
             )
         base = link.base
         if base is None:
@@ -407,7 +507,9 @@ def write_back(view: Tensor) -> None:
         return
     import lucid
 
-    if link.kind == _DETACHED:
+    if _self_overlaps(base):
+        _write_past_overlaps(view)
+    elif link.kind == _DETACHED:
         with lucid.no_grad():
             base.copy_(view)
     elif link.kind == _GRAD:
@@ -424,12 +526,40 @@ def write_back(view: Tensor) -> None:
             base.copy_(flat.reshape(tuple(base.shape)))
 
 
+def _write_past_overlaps(view: Tensor) -> None:
+    """Write ``view`` into its storage's owner, past a base whose elements overlap.
+
+    Written back a link at a time, the overlapping base would scatter all its
+    elements, those that share a place with ``view``'s included, and the
+    stale ones would win.  ``view``'s own elements go straight to their place
+    in the storage instead, and each tensor between is taken again from it.
+    """
+    import lucid
+
+    frames, _ = _frames(view)
+    owner = frames[-1]
+    picked = _picked(owner, (tuple(view.shape), *_layout(view)))
+    if picked is None:
+        return  # the owner is gone, and with it every place to write to
+    flat = owner.reshape(-1)
+    flat[picked.to(owner.device)] = view.reshape(-1)
+    if _ATTR not in flat.__dict__:
+        owner.copy_(flat.reshape(tuple(owner.shape)))
+    with lucid.no_grad():
+        for k in range(len(frames) - 2, 0, -1):
+            link = frames[k].__dict__[_ATTR]
+            again = _replayed(link, frames[k + 1], tuple(frames[k].shape))
+            frames[k]._impl.copy_from(again._impl)
+
+
 def _writer(original: Callable[..., object]) -> Callable[..., object]:
     allow_overlap = getattr(original, "__name__", "") in _FILLS
 
     @functools.wraps(original)
     def method(self: Tensor, *args: object, **kwargs: object) -> object:
         if _ATTR not in self.__dict__:
+            if _SHARING:
+                _before_write(self)
             return original(self, *args, **kwargs)
         _check(self, allow_overlap=allow_overlap)
         out = original(self, *args, **kwargs)
@@ -466,7 +596,10 @@ def _link_reshape(out: Tensor, base: Tensor, name: str) -> None:
     new_stride = _view_strides(tuple(base.shape), source.stride, shape, squeeze)
     if new_stride is not None:
         _link(out, base, _RESHAPE, layout=_Layout(new_stride, source.offset))
-    elif name in ("view", "view_as"):
+    elif name not in ("view", "view_as"):
+        if out._impl.is_aliased():
+            _share(out)
+    else:
         raise _C_engine.LucidError(
             "view: view size is not compatible with input tensor's "
             "size and stride (at least one dimension spans across "
@@ -487,9 +620,11 @@ def _viewer(
 
     @functools.wraps(original)
     def view(*args: object, **kwargs: object) -> object:
+        base = args[0] if args else None
+        if _SHARING and isinstance(base, _TENSOR):
+            _before_view(base)
         out = original(*args, **kwargs)
         # _metal_input, inlined: this runs on every view op on every device.
-        base = args[0] if args else None
         if isinstance(base, _TENSOR) and base._impl.device.value == _GPU:
             if kind == _TRACED:
                 _link(
@@ -513,8 +648,10 @@ def _pieces(original: Callable[..., object], name: str) -> Callable[..., object]
 
     @functools.wraps(original)
     def view(*args: object, **kwargs: object) -> object:
-        out = original(*args, **kwargs)
         base = args[0] if args else None
+        if _SHARING and isinstance(base, _TENSOR):
+            _before_view(base)
+        out = original(*args, **kwargs)
         if (
             isinstance(base, _TENSOR)
             and base._impl.device.value == _GPU
@@ -535,31 +672,61 @@ def _pieces(original: Callable[..., object], name: str) -> Callable[..., object]
 # ── as_strided: a window onto the storage ────────────────────────────────────
 
 
+#: ``as_strided``'s parameters after its input, in order.
+_WINDOW_PARAMS = ("size", "stride", "storage_offset")
+
+
 def _window(
     args: tuple[object, ...], kwargs: dict[str, object]
 ) -> tuple[_Dims, _Dims, int | None]:
     """``as_strided``'s window, from the arguments after its input, in elements.
 
-    A negative ``storage_offset`` stands for the input's own, as the engine
-    reads it.
+    Bound as the signature binds them and checked as the reference checks
+    them — integers only, so ``size=(2.0,)`` is refused — on every device,
+    before anything is read.  A negative ``storage_offset`` stands for the
+    input's own, as the engine reads it.
     """
-    given = dict(zip(("size", "stride", "storage_offset"), args, strict=False))
-    given.update(kwargs)
-    size, stride, offset = (
-        given.get("size"),
-        given.get("stride"),
-        given.get("storage_offset"),
-    )
-    if not isinstance(size, Sequence) or not isinstance(stride, Sequence):
-        raise TypeError("as_strided: size and stride must be sequences of integers")
-    if offset is not None and not isinstance(offset, SupportsIndex):
-        raise TypeError("as_strided: storage_offset must be an integer or None")
+    if len(args) > len(_WINDOW_PARAMS):
+        raise TypeError(
+            "as_strided() takes size, stride and an optional storage_offset, "
+            f"but {len(args)} arguments followed the input"
+        )
+    given = dict(zip(_WINDOW_PARAMS, args, strict=False))
+    for name, value in kwargs.items():
+        if name not in _WINDOW_PARAMS:
+            raise TypeError(f"as_strided() got an unexpected keyword argument {name!r}")
+        if name in given:
+            raise TypeError(f"as_strided() got multiple values for argument {name!r}")
+        given[name] = value
+    if "size" not in given or "stride" not in given:
+        raise TypeError("as_strided() missing a required argument: 'size' and 'stride'")
+    offset = given.get("storage_offset")
+    if offset is not None and not _is_integer(offset):
+        raise TypeError(
+            "as_strided(): argument 'storage_offset' must be int or None, not "
+            f"{type(offset).__name__}"
+        )
     at = None if offset is None else operator.index(offset)
     return (
-        tuple(operator.index(n) for n in size),
-        tuple(operator.index(s) for s in stride),
+        _integers("size", given["size"]),
+        _integers("stride", given["stride"]),
         None if at is None or at < 0 else at,
     )
+
+
+def _integers(name: str, value: object) -> _Dims:
+    if not isinstance(value, Sequence):
+        raise TypeError(
+            f"as_strided(): argument {name!r} must be a sequence of ints, not "
+            f"{type(value).__name__}"
+        )
+    for at, item in enumerate(value):
+        if not _is_integer(item):
+            raise TypeError(
+                f"as_strided(): argument {name!r} must be a sequence of ints, but "
+                f"found an element of type {type(item).__name__} at position {at}"
+            )
+    return tuple(operator.index(item) for item in value)
 
 
 def _frames(t: Tensor) -> tuple[list[Tensor], int]:
@@ -677,6 +844,7 @@ def _read_block(
     frame: Tensor,
     held: tuple[list[int], int],
     window: _Window,
+    skips: tuple[weakref.ref[Tensor], ...] = (),
 ) -> object:
     """The window, taken by ``as_strided`` of the dense block ``frame`` is."""
     size, stride, offset = window
@@ -687,15 +855,21 @@ def _read_block(
         out,
         block,
         _TRACED,
-        replay=("as_strided", (size, stride, offset), {}, None),
+        replay=("as_strided", window, {}, None),
         overlap=True,
         layout=_Layout(stride, offset),
         positions=_window_positions(size, stride, start),
+        skips=skips,
     )
     return out
 
 
-def _read_picked(frame: Tensor, picked: Tensor, window: _Window) -> object:
+def _read_picked(
+    frame: Tensor,
+    picked: Tensor,
+    window: _Window,
+    skips: tuple[weakref.ref[Tensor], ...] = (),
+) -> object:
     """The window, gathered from ``frame``'s elements at ``picked``."""
     size, stride, offset = window
     out = frame.reshape(-1)[picked.reshape(size).to(frame.device)]
@@ -707,6 +881,7 @@ def _read_picked(frame: Tensor, picked: Tensor, window: _Window) -> object:
         overlap=True,
         layout=_Layout(stride, offset),
         positions=picked,
+        skips=skips,
     )
     return out
 
@@ -721,8 +896,9 @@ def _strided_window(
     The elements come from ``v`` itself when it holds them all, so a write
     through the window reaches ``v`` and a gradient flows into it; otherwise
     from the nearest tensor of ``v``'s chain that holds them, outside
-    autograd — a gradient that way would skip ``v``, and is refused as the
-    CPU refuses it.
+    autograd.  A gradient that way would skip ``v``, and is refused as the
+    CPU refuses it; so is a write while ``v`` or a view between lives, as it
+    would keep its old values and write them back over the window's.
     """
     import lucid
 
@@ -744,14 +920,16 @@ def _strided_window(
             "the window of that"
         )
     with lucid.no_grad():
-        for frame in frames[1:]:
-            held = _holds(frame, offset, last)
+        for k in range(1, len(frames)):
+            held = _holds(frames[k], offset, last)
             if held is not None:
-                return _read_block(original, frame, held, whole)
+                skips = tuple(weakref.ref(f) for f in frames[:k])
+                return _read_block(original, frames[k], held, whole, skips)
         # The storage's owner is gone: what is left of it is the last tensor alive.
         picked = _picked(frames[-1], whole) if len(frames) > 1 else None
         if picked is not None:
-            return _read_picked(frames[-1], picked, whole)
+            skips = tuple(weakref.ref(f) for f in frames[:-1])
+            return _read_picked(frames[-1], picked, whole, skips)
     raise RuntimeError(
         "as_strided: the window reads elements of a Metal tensor that has been "
         "freed — keep the tensor this view was taken from alive"
@@ -770,12 +948,16 @@ def _as_strided(original: Callable[..., object]) -> Callable[..., object]:
     @functools.wraps(original)
     def view(*args: object, **kwargs: object) -> object:
         base = args[0] if args else None
-        if not isinstance(base, _TENSOR) or base._impl.device.value != _GPU:
+        if not isinstance(base, _TENSOR):
             return original(*args, **kwargs)
+        window = _window(args[1:], kwargs)
+        if base._impl.device.value != _GPU:
+            return original(*args, **kwargs)
+        _before_view(base)
         if _ATTR in base.__dict__:
-            return _strided_window(original, base, _window(args[1:], kwargs))
+            return _strided_window(original, base, window)
         out = original(*args, **kwargs)
-        size, stride, given = _window(args[1:], kwargs)
+        size, stride, given = window
         offset = 0 if given is None else given
         _link(
             out,
@@ -801,8 +983,11 @@ def _constructor(original: Callable[..., object]) -> Callable[..., object]:
 
     @functools.wraps(original)
     def __init__(self: Tensor, *args: object, **kwargs: object) -> None:
+        data = args[0] if args else kwargs.get("data")
+        if _SHARING and isinstance(data, _TENSOR):
+            _before_view(data)
         original(self, *args, **kwargs)
-        base = _metal_input(args if args else (kwargs.get("data"),))
+        base = _metal_input((data,))
         if base is not None:
             impl, source = self._impl, base._impl
             if (
@@ -915,9 +1100,15 @@ def _install_free_functions(
 def _getitem(original: Callable[..., object]) -> Callable[..., object]:
     @functools.wraps(original)
     def method(self: Tensor, key: object) -> object:
-        if not _on_metal(self):
+        if self._impl.device.value != _GPU:
             return original(self, key)
-        split = _split_at_copy(key, self.ndim)
+        if _SHARING:
+            _before_view(self)
+        if type(key) is int or type(key) is slice and not _backwards(key):
+            out = original(self, key)  # the common keys, read in place
+            _link(out, self, _KEY, key=key)
+            return out
+        split = _split_at_copy(key, self)
         if split is not None:
             # The CPU's view of its copy keeps the copy, which nothing else
             # holds, alive: a window of the view may read the rest of it.
@@ -973,13 +1164,25 @@ _REPORTS: dict[str, Callable[..., object]] = {
 def _reporter(
     original: Callable[..., object], report: Callable[..., object]
 ) -> Callable[..., object]:
-    @functools.wraps(original)
-    def method(self: Tensor, *args: object, **kwargs: object) -> object:
-        if _ATTR in self.__dict__ and _on_metal(self):
-            return report(self, *args, **kwargs)
-        return original(self, *args, **kwargs)
+    # A query of a tensor that is no Metal view goes straight on, unpacked:
+    # ``stride()`` is read in loops.
+    if report is _stride_of:
 
-    return method
+        @functools.wraps(original)
+        def stride(self: Tensor, dim: SupportsIndex | None = None) -> object:
+            if _ATTR in self.__dict__:
+                return report(self, dim)
+            return original(self) if dim is None else original(self, dim)
+
+        return stride
+
+    @functools.wraps(original)
+    def query(self: Tensor) -> object:
+        if _ATTR in self.__dict__:
+            return report(self)
+        return original(self)
+
+    return query
 
 
 def _property(prop: property, kind: int) -> property:
@@ -987,6 +1190,8 @@ def _property(prop: property, kind: int) -> property:
     assert getter is not None
 
     def fget(self: Tensor) -> object:
+        if _SHARING:
+            _before_view(self)
         out = getter(self)
         if out is not None and _on_metal(self):
             name = getter.__name__

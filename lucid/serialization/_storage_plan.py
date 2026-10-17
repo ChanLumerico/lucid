@@ -12,9 +12,10 @@ sharing nor the values may be guessed:
   slice, the weights ``load_state_dict`` copied in), and those tensors never
   see each other's writes.  A Metal tensor is therefore saved as sharing only
   with the views :mod:`lucid._tensor._metal_views` links back to it, while it
-  is alive; a tensor whose base is gone holds its own values.  Members of an
-  engine view family that carry no link (``Parameter(x)`` and ``x``) are
-  saved apart until the engine names a family to Python (LCD-477).
+  is alive, each placed where that module's layout puts it in the storage;
+  a view whose base is gone shares only its own elements with its views.
+  Members of an engine view family that carry no link (``Parameter(x)`` and
+  ``x``) are saved apart until the engine names a family to Python (LCD-477).
 
 * **Values are each tensor's own.**  A shared storage is assembled from every
   member's ``to_bytes()``, laid out by its geometry, and each member is then
@@ -30,18 +31,22 @@ was mostly not saved.
 from typing import TYPE_CHECKING, final
 
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _wrap
+from lucid._tensor import _metal_views
 from lucid._tensor.tensor import Tensor as _T
 
 if TYPE_CHECKING:
     from lucid._tensor._metal_views import _Link
 
 #: The attribute :mod:`lucid._tensor._metal_views` keeps a Metal view's link in.
-_LINK_ATTR = "_metal_view"
-#: Link kinds that view the base's elements: ``.data`` / ``detach()`` (0),
-#: basic indexing (1), an order-preserving reshape (2), a replayed view (3).
-#: ``.grad`` (4) is its owner's gradient, not a view of the owner.
-_VIEW_KINDS = (0, 1, 2, 3)
+_LINK_ATTR = _metal_views._ATTR
+#: Link kinds that view the base's elements.  ``.grad`` is its owner's
+#: gradient, not a view of the owner.
+_VIEW_KINDS = (
+    _metal_views._DETACHED,
+    _metal_views._KEY,
+    _metal_views._RESHAPE,
+    _metal_views._TRACED,
+)
 
 #: ``id(tensor) -> (shape, stride, offset, storage id)``, in elements.
 type _TensorMeta = dict[int, tuple[list[int], list[int], int, int]]
@@ -144,50 +149,44 @@ def _metal_chain(t: _T) -> tuple[_T, _Chain]:
     return root, chain
 
 
-def _replay_link(cur: _T, view_shape: tuple[int, ...], link: _Link) -> _T | None:
-    """Take ``link``'s view of ``cur`` again, or ``None`` if it is not a tensor."""
-    if link.kind == 0:
-        return cur
-    if link.kind == 1:
-        out: object = cur[link.key]
-    elif link.kind == 2:
-        out = cur.reshape(view_shape)
-    elif link.replay is not None:
-        name, args, kwargs, piece = link.replay
-        attr = getattr(cur, name)
-        res = attr(*args, **kwargs) if callable(attr) else attr
-        out = res[piece] if piece is not None else res
-    else:
-        return None
-    return out if isinstance(out, _T) else None
+def _owns_storage(root: _T) -> bool:
+    """Whether ``root`` is its storage's owner, not a view whose base is gone."""
+    link: _Link | None = root.__dict__.get(_LINK_ATTR)
+    return link is None or link.kind not in _VIEW_KINDS
 
 
-def _replayed_geometry(
-    root: _T, chain: _Chain
-) -> tuple[list[int], list[int], int] | None:
-    """Where the tensor at the end of ``chain`` reads ``root``'s storage.
+def _metal_geometry(t: _T, root: _T) -> tuple[list[int], list[int], int] | None:
+    """Where the Metal tensor ``t`` reads the storage it shares with ``root``.
 
-    The links are replayed on a one-byte CPU probe laid out as ``root`` is,
-    whose views are real, so the replayed view's address less the probe's is
-    its offset in elements.  ``None`` when a link copies instead: the copy's
-    first element is not in the probe.
+    The one owner of a Metal view's layout decides it,
+    :func:`lucid._tensor._metal_views._layout` — the reference's place in its
+    base's storage, which a ``stride()`` / ``storage_offset()`` reads too.
+    Replaying the links on a CPU probe placed a window by the CPU's rules
+    instead, which restart the storage at a leading slice (LCD-517), so a
+    view saved and loaded aliased another row than it did live.
+
+    When ``root`` owns its storage, that is the space.  When its own base is
+    gone, the space is ``root``'s elements alone, packed — the freed base's
+    span is no storage anyone can read — and each member is placed in it by
+    which of ``root``'s elements it reads; ``None`` when those are not a
+    strided run.
     """
-    shape, stride, offset = _own_geometry(root)
-    if any(s < 0 for s in stride):
+    shape = [int(d) for d in t.shape]
+    layout = _metal_views._layout(t)
+    if _owns_storage(root):
+        return shape, list(layout.stride), layout.offset
+    picked = _metal_views._picked(root, (tuple(shape), layout.stride, layout.offset))
+    if picked is None:
         return None
-    size = offset + _reach(shape, stride)
-    seed = _C_engine.empty([size], _C_engine.Dtype.I8, _C_engine.Device.CPU)
-    cur: _T | None = _wrap(_C_engine.TensorImpl._make_view(seed, shape, stride, offset))
-    for view_shape, link in reversed(chain):
-        if cur is None:
-            return None
-        cur = _replay_link(cur, view_shape, link)
-    if cur is None:
-        return None
-    at = int(cur.data_ptr()) - int(seed.data_ptr())
-    if not 0 <= at < size:
-        return None
-    return [int(d) for d in cur.shape], [int(s) for s in cur.stride()], at
+    offset = int(picked[0].item())
+    step = _contiguous_stride(shape)
+    stride = [
+        int(picked[s].item()) - offset if n > 1 else 1
+        for n, s in zip(shape, step, strict=True)
+    ]
+    placed = _metal_views._window_positions(tuple(shape), tuple(stride), offset)
+    strided = bool((placed == picked).all().item())
+    return (shape, stride, offset) if strided else None
 
 
 @final
@@ -209,8 +208,8 @@ class _Member:
     def place(self) -> bool:
         """Fix where the member reads; ``False`` if it cannot be placed."""
         geometry = (
-            _replayed_geometry(self.root, self.chain)
-            if self.chain
+            _metal_geometry(self.tensor, self.root)
+            if self.tensor.is_metal
             else _own_geometry(self.tensor)
         )
         if geometry is None or any(s < 0 for s in geometry[1]):

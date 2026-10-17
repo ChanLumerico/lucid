@@ -334,7 +334,7 @@ def _index_rule(g: _Geometry, /, key: object) -> _Layout:
             offset += start * g.stride[d]
             found.append(g.stride[d] * step)
             d += 1
-        elif isinstance(part, SupportsIndex):
+        elif isinstance(part, (int, SupportsIndex)):
             i = operator.index(part)
             offset += (i + g.shape[d] if i < 0 else i) * g.stride[d]
             d += 1

@@ -19,6 +19,12 @@ for the storage a Metal tensor does not share with its views:
   view's place in its base's storage, as the reference does, and the window
   is read from there.
 
+* **What writes reach.**  A write through a window read past its view left
+  the view stale, to write its old values back later — refused while the
+  view lives.  A reshape the CPU copies shared its input's buffer on Metal,
+  so writes crossed between them.  A write into a view of an overlapping
+  view was refused on Metal only.
+
 The reference is the contract for the layout.  Where the CPU disagrees with
 it — a leading slice restarts the CPU's storage (LCD-517) — the CPU cell is
 a strict xfail.
@@ -237,6 +243,14 @@ def _window_cases() -> list[Any]:
     return cases
 
 
+def _reads_outside(make: _View, args: tuple[object, ...], ref: Any) -> bool:
+    """Whether the window reads an element of the storage the view does not hold."""
+    index = ref.arange(24).reshape(4, 6)
+    view = make(index)
+    held = set(view.reshape(-1).tolist())
+    return not set(view.as_strided(*args).reshape(-1).tolist()) <= held
+
+
 @pytest.mark.parity
 @pytest.mark.parametrize(("name", "device"), _window_cases())
 def test_a_window_reads_and_writes_the_references_elements(
@@ -244,11 +258,26 @@ def test_a_window_reads_and_writes_the_references_elements(
 ) -> None:
     make, args, _ = WINDOWS[name]
     ours, theirs = _grid(lucid, device), _grid(ref, "cpu")
-    mine, want = make(ours).as_strided(*args), make(theirs).as_strided(*args)
+    view, their_view = make(ours), make(theirs)
+    mine, want = view.as_strided(*args), their_view.as_strided(*args)
     assert mine.tolist() == want.tolist()
-    mine.fill_(-1.0)
-    want.fill_(-1.0)
+    if device == "metal" and _reads_outside(make, args, ref):
+        # The write would land past ``view``, which would keep its old values
+        # and write them back later: refused while ``view`` is alive.
+        with pytest.raises(RuntimeError, match="outside the view"):
+            mine.add_(100.0)
+        assert ours.tolist() == _grid(ref, "cpu").tolist()
+        return
+    mine.add_(100.0)
+    want.add_(100.0)
+    assert view.tolist() == their_view.tolist()
     assert ours.tolist() == theirs.tolist()
+
+
+def test_a_window_past_a_view_nothing_holds_writes_its_base() -> None:
+    y = _grid(lucid, "metal")
+    y[:, 1].as_strided((2,), (1,), 1).fill_(-7.0)  # the column is gone at once
+    assert y[0].tolist() == [0.0, -7.0, -7.0, 3.0, 4.0, 5.0]
 
 
 def test_the_free_function_reads_the_window_the_method_does() -> None:
@@ -392,3 +421,129 @@ def test_a_view_of_a_reshape_of_a_temporary_holds_the_whole_storage() -> None:
     y = lucid.arange(6.0, device="metal").reshape(2, 3)
     assert y.t().as_strided((2,), (1,)).tolist() == [0.0, 1.0]
     assert _metal_views._ATTR in y.__dict__
+
+
+# ── A reshape the CPU copies is a tensor of its own ──────────────────────────
+
+#: Reshapes of the transpose ``u`` of a (2, 3) base, which no strides read in
+#: place: the CPU copies, and the engine on Metal shares ``u``'s buffer.
+COPYING: dict[str, _View] = {
+    "reshape": lambda u: u.reshape(-1),
+    "flatten": lambda u: u.flatten(),
+    "ravel": lambda u: u.ravel(),
+    "reshape_as": lambda u: u.reshape_as(u.flatten()),
+    "unflatten": lambda u: u.reshape(-1).unflatten(0, (2, 3)),
+}
+
+THEN: dict[str, Callable[[Any, Any], object]] = {
+    "write the copy": lambda u, f: f.add_(100.0),
+    "write the view": lambda u, f: u.add_(100.0),
+    "write a view of the copy": lambda u, f: f.view(-1)[1:3].add_(100.0),
+    "write a view of the view": lambda u, f: u[1].add_(100.0),
+    "assign into the copy": lambda u, f: f.__setitem__(0, -1.0),
+}
+
+
+@pytest.mark.parametrize("then", list(THEN), ids=list(THEN))
+@pytest.mark.parametrize("op", list(COPYING), ids=list(COPYING))
+def test_a_copying_reshape_of_a_view_is_a_tensor_of_its_own(op: str, then: str) -> None:
+    def run(device: str) -> tuple[object, ...]:
+        x = lucid.arange(6.0, device=device).reshape(2, 3)
+        u = x.t()
+        f = COPYING[op](u)
+        THEN[then](u, f)
+        u.mul_(1.0)  # ``u`` writes its values back to ``x``
+        return x.tolist(), u.tolist(), f.tolist()
+
+    assert run("metal") == run("cpu")
+
+
+def test_a_copying_reshape_shares_until_written() -> None:
+    # The merge-heads reshape of every attention layer: no copy is made until
+    # a write could tell the copy from the view.
+    u = lucid.arange(6.0, device="metal").reshape(2, 3).t()
+    with lucid.profiler.profile() as prof:
+        f = u.reshape(-1)
+    assert [event.name for event in prof.events()] == ["reshape"]
+    assert f._impl.is_aliased()
+    with pytest.raises(RuntimeError, match="use .reshape"):
+        u.view(-1)
+
+
+# ── A write into a view of a view whose elements overlap ─────────────────────
+
+#: An overlapping view of ``_grid`` and a view of it whose own elements do not
+#: overlap, which the reference writes through.
+OVERLAPPED: dict[str, tuple[_View, _View]] = {
+    "unfold-window": (lambda y: y[0].unfold(0, 3, 1), lambda u: u[1]),
+    "unfold-row-windows": (lambda y: y.unfold(1, 2, 1), lambda u: u[1, 2]),
+    "expand-row": (lambda y: y[:1].expand(3, 6), lambda e: e[1]),
+    "expand-window": (
+        lambda y: y[:1].expand(3, 6),
+        lambda e: e.as_strided((2,), (1,)),
+    ),
+    "expand-part-of-a-row": (lambda y: y[1:2].expand(3, 6), lambda e: e[2, 1:4]),
+}
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("name", list(OVERLAPPED), ids=list(OVERLAPPED))
+def test_a_write_into_a_view_of_an_overlapping_view_is_the_references(
+    name: str, ref: Any
+) -> None:
+    outer, inner = OVERLAPPED[name]
+
+    def run(module: Any, device: str) -> tuple[object, ...]:
+        y = _grid(module, device)
+        overlapping = outer(y)
+        inner(overlapping).add_(100.0)
+        return y.tolist(), overlapping.tolist()
+
+    want = run(ref, "cpu")
+    for device in ("cpu", "metal"):
+        assert run(lucid, device) == want, device
+
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+def test_a_write_into_overlapping_elements_is_still_refused(device: str) -> None:
+    y = _grid(lucid, device)
+    with pytest.raises(RuntimeError, match="overlap"):
+        y[:1].expand(3, 6).add_(1.0)
+    y[:1].expand(3, 6).fill_(-1.0)  # one value for all of them is no ambiguity
+    assert y[0].tolist() == [-1.0] * 6
+
+
+# ── as_strided's arguments, checked as the reference checks them ─────────────
+
+BAD_WINDOWS: dict[str, tuple[tuple[object, ...], dict[str, object]]] = {
+    "float size": (((2.0,), (1,)), {}),
+    "float stride": (((2,), (1.0,)), {}),
+    "float offset": (((2,), (1,), 1.0), {}),
+    "fourth argument": (((2,), (1,), 0, 1), {}),
+    "unknown keyword": (((2,), (1,)), {"offset": 1}),
+    "size twice": (((2,), (1,)), {"size": (2,)}),
+}
+
+
+@pytest.mark.parametrize("args", list(BAD_WINDOWS), ids=list(BAD_WINDOWS))
+@pytest.mark.parametrize(
+    "make",
+    [lambda d: lucid.arange(6.0, device=d), lambda d: _grid(lucid, d).t()],
+    ids=["tensor", "view"],
+)
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+def test_a_bad_window_is_refused_before_anything_is_read(
+    device: str, make: Callable[[str], lucid.Tensor], args: str
+) -> None:
+    positional, named = BAD_WINDOWS[args]
+    with pytest.raises(TypeError):
+        make(device).as_strided(*positional, **named)
+
+
+def test_a_slice_step_that_is_no_integer_is_refused_in_the_cpus_words() -> None:
+    def message(device: str) -> str:
+        with pytest.raises(TypeError) as caught:
+            lucid.arange(6.0, device=device)[::1.5]
+        return str(caught.value)
+
+    assert message("metal") == message("cpu")
