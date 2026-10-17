@@ -942,6 +942,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the landing install command names the lucid-dl distribution
 
+- a tensor's shape is concrete; one numel rule (LCD-518)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

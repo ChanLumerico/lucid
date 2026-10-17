@@ -26,10 +26,12 @@ namespace lucid {
 
 // Sequence of dimension sizes describing a tensor's shape.
 //
-// Dimensions are stored as signed ``int64`` so the same vector can carry
-// negative sentinels (typically ``-1``) for unknown / dynamic extents — for
-// example before a deferred-shape op has been materialised.  Free-form
-// construction via braced-init is supported and idiomatic:
+// Dimensions are signed ``int64`` so that an op's *argument* can carry a
+// wildcard — reshape's inferred ``-1``, expand's keep-this-size ``-1`` — until
+// the op resolves it.  A tensor's shape is always concrete: every extent is
+// ``>= 0``, and :func:`shape_numel` / :func:`contiguous_stride` refuse any
+// other (the tensor constructor builds its stride through the latter).
+// Free-form construction via braced-init is supported and idiomatic:
 //
 // Examples
 // --------
@@ -37,7 +39,6 @@ namespace lucid {
 //
 //     Shape s{B, C, H, W};                    // 4-D image batch
 //     Shape scalar_shape;                     // empty vector → scalar (numel=1)
-//     Shape dynamic{-1, 256};                 // first axis unresolved
 //
 // See Also
 // --------
@@ -56,29 +57,50 @@ using Shape = std::vector<std::int64_t>;
 // :func:`contiguous_stride` for its shape and element size.
 using Stride = std::vector<std::int64_t>;
 
-// Returns the total number of elements implied by a shape.
+// Refuses a shape with a negative extent.
 //
-// The product is computed in :type:`std::size_t` to avoid sign issues when
-// the caller wants to use the result for allocation sizing.
+// Raises :class:`InvalidArgument` naming the innermost op on the error-context
+// stack and the first negative extent, in the reference framework's words:
+// ``zeros: Trying to create tensor with negative dimension -3: [2, -3]``.
+// Defined out of line, in ``ErrorBuilder.cpp``: the op name lives on
+// :class:`ErrorContext`, whose header includes this one.  Not exported: only
+// the engine itself calls it.
+[[noreturn]] void throw_negative_dim(const Shape& shape);
+
+// Refuses ``shape`` unless every extent is ``>= 0``.
+//
+// For an op that must turn a shape away before it dispatches: the backend
+// sizes its work by the shape it is handed, before any tensor is built.
+inline void check_concrete_shape(const Shape& shape) {
+    for (auto d : shape)
+        if (d < 0)
+            throw_negative_dim(shape);
+}
+
+// Returns the total number of elements implied by a shape — the one
+// element-count rule; :func:`TensorMeta::numel` and every allocation sized
+// by a shape go through it.
+//
+// The product is computed in :type:`std::size_t` so the result can size an
+// allocation directly.
 //
 // Parameters
 // ----------
 // shape : Shape
-//     Shape vector to reduce.  May be empty (scalar) or contain negative
-//     sentinel values.
+//     A concrete shape.  May be empty (scalar).
 //
 // Returns
 // -------
 // std::size_t
 //     Product of all dimensions.  ``1`` for an empty shape (scalar
-//     convention); ``0`` as soon as any dimension is negative — the caller
-//     is responsible for not allocating storage in that case.
+//     convention).
 //
-// Notes
-// -----
-// The early-return-zero behaviour for negative dims is deliberate: it lets
-// dynamic-shape pipelines pass an unresolved :type:`Shape` through generic
-// code paths without manually filtering for sentinels.
+// Raises
+// ------
+// InvalidArgument
+//     A dimension is negative (:func:`throw_negative_dim`).  It has no
+//     count: as a ``size_t`` it is ``2^64 - 1``, and a kernel that walks
+//     that count runs off its buffer.
 //
 // Examples
 // --------
@@ -86,14 +108,12 @@ using Stride = std::vector<std::int64_t>;
 //
 //     shape_numel({})            // 1   (scalar)
 //     shape_numel({3, 4})        // 12
-//     shape_numel({-1, 8})       // 0   (unresolved leading dim)
+//     shape_numel({-1, 8})       // throws InvalidArgument
 inline std::size_t shape_numel(const Shape& shape) {
-    if (shape.empty())
-        return 1;
     std::size_t n = 1;
     for (auto d : shape) {
         if (d < 0)
-            return 0;
+            throw_negative_dim(shape);
         n *= static_cast<std::size_t>(d);
     }
     return n;
@@ -111,7 +131,7 @@ inline std::size_t shape_numel(const Shape& shape) {
 // Parameters
 // ----------
 // shape : Shape
-//     Target shape.  Empty shape yields an empty stride.
+//     A concrete shape.  Empty shape yields an empty stride.
 // elem_size : std::size_t
 //     Element size in bytes — typically obtained from :func:`dtype_size`.
 //
@@ -121,6 +141,12 @@ inline std::size_t shape_numel(const Shape& shape) {
 //     Vector of the same length as ``shape``.  When the result is fed back
 //     into :class:`TensorMeta`, :func:`TensorImpl::is_contiguous` returns
 //     ``true``.
+//
+// Raises
+// ------
+// InvalidArgument
+//     A dimension is negative (:func:`throw_negative_dim`).  The tensor
+//     constructor derives its stride here, so no tensor is built with one.
 //
 // Math
 // ----
@@ -143,8 +169,11 @@ inline Stride contiguous_stride(const Shape& shape, std::size_t elem_size) {
         return s;
     std::int64_t acc = static_cast<std::int64_t>(elem_size);
     for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(shape.size()) - 1; i >= 0; --i) {
+        const std::int64_t d = shape[static_cast<std::size_t>(i)];
+        if (d < 0)
+            throw_negative_dim(shape);
         s[static_cast<std::size_t>(i)] = acc;
-        acc *= std::max<std::int64_t>(shape[static_cast<std::size_t>(i)], 1);
+        acc *= std::max<std::int64_t>(d, 1);
     }
     return s;
 }

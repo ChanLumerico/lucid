@@ -88,19 +88,14 @@ struct TensorMeta {
     //
     // Notes
     // -----
-    // Does not guard against negative dimensions — callers that may
-    // encounter symbolic / placeholder negatives should use
-    // ``shape_numel`` from ``Shape.h`` instead.
+    // ``shape_numel`` is the one element-count rule; a second one here
+    // cast a negative extent to ``2^64 - 1`` while allocation counted it
+    // as empty.  A negative extent raises :class:`InvalidArgument`.
     //
     // Math
     // ----
     // $$ \mathrm{numel} = \prod_{i=0}^{N-1} \mathrm{shape}_i $$
-    std::size_t numel() const noexcept {
-        std::size_t n = 1;
-        for (auto d : shape)
-            n *= static_cast<std::size_t>(d);
-        return n;
-    }
+    std::size_t numel() const { return shape_numel(shape); }
 
     // Returns whether the stored stride matches row-major (C-order)
     // contiguous layout for ``elem_size``-byte elements.

@@ -153,6 +153,11 @@ TensorImplPtr repeat_op(const TensorImplPtr& a, std::int64_t repeats, int axis) 
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"repeat", device, dt, a->shape()};
+    // Before the backend sizes its copy loop by it: the reference refuses a
+    // negative count even when the axis is empty.
+    if (repeats < 0)
+        ErrorBuilder("repeat").invalid_argument("Repeats must be non-negative, got " +
+                                                std::to_string(repeats));
     int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
     scope.set_attr("repeats", static_cast<std::int64_t>(repeats));
@@ -177,7 +182,6 @@ TensorImplPtr tile_op(const TensorImplPtr& a, std::vector<std::int64_t> reps) {
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"tile", device, dt, a->shape()};
-    scope.set_attr("reps", reps);
     const std::size_t nout = reps.size();
     if (nout < a->shape().size())
         ErrorBuilder("tile").invalid_argument("reps must be at least as long as ndim");
@@ -188,9 +192,18 @@ TensorImplPtr tile_op(const TensorImplPtr& a, std::vector<std::int64_t> reps) {
     const std::size_t lead = nout - a->shape().size();
     for (std::size_t d = 0; d < a->shape().size(); ++d)
         padded[lead + d] = a->shape()[d];
+    // The reference rules on the output's extents, not the counts: a negative
+    // count over an empty axis still makes an empty one.  The backends size
+    // their loops by the count, so they are handed 0 there, and any other
+    // negative extent is refused before they run.
     Shape out_shape(nout);
-    for (std::size_t d = 0; d < nout; ++d)
+    for (std::size_t d = 0; d < nout; ++d) {
+        if (padded[d] == 0 && reps[d] < 0)
+            reps[d] = 0;
         out_shape[d] = padded[d] * reps[d];
+    }
+    check_concrete_shape(out_shape);
+    scope.set_attr("reps", reps);
 
     Storage out_storage =
         backend::Dispatcher::for_device(device).tile(a->storage(), a->shape(), dt, reps);

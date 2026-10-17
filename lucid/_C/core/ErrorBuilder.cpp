@@ -48,6 +48,24 @@ void ErrorContext::reset() {
     tl_stack_.clear();
 }
 
+// The op is the innermost frame — the op whose entry pushed it is the one
+// about to build the tensor; a call from outside any op names none.
+void throw_negative_dim(const Shape& shape) {
+    std::string dims;
+    std::int64_t bad = 0;
+    for (std::size_t i = 0; i < shape.size(); ++i) {
+        if (i)
+            dims += ", ";
+        dims += std::to_string(shape[i]);
+        if (shape[i] < 0 && bad == 0)
+            bad = shape[i];
+    }
+    std::string msg = tl_stack_.empty() ? std::string{} : tl_stack_.back() + ": ";
+    msg += "Trying to create tensor with negative dimension " + std::to_string(bad) + ": [" + dims +
+           "]";
+    throw InvalidArgument(std::move(msg));
+}
+
 ErrorContextGuard::ErrorContextGuard(std::string op_name) {
     ErrorContext::push(std::move(op_name));
 }
