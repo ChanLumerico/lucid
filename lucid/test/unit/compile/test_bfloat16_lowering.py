@@ -6,8 +6,17 @@ bfloat16 call was refused before the trace and ran eagerly.  MPSGraph holds
 warning, a cached executable — and agrees with eager to within bfloat16's
 rounding: both compute at reduced precision, and their order of operations
 differs, so a result may land one bfloat16 step apart (2^-7 relative).
-The training cases hold ``make_step``'s gradients and three ``fused_step``
-SGD updates to two bfloat16 steps of eager's.
+
+Training holds each route to a float32 twin — the same bfloat16-rounded
+weights and batch, computed in float32 — rather than to the other route
+(LCD-531).  A backward rounds every intermediate to bfloat16 and the errors
+do not cancel, so each route lands about two steps from the twin, on either
+side of it: ``make_step``'s gradients measured 1.94 steps eager, 1.16
+compiled on an M1 Pro and 2.16 compiled on the hosted runner, whose compiled
+gradient sat three steps from eager's with neither wrong.  Three
+``fused_step`` SGD updates measured 1.30 eager and 1.12 compiled.  Each is
+held to ``STEPS``: a 3% error in a gradient is 4.3 to 8 steps, and an 8%
+error in the learning rate puts ``fused_step``'s weights 4.7 steps off.
 """
 
 import math
@@ -80,35 +89,54 @@ def test_a_bfloat16_call_compiles_and_matches_eager(case: str) -> None:
 # ── training: gradients and an optimizer step at bfloat16 ───────────
 
 
-def _two_steps(t: lucid.Tensor) -> float:
-    """Two bfloat16 steps at ``t``'s largest magnitude, rounded up to a power
-    of two: the gap a different order of operations may leave."""
+#: How far a bfloat16 training result may sit from its float32 twin, in
+#: bfloat16 steps at the twin's largest magnitude.
+STEPS = 4
+
+
+def _step(t: lucid.Tensor) -> float:
+    """One bfloat16 step at ``t``'s largest magnitude, rounded up to a power
+    of two."""
     peak = max(float(t.abs().max().item()), 2.0**-100)
-    return 2.0 * 2.0 ** (math.ceil(math.log2(peak)) - 8)
+    return 2.0 ** (math.ceil(math.log2(peak)) - 8)
 
 
-def _mlp() -> nn.Module:
+def _near_truth(got: lucid.Tensor, truth: lucid.Tensor) -> None:
+    assert got.dtype == lucid.bfloat16
+    assert truth.dtype == lucid.float32
+    err = float((got.detach().to(lucid.float32) - truth.detach()).abs().max().item())
+    step = _step(truth)
+    assert err <= STEPS * step, f"{err / step:.2f} steps from float32, over {STEPS}"
+
+
+def _mlp(dtype: lucid.dtype = lucid.bfloat16) -> nn.Module:
+    """The network with its weights rounded to bfloat16, held as ``dtype``."""
     lucid.manual_seed(0)
     model = nn.Sequential(
         nn.Linear(8, 16), nn.GELU(), nn.LayerNorm(16), nn.Linear(16, 4)
     )
-    return model.to(COMPILE_DEVICE).to(lucid.bfloat16)
+    return model.to(COMPILE_DEVICE).to(lucid.bfloat16).to(dtype)
 
 
-def _batch() -> tuple[lucid.Tensor, lucid.Tensor]:
+def _batch(dtype: lucid.dtype = lucid.bfloat16) -> tuple[lucid.Tensor, lucid.Tensor]:
     lucid.manual_seed(1)
-    x = lucid.randn(6, 8).to(COMPILE_DEVICE).to(lucid.bfloat16)
-    t = lucid.randn(6, 4).to(COMPILE_DEVICE).to(lucid.bfloat16)
+    x = lucid.randn(6, 8).to(COMPILE_DEVICE).to(lucid.bfloat16).to(dtype)
+    t = lucid.randn(6, 4).to(COMPILE_DEVICE).to(lucid.bfloat16).to(dtype)
     return x, t
 
 
-def _close(got: lucid.Tensor, want: lucid.Tensor) -> None:
-    assert got.dtype == lucid.bfloat16 == want.dtype
-    g, w = got.to(lucid.float32), want.to(lucid.float32)
-    assert float((g - w).abs().max().item()) <= _two_steps(w)
+def _sgd_step(
+    model: nn.Module, opt: optim.SGD, x: lucid.Tensor, t: lucid.Tensor
+) -> None:
+    opt.zero_grad()
+    F.mse_loss(model(x), t).backward()
+    opt.step()
 
 
 def test_make_step_gradients_match_eager_at_bfloat16() -> None:
+    twin = _mlp(lucid.float32)
+    x32, t32 = _batch(lucid.float32)
+    F.mse_loss(twin(x32), t32).backward()
     model = _mlp()
     x, t = _batch()
     F.mse_loss(model(x), t).backward()
@@ -118,22 +146,29 @@ def test_make_step_gradients_match_eager_at_bfloat16() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error", fallback.CompileFallbackWarning)
         lucid.compile.make_step(model, F.mse_loss)(x, t).backward()
-    for want, p in zip(eager, model.parameters(), strict=True):
-        assert p.grad is not None
-        _close(p.grad, want)
+    for truth, want, p in zip(
+        twin.parameters(), eager, model.parameters(), strict=True
+    ):
+        assert truth.grad is not None and p.grad is not None
+        _near_truth(want, truth.grad)
+        _near_truth(p.grad, truth.grad)
 
 
 def test_fused_step_sgd_matches_eager_at_bfloat16() -> None:
-    eager, compiled = _mlp(), _mlp()
+    eager, compiled, twin = _mlp(), _mlp(), _mlp(lucid.float32)
     x, t = _batch()
+    x32, t32 = _batch(lucid.float32)
     eager_opt = optim.SGD(eager.parameters(), lr=0.1)
+    twin_opt = optim.SGD(twin.parameters(), lr=0.1)
     step = fused_step(compiled, F.mse_loss, optim.SGD(compiled.parameters(), lr=0.1))
     with warnings.catch_warnings():
         warnings.simplefilter("error", fallback.CompileFallbackWarning)
         for _ in range(3):
-            eager_opt.zero_grad()
-            F.mse_loss(eager(x), t).backward()
-            eager_opt.step()
+            _sgd_step(eager, eager_opt, x, t)
+            _sgd_step(twin, twin_opt, x32, t32)
             step(x, t)
-    for want, got in zip(eager.parameters(), compiled.parameters(), strict=True):
-        _close(got, want)
+    for truth, want, got in zip(
+        twin.parameters(), eager.parameters(), compiled.parameters(), strict=True
+    ):
+        _near_truth(want, truth)
+        _near_truth(got, truth)
