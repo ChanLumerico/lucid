@@ -35,13 +35,7 @@
 //   ctc_loss         FP32 on Metal too — the reference has no MPS kernel
 //                    for it, and the CPU answer is the one it is compared
 //                    against.
-//   batch_norm_eval  FP32 on the CPU, where the reference keeps the input:
-//                    the CPU eval kernel has no half path yet (LCD-487,
-//                    "CPU BatchNorm eval in float16/bfloat16 raises
-//                    NotImplementedError"), so a bfloat16 activation from an
-//                    autocast conv would raise.  The row goes back to KEEP
-//                    when LCD-487 lands.
-//   pad              No row.  The reference's CPU list runs reflect and
+//   pad             No row.  The reference's CPU list runs reflect and
 //                    replicate padding in float32 and leaves constant and
 //                    circular padding alone; Lucid's one ``pad`` schema takes
 //                    the mode as an argument, so a row cannot tell them
@@ -69,7 +63,7 @@ LUCID_AMP_ROW(baddbmm,                      LOWER,  LOWER)
 LUCID_AMP_ROW(batch_norm,                   FP32,   KEEP)
 LUCID_AMP_ROW(batch_norm1d,                 FP32,   KEEP)
 LUCID_AMP_ROW(batch_norm3d,                 FP32,   KEEP)
-LUCID_AMP_ROW(batch_norm_eval,              FP32,   FP32)
+LUCID_AMP_ROW(batch_norm_eval,              FP32,   KEEP)
 LUCID_AMP_ROW(bce_loss,                     KEEP,   FP32)
 LUCID_AMP_ROW(bce_with_logits,              FP32,   FP32)
 LUCID_AMP_ROW(bilinear_layer,               WIDEST, KEEP)

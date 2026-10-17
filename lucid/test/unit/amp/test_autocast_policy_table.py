@@ -722,17 +722,18 @@ def test_cosine_similarity_promotes_mixed_inputs(device: str) -> None:
 # ── documented deviations ────────────────────────────────────────────────────
 
 
-def test_cpu_batch_norm_eval_computes_in_float32() -> None:
-    """``batch_norm_eval`` departs from the reference on the CPU (FP32 where
-    it keeps the input): the CPU eval kernel has no half path (LCD-487), and
-    a CNN in eval mode under a CPU bfloat16 autocast hands it the conv's
-    bfloat16 output.  Drop this test with the row when LCD-487 lands."""
+def test_a_cnn_in_eval_mode_runs_under_a_cpu_bfloat16_autocast() -> None:
+    """The conv is LOWER and hands batch_norm_eval a bfloat16 activation,
+    which the CPU column keeps, as the reference's does.  Until LCD-487 the
+    CPU eval kernel had no half path and the row was a FP32 departure."""
     model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.BatchNorm2d(4), nn.ReLU()).eval()
     x = lucid.randn(2, 3, 8, 8)
     with autocast(device_type="cpu", dtype=lucid.bfloat16):
         y = model(x)
-    assert y.dtype == lucid.float32
-    assert _rows()["batch_norm_eval"][1] == _P.ForceFP32
+    assert y.dtype == lucid.bfloat16
+    with lucid.no_grad():
+        want = model(x)
+    assert float((y.float() - want).abs().max().item()) < 5e-2
 
 
 @pytest.mark.xfail(
@@ -802,31 +803,16 @@ def _ref_device(ref: ModuleType, device: str) -> str:
     return "cpu"
 
 
-# The rows that depart from the reference on purpose (``AmpPolicyTable.def``
-# says why).  Strict, so a row that rejoins the reference flips its test.
-_DEVIATIONS = {
-    ("batch_norm_eval", "cpu", "half"): "LCD-487: CPU eval batch_norm has no half kernel",
-}
-
-
 @pytest.mark.parity
 @pytest.mark.parametrize("input_dt", _INPUTS)
 @pytest.mark.parametrize(("device", "autocast_dt"), _SETTINGS)
 @pytest.mark.parametrize("name", sorted(_CASES) + sorted(_KEEP_CASES))
 def test_the_dtype_matches_the_reference(
-    ref: ModuleType,
-    request: pytest.FixtureRequest,
-    name: str,
-    device: str,
-    autocast_dt: str,
-    input_dt: str,
+    ref: ModuleType, name: str, device: str, autocast_dt: str, input_dt: str
 ) -> None:
     case = _CASES.get(name) or _KEEP_CASES[name]
     if device not in case.devices:
         pytest.skip(f"{name} is checked on {case.devices} only")
-    deviation = _DEVIATIONS.get((name, device, input_dt))
-    if deviation is not None:
-        request.applymarker(pytest.mark.xfail(strict=True, reason=deviation))
     got = _run_lucid(case, device, autocast_dt, input_dt)
 
     ref_device = _ref_device(ref, device)
