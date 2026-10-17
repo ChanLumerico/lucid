@@ -291,7 +291,6 @@
     "lucid/models/generative/rectified_flow/_model.py": 9,
     "lucid/models/vision/cvt/_model.py": 2,
     "lucid/models/vision/sknet/_model.py": 3,
-    "lucid/nn/_state_dict.py": 2,
     "lucid/nn/functional/sampling.py": 1,
     "lucid/nn/hooks.py": 6,
     "lucid/nn/intrinsic/qat/modules.py": 1,

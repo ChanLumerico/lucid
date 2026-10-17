@@ -10,7 +10,7 @@ from typing import Callable, Sequence, cast
 
 import lucid
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _wrap, _unwrap
+from lucid._dispatch import _impl_with_grad, _wrap, _unwrap
 from lucid._tensor.tensor import Tensor
 
 
@@ -82,7 +82,7 @@ def gradcheck(
 
     def _clone_leaf(t: Tensor) -> Tensor:
         """Deep-copy t into a new leaf tensor with requires_grad=True."""
-        return _wrap(_C_engine.contiguous(_unwrap(t)).clone_with_grad(True))
+        return _wrap(_impl_with_grad(_C_engine.contiguous(_unwrap(t)), True))
 
     def _detach_copy(t: Tensor) -> Tensor:
         """Deep-copy t as a non-grad leaf (for building perturbed inputs)."""

@@ -25,7 +25,7 @@ from collections.abc import Sequence, Set
 
 from lucid import _promotion
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _default_dtype_enum_cached
+from lucid._dispatch import _default_dtype_enum_cached, _impl_with_grad
 from lucid._dtype import _ENGINE_TO_DTYPE
 
 _D = _C_engine.Dtype
@@ -83,12 +83,13 @@ def _leaf(impl: _C_engine.TensorImpl, requires_grad: bool) -> _C_engine.TensorIm
     ``impl`` must already hold the final value in the final dtype on the
     final device, built without grad — nothing may convert it afterwards,
     or the caller gets that conversion's output instead of a leaf.
+
+    Raises
+    ------
+    RuntimeError
+        If ``requires_grad`` is set on a bool or integer ``impl``.
     """
-    if requires_grad and _promotion.is_integral(impl.dtype):
-        raise RuntimeError(
-            "only Tensors of floating point and complex dtype can require gradients"
-        )
-    return impl.clone_with_grad(True) if requires_grad else impl
+    return _impl_with_grad(impl, True) if requires_grad else impl
 
 
 def _is_numpy_scalar(value: object) -> bool:

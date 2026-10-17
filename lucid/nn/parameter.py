@@ -4,9 +4,9 @@ nn.Parameter: a Tensor that is automatically registered by Module.
 
 from typing import cast, override
 
-from lucid import _promotion
 from lucid._tensor.tensor import Tensor
 from lucid._C import engine as _C_engine
+from lucid._dispatch import _impl_with_grad
 from lucid._factories.converters import _to_impl
 
 
@@ -112,13 +112,9 @@ class Parameter(Tensor):
                 impl = PhantomImpl((0,), None, None, requires_grad)
             else:
                 impl = _C_engine.zeros([0], _C_engine.F32, _C_engine.CPU)
-                impl = impl.clone_with_grad(requires_grad)
+                impl = _impl_with_grad(impl, requires_grad)
         elif isinstance(data, Tensor):
-            if requires_grad and _promotion.is_integral(data._impl.dtype):
-                raise RuntimeError(
-                    "only Tensors of floating point and complex dtype can require gradients"
-                )
-            impl = data._impl.clone_with_grad(requires_grad)
+            impl = _impl_with_grad(data._impl, requires_grad)
         else:
             impl = _to_impl(data, requires_grad=requires_grad)
         obj = object.__new__(cls)
@@ -191,6 +187,12 @@ class UninitializedParameter(Parameter):
         data : Tensor
             The real parameter, already the right shape and initialised.
 
+        Raises
+        ------
+        RuntimeError
+            If ``data`` is bool or an integer dtype, which cannot require
+            gradients.
+
         Notes
         -----
         Rebinds ``_impl`` rather than copying into it: the buffer is a
@@ -198,7 +200,7 @@ class UninitializedParameter(Parameter):
         instance's class is rewritten to :class:`Parameter` so nothing
         downstream keeps treating a fully-formed weight as pending.
         """
-        self._impl = data._impl.clone_with_grad(True)
+        self._impl = _impl_with_grad(data._impl, True)
         # Rewriting the class is the point: nothing downstream should keep
         # treating a fully-formed weight as pending.  mypy cannot express
         # an instance narrowing its own type, hence the ignore.

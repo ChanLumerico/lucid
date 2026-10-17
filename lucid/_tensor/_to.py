@@ -4,11 +4,12 @@ Injected into Tensor by _inject_to() after class definition.
 """
 
 from typing import TYPE_CHECKING, cast
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dtype import dtype as _dtype_cls, to_engine_dtype
 from lucid._dtype import float16, float32, float64, int32, int64, bool_
 from lucid._device import device as _device_cls
-from lucid._dispatch import _parse_device, _wrap
+from lucid._dispatch import _impl_with_grad, _parse_device, _wrap
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -230,8 +231,15 @@ def _inject_to(cls: type) -> None:
         #   SharedStorage remains useful when explicitly requested via
         #   lucid.metal.to_shared() / lucid.metal.shared_tensor() for custom Metal
         #   kernel dispatch where the CPU needs to read/write the same buffer.
+        #
+        # The result keeps the source's flag — except on bool or an integer.
+        # ``astype`` deliberately ends the graph at such a result (the
+        # derivative of rounding is zero almost everywhere), and restoring
+        # the flag re-attached it: ``x.long()``, and across a device
+        # ``x.to("metal", lucid.int64)``, came back requiring grad with a
+        # backward that fell over inside the backend.
+        rg = self._impl.requires_grad and not _promotion.is_integral(target_dtype)
         if target_device != impl.device:
-            rg = self._impl.requires_grad
             if rg and impl.requires_grad and _C_engine.grad_enabled():
                 # Inside a graph the move is differentiable: the gradient
                 # goes back to the source device.  Returning a fresh leaf
@@ -256,31 +264,15 @@ def _inject_to(cls: type) -> None:
                 # CPU↔GPU workloads.
                 impl = impl.transfer_to_device(target_device, rg)
             if impl.requires_grad != rg:
-                impl = impl.clone_with_grad(rg)
-        else:
-            # 3.3 AMP fix: only clone_with_grad when the requires_grad flag
-            # actually disagrees.  The astype path above wires AstypeBackward
-            # (and propagates requires_grad) when grad mode is on, so an
-            # unconditional clone here would strip the freshly-installed
-            # grad_fn and break the backward chain — exactly the failure
-            # that left ``logits.float()`` mid-graph dropping gradients
-            # under AMP.
-            # …but not back onto a discrete dtype.  ``astype`` deliberately
-            # ends the graph at an integer or bool result — the derivative
-            # of rounding is zero almost everywhere — and restoring the
-            # flag here re-attached it, so ``x.long()`` came back with
-            # ``requires_grad=True`` and a backward that fell over inside
-            # the backend.  ``.int()`` and ``.bool()`` happened to escape
-            # only because their flags already agreed.
-            discrete = target_dtype in (
-                _C_engine.Dtype.I8,
-                _C_engine.Dtype.I16,
-                _C_engine.Dtype.I32,
-                _C_engine.Dtype.I64,
-                _C_engine.Dtype.Bool,
-            )
-            if not discrete and impl.requires_grad != self._impl.requires_grad:
-                impl = impl.clone_with_grad(self._impl.requires_grad)
+                impl = _impl_with_grad(impl, rg)
+        elif impl.requires_grad != rg:
+            # 3.3 AMP fix: re-flag only when the flag disagrees.  The astype
+            # path above wires AstypeBackward (and propagates requires_grad)
+            # when grad mode is on, so an unconditional alias here would
+            # strip the freshly-installed grad_fn and break the backward
+            # chain — exactly the failure that left ``logits.float()``
+            # mid-graph dropping gradients under AMP.
+            impl = _impl_with_grad(impl, rg)
         return _wrap(impl)
 
     def metal(self: Tensor) -> Tensor:

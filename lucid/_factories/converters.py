@@ -16,7 +16,7 @@ keep the numpy bridge.
 from typing import TYPE_CHECKING, TypeGuard
 
 from lucid._C import engine as _C_engine
-from lucid._dispatch import normalize_factory_kwargs
+from lucid._dispatch import _impl_with_grad, normalize_factory_kwargs
 from lucid._factories._build import (
     _from_values,
     _infer_dtype,
@@ -262,10 +262,10 @@ def _source_impl(
         # the storage without sharing the tensor, and keeps a source that
         # requires grad in the graph, as the reference's ``Tensor(x)`` does.
         if requires_grad and not source.requires_grad:
-            return source.clone_with_grad(True)
+            return _impl_with_grad(source, True)
         return _C_engine.view(source, list(source.shape))
     if source.requires_grad != requires_grad:
-        return source.clone_with_grad(requires_grad)
+        return _impl_with_grad(source, requires_grad)
     return source
 
 

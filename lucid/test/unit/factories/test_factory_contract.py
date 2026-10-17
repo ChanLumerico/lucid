@@ -385,37 +385,163 @@ def test_full_follows_default_float_dtype() -> None:
         lucid.set_default_dtype(previous)
 
 
-# ── LCD-330 / LCD-69: integral and boolean tensors refuse requires_grad ──
+# ── requires_grad needs a floating or complex dtype, on every path ───────
+#
+# One rule — bool and integer tensors cannot require gradients — has to
+# hold on every way the flag gets set.  It used to live in five copies, and
+# ``Tensor(int_tensor, requires_grad=True)`` reached none of them.  The
+# matrix walks every public setter, so a new one that skips the rule fails
+# here rather than handing back an integer tensor whose backward falls
+# over inside the backend.
 
-_INTEGRAL_DTYPES = [
-    lucid.int8,
-    lucid.int16,
-    lucid.int32,
-    lucid.int64,
-    lucid.bool,
-]
+_NO_GRAD_MSG = "only Tensors of floating point and complex dtype can require gradients"
+_NO_GRAD_DTYPES = [lucid.int8, lucid.int16, lucid.int32, lucid.int64, lucid.bool]
+
+type GradSetter = Callable[[lucid.dtype, str], lucid.Tensor]
+
+
+def _src(dtype: lucid.dtype, device: str) -> lucid.Tensor:
+    return lucid.zeros(2, dtype=dtype, device=device)
+
+
+def _factory_setter(name: str) -> GradSetter:
+    def make(dtype: lucid.dtype, device: str) -> lucid.Tensor:
+        return FACTORIES[name](dtype, device, True)
+
+    return make
+
+
+def _property_setter(dtype: lucid.dtype, device: str) -> lucid.Tensor:
+    t = _src(dtype, device)
+    t.requires_grad = True
+    return t
+
+
+def _materialize(dtype: lucid.dtype, device: str) -> lucid.Tensor:
+    p = lucid.nn.UninitializedParameter()
+    p.materialize(_src(dtype, device))
+    return p
+
+
+def _assign_state(dtype: lucid.dtype, device: str) -> lucid.Tensor:
+    m = lucid.nn.Linear(2, 1)
+    m.load_state_dict(
+        {
+            "weight": lucid.zeros(1, 2, dtype=dtype, device=device),
+            "bias": lucid.zeros(1, dtype=dtype, device=device),
+        },
+        assign=True,
+    )
+    return m.weight
+
+
+_GRAD_SETTERS: dict[str, GradSetter] = {
+    **{f"factory-{name}": _factory_setter(name) for name in FACTORIES},
+    "Tensor-list": lambda d, dev: lucid.Tensor(
+        [1, 0], dtype=d, device=dev, requires_grad=True
+    ),
+    "Tensor-tensor": lambda d, dev: lucid.Tensor(_src(d, dev), requires_grad=True),
+    "Tensor-tensor-cast": lambda d, dev: lucid.Tensor(
+        lucid.zeros(2, device=dev), dtype=d, requires_grad=True
+    ),
+    "Tensor-tensor-move": lambda d, dev: lucid.Tensor(
+        lucid.zeros(2, dtype=d), device=dev, requires_grad=True
+    ),
+    "tensor-tensor": lambda d, dev: lucid.tensor(_src(d, dev), requires_grad=True),
+    "requires_grad_": lambda d, dev: _src(d, dev).requires_grad_(),
+    "requires_grad-setter": _property_setter,
+    "Parameter": lambda d, dev: lucid.nn.Parameter(_src(d, dev)),
+    "UninitializedParameter-materialize": _materialize,
+    "load_state_dict-assign": _assign_state,
+    "new_tensor": lambda d, dev: _src(d, dev).new_tensor([1, 0], requires_grad=True),
+    "new_zeros": lambda d, dev: _src(d, dev).new_zeros(2, requires_grad=True),
+    "new_ones": lambda d, dev: _src(d, dev).new_ones(2, requires_grad=True),
+    "new_empty": lambda d, dev: _src(d, dev).new_empty(2, requires_grad=True),
+    "new_full": lambda d, dev: _src(d, dev).new_full((2,), 1, requires_grad=True),
+}
+
+
+def _setter_cases(dtypes: list[lucid.dtype]) -> list[object]:
+    out: list[object] = []
+    for setter in _GRAD_SETTERS:
+        factory = setter.removeprefix("factory-")
+        for dtype in dtypes:
+            if factory in FACTORIES and _reference_refuses(factory, dtype):
+                continue
+            for device in DEVICES:
+                if device == "metal" and dtype in _METAL_ABSENT:
+                    continue
+                out.append(
+                    pytest.param(
+                        setter,
+                        dtype,
+                        device,
+                        id=f"{setter}-{str(dtype).removeprefix('lucid.')}-{device}",
+                    )
+                )
+    return out
+
+
+@pytest.mark.parametrize(("setter", "dtype", "device"), _setter_cases(_NO_GRAD_DTYPES))
+def test_requires_grad_is_refused_on_bool_and_integer(
+    setter: str, dtype: lucid.dtype, device: str
+) -> None:
+    with pytest.raises(RuntimeError, match=_NO_GRAD_MSG):
+        _GRAD_SETTERS[setter](dtype, device)
+
+
+@pytest.mark.parametrize(
+    ("setter", "dtype", "device"), _setter_cases(sorted(_FLOATING, key=str))
+)
+def test_requires_grad_is_accepted_on_floating_and_complex(
+    setter: str, dtype: lucid.dtype, device: str
+) -> None:
+    t = _GRAD_SETTERS[setter](dtype, device)
+    assert (t.dtype, t.device.type) == (dtype, device)
+    assert t.requires_grad and t.is_leaf
 
 
 @pytest.mark.parametrize("device", DEVICES)
-@pytest.mark.parametrize("dtype", _INTEGRAL_DTYPES, ids=str)
-def test_integral_and_bool_tensors_refuse_requires_grad(
+def test_unsigned_input_widens_and_still_refuses_requires_grad(device: str) -> None:
+    arr = np.array([1, 0], dtype=np.uint8)
+    with pytest.raises(RuntimeError, match=_NO_GRAD_MSG):
+        lucid.Tensor(arr, device=device, requires_grad=True)
+    with pytest.raises(RuntimeError, match=_NO_GRAD_MSG):
+        lucid.tensor(arr, device=device, requires_grad=True)
+
+
+@pytest.mark.parametrize("device", DEVICES)
+@pytest.mark.parametrize("dtype", _NO_GRAD_DTYPES, ids=str)
+def test_a_refused_flag_leaves_the_tensor_unchanged(
     device: str, dtype: lucid.dtype
 ) -> None:
-    msg = "only Tensors of floating point and complex dtype can require gradients"
-    for name, fn in FACTORIES.items():
-        if _reference_refuses(name, dtype):
-            continue
-        with pytest.raises(RuntimeError, match=msg):
-            fn(dtype, device, True)
-    with pytest.raises(RuntimeError, match=msg):
-        lucid.Tensor([1, 0], dtype=dtype, device=device, requires_grad=True)
-    t = lucid.zeros(2, dtype=dtype, device=device)
-    with pytest.raises(RuntimeError, match=msg):
-        t.requires_grad_(True)
-    with pytest.raises(RuntimeError, match=msg):
-        t.requires_grad = True
-    with pytest.raises(RuntimeError, match=msg):
-        lucid.nn.Parameter(t)
+    t = _src(dtype, device)
+    for refused in (
+        lambda: t.requires_grad_(True),
+        lambda: setattr(t, "requires_grad", True),
+        lambda: lucid.Tensor(t, requires_grad=True),
+        lambda: lucid.nn.Parameter(t),
+    ):
+        with pytest.raises(RuntimeError, match=_NO_GRAD_MSG):
+            refused()
+        assert not t.requires_grad and t.is_leaf
     assert t.requires_grad_(False) is t
     t.requires_grad = False
     assert not t.requires_grad
+
+
+@pytest.mark.parametrize("target", ["cpu", "metal"])
+@pytest.mark.parametrize("dtype", _NO_GRAD_DTYPES, ids=str)
+def test_a_cast_to_bool_or_integer_drops_requires_grad(
+    dtype: lucid.dtype, target: str
+) -> None:
+    # A cast ends the graph at a discrete result rather than refusing: the
+    # source's flag must not carry over, on the same device or across one.
+    x = lucid.randn(3, requires_grad=True)
+    for y in (x.to(target, dtype), x.to(target).to(dtype)):
+        assert (y.dtype, y.device.type) == (dtype, target)
+        assert not y.requires_grad
+    with lucid.no_grad():
+        assert not x.to(target, dtype).requires_grad
+    kept = x.to(target, lucid.float16)
+    assert kept.requires_grad
