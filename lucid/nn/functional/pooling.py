@@ -14,7 +14,7 @@ from lucid.nn.functional._pool_core import (
     _lp_pool,
     _max_pool,
 )
-from lucid.nn.functional._spatial_args import _ntuple, _pool_geometry
+from lucid.nn.functional._spatial_args import _ntuple, _pool_geometry, _spatial_extent
 
 type _OutSize = int | tuple[int | None, ...]
 
@@ -37,7 +37,7 @@ def _unpool_default_size(
     k = _ntuple(kernel_size, n, f"max_unpool{n}d", "kernel_size")
     s = k if stride is None else _ntuple(stride, n, f"max_unpool{n}d", "stride")
     p = _ntuple(padding, n, f"max_unpool{n}d", "padding")
-    extent = tuple(int(v) for v in x.shape[-n:])
+    extent = _spatial_extent(x, n, f"max_unpool{n}d")
     return tuple(
         (i - 1) * sd - 2 * pd + kd
         for i, kd, sd, pd in zip(extent, k, s, p, strict=True)

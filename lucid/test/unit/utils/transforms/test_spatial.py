@@ -87,5 +87,18 @@ class TestReproducibility:
         assert float((a - b).abs().max().item()) == 0.0
 
 
+@pytest.mark.parametrize("dst_points", [3, 5])
+def test_perspective_matrix_wants_a_destination_per_corner(dst_points: int) -> None:
+    """Unpaired corners say so rather than surfacing ``zip``'s own error.
+
+    A fifth destination used to be dropped without a word.
+    """
+    import lucid.utils.transforms.functional as F
+
+    square = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [2.0, 2.0]]
+    with pytest.raises(ValueError, match=f"got 4 and {dst_points} points"):
+        F.perspective_matrix(square[:4], square[:dst_points])
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

@@ -103,3 +103,23 @@ def test_every_rank_shares_the_guard(fn, shape, size) -> None:
     assert fn(x, indices, kernel_size=2, output_size=size) is not None
     with pytest.raises(ValueError, match="positive"):
         fn(x, indices, kernel_size=2, output_size=tuple(-1 for _ in size))
+
+
+@pytest.mark.parametrize(
+    "fn,shape",
+    [
+        (F.max_unpool1d, ()),
+        (F.max_unpool2d, (2,)),
+        (F.max_unpool3d, (2, 2)),
+    ],
+)
+def test_the_default_size_needs_a_spatial_axis_per_kernel_axis(fn, shape) -> None:
+    """Too few axes to read the default ``output_size`` off says so.
+
+    The extents were zipped against the kernel, which named neither the
+    function nor the shape once ``zip`` turned strict.
+    """
+    x = lucid.zeros(*shape)
+    indices = lucid.zeros(*shape, dtype=lucid.int64)
+    with pytest.raises(ValueError, match=r"max_unpool\dd: expected an input"):
+        fn(x, indices, kernel_size=2)

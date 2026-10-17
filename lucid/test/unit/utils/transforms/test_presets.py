@@ -377,6 +377,21 @@ def test_the_padding_reaches_the_model_at_pad_value() -> None:
         assert float((out[:, 32:, :] - pad_value).abs().max().item()) < 1e-6
 
 
+@pytest.mark.parametrize(
+    ("mean", "std"), [((0.5,), None), ((0.5, 0.5, 0.5), (0.25,))], ids=["1-3", "3-1"]
+)
+def test_a_pad_value_with_unpaired_mean_and_std_names_both(
+    mean: tuple[float, ...], std: tuple[float, ...] | None
+) -> None:
+    """The fill is one value per channel, so ``mean`` and ``std`` must pair.
+
+    They were zipped to build it, which named neither once ``zip`` turned
+    strict — and before that dropped the unpaired channels from the fill.
+    """
+    with pytest.raises(ValueError, match="mean and std .* got (1 and 3|3 and 1)"):
+        T.Detection(max_size=64, pad_value=0.0, mean=mean, std=std)
+
+
 def test_without_pad_value_the_padding_is_a_normalised_black_pixel() -> None:
     # What a config saved before pad_value existed produced, unchanged.
     tf = T.Detection(max_size=64, pad_position="top_left")

@@ -915,6 +915,11 @@ def perspective_matrix(
     Tensor
         Forward 3x3 homography mapping ``src[i] → dst[i]`` exactly.
     """
+    if len(src) != len(dst):
+        raise ValueError(
+            f"perspective_matrix: src and dst pair corner for corner, got "
+            f"{len(src)} and {len(dst)} points"
+        )
     rows: list[list[float]] = []
     rhs: list[float] = []
     for (sx, sy), (dx, dy) in zip(src, dst, strict=True):

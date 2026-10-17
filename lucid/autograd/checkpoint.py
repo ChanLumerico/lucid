@@ -50,6 +50,31 @@ from lucid.autograd._grad_mode import no_grad, enable_grad
 from lucid.autograd.function import Function, FunctionCtx
 
 
+def _roots_and_seeds(
+    output: object, grad_outputs: tuple[Tensor | None, ...]
+) -> tuple[list[Tensor], list[Tensor]]:
+    """Pair each recomputed output that needs a gradient with its seed.
+
+    ``Function.apply`` hands ``backward`` one gradient per *tensor* output,
+    so a ``None`` or a count beside the tensors gets none.  A seed arrives
+    shaped ``(1,)`` for a 0-d output — harmless for an ordinary backward,
+    which broadcasts, but the engine checks the shape exactly, so a segment
+    returning a scalar could not be checkpointed at all.
+    """
+    outputs = output if isinstance(output, tuple) else (output,)
+    tensor_outputs = [o for o in outputs if isinstance(o, Tensor)]
+    roots: list[Tensor] = []
+    seeds: list[Tensor] = []
+    for out, seed in zip(tensor_outputs, grad_outputs, strict=True):
+        if seed is None or not out.requires_grad:
+            continue
+        if tuple(seed.shape) != tuple(out.shape):
+            seed = seed.reshape(out.shape)
+        roots.append(out)
+        seeds.append(seed)
+    return roots, seeds
+
+
 def checkpoint(
     function: Callable[..., Tensor | tuple[Tensor, ...]],
     *args: Tensor,
@@ -157,20 +182,8 @@ def checkpoint(
                     set_rng_state(resume)
 
             # Backward through the re-computed graph, every output seeded
-            # with its own gradient.  A seed arrives shaped ``(1,)`` for a
-            # 0-d output — harmless for an ordinary backward, which
-            # broadcasts, but the engine checks the shape exactly, so a
-            # segment returning a scalar could not be checkpointed at all.
-            outputs = output if isinstance(output, tuple) else (output,)
-            roots: list[Tensor] = []
-            seeds: list[Tensor] = []
-            for out, seed in zip(outputs, grad_outputs, strict=True):
-                if seed is None or not out.requires_grad:
-                    continue
-                if tuple(seed.shape) != tuple(out.shape):
-                    seed = seed.reshape(out.shape)
-                roots.append(out)
-                seeds.append(seed)
+            # with its own gradient.
+            roots, seeds = _roots_and_seeds(output, grad_outputs)
             if roots:
                 from lucid.autograd._backward import backward
 

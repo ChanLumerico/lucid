@@ -76,3 +76,30 @@ def test_a_segment_returning_several_tensors() -> None:
     first, second = utils_checkpoint(lambda t: (t * 2, t**2), a)
     (first.sum() + second.sum()).backward()
     np.testing.assert_allclose(a.grad.numpy(), 2 + 2 * a.detach().numpy(), rtol=1e-6)
+
+
+@pytest.mark.parametrize("use_reentrant", [True, False])
+@pytest.mark.parametrize(
+    "none_first", [False, True], ids=["tensor-none", "none-tensor"]
+)
+def test_a_segment_returning_none_beside_its_tensor(
+    use_reentrant: bool, none_first: bool
+) -> None:
+    """A ``None`` among the outputs takes no gradient, wherever it sits.
+
+    ``backward`` gets one gradient per tensor output; pairing them with
+    every output raised once ``zip`` turned strict, and with the ``None``
+    first it had always read ``requires_grad`` off it.
+    """
+    a = lucid.randn(3, requires_grad=True)
+
+    def segment(t: lucid.Tensor) -> tuple[lucid.Tensor | None, ...]:
+        return (None, t * 2) if none_first else (t * 2, None)
+
+    out = autograd_checkpoint(segment, a, use_reentrant=use_reentrant)
+    assert isinstance(out, tuple)
+    tensor = out[1] if none_first else out[0]
+    assert isinstance(tensor, lucid.Tensor)
+    tensor.sum().backward()
+    assert a.grad is not None
+    np.testing.assert_allclose(a.grad.numpy(), np.full(3, 2.0))

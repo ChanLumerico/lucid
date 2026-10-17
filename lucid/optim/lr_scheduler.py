@@ -26,6 +26,12 @@ def _holds_a_callable(value: object) -> bool:
     return False
 
 
+def _write_rates(groups: list[dict[str, object]], rates: list[float]) -> None:
+    """Write rates in order; a group added after the schedule keeps its own."""
+    for group, lr in zip(groups, rates, strict=False):
+        group["lr"] = lr
+
+
 class _LRScheduler:
     """Base class for all learning rate schedulers.
 
@@ -107,8 +113,7 @@ class _LRScheduler:
         # at full rate, ConstantLR unscaled, CyclicLR at max_lr, OneCycleLR at
         # max_lr rather than max_lr / div_factor — 25x its first step.
         self._last_lr: list[float] = list(self.get_lr())
-        for group, lr in zip(optimizer.param_groups, self._last_lr, strict=True):
-            group["lr"] = lr
+        _write_rates(optimizer.param_groups, self._last_lr)
         optimizer._sync_hyperparams()
 
     def step(self) -> None:
@@ -136,8 +141,7 @@ class _LRScheduler:
         self.last_epoch += 1
         self._step_count += 1
         values = self.get_lr()
-        for group, lr in zip(self.optimizer.param_groups, values, strict=True):
-            group["lr"] = lr
+        _write_rates(self.optimizer.param_groups, values)
         self._last_lr = list(values)
         self.optimizer._sync_hyperparams()
         if self.verbose:
@@ -624,6 +628,11 @@ class LambdaLR(_LRScheduler):
             self.lr_lambdas = [lr_lambda] * len(optimizer.param_groups)
         else:
             self.lr_lambdas = list(lr_lambda)
+            if len(self.lr_lambdas) != len(optimizer.param_groups):
+                raise ValueError(
+                    f"LambdaLR: expected {len(optimizer.param_groups)} lr_lambdas, "
+                    f"one per param group, got {len(self.lr_lambdas)}"
+                )
         super().__init__(optimizer, last_epoch, verbose)
 
     @override
@@ -1460,8 +1469,7 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
             self._T_cur -= self._T_i
             self._T_i *= self.T_mult
         values = self.get_lr()
-        for group, lr in zip(self.optimizer.param_groups, values, strict=True):
-            group["lr"] = lr
+        _write_rates(self.optimizer.param_groups, values)
         self._last_lr = list(values)
         self.optimizer._sync_hyperparams()
         if self.verbose:
@@ -1706,9 +1714,7 @@ class SequentialLR:
         self._idx = 0
         # Each child wrote its own step-0 rate as it was built, so the last
         # one built won.  The first child's is the rate until its milestone.
-        first = schedulers[0]
-        for group, lr in zip(optimizer.param_groups, first.get_lr(), strict=True):
-            group["lr"] = lr
+        _write_rates(optimizer.param_groups, schedulers[0].get_lr())
         optimizer._sync_hyperparams()
 
     def state_dict(self) -> dict[str, object]:
@@ -1861,10 +1867,7 @@ class ChainedScheduler:
         # step-0 rate, and some read that rate back (StepLR).  Start every
         # track from the base instead.
         for sched in schedulers:
-            for group, base in zip(
-                sched.optimizer.param_groups, sched.base_lrs, strict=True
-            ):
-                group["lr"] = base
+            _write_rates(sched.optimizer.param_groups, sched.base_lrs)
             sched._last_lr = list(sched.get_lr())
         self._compose()
 
@@ -1934,10 +1937,7 @@ class ChainedScheduler:
             # group's current rate (ExponentialLR, StepLR), and that rate is
             # the chain's product — the previous child's factor would be
             # applied again.
-            for group, lr in zip(
-                sched.optimizer.param_groups, sched._last_lr, strict=True
-            ):
-                group["lr"] = lr
+            _write_rates(sched.optimizer.param_groups, sched._last_lr)
             sched.step()
         self._compose()
 

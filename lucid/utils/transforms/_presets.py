@@ -846,6 +846,11 @@ class Detection(TransformsPreset):
         else:
             self._resize = LongestMaxSize(max_size, interpolation=interpolation)
         side = self.canvas_size
+        if pad_value is not None and len(self.mean) != len(self.std):
+            raise ValueError(
+                f"Detection: mean and std hold one value per channel, got "
+                f"{len(self.mean)} and {len(self.std)}"
+            )
         # Filling with ``pad_value * std + mean`` normalises to ``pad_value``.
         fill: float | tuple[float, ...] = (
             0.0

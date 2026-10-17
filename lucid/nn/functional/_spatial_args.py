@@ -89,6 +89,16 @@ def _drop_batch_axis(out: Tensor, unbatched: bool) -> Tensor:
     return out.squeeze(0) if unbatched else out
 
 
+def _spatial_extent(x: Tensor, n: int, op: str) -> tuple[int, ...]:
+    """The sizes of ``x``'s last ``n`` axes, refusing an input with fewer."""
+    if x.ndim < n:
+        raise ValueError(
+            f"{op}: expected an input with at least {n} dimension(s), "
+            f"got shape {tuple(int(d) for d in x.shape)}"
+        )
+    return tuple(int(v) for v in x.shape[-n:])
+
+
 def _check_string_padding(padding: str, stride: tuple[int, ...], op: str) -> None:
     """Refuse a padding string the reference refuses.
 

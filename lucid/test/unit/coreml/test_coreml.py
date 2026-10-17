@@ -802,3 +802,41 @@ class TestVerifyingAnImageExport:
                 exported.verify(model, lucid.randn(1, 3, 64, 64))
         finally:
             exported.close()
+
+
+class TestASingleResultEmitter:
+    """An emitter that builds one value names its operation's first result."""
+
+    def test_an_operation_with_several_results_binds_the_first(
+        self, tmp_path: object, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Stands in for the next emitter that answers a multi-result
+        # operation with one MIL op: the driver names the first result and
+        # leaves the rest for a consumer to ask after by name.  Pairing the
+        # one value with every result raised once ``zip`` turned strict.
+        from lucid.coreml import _emit
+        from lucid.coreml._build import Builder
+
+        def first_section(
+            b: Builder, op: _emit.TracedOp, ins: list[str]
+        ) -> _emit.EmitResult:
+            size = [int(d) for d in op.outputs[0].shape]
+            return "slice_by_size", [
+                ("x", ins[0]),
+                ("begin", b.const_ints([0] * len(size))),
+                ("size", b.const_ints(size)),
+            ]
+
+        class FirstHalf(nn.Module):
+            def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+                return lucid.split(x, 2, dim=1)[0] * 3.0
+
+        monkeypatch.setitem(_emit.EMITTERS, "split", first_section)
+        model, x = FirstHalf().eval(), lucid.randn(3, 4)
+        cm = cml.export(model, x, str(tmp_path / "first.mlpackage"))
+        try:
+            got = cm.predict(x)
+            assert isinstance(got, lucid.Tensor)
+            assert float((got - model(x)).abs().max().item()) < 1e-6
+        finally:
+            cm.close()

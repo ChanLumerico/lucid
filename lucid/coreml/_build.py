@@ -3058,7 +3058,7 @@ def build_package(
             for out, bound in zip(op.outputs, result.names, strict=True):
                 names[out.id] = bound
             continue
-        multi = isinstance(result, MultiOutput)
+        outs = op.outputs if isinstance(result, MultiOutput) else op.outputs[:1]
         mil_type, raw_bindings = (
             (result.mil_type, result.bindings)
             if isinstance(result, MultiOutput)
@@ -3078,13 +3078,13 @@ def build_package(
                     ),
                 ),
             )
-            for o in (op.outputs if multi else op.outputs[:1])
+            for o in outs
         ]
-        if multi:
+        if isinstance(result, MultiOutput):
             program.add_op_multi(mil_type, bindings, produced)
         else:
             program.add_op(mil_type, bindings, produced[0][0], produced[0][1])
-        for (out_name, (out_dtype, shape)), o in zip(produced, op.outputs, strict=True):
+        for (out_name, (out_dtype, shape)), o in zip(produced, outs, strict=True):
             names[o.id] = out_name
             builder.declare(out_name, shape)
             builder.dtypes[out_name] = out_dtype

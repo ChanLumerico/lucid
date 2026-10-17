@@ -94,6 +94,61 @@ class TestLRScheduler:
         for group in opt.param_groups:
             assert abs(group["lr"] - 0.5) < 1e-6
 
+    def test_lambda_lr_wants_one_lambda_per_group(self) -> None:
+        a, b = lucid.zeros(1, requires_grad=True), lucid.zeros(1, requires_grad=True)
+        opt = optim.SGD([{"params": [a]}, {"params": [b]}], lr=0.1)
+        with pytest.raises(ValueError, match="expected 2 lr_lambdas"):
+            optim.lr_scheduler.LambdaLR(opt, [lambda epoch: 1.0])
+
+
+_S = optim.lr_scheduler
+# Schedulers whose rates come from ``base_lrs``, one per group seen at
+# construction.  A group added later is not theirs to schedule.
+_BASE_RATE_SCHEDULERS = {
+    "LambdaLR": lambda o: _S.LambdaLR(o, lambda epoch: 0.5**epoch),
+    "CosineAnnealingLR": lambda o: _S.CosineAnnealingLR(o, T_max=10),
+    "LinearLR": lambda o: _S.LinearLR(o),
+    "ConstantLR": lambda o: _S.ConstantLR(o),
+    "PolynomialLR": lambda o: _S.PolynomialLR(o),
+    "OneCycleLR": lambda o: _S.OneCycleLR(o, max_lr=0.1, total_steps=10),
+    "CosineAnnealingWarmRestarts": lambda o: _S.CosineAnnealingWarmRestarts(o, T_0=2),
+    "SequentialLR": lambda o: _S.SequentialLR(
+        o, [_S.ConstantLR(o), _S.LinearLR(o)], milestones=[2]
+    ),
+    "ChainedScheduler": pytest.param(
+        lambda o: _S.ChainedScheduler([_S.ConstantLR(o), _S.LinearLR(o)]),
+        marks=pytest.mark.xfail(
+            strict=True,
+            raises=IndexError,
+            reason="FOUND in LCD-470: _compose reads base_lrs[i] for every group",
+        ),
+    ),
+}
+
+
+@pytest.mark.parametrize(
+    "make", list(_BASE_RATE_SCHEDULERS.values()), ids=list(_BASE_RATE_SCHEDULERS)
+)
+def test_a_group_added_after_the_scheduler_keeps_its_own_rate(make) -> None:
+    """``add_param_group`` after the scheduler: it steps, and leaves the group be.
+
+    The reference pairs the groups with the schedule's rates by ``zip``
+    and so stops at the groups it was built over; a strict ``zip`` made
+    every ``step()`` raise instead.
+    """
+    tracked, late, alone = (lucid.zeros(1, requires_grad=True) for _ in range(3))
+    opt = optim.SGD([tracked], lr=0.1)
+    solo = optim.SGD([alone], lr=0.1)
+    sched, solo_sched = make(opt), make(solo)
+    opt.add_param_group({"params": [late], "lr": 0.3})
+    for _ in range(4):
+        opt.step()
+        sched.step()
+        solo.step()
+        solo_sched.step()
+    assert opt.param_groups[0]["lr"] == solo.param_groups[0]["lr"]
+    assert opt.param_groups[1]["lr"] == 0.3
+
 
 _LEAK_PROBE = """
 import gc, sys, lucid, lucid.nn as nn, lucid.optim as optim
