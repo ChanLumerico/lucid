@@ -11,9 +11,10 @@ Two running-stats configurations CANNOT ride the graph and must be handled by
 the caller (eager fallback for ``make_step`` / ``CompiledModule``; a clear error
 for ``fused_step`` / ``compiled_step`` which have no fallback):
 
-* ``track_running_stats=True`` + ``momentum=None`` (cumulative moving average) —
-  the update needs ``num_batches_tracked`` as a host scalar (a GPU sync), so it
-  can't be lowered into a pure graph.  :func:`model_has_cumulative_bn` detects it.
+* a BatchNorm with ``track_running_stats=True`` + ``momentum=None`` (cumulative
+  moving average) — the update needs ``num_batches_tracked`` as a host scalar (a
+  GPU sync), so it can't be lowered into a pure graph.
+  :func:`model_has_cumulative_bn` detects it.
 
 A ``track_running_stats=False`` BatchNorm, by contrast, keeps NO buffers and uses
 batch statistics in both train and eval — it traces as a plain 3-input node with
@@ -35,21 +36,25 @@ _BN_NAMES: tuple[str, ...] = ("batch_norm", "batch_norm1d", "batch_norm3d")
 
 def model_has_cumulative_bn(model: Module) -> bool:
     """Return ``True`` if any submodule keeps running stats via cumulative moving
-    average (``track_running_stats=True`` and ``momentum is None``).
+    average: a BatchNorm-family layer with ``track_running_stats=True`` and
+    ``momentum is None``.
 
     Such a layer's running-stats update can't be lowered into the compiled graph
     (it reads ``num_batches_tracked`` as a host scalar), so the caller must fall
     back to eager (``make_step`` / ``CompiledModule``) or raise (``fused_step`` /
-    ``compiled_step``).  Duck-typed so it also catches InstanceNorm-style layers
-    without importing every norm class.
+    ``compiled_step``).
+
+    The test is the layer's update rule, not the shape of its attributes.  An
+    InstanceNorm with ``momentum=None`` passes no weight to its update, as the
+    reference does, so it reads no count; matched by attribute it sent a
+    compilable step to eager, and made ``compiled_step`` refuse it (LCD-521).
     """
-    for m in model.modules():
-        if (
-            getattr(m, "track_running_stats", False)
-            and getattr(m, "momentum", 0.1) is None
-        ):
-            return True
-    return False
+    from lucid.nn.modules.normalization import _BatchNormBase
+
+    return any(
+        isinstance(m, _BatchNormBase) and m.track_running_stats and m.momentum is None
+        for m in model.modules()
+    )
 
 
 def model_has_tracking_bn(model: Module) -> bool:
