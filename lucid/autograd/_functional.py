@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from typing import Callable, TYPE_CHECKING
 
 import lucid
-from lucid.autograd._backward import grad as _grad
+from lucid.autograd._backward import _make_seeds, grad as _grad
 from lucid.autograd._grad_mode import enable_grad
 
 if TYPE_CHECKING:
@@ -650,15 +650,21 @@ def jvp(
     RuntimeError
         The number of entries of ``v`` differs from the number of
         inputs, ``v`` is left out and ``inputs`` is not one single-element
-        tensor, or an op on the path has no differentiable backward
-        (the second pass differentiates the first).
+        tensor, or ``strict`` refuses a result.
+    NotImplementedError
+        ``create_graph`` is set and an op on the path has no graph-mode
+        backward, so no differentiable tangent can be built through it.
     ShapeMismatch, DeviceMismatch
         An entry of ``v`` does not have its input's shape or device.
 
     Notes
     -----
     The complementary operation is :func:`vjp`, which computes
-    :math:`v^\top J` with one reverse pass.  This JVP costs two.
+    :math:`v^\top J` with one reverse pass.  This JVP costs two.  The
+    second pass differentiates the first; through an op whose backward has
+    no graph mode (``LSTM``, a padded ``avg_pool``) it cannot, and the
+    product is taken one output element at a time instead — one reverse
+    pass per element, exact all the same.
 
     Examples
     --------
@@ -702,19 +708,97 @@ def _forward_by_double_back(
     vector-Jacobian product with ``v`` is ``J v``.  ``u`` enters as
     ``grad_outputs``, whose graph ``grad`` keeps under ``create_graph``.
     Call under :func:`enable_grad`; shared by :func:`jvp` and :func:`hvp`.
+
+    The second pass differentiates the first, so every op on the path needs
+    a graph-mode backward — and under ``create_graph`` so does every
+    backward op.  One without (``LSTM``, a padded ``avg_pool``) refuses with
+    ``NotImplementedError``, and the product is then taken by
+    :func:`_forward_by_rows` instead, which needs no more than ``grad``
+    itself does.
     """
     us = [lucid.zeros_like(o).requires_grad_(True) for o in outs]
-    firsts = _grad(
-        list(outs), list(xs), grad_outputs=us, create_graph=True, allow_unused=True
-    )
+    try:
+        firsts = _grad(
+            list(outs), list(xs), grad_outputs=us, create_graph=True, allow_unused=True
+        )
+    except NotImplementedError:
+        return _forward_by_rows(outs, xs, v, create_graph, strict)
     _require_tracked(firsts, "grad_inputs", strict)
-    return _grad(
-        _or_zeros(firsts, xs),
-        us,
-        grad_outputs=list(v),
-        create_graph=create_graph,
-        allow_unused=True,
-    )
+    try:
+        return _grad(
+            _or_zeros(firsts, xs),
+            us,
+            grad_outputs=list(v),
+            create_graph=create_graph,
+            allow_unused=True,
+        )
+    except NotImplementedError:
+        return _forward_by_rows(outs, xs, v, create_graph, strict)
+
+
+def _forward_by_rows(
+    outs: Sequence[Tensor],
+    xs: Sequence[Tensor],
+    v: Sequence[Tensor],
+    create_graph: bool,
+    strict: bool,
+) -> tuple[Tensor | None, ...]:
+    """``J v`` one output element at a time: element ``k`` of an output's
+    tangent is its gradient row, seeded with the ``k``-th unit vector,
+    dotted with ``v``.
+
+    The fallback of :func:`_forward_by_double_back` for a path with an op
+    whose backward has no graph mode.  Each pass is an ordinary backward —
+    graph-mode only under ``create_graph`` — so this runs wherever ``grad``
+    does, at one reverse pass per output element.  ``None`` marks an output
+    no input reaches, as the double-backward route marks it.
+    """
+    # The checks the second pass of the double-backward route applies to v.
+    seeds = [s for s in _make_seeds("grad", xs, list(v)) if s is not None]
+    reached = [False] * len(xs)
+    tangents: list[Tensor | None] = []
+    for o in outs:
+        flat = lucid.arange(o.numel(), device=o.device)
+        entries: list[Tensor] = []
+        hit = False
+        for k in range(o.numel()):
+            rows = _grad(
+                o,
+                list(xs),
+                grad_outputs=(flat == k).to(o.dtype).reshape(o.shape),
+                retain_graph=True,
+                create_graph=create_graph,
+                allow_unused=True,
+            )
+            entries.append(_dot_rows(rows, seeds, o))
+            for i, row in enumerate(rows):
+                reached[i] = reached[i] or row is not None
+                hit = hit or row is not None
+        if not entries:
+            tangents.append(lucid.zeros_like(o))
+        else:
+            tangents.append(lucid.stack(entries).reshape(o.shape) if hit else None)
+    if strict and not all(reached):
+        raise RuntimeError(
+            f"{_INDEPENDENT['back'].format(i=reached.index(False))} This is not "
+            "allowed in strict mode."
+        )
+    return tuple(tangents)
+
+
+def _dot_rows(
+    rows: Sequence[Tensor | None], v: Sequence[Tensor], out: Tensor
+) -> Tensor:
+    """``sum_i <rows[i], v[i]>`` in ``out``'s dtype — one element of ``J v``.
+
+    A row that is ``None`` (its input does not reach this element) adds
+    nothing.  Summed one term at a time: the inputs may differ in dtype.
+    """
+    total = lucid.zeros((), dtype=out.dtype, device=out.device)
+    for row, s in zip(rows, v, strict=True):
+        if row is not None:
+            total = total + (row * s).sum().to(out.dtype)
+    return total
 
 
 def _hessian_product(
