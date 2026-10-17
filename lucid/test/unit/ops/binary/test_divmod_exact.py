@@ -204,11 +204,6 @@ def _ref_op(ref: ModuleType, op: str) -> Callable[..., object]:
 
 _HALF = (lucid.float16, lucid.bfloat16)
 
-#: ``trunc`` reads the rounded quotient, and the CPU's float64 division
-#: (``vDSP_vdivD``) is not correctly rounded: ``1.0 / 0.001`` is
-#: ``999.9999999999999``, which truncates to 999 where the reference has 1000.
-_F64_CPU_DIV = "LCD-506: CPU float64 div is not correctly rounded"
-
 
 def _half_oracle(ref: ModuleType, op: str, a: object, b: object, rdt: object) -> object:
     """The exact answer for 16-bit operands, rounded once into their dtype.
@@ -239,14 +234,11 @@ def _assert_same_floats(got: lucid.Tensor, want: object) -> None:
 @pytest.mark.parametrize("op", sorted(OPS))
 @pytest.mark.parametrize(("device", "dtype"), device_dtype_params(_FLOAT_DTYPES))
 def test_float_results_match_the_reference(
-    request: pytest.FixtureRequest,
     ref: ModuleType,
     device: str,
     dtype: lucid.dtype,
     op: str,
 ) -> None:
-    if device == "cpu" and dtype == lucid.float64 and _KIND[op] == "trunc":
-        request.applymarker(pytest.mark.xfail(strict=True, reason=_F64_CPU_DIV))
     pairs = [(a, b) for a in _FLOAT_NUMS for b in _FLOAT_DENS]
     nums, dens = [a for a, _ in pairs], [b for _, b in pairs]
     rdt = _ref_dtype(ref, dtype)
