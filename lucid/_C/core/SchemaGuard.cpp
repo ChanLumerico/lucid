@@ -40,6 +40,14 @@ constexpr bool is_autocast_eligible(Dtype dt) noexcept {
     return dt == Dtype::F16 || dt == Dtype::BF16 || dt == Dtype::F32;
 }
 
+// Whether an integer or bool input becomes float32: the op answers in real
+// numbers (``real_valued``, or the ``ForceFP32`` family) and has no exact
+// answer of its own in the integer type (``integral_closed``).
+constexpr bool promotes_integral_input(const OpSchema& schema) noexcept {
+    return (schema.real_valued || schema.amp_policy == AmpPolicy::ForceFP32) &&
+           !schema.integral_closed;
+}
+
 }  // namespace
 
 // Performs the determinism check first (cheapest path — no memory reads beyond
@@ -74,7 +82,7 @@ SchemaGuard::SchemaGuard(const OpSchema& schema, Dtype input_dtype, Device devic
         // ``is_integral`` deliberately excludes Bool, so it is named here:
         // the reference promotes a bool input for these ops too, and
         // ``sqrt(True)`` is 1.0 rather than a type error.
-        if ((schema.real_valued || schema.amp_policy == AmpPolicy::ForceFP32) &&
+        if (promotes_integral_input(schema) &&
             (is_integral(input_dtype) || input_dtype == Dtype::Bool))
             effective_dtype_ = Dtype::F32;
         else

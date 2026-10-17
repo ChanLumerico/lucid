@@ -13,9 +13,13 @@
 
 namespace lucid {
 
-// Promote keeps integer operands in their integer dtype (outside and inside
-// autocast) while allowing autocast-eligible floating operands to promote.
-const OpSchema PowBackward::schema_v1{"pow", 1, AmpPolicy::Promote, true};
+// ForceFP32: under autocast a floating power runs in float32, as the
+// reference runs it — log() and fractional exponents are unstable in half
+// precision, and ``x ** 2.0`` (pow_scalar) already answered float32.
+// ``integral_closed``: an integer or bool power is exact in its own dtype,
+// inside autocast and out, so the policy's int-to-float32 promotion is off.
+const OpSchema PowBackward::schema_v1{
+    "pow", 1, AmpPolicy::ForceFP32, true, "", /*real=*/false, /*closed=*/true};
 
 // Gradient of element-wise power (a ^ b).
 //

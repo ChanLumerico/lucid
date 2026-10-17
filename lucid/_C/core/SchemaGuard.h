@@ -25,7 +25,8 @@
 //        ForceFP32 — always return :class:`Dtype::F32`.
 //      Non-eligible dtypes (``F64``, ``C64``, ``C128``, integers, ``Bool``)
 //      and calls outside AMP return ``input_dtype`` unchanged (or ``F32``
-//      when an integral/bool input enters a real-valued / ``ForceFP32`` op).
+//      when an integral/bool input enters a real-valued / ``ForceFP32`` op
+//      whose schema is not ``integral_closed``).
 //
 // :func:`check_schema_determinism` exposes the determinism gate as a
 // standalone function for callers (e.g. custom-function wrappers,

@@ -123,6 +123,15 @@ struct LUCID_API OpSchema {
     // training memory and speed to fix an integer-input bug.
     bool real_valued = false;
 
+    // When true, an integer or bool input keeps its own dtype although
+    // ``amp_policy`` is ``ForceFP32``: the op has an exact answer in that
+    // type, and the policy speaks for floating inputs only.  ``pow`` is the
+    // case.  ``int64 ** 2`` is an integer, exact past 2**53 where float32 is
+    // not, while ``f16 ** f16`` under autocast runs in float32 as the
+    // reference runs it.  Without the flag one policy had to serve both, and
+    // switching ``pow`` to ``Promote`` for the first broke the second.
+    bool integral_closed = false;
+
     // Minimal constructor for deterministic ops with default arity.
     //
     // Parameters
@@ -137,6 +146,10 @@ struct LUCID_API OpSchema {
     //     Determinism flag.
     // note : std::string_view, default=""
     //     Non-determinism explanation; ignored when ``det`` is true.
+    // real : bool, default=false
+    //     Sets ``real_valued``.
+    // closed : bool, default=false
+    //     Sets ``integral_closed``.
     //
     // Notes
     // -----
@@ -148,13 +161,15 @@ struct LUCID_API OpSchema {
                        AmpPolicy ap,
                        bool det = true,
                        std::string_view note = "",
-                       bool real = false)
+                       bool real = false,
+                       bool closed = false)
         : name(n),
           version(v),
           amp_policy(ap),
           deterministic(det),
           determinism_note(note),
-          real_valued(real) {}
+          real_valued(real),
+          integral_closed(closed) {}
 
     // Full constructor for ops that need explicit arity, saved-input
     // tracking, or the ``internal`` flag set.

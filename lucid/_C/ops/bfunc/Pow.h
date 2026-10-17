@@ -49,7 +49,9 @@ namespace lucid {
 // Attributes
 // ----------
 // schema_v1 : OpSchema
-//     ``"pow"``, version ``1``, :enum:`AmpPolicy::Promote`, deterministic.
+//     ``"pow"``, version ``1``, :enum:`AmpPolicy::ForceFP32`,
+//     ``integral_closed``, deterministic.  A floating power runs in FP32
+//     under autocast; an integer or bool power stays in its own dtype.
 //
 // Notes
 // -----
@@ -64,8 +66,8 @@ namespace lucid {
 // log_op : Natural logarithm (used by the $\partial L/\partial b$ branch).
 class LUCID_API PowBackward : public BinaryOp<PowBackward> {
 public:
-    // Op registration metadata: name "pow", schema version 1, Promote under
-    // AMP (keeping integer inputs in their integer dtype), deterministic.
+    // Op registration metadata: name "pow", schema version 1, ForceFP32
+    // under AMP for floating inputs, integer inputs kept, deterministic.
     static const OpSchema schema_v1;
 
     // Route the forward computation through the backend's pow primitive.
