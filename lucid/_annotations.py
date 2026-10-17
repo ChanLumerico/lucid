@@ -253,6 +253,7 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
     "lucid._tensor._metal_views": (
         ("OpEntry", "lucid._ops._registry", "OpEntry"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
+        ("_IndexType", "lucid._types", "_IndexType"),
     ),
     "lucid._tensor._methods": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid._tensor._repr": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
@@ -355,6 +356,12 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("TracedOp", "lucid.coreml._emit", "TracedOp"),
     ),
     "lucid.coreml._emit": (("Builder", "lucid.coreml._build", "Builder"),),
+    "lucid.coreml._linear": (
+        ("Bindings", "lucid.coreml._emit", "Bindings"),
+        ("Builder", "lucid.coreml._build", "Builder"),
+        ("EmitResult", "lucid.coreml._emit", "EmitResult"),
+        ("TracedOp", "lucid.coreml._emit", "TracedOp"),
+    ),
     "lucid.coreml._model": (
         ("Module", "lucid.nn.module", "Module"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
@@ -368,10 +375,7 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
     ),
     "lucid.coreml._spec": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.fft": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
-    "lucid.func": (
-        ("Tensor", "lucid._tensor.tensor", "Tensor"),
-        ("_C_engine", "lucid._C", "engine"),
-    ),
+    "lucid.func": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.metal": (("lucid", "lucid", None),),
     "lucid.models._auto": (
         ("ModelConfig", "lucid.models._base", "ModelConfig"),
