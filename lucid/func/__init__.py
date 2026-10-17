@@ -36,7 +36,8 @@ Limitations
 * ``randomness='error'`` (default) raises if the function calls any random op.
 """
 
-from typing import Any, Callable, TYPE_CHECKING
+import warnings
+from typing import Callable, TYPE_CHECKING
 from lucid._ctx import _RandomnessGuard as _RandGuard
 from lucid.autograd._functional import jvp as _jvp_by_double_backward
 
@@ -66,6 +67,14 @@ __all__ = [
 _ISOLATION_ATTR = "_lucid_needs_vmap_isolation"
 _MIN_AUX_TUPLE_LEN = 2
 
+#: One result per differentiated argument — bare for an int ``argnums``, a
+#: tuple for a tuple — and ``None`` for one the output does not reach: what
+#: :func:`grad` and :func:`jacfwd` return.
+type _PerArgnum = Tensor | tuple[Tensor | None, ...] | None
+#: A Jacobian packed over inputs and outputs as
+#: :func:`lucid.autograd.jacobian` packs it: what :func:`jacrev` returns.
+type _Jacobian = Tensor | tuple[Tensor | tuple[Tensor, ...], ...]
+
 
 def _mark_isolation[**P, R](fn: Callable[P, R]) -> Callable[P, R]:
     """Tag *fn* so :func:`vmap` uses the per-element isolation path.
@@ -90,7 +99,9 @@ def _normalise_argnums(
     return False, tuple(argnums)
 
 
-def _prepare_grad_args(args: tuple[Any, ...], argnums: tuple[int, ...]) -> list[Any]:
+def _prepare_grad_args(
+    args: tuple[object, ...], argnums: tuple[int, ...]
+) -> list[object]:
     from lucid._tensor.tensor import Tensor as _T
 
     args_list = list(args)
@@ -101,19 +112,98 @@ def _prepare_grad_args(args: tuple[Any, ...], argnums: tuple[int, ...]) -> list[
     return args_list
 
 
-def _unpack_has_aux(
-    output: Any, *, has_aux: bool, name: str, label: str = "output"
-) -> tuple[Tensor, Any]:
+def _tensor_argument(args: list[object], i: int, name: str) -> Tensor:
+    """Argument ``i``, which ``name`` differentiates and so must be a tensor."""
+    from lucid._tensor.tensor import Tensor as _T
+
+    a = args[i]
+    if not isinstance(a, _T):
+        raise TypeError(
+            f"lucid.func.{name}: argument {i} is differentiated, so it must be "
+            f"a Tensor, got {type(a).__name__}"
+        )
+    return a
+
+
+def _output_tensors(value: object, name: str) -> Tensor | tuple[Tensor, ...]:
+    """``value`` when it is a tensor or a tuple (or list) of tensors — what a
+    transform can differentiate; refused with ``TypeError`` otherwise."""
+    from lucid._tensor.tensor import Tensor as _T
+
+    if isinstance(value, _T):
+        return value
+    if isinstance(value, (tuple, list)) and all(isinstance(v, _T) for v in value):
+        return tuple(item for item in value if isinstance(item, _T))
+    raise TypeError(
+        f"lucid.func.{name}: func must return a Tensor or a tuple of Tensors, "
+        f"got {type(value).__name__}"
+    )
+
+
+def _output_tensor(value: object, name: str) -> Tensor:
+    """``value`` when it is one tensor; refused with ``TypeError`` otherwise."""
+    out = _output_tensors(value, name)
+    if isinstance(out, tuple):
+        raise TypeError(
+            f"lucid.func.{name}: func must return a single Tensor, got a tuple "
+            f"of {len(out)}"
+        )
+    return out
+
+
+def _split_aux(
+    output: object, *, has_aux: bool, name: str, label: str = "output"
+) -> tuple[object, object]:
+    """``(output, aux)`` from what ``func`` returned — ``aux`` is ``None``
+    unless ``has_aux``, and then everything after the first item."""
     if not has_aux:
-        out_t: Tensor = output
-        return out_t, None
+        return output, None
     if not isinstance(output, tuple) or len(output) < _MIN_AUX_TUPLE_LEN:
         raise ValueError(
             f"lucid.func.{name}: has_aux=True requires func to return ({label}, aux)"
         )
     aux = output[1] if len(output) == _MIN_AUX_TUPLE_LEN else output[1:]
-    out_first: Tensor = output[0]
-    return out_first, aux
+    return output[0], aux
+
+
+def _requires_grad(out: Tensor | tuple[Tensor, ...]) -> bool:
+    """Whether any tensor of ``out`` is attached to a graph."""
+    return any(o.requires_grad for o in (out if isinstance(out, tuple) else (out,)))
+
+
+def _attachment(
+    primals: tuple[Tensor, ...], out: Tensor | tuple[Tensor, ...]
+) -> tuple[bool, bool]:
+    """``(attach, required)`` for tangents at ``primals``, under the current
+    grad mode, given ``func``'s output there evaluated in that mode.
+
+    Required when a primal requires grad; attached then, and also when
+    ``out`` reaches the caller's graph through tensors ``func`` captures.
+    """
+    import lucid
+
+    if not lucid.is_grad_enabled():
+        return False, False
+    required = any(p.requires_grad for p in primals)
+    return required or _requires_grad(out), required
+
+
+def _replay_draws() -> Callable[[], None]:
+    """A rewind of the default generator to where it stands now.
+
+    Calling the rewind before ``func`` is evaluated again makes that
+    evaluation draw exactly what the previous one drew — the same dropout
+    mask — and leaves the stream where one evaluation leaves it, so a
+    transform that has to run ``func`` twice still looks like one call.
+    """
+    from lucid._factories.random import get_rng_state, set_rng_state
+
+    state = get_rng_state()
+
+    def rewind() -> None:
+        set_rng_state(state)
+
+    return rewind
 
 
 def _normalise_in_dims(
@@ -171,7 +261,7 @@ def _combine_outputs(
 
 
 def _validate_vmap_batch_size(
-    args: tuple[Any, ...], in_dims: list[int | None]
+    args: tuple[object, ...], in_dims: list[int | None]
 ) -> int | None:
     from lucid._tensor.tensor import Tensor as _T
 
@@ -193,7 +283,7 @@ def _validate_vmap_batch_size(
 
 def _vectorized_vmap_call(
     func: Callable[..., Tensor | tuple[Tensor, ...]],
-    args: tuple[Any, ...],
+    args: tuple[object, ...],
     kwargs: dict[str, object],
     in_dims: list[int | None],
     out_dims: int | tuple[int, ...],
@@ -204,19 +294,19 @@ def _vectorized_vmap_call(
         a if d is None or not isinstance(a, _T) else _move_to_front(a, d)
         for a, d in zip(args, in_dims, strict=True)
     ]
-    output: Any = func(*moved, **kwargs)
+    output = func(*moved, **kwargs)
     if isinstance(output, tuple):
         od_list = (
             [out_dims] * len(output) if isinstance(out_dims, int) else list(out_dims)
         )
+        # A non-tensor item passes through, as it always has.
         return tuple(
             _move_from_front(o, od) if isinstance(o, _T) else o
             for o, od in zip(output, od_list, strict=True)
         )
     if isinstance(output, _T) and isinstance(out_dims, int) and out_dims != 0:
         return _move_from_front(output, out_dims)
-    out_tensor: Tensor = output
-    return out_tensor
+    return output
 
 
 # ── vmap ─────────────────────────────────────────────────────────────────────
@@ -415,37 +505,38 @@ def _isolated_vmap(
 
 
 def _eval_grad_and_value(
-    func: Callable[..., Any],
-    args: tuple[Any, ...],
+    func: Callable[..., object],
+    args: tuple[object, ...],
     kwargs: dict[str, object],
     argnums: tuple[int, ...],
     *,
     has_aux: bool,
     name: str,
-) -> tuple[Any, Tensor, Any]:
+) -> tuple[_PerArgnum, Tensor, object]:
     from lucid.autograd._backward import grad as _ag
     from lucid.autograd._grad_mode import enable_grad
 
     args_list = _prepare_grad_args(args, argnums)
     with enable_grad():
         output = func(*args_list, **kwargs)
-    loss, aux = _unpack_has_aux(output, has_aux=has_aux, name=name, label="loss")
+    first, aux = _split_aux(output, has_aux=has_aux, name=name, label="loss")
+    loss = _output_tensor(first, name)
     grads = _ag(
         [loss],
-        [args_list[i] for i in argnums],
+        [_tensor_argument(args_list, i, name) for i in argnums],
         retain_graph=False,
         create_graph=False,
         allow_unused=True,
     )
-    g: Any = grads[0] if len(argnums) == 1 else tuple(grads)
+    g = grads[0] if len(argnums) == 1 else tuple(grads)
     return g, loss.detach(), aux
 
 
-def grad(
-    func: Callable[..., Tensor],
+def grad[**P](
+    func: Callable[P, Tensor | tuple[object, ...]],
     argnums: int | tuple[int, ...] = 0,
     has_aux: bool = False,
-) -> Callable[..., Any]:
+) -> Callable[P, _PerArgnum | tuple[_PerArgnum, object]]:
     r"""Build a function returning the gradient of ``func``.
 
     The cornerstone of functional-style autograd: rather than calling
@@ -496,7 +587,9 @@ def grad(
     """
     _, _argnums = _normalise_argnums(argnums)
 
-    def grad_fn(*args: Tensor, **kwargs: object) -> Any:
+    def grad_fn(
+        *args: P.args, **kwargs: P.kwargs
+    ) -> _PerArgnum | tuple[_PerArgnum, object]:
         """Closure that computes the gradient via reverse-mode autograd."""
         g, _, aux = _eval_grad_and_value(
             func, args, kwargs, _argnums, has_aux=has_aux, name="grad"
@@ -506,11 +599,11 @@ def grad(
     return _mark_isolation(grad_fn)
 
 
-def grad_and_value(
-    func: Callable[..., Tensor],
+def grad_and_value[**P](
+    func: Callable[P, Tensor | tuple[object, ...]],
     argnums: int | tuple[int, ...] = 0,
     has_aux: bool = False,
-) -> Callable[..., Any]:
+) -> Callable[P, tuple[_PerArgnum, Tensor | tuple[Tensor, object]]]:
     r"""Return a function computing both the gradient and the primal value.
 
     Equivalent to combining :func:`grad` with an evaluation of ``func``,
@@ -558,7 +651,9 @@ def grad_and_value(
     """
     _, _argnums = _normalise_argnums(argnums)
 
-    def gv_fn(*args: Tensor, **kwargs: object) -> Any:
+    def gv_fn(
+        *args: P.args, **kwargs: P.kwargs
+    ) -> tuple[_PerArgnum, Tensor | tuple[Tensor, object]]:
         """Closure that computes the gradient and primal value."""
         g, val, aux = _eval_grad_and_value(
             func, args, kwargs, _argnums, has_aux=has_aux, name="grad_and_value"
@@ -572,10 +667,13 @@ def grad_and_value(
 
 
 def vjp(
-    func: Callable[..., Tensor | tuple[Tensor, ...]],
+    func: Callable[..., Tensor | tuple[object, ...]],
     *primals: Tensor,
     has_aux: bool = False,
-) -> tuple[Any, Callable[..., tuple[Tensor | None, ...]]]:
+) -> tuple[
+    Tensor | tuple[Tensor, ...] | tuple[Tensor | tuple[Tensor, ...], object],
+    Callable[..., tuple[Tensor | None, ...]],
+]:
     r"""Compute the vector-Jacobian product of ``func`` at ``primals``.
 
     Evaluates ``func`` at the supplied primal inputs and returns both the
@@ -627,14 +725,14 @@ def vjp(
     from lucid.autograd._backward import grad as _ag
     from lucid.autograd._grad_mode import enable_grad
 
-    primals_rg = _prepare_grad_args(primals, tuple(range(len(primals))))
+    prepared = _prepare_grad_args(primals, tuple(range(len(primals))))
+    primals_rg = [_tensor_argument(prepared, i, "vjp") for i in range(len(prepared))]
     with enable_grad():
         raw_out = func(*primals_rg)
 
-    outputs, aux = _unpack_has_aux(raw_out, has_aux=has_aux, name="vjp")
-    out_list: list[Tensor] = (
-        list(outputs) if isinstance(outputs, (list, tuple)) else [outputs]
-    )
+    first, aux = _split_aux(raw_out, has_aux=has_aux, name="vjp")
+    outputs = _output_tensors(first, "vjp")
+    out_list = list(outputs) if isinstance(outputs, tuple) else [outputs]
 
     def _vjp(*cotangents: Tensor) -> tuple[Tensor | None, ...]:
         cots: list[Tensor | None] = (
@@ -658,6 +756,93 @@ def vjp(
 # ── jvp ──────────────────────────────────────────────────────────────────────
 
 
+def _on_tensors(
+    func: Callable[..., Tensor | tuple[Tensor, ...]], primals: tuple[Tensor, ...]
+) -> tuple[Callable[..., Tensor | tuple[Tensor, ...]], tuple[int, ...]]:
+    """``func`` as a function of its tensor primals alone, and their
+    positions — a primal that is not a tensor is held fixed."""
+    from lucid._tensor.tensor import Tensor as _T
+
+    idx = tuple(i for i, p in enumerate(primals) if isinstance(p, _T))
+    if len(idx) == len(primals):
+        return func, idx
+    return (lambda *sel: func(*_splice(primals, idx, sel))), idx
+
+
+def _tangent_pass(
+    fn: Callable[..., Tensor | tuple[Tensor, ...]],
+    primals: tuple[Tensor, ...],
+    tangents: tuple[Tensor, ...],
+    *,
+    attach: bool,
+    required: bool,
+    strict: bool,
+) -> tuple[Tensor | tuple[Tensor, ...], Tensor | tuple[Tensor, ...]]:
+    """``fn``'s outputs and tangents at ``primals``, the tangents attached
+    to the caller's graph when ``attach``.
+
+    The attachment is ``required`` when a primal or a tangent requires grad:
+    the caller differentiates through the tangent, and an op on the path
+    with no graph-mode backward is then an error.  Otherwise only tensors
+    ``fn`` captures would attach it, and through such an op the tangent is
+    taken first-order and returned detached, with a warning — ``fn`` runs
+    once more for it, on the same random draws.
+    """
+    rewind = _replay_draws() if attach and not required else None
+    try:
+        return _jvp_by_double_backward(
+            fn, primals, tangents, create_graph=attach, strict=strict
+        )
+    except NotImplementedError:
+        if rewind is None:
+            raise
+    warnings.warn(
+        "lucid.func: an op on the path has no graph-mode backward, so the "
+        "tangent cannot reach the tensors func captures and is returned "
+        "detached",
+        stacklevel=4,
+    )
+    rewind()
+    return _jvp_by_double_backward(
+        fn, primals, tangents, create_graph=False, strict=strict
+    )
+
+
+def _jvp_attached(
+    fn: Callable[..., Tensor | tuple[Tensor, ...]],
+    primals: tuple[Tensor, ...],
+    tangents: tuple[Tensor, ...],
+    strict: bool,
+) -> tuple[Tensor | tuple[Tensor, ...], Tensor | tuple[Tensor, ...]]:
+    """:func:`jvp` at tensor primals, its results attached to the caller's
+    graph exactly where the reference attaches them."""
+    import lucid
+
+    grad_on = lucid.is_grad_enabled()
+    if not grad_on or any(p.requires_grad for p in primals):
+        return _tangent_pass(
+            fn, primals, tangents, attach=grad_on, required=grad_on, strict=strict
+        )
+    # Nothing passed in requires grad, yet ``fn`` can still reach the
+    # caller's graph through the tensors it captures — a model's parameters.
+    # The backward passes run ``fn`` at copies of the primals that require
+    # grad, so their output is attached whatever ``fn`` captures; only an
+    # evaluation at the primals themselves tells.
+    replay = _replay_draws()
+    primals_out = _output_tensors(fn(*primals), "jvp")
+    replay()
+    required = any(t.requires_grad for t in tangents)
+    _, tangents_out = _tangent_pass(
+        fn,
+        primals,
+        tangents,
+        attach=required or _requires_grad(primals_out),
+        required=required,
+        strict=strict,
+    )
+    return primals_out, tangents_out
+
+
 def jvp(
     func: Callable[..., Tensor | tuple[Tensor, ...]],
     primals: tuple[Tensor, ...],
@@ -679,11 +864,12 @@ def jvp(
     primals : tuple of Tensor
         Points at which to evaluate ``func`` and its Jacobian.
     tangents : tuple of Tensor
-        Tangent vectors, each matching the shape of the corresponding
-        primal.
+        Tangent vectors, one per primal, each matching the shape of the
+        corresponding primal.
     strict : bool, optional
-        If ``True``, raise when an output is independent of any input.
-        Default ``False``.
+        If ``True``, refuse what :func:`lucid.autograd.jvp` refuses under
+        ``strict`` — an output independent of the inputs among them —
+        instead of giving it a zero tangent. Default ``False``.
 
     Returns
     -------
@@ -691,11 +877,40 @@ def jvp(
         ``(primals_out, tangents_out)`` with the same nested structure as
         ``func(*primals)``.
 
+    Raises
+    ------
+    RuntimeError
+        ``primals`` and ``tangents`` differ in length, or ``strict``
+        refuses a result.
+    NotImplementedError
+        A primal or a tangent requires grad, so the tangent has to stay
+        differentiable, and an op on the path has no graph-mode backward.
+
     Notes
     -----
-    Delegates to :func:`lucid.autograd.functional.jvp`, which computes
-    :math:`J v` exactly in two reverse-mode passes via the double-VJP
-    trick without finite differences.
+    :math:`J v` is exact, not a finite difference: it is computed by
+    :func:`lucid.autograd.jvp` in two reverse passes (the double-VJP
+    trick), or — through an op whose backward has no graph mode, such as
+    ``LSTM`` or a padded ``avg_pool`` — in one reverse pass per output
+    element.
+
+    The results join the caller's autograd graph as the reference's do.
+    Under ``no_grad`` neither does.  Otherwise the primal output is attached
+    when it depends on a tensor that requires grad — a primal, or a
+    parameter ``func`` captures — and the tangent is attached when a
+    primal, a tangent or such a parameter requires grad.  Through an op
+    with no graph-mode backward the tangent cannot be attached: when only
+    captured parameters would attach it, it comes back detached with a
+    warning.
+
+    ``func`` runs once when grad mode is off or a primal requires grad.
+    With grad mode on and no primal requiring grad it runs **twice**: once
+    at the primals, which is the only way to learn whether the output
+    reaches the caller's graph through tensors ``func`` captures, and once
+    for the tangent.  The second run replays the first one's random draws,
+    so a dropout mask is the same in both, but any other side effect
+    happens twice — a ``BatchNorm`` in training mode updates its running
+    statistics twice, and an in-place buffer update is applied twice.
 
     Examples
     --------
@@ -704,25 +919,23 @@ def jvp(
     >>> f = lambda x: x ** 2
     >>> x = lucid.tensor([1.0, 2.0, 3.0])
     >>> t = lucid.ones_like(x)
-    >>> y, dy = jvp(f, (x,), (t,))  # dy = 2 * x
+    >>> y, dy = jvp(f, (x,), (t,))
+    >>> dy  # 2 * x
+    tensor([2., 4., 6.])
     """
-    import lucid
-    from lucid._tensor.tensor import Tensor as _T
-
     primals_t = tuple(primals)
     tangents_t = tuple(tangents)
-    create_graph = lucid.is_grad_enabled()
-    if all(isinstance(p, _T) for p in primals_t):
-        return _jvp_by_double_backward(
-            func, primals_t, tangents_t, create_graph=create_graph, strict=strict
+    if len(primals_t) != len(tangents_t):
+        raise RuntimeError(
+            f"jvp: expected one tangent per primal, got {len(primals_t)} primals "
+            f"and {len(tangents_t)} tangents"
         )
-    tensor_idx = tuple(i for i, p in enumerate(primals_t) if isinstance(p, _T))
-    return _jvp_by_double_backward(
-        lambda *sel: func(*_splice(primals_t, tensor_idx, sel)),
-        tuple(primals_t[i] for i in tensor_idx),
-        tuple(tangents_t[i] for i in tensor_idx),
-        create_graph=create_graph,
-        strict=strict,
+    fn, idx = _on_tensors(func, primals_t)
+    return _jvp_attached(
+        fn,
+        tuple(primals_t[i] for i in idx),
+        tuple(tangents_t[i] for i in idx),
+        strict,
     )
 
 
@@ -763,8 +976,11 @@ def linearize(
 
         f(x + t) \approx f(x) + J_f(x) \, t.
 
-    The returned ``linear_fn`` is flagged for vmap isolation so that
-    composing ``vmap(linear_fn)`` slices tangents one at a time.
+    ``func`` runs once here and once per call of ``linear_fn``.  Whether
+    the results join the caller's autograd graph follows :func:`jvp`, and
+    is decided here, from the primal output, once.  The returned
+    ``linear_fn`` is flagged for vmap isolation so that composing
+    ``vmap(linear_fn)`` slices tangents one at a time.
 
     Examples
     --------
@@ -776,13 +992,34 @@ def linearize(
     >>> lin(lucid.ones_like(x))  # 2 * x
     tensor([2., 4., 6.])
     """
-    primals_out, _ = vjp(func, *primals)
+    import lucid
+
+    fn, idx = _on_tensors(func, primals)
+    primals_sel = tuple(primals[i] for i in idx)
+    primals_out = _output_tensors(func(*primals), "linearize")
+    attached, primal_attached = _attachment(primals_sel, primals_out)
 
     def linear_fn(
         *tangents: Tensor,
     ) -> Tensor | tuple[Tensor, ...]:
         """Closure that applies the linear approximation."""
-        _, tangents_out = jvp(func, primals, tangents)
+        if len(tangents) != len(primals):
+            raise RuntimeError(
+                f"linearize: expected one tangent per primal, got {len(primals)} "
+                f"primals and {len(tangents)} tangents"
+            )
+        on = lucid.is_grad_enabled()
+        required = on and (
+            primal_attached or any(tangents[i].requires_grad for i in idx)
+        )
+        _, tangents_out = _tangent_pass(
+            fn,
+            primals_sel,
+            tuple(tangents[i] for i in idx),
+            attach=required or (on and attached),
+            required=required,
+            strict=False,
+        )
         return tangents_out
 
     return primals_out, _mark_isolation(linear_fn)
@@ -809,52 +1046,47 @@ def _one_hot_tangent(x: Tensor, col: int) -> Tensor:
 
 
 def _jacfwd_block(
-    wrapped_fn: Callable[..., Tensor],
-    primals_sel: tuple[Any, ...],
-    argnums: tuple[int, ...],
-    target_idx: int,
+    wrapped_fn: Callable[..., Tensor | tuple[Tensor, ...]],
+    primals: tuple[Tensor, ...],
+    target: int,
     out_shape: list[int],
+    *,
+    attach: bool,
+    required: bool,
 ) -> Tensor | None:
-    from lucid._C import engine as _C_engine
-    from lucid._dispatch import _unwrap, _wrap
-    from lucid._tensor.tensor import Tensor as _T
+    """The Jacobian of ``wrapped_fn``'s output in ``primals[target]``, one
+    column — one :func:`jvp` along a unit tangent — at a time."""
+    import lucid
 
-    x = primals_sel[target_idx]
-    if not isinstance(x, _T):
-        return None
-    argn = argnums[target_idx]
-    dev = x._impl.device
-    dtype = x._impl.dtype
+    x = primals[target]
     cols: list[Tensor] = []
     for col in range(x.numel()):
-        t = _one_hot_tangent(x, col)
         tans = tuple(
-            (
-                t
-                if argn2 == argn or not isinstance(x2, _T)
-                else _T.__new_from_impl__(
-                    _C_engine.zeros(list(x2.shape) if x2.shape else [], dtype, dev)
-                )
-            )
-            for argn2, x2 in zip(argnums, primals_sel, strict=True)
+            _one_hot_tangent(x, col) if k == target else lucid.zeros_like(p)
+            for k, p in enumerate(primals)
         )
-        _, jvp_col = jvp(wrapped_fn, primals_sel, tans)
-        jc: Tensor = jvp_col if not isinstance(jvp_col, tuple) else jvp_col[0]
-        cols.append(_wrap(_C_engine.reshape(_unwrap(jc), [jc.numel()])))
+        _, jvp_col = _tangent_pass(
+            wrapped_fn,
+            primals,
+            tans,
+            attach=attach,
+            required=required,
+            strict=False,
+        )
+        jc = jvp_col[0] if isinstance(jvp_col, tuple) else jvp_col
+        cols.append(jc.reshape(-1))
     if not cols:
         return None
-    stacked = _C_engine.stack([_unwrap(c) for c in cols], -1)
-    full_shape = out_shape + list(x.shape)
-    return _wrap(_C_engine.reshape(stacked, full_shape) if full_shape else stacked)
+    return lucid.stack(cols, dim=-1).reshape(out_shape + list(x.shape))
 
 
-def jacrev(
-    func: Callable[..., Tensor | tuple[Tensor, ...]],
+def jacrev[**P](
+    func: Callable[P, Tensor | tuple[object, ...]],
     argnums: int | tuple[int, ...] = 0,
     has_aux: bool = False,
     *,
     chunk_size: int | None = None,
-) -> Callable[..., Any]:
+) -> Callable[P, _Jacobian | tuple[_Jacobian, object]]:
     r"""Build a function returning the reverse-mode Jacobian of ``func``.
 
     Assembles the full Jacobian matrix one row at a time, each row
@@ -904,36 +1136,38 @@ def jacrev(
     if chunk_size is not None and chunk_size <= 0:
         raise ValueError("jacrev: chunk_size must be positive")
     _scalar_argnum, _argnums = _normalise_argnums(argnums)
+    call: Callable[..., object] = func
 
-    def jac_fn(*args: Tensor, **kwargs: object) -> Any:
+    def jac_fn(
+        *args: P.args, **kwargs: P.kwargs
+    ) -> _Jacobian | tuple[_Jacobian, object]:
         """Closure that computes the Jacobian."""
-        selected: Any = (
-            args[_argnums[0]] if _scalar_argnum else tuple(args[i] for i in _argnums)
-        )
-        aux_holder: list[Any] = []
+        arg_list = list(args)
+        selected = tuple(_tensor_argument(arg_list, i, "jacrev") for i in _argnums)
+        aux_holder: list[object] = []
 
-        def _wrapped(*sel: Tensor) -> Tensor:
-            out, aux = _unpack_has_aux(
-                func(*_splice(args, _argnums, sel), **kwargs),
+        def _wrapped(*sel: Tensor) -> Tensor | tuple[Tensor, ...]:
+            out, aux = _split_aux(
+                call(*_splice(args, _argnums, sel), **kwargs),
                 has_aux=has_aux,
                 name="jacrev",
             )
             aux_holder.append(aux)
-            return out
+            return _output_tensors(out, "jacrev")
 
-        jac = _jacobian(_wrapped, selected)
+        jac = _jacobian(_wrapped, selected[0] if _scalar_argnum else selected)
         return (jac, aux_holder[0]) if has_aux else jac
 
     return _mark_isolation(jac_fn)
 
 
-def jacfwd(
-    func: Callable[..., Tensor | tuple[Tensor, ...]],
+def jacfwd[**P](
+    func: Callable[P, Tensor | tuple[object, ...]],
     argnums: int | tuple[int, ...] = 0,
     has_aux: bool = False,
     *,
     randomness: str = "error",
-) -> Callable[..., Any]:
+) -> Callable[P, _PerArgnum | tuple[_PerArgnum, object]]:
     r"""Build a function returning the forward-mode Jacobian of ``func``.
 
     Materialises the Jacobian one column at a time by repeatedly calling
@@ -970,8 +1204,10 @@ def jacfwd(
         J \in \mathbb{R}^{m \times n}.
 
     Cost scales with the input dimension :math:`n` (one forward / JVP per
-    column). Prefer this transform over :func:`jacrev` when
-    :math:`n \ll m`.
+    column, and one forward at the arguments themselves). Prefer this
+    transform over :func:`jacrev` when :math:`n \ll m`.  Whether the
+    Jacobian joins the caller's autograd graph follows :func:`jvp`, and is
+    decided once, from that first forward.
 
     Examples
     --------
@@ -982,33 +1218,45 @@ def jacfwd(
     tensor([[1., 1., 1.], [2., 4., 6.]])
     """
     _scalar_argnum, _argnums = _normalise_argnums(argnums)
+    call: Callable[..., object] = func
 
-    def jac_fn(*args: Tensor, **kwargs: object) -> Any:
+    def jac_fn(
+        *args: P.args, **kwargs: P.kwargs
+    ) -> _PerArgnum | tuple[_PerArgnum, object]:
         """Closure that computes the Jacobian."""
-        import lucid
-        from lucid._tensor.tensor import Tensor as _T
-
-        primals_sel = tuple(args[i] for i in _argnums)
+        arg_list = list(args)
+        primals = tuple(_tensor_argument(arg_list, i, "jacfwd") for i in _argnums)
         with _RandGuard(randomness):
-            with lucid.no_grad():
-                ref_out = func(*args, **kwargs)
-            sample_out, aux = _unpack_has_aux(ref_out, has_aux=has_aux, name="jacfwd")
-            out_shape = list(sample_out.shape) if isinstance(sample_out, _T) else []
+            # At the arguments, in the caller's grad mode: the output's shape,
+            # the aux, and the attachment — decided once, not per column.
+            first, aux = _split_aux(
+                call(*args, **kwargs), has_aux=has_aux, name="jacfwd"
+            )
+            sample = _output_tensors(first, "jacfwd")
+            out_shape = [] if isinstance(sample, tuple) else list(sample.shape)
+            attach, required = _attachment(primals, sample)
 
-            def _wrapped(*sel: Tensor) -> Tensor:
-                out, _ = _unpack_has_aux(
-                    func(*_splice(args, _argnums, sel), **kwargs),
+            def _wrapped(*sel: Tensor) -> Tensor | tuple[Tensor, ...]:
+                out, _ = _split_aux(
+                    call(*_splice(args, _argnums, sel), **kwargs),
                     has_aux=has_aux,
                     name="jacfwd",
                 )
-                return out
+                return _output_tensors(out, "jacfwd")
 
-            results = [
-                _jacfwd_block(_wrapped, primals_sel, _argnums, k, out_shape)
+            results = tuple(
+                _jacfwd_block(
+                    _wrapped,
+                    primals,
+                    k,
+                    out_shape,
+                    attach=attach,
+                    required=required,
+                )
                 for k in range(len(_argnums))
-            ]
+            )
 
-        r: Any = results[0] if _scalar_argnum else tuple(results)
+        r = results[0] if _scalar_argnum else results
         return (r, aux) if has_aux else r
 
     return _mark_isolation(jac_fn)
@@ -1017,10 +1265,10 @@ def jacfwd(
 # ── hessian ───────────────────────────────────────────────────────────────────
 
 
-def hessian(
-    func: Callable[..., Tensor],
+def hessian[**P](
+    func: Callable[P, Tensor],
     argnums: int | tuple[int, ...] = 0,
-) -> Callable[..., Any]:
+) -> Callable[P, Tensor | tuple[tuple[Tensor, ...], ...]]:
     r"""Build a function returning the Hessian of a scalar-valued ``func``.
 
     Computes the matrix of second partial derivatives by composing
@@ -1065,15 +1313,17 @@ def hessian(
     from lucid.autograd._functional import hessian as _hessian
 
     _scalar_argnum, _argnums = _normalise_argnums(argnums)
+    call: Callable[..., Tensor] = func
 
-    def hessian_fn(*args: Tensor, **kwargs: object) -> Any:
+    def hessian_fn(
+        *args: P.args, **kwargs: P.kwargs
+    ) -> Tensor | tuple[tuple[Tensor, ...], ...]:
         """Closure that computes the Hessian (second-order derivative tensor)."""
-        selected: Any = (
-            args[_argnums[0]] if _scalar_argnum else tuple(args[i] for i in _argnums)
-        )
+        arg_list = list(args)
+        selected = tuple(_tensor_argument(arg_list, i, "hessian") for i in _argnums)
         return _hessian(
-            lambda *sel: func(*_splice(args, _argnums, sel), **kwargs),
-            selected,
+            lambda *sel: call(*_splice(args, _argnums, sel), **kwargs),
+            selected[0] if _scalar_argnum else selected,
         )
 
     return _mark_isolation(hessian_fn)
