@@ -6,7 +6,8 @@ materializing the ``(B, H, Lq, Lk)`` score matrix.  Checks:
 * **output parity** — fused metal additive/bool/causal output matches the CPU
   reference (which rolls the full softmax by hand);
 * **memory** — the fused forward allocates its output and no ``(Lq, Lk)``
-  buffer, for every head dim MLX fuses;
+  buffer, for every head dim up to 128: one MLX does not fuse is padded to
+  one it does, and the padded call matches the CPU reference;
 * **weights variant** — ``scaled_dot_product_attention_with_weights`` still
   returns correct dense weights on metal for none/causal/additive/bool.
 """
@@ -89,30 +90,52 @@ def test_query_broadcast_padding_mask_applied() -> None:
     np.testing.assert_allclose(out, ref, atol=1e-4, rtol=1e-3)
 
 
-_UNFUSED_HEAD_DIM = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "LCD-496: MLX 0.32 fuses attention only for head dims 64/80/96/128 "
-        "(Lq > 8); for any other, fast::scaled_dot_product_attention falls "
-        "back to q*scale, q@k^T, softmax and p@v and materialises the "
-        "(B, H, Lq, Lk) scores"
-    ),
-)
+# The head dims MLX fuses for more than 8 queries.  The engine zero-pads a
+# narrower q, k and v to the next one (LCD-498).
+_FUSED_WIDTHS = (64, 72, 80, 96, 128)
+
+
+def _fused_width(*dims: int) -> int:
+    return next(w for w in _FUSED_WIDTHS if w >= max(dims))
+
+
+def _forward_peak_above_inputs(q, k, v, is_causal: bool) -> tuple[int, int]:
+    """Peak bytes the forward allocates above its live inputs, and its output's size.
+
+    The GPU is synchronised before each reading.  MLX hands a command
+    buffer's temporaries back from its completion handler, after ``.item()``
+    has already returned, so a peak reset right after one is charged with
+    the previous call's scratch.
+    """
+    _C_engine.synchronize_gpu()
+    before = _C_engine.metal_active_memory()
+    _C_engine.metal_reset_peak_memory()
+    out = F.scaled_dot_product_attention(q, k, v, is_causal=is_causal)
+    _C_engine.synchronize_gpu()
+    return _C_engine.metal_peak_memory() - before, out.numel() * 4
+
+
+def _assert_no_score_matrix(dims: tuple[int, int], is_causal: bool) -> None:
+    head_dim, value_dim = dims
+    b, h, lq = 1, 4, 1024
+    q, k = (lucid.randn(b, h, lq, head_dim, device="metal") for _ in range(2))
+    v = lucid.randn(b, h, lq, value_dim, device="metal")
+    extra, out_bytes = _forward_peak_above_inputs(q, k, v, is_causal)
+
+    width = _fused_width(head_dim, value_dim)
+    # A padded call copies q, k, v and the output at the fused width.
+    padded = 0 if width == head_dim == value_dim else 4 * b * h * lq * width * 4
+    # Any (Lq, Lk) buffer, even a one-byte mask, is at least lq * lq bytes.
+    assert extra < out_bytes + padded + lq * lq // 2, (
+        f"dims={dims} is_causal={is_causal}: the fused forward peaked {extra} "
+        f"bytes above its inputs for a {out_bytes}-byte output and {padded} "
+        f"bytes of padded copies; one (B, H, Lq, Lk) float32 score matrix is "
+        f"{b * h * lq * lq * 4} bytes"
+    )
 
 
 @pytest.mark.parametrize("is_causal", [True, False])
-@pytest.mark.parametrize(
-    "head_dim",
-    [
-        64,
-        80,
-        96,
-        128,
-        pytest.param(16, marks=_UNFUSED_HEAD_DIM),
-        pytest.param(32, marks=_UNFUSED_HEAD_DIM),
-        pytest.param(48, marks=_UNFUSED_HEAD_DIM),
-    ],
-)
+@pytest.mark.parametrize("head_dim", [16, 32, 48, 64, 72, 80, 88, 96, 128])
 def test_fused_forward_allocates_no_score_matrix(
     head_dim: int, is_causal: bool
 ) -> None:
@@ -124,31 +147,80 @@ def test_fused_forward_allocates_no_score_matrix(
     while ``scores * scale`` also materialised the broadcast scale.  When
     that copy went (LCD-299), the same 18.9 MB failed.
 
-    The GPU is synchronised before each reading.  MLX hands a command
-    buffer's temporaries back from its completion handler, after ``.item()``
-    has already returned, so a peak reset right after one is charged with
-    the previous call's scratch.
+    At a head dim MLX does not fuse it ran unfused and held the scores
+    (LCD-496); the engine now pads it to the next fused width, which costs
+    copies linear in the sequence length.
     """
     if not metal_available():
         pytest.skip("metal backend unavailable")
+    _assert_no_score_matrix((head_dim, head_dim), is_causal)
 
-    b, h, lq = 1, 4, 1024
-    q, k, v = (lucid.randn(b, h, lq, head_dim, device="metal") for _ in range(3))
-    _C_engine.synchronize_gpu()
-    before = _C_engine.metal_active_memory()
-    _C_engine.metal_reset_peak_memory()
 
-    out = F.scaled_dot_product_attention(q, k, v, is_causal=is_causal)
-    _C_engine.synchronize_gpu()
-    extra = _C_engine.metal_peak_memory() - before
+@pytest.mark.parametrize("dims", [(64, 32), (32, 64)])
+def test_unequal_value_width_allocates_no_score_matrix(dims: tuple[int, int]) -> None:
+    """MLX fuses only when q and v share a width, so both are padded to one."""
+    if not metal_available():
+        pytest.skip("metal backend unavailable")
+    _assert_no_score_matrix(dims, is_causal=False)
 
-    out_bytes = out.numel() * 4
-    # Any (Lq, Lk) buffer, even a one-byte mask, is at least lq * lq bytes.
-    assert extra < out_bytes + lq * lq // 2, (
-        f"head_dim={head_dim} is_causal={is_causal}: the fused forward peaked "
-        f"{extra} bytes above its inputs for a {out_bytes}-byte output; one "
-        f"(B, H, Lq, Lk) float32 score matrix is {b * h * lq * lq * 4} bytes"
-    )
+
+@pytest.mark.parametrize("mode", ["none", "causal", "additive", "bool"])
+@pytest.mark.parametrize("lk", [1024, 2048])
+@pytest.mark.parametrize("dims", [(16, 16), (48, 48), (100, 100), (64, 32), (32, 64)])
+def test_padded_head_dim_matches_cpu(dims: tuple[int, int], lk: int, mode: str) -> None:
+    """A head dim padded to a fused width gives the CPU kernel's answer.
+
+    The lengths are long enough for the engine to pad.  With ``lk != lq``
+    the functional folds a causal triangle into an additive mask.
+    """
+    if not metal_available():
+        pytest.skip("metal backend unavailable")
+    head_dim, value_dim = dims
+    lucid.manual_seed(0)
+    b, h, lq = 1, 2, 1024
+    q = lucid.randn(b, h, lq, head_dim)
+    k = lucid.randn(b, h, lk, head_dim)
+    v = lucid.randn(b, h, lk, value_dim)
+    mask = None
+    if mode == "additive":
+        mask = lucid.randn(1, 1, lq, lk)
+    elif mode == "bool":
+        mask = lucid.randn(1, 1, lq, lk) > -1.0
+
+    def out(device: str) -> np.ndarray:
+        m = mask.to(device) if mask is not None else None
+        return F.scaled_dot_product_attention(
+            q.to(device),
+            k.to(device),
+            v.to(device),
+            attn_mask=m,
+            is_causal=mode == "causal",
+        ).numpy()
+
+    np.testing.assert_allclose(out("metal"), out("cpu"), atol=1e-5, rtol=1e-4)
+
+
+@pytest.mark.parametrize("is_causal", [True, False])
+@pytest.mark.parametrize(
+    ("dtype", "tol"), [(lucid.float16, 1e-3), (lucid.bfloat16, 8e-3)]
+)
+def test_padded_head_dim_half_matches_cpu(dtype, tol: float, is_causal: bool) -> None:
+    """A padded half-precision call agrees with the CPU kernel, which widens.
+
+    ``tol`` is about one unit in the last place of the dtype at 1.0.
+    """
+    if not metal_available():
+        pytest.skip("metal backend unavailable")
+    lucid.manual_seed(0)
+    q, k, v = (lucid.randn(1, 2, 1024, 32).to(dtype) for _ in range(3))
+
+    def out(device: str) -> np.ndarray:
+        r = F.scaled_dot_product_attention(
+            q.to(device), k.to(device), v.to(device), is_causal=is_causal
+        )
+        return r.to(lucid.float32).numpy()
+
+    np.testing.assert_allclose(out("metal"), out("cpu"), atol=tol, rtol=tol)
 
 
 @pytest.mark.parametrize("config", ["none", "causal", "additive", "bool"])

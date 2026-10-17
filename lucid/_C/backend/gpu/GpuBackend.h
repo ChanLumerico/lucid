@@ -104,6 +104,7 @@
 #include "MetalAllocator.h"
 #include "MetalKernelRunner.h"
 #include "MlxBridge.h"
+#include "SdpaHeadDim.h"
 #include "SortOrder.h"
 
 namespace lucid {
@@ -3919,8 +3920,7 @@ public:
                 mlx_mask = *std::get<GpuStorage>(*attn_mask).arr;
             }
 
-            ::mlx::core::array out = ::mlx::core::fast::scaled_dot_product_attention(
-                *gQ.arr, *gK.arr, *gV.arr, scale_f, mask_mode, mlx_mask);
+            auto out = gpu::sdpa_fused(*gQ.arr, *gK.arr, *gV.arr, scale_f, mask_mode, mlx_mask);
 
             auto dummy_w = ::mlx::core::zeros({1}, gpu::to_mlx_dtype(dt));
             return {Storage{gpu::wrap_mlx_array(std::move(dummy_w), dt)},

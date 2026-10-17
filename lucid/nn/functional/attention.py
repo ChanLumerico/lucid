@@ -43,7 +43,18 @@ def _fused_attention(
     scale: float,
     is_causal: bool,
 ) -> Tensor:
-    """The engine's fused kernel; it never materialises the probabilities."""
+    """The engine's attention kernel.
+
+    On metal the forward's extra memory is linear in the sequence lengths
+    at every head dim up to 128.  With more than 8 queries, MLX fuses head
+    dims 64, 72, 80, 96 and 128 and forms no ``(Lq, Lk)`` buffer.  The
+    engine zero-pads a narrower q, k and v to the next of those once the
+    scores would be at least twice the padded copies; below that the
+    scores are themselves linear in the lengths.  The full scores are
+    formed for a wider head dim, by the metal backward, which MLX
+    differentiates unfused, and by the CPU kernel, which keeps the weights
+    for its backward.
+    """
     return _wrap(
         _C_engine.nn.scaled_dot_product_attention(
             _unwrap(query),
