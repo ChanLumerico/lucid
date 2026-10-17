@@ -95,6 +95,23 @@ _KINDS = [
 ]
 _MODES = ["backward", "no-backward", "retain-graph-twice"]
 
+# A hooked call's runners live on the engine state its input and output hook
+# nodes share, and the input node is owned through a tensor an op saved.
+# Nodes do not expose what they saved, so the collector cannot prove the
+# state is reachable only through the garbage, and a cycle closed before
+# backward ever runs is not collected.  Reporting it anyway was what cleared
+# live graphs (LCD-459).  Two cases — several kept tensors from one graph, a
+# ctx saving its own output — are owned jointly and leak in the reference too.
+_LCD459_LEAK = pytest.mark.xfail(
+    strict=True,
+    reason="LCD-459 follow-up: node-saved tensors invisible to GC "
+    "(Node::for_each_owned_tensor)",
+)
+_MODES_BEFORE_BACKWARD_LEAK = [
+    pytest.param(mode, marks=_LCD459_LEAK) if mode == "no-backward" else mode
+    for mode in _MODES
+]
+
 
 # ── lifetime ───────────────────────────────────────────────────────────────
 
@@ -146,6 +163,7 @@ def test_a_state_lives_as_long_as_its_graph(device: str) -> None:
     assert _states_of(module) == []
 
 
+@_LCD459_LEAK
 def test_a_module_holding_its_hooked_output_is_freed(device: str) -> None:
     module = nn.Linear(3, 3, device=device)
     module.register_full_backward_hook(_full_hook)
@@ -156,7 +174,7 @@ def test_a_module_holding_its_hooked_output_is_freed(device: str) -> None:
     assert module_ref() is None
 
 
-@pytest.mark.parametrize("mode", _MODES)
+@pytest.mark.parametrize("mode", _MODES_BEFORE_BACKWARD_LEAK)
 @pytest.mark.parametrize("kind", _KINDS)
 def test_a_module_holding_its_hooked_output_across_a_deeper_graph_is_freed(
     kind: str, mode: str, device: str
@@ -181,6 +199,7 @@ def test_a_module_holding_its_hooked_output_across_a_deeper_graph_is_freed(
         assert output_ref() is None
 
 
+@_LCD459_LEAK
 def test_a_module_holding_multiple_tensors_from_the_same_hooked_graph_is_freed(
     device: str,
 ) -> None:
@@ -224,7 +243,13 @@ def test_a_live_downstream_branch_keeps_a_cyclic_hooked_module_alive_until_dropp
     assert module_ref() is None
 
 
-@pytest.mark.parametrize("run_backward", [False, True], ids=["no-backward", "backward"])
+@pytest.mark.parametrize(
+    "run_backward",
+    [
+        pytest.param(False, marks=_LCD459_LEAK, id="no-backward"),
+        pytest.param(True, id="backward"),
+    ],
+)
 def test_custom_function_cycle_through_ctx_or_module_is_freed(
     run_backward: bool, device: str
 ) -> None:
@@ -271,6 +296,7 @@ def test_tensor_hook_cycle_through_module_is_freed(leaf: bool, device: str) -> N
     assert target_ref() is None
 
 
+@_LCD459_LEAK  # the odd iterations skip backward
 def test_repeated_gc_collect_cycles_with_hooked_modules(device: str) -> None:
     refs: list[weakref.ref[nn.Module]] = []
     for i in range(12):
