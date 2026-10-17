@@ -3,7 +3,7 @@
   "name": "einops",
   "path": "lucid.einops",
   "kind": "module",
-  "source": "https://github.com/ChanLumerico/lucid/blob/4ae9124/lucid/einops/__init__.py#L1",
+  "source": "https://github.com/lucid-official/lucid/blob/0b88312/lucid/einops/__init__.py#L1",
   "members": [
     {
       "name": "rearrange",
@@ -11,7 +11,7 @@
       "kind": "function",
       "labels": [],
       "signature": "rearrange(tensor: Tensor, pattern: str, axes_lengths: int = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/4ae9124/lucid/einops/__init__.py#L44",
+      "source": "https://github.com/lucid-official/lucid/blob/0b88312/lucid/einops/__init__.py#L103",
       "subcategory": null,
       "summary": "Rearrange axes of `tensor` according to an einops pattern.",
       "extended": "Performs arbitrary axis manipulation — transpose, reshape,\ncomposition, and decomposition — expressed in a single readable\npattern string. The notation makes the intent explicit and removes\nthe chain of `transpose`/`view` calls that obscure dimensionality\ntransforms in raw tensor code.",
@@ -25,13 +25,13 @@
         {
           "name": "pattern",
           "annotation": "str",
-          "description": "Einops pattern of the form `\"<lhs> -> <rhs>\"`. Parentheses\ngroup axes for composition or decomposition.",
+          "description": "Einops pattern of the form `\"<lhs> -> <rhs>\"`. Parentheses\ngroup axes for composition or decomposition, `...` stands for\nthe axes the pattern does not name, and `1` or `()` is a unit\naxis.  Every named axis must appear on both sides.",
           "default": null
         },
         {
           "name": "**axes_lengths",
           "annotation": "int",
-          "description": "Named axis sizes used to disambiguate decomposed groups.",
+          "description": "Axis lengths, needed to split a dimension into a group and checked\nagainst the input wherever the input already fixes the axis.",
           "default": "{}"
         }
       ],
@@ -39,9 +39,18 @@
         "annotation": "Tensor",
         "description": "The rearranged tensor."
       },
-      "raises": [],
+      "raises": [
+        {
+          "annotation": "lucid._C.engine.InvalidArgument",
+          "description": "The pattern is malformed, an axis appears on one side only, or a\nkeyword names no axis of the pattern."
+        },
+        {
+          "annotation": "lucid._C.engine.ShapeMismatch",
+          "description": "The input's rank or a dimension does not fit the pattern or the\nkeyword lengths."
+        }
+      ],
       "examples": [
-        ">>> import lucid\n>>> x = lucid.randn(2, 3, 4)\n>>> lucid.einops.rearrange(x, \"b h w -> b (h w)\").shape\n(2, 12)"
+        ">>> import lucid\n>>> x = lucid.randn(2, 3, 4)\n>>> lucid.einops.rearrange(x, \"b h w -> b (h w)\").shape\n(2, 12)\n>>> lucid.einops.rearrange(x, \"b ... -> b (...)\").shape\n(2, 12)\n>>> lucid.einops.rearrange(x, \"b (h1 h2) w -> b h1 h2 w 1\", h2=3).shape\n(2, 1, 3, 4, 1)"
       ],
       "notes": [
         "The transformation is purely a reshape and permutation — no data is\ncopied unless required by memory layout. Typical patterns include\n`\"b c h w -> b (h w) c\"` for flattening spatial dims into a token\nsequence, and `\"b (h w) c -> b c h w\"` for the inverse."
@@ -56,7 +65,7 @@
       "kind": "function",
       "labels": [],
       "signature": "reduce(tensor: Tensor, pattern: str, reduction: str, axes_lengths: int = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/4ae9124/lucid/einops/__init__.py#L86",
+      "source": "https://github.com/lucid-official/lucid/blob/0b88312/lucid/einops/__init__.py#L160",
       "subcategory": null,
       "summary": "Reduce `tensor` along axes implied by an einops pattern.",
       "extended": "Generalises standard `sum` / `mean` / `max` / `min` /\n`prod` reductions to arbitrary axes selected by symbolic pattern.\nAny axis present on the left-hand side of `->` but absent on the\nright-hand side is collapsed by the chosen reduction.",
@@ -70,19 +79,19 @@
         {
           "name": "pattern",
           "annotation": "str",
-          "description": "Einops pattern such as `\"b h w -> b w\"`.",
+          "description": "Einops pattern such as `\"b h w -> b w\"`.  A number on the left\nis an unnamed axis of that length, so `\"(h 2) (w 2) -> h w\"`\npools 2x2 windows.",
           "default": null
         },
         {
           "name": "reduction",
           "annotation": "str",
-          "description": "Reduction operation; one of `\"sum\"`, `\"mean\"`, `\"max\"`,\n`\"min\"`, `\"prod\"`.",
+          "description": "Reduction operation; one of `\"sum\"`, `\"mean\"`, `\"max\"`,\n`\"min\"`, `\"prod\"`, `\"any\"`, `\"all\"`.",
           "default": null
         },
         {
           "name": "**axes_lengths",
           "annotation": "int",
-          "description": "Named axis sizes used to disambiguate decomposed groups.",
+          "description": "Axis lengths, needed to split a dimension into a group and checked\nagainst the input wherever the input already fixes the axis.",
           "default": "{}"
         }
       ],
@@ -90,9 +99,22 @@
         "annotation": "Tensor",
         "description": "The reduced tensor."
       },
-      "raises": [],
+      "raises": [
+        {
+          "annotation": "lucid._C.engine.InvalidArgument",
+          "description": "The pattern is malformed, the reduction is unknown, an axis\nappears only on the right, or a keyword names no axis."
+        },
+        {
+          "annotation": "lucid._C.engine.ShapeMismatch",
+          "description": "The input's shape does not fit the pattern or the keyword lengths."
+        },
+        {
+          "annotation": "lucid._C.engine.NotImplementedError",
+          "description": "`reduction=\"mean\"` over a tensor that is not floating point."
+        }
+      ],
       "examples": [
-        ">>> import lucid\n>>> x = lucid.randn(2, 3, 4)\n>>> lucid.einops.reduce(x, \"b h w -> b w\", \"mean\").shape\n(2, 4)"
+        ">>> import lucid\n>>> x = lucid.randn(2, 3, 4)\n>>> lucid.einops.reduce(x, \"b h w -> b w\", \"mean\").shape\n(2, 4)\n>>> lucid.einops.reduce(lucid.randn(2, 4, 6), \"b (h 2) (w 3) -> b h w\", \"max\").shape\n(2, 2, 2)"
       ],
       "notes": [
         "Conceptually equivalent to a permutation followed by a reduction\nalong contiguous trailing axes. For `reduction=\"mean\"` the result\nis\n\n\n\n$$\ny_{b w} = \\frac{1}{H} \\sum_{h=1}^{H} x_{b h w}.\n$$"
@@ -107,10 +129,10 @@
       "kind": "function",
       "labels": [],
       "signature": "repeat(tensor: Tensor, pattern: str, axes_lengths: int = {})",
-      "source": "https://github.com/ChanLumerico/lucid/blob/4ae9124/lucid/einops/__init__.py#L137",
+      "source": "https://github.com/lucid-official/lucid/blob/0b88312/lucid/einops/__init__.py#L225",
       "subcategory": null,
       "summary": "Repeat `tensor` along new or existing axes via an einops pattern.",
-      "extended": "Provides a single notation for both tiling along existing axes and\nbroadcasting into entirely new axes. The pattern's right-hand side\nenumerates the desired output axes; any axis appearing on the right\nbut not on the left is introduced and must be given an explicit\nlength through `**axes_lengths`.",
+      "extended": "Provides a single notation for both tiling along existing axes and\nbroadcasting into entirely new axes. The pattern's right-hand side\nenumerates the desired output axes; any axis appearing on the right\nbut not on the left is introduced and must be given an explicit\nlength through `**axes_lengths`, or written as a number.",
       "parameters": [
         {
           "name": "tensor",
@@ -121,13 +143,13 @@
         {
           "name": "pattern",
           "annotation": "str",
-          "description": "Einops pattern such as `\"b h w -> b h w c\"` (new axis `c`).",
+          "description": "Einops pattern such as `\"b h w -> b h w c\"` (new axis `c`) or\n`\"h w -> (h 2) w\"` (each row twice).",
           "default": null
         },
         {
           "name": "**axes_lengths",
           "annotation": "int",
-          "description": "Sizes for every new axis introduced by the pattern.",
+          "description": "Lengths for every new named axis, and checks for axes the input\nalready fixes.",
           "default": "{}"
         }
       ],
@@ -135,9 +157,18 @@
         "annotation": "Tensor",
         "description": "The repeated tensor."
       },
-      "raises": [],
+      "raises": [
+        {
+          "annotation": "lucid._C.engine.InvalidArgument",
+          "description": "The pattern is malformed, drops an axis, or introduces a named\naxis without a length."
+        },
+        {
+          "annotation": "lucid._C.engine.ShapeMismatch",
+          "description": "The input's shape does not fit the pattern or the keyword lengths."
+        }
+      ],
       "examples": [
-        ">>> import lucid\n>>> x = lucid.randn(2, 3, 4)\n>>> lucid.einops.repeat(x, \"b h w -> b h w c\", c=5).shape\n(2, 3, 4, 5)"
+        ">>> import lucid\n>>> x = lucid.randn(2, 3, 4)\n>>> lucid.einops.repeat(x, \"b h w -> b h w c\", c=5).shape\n(2, 3, 4, 5)\n>>> lucid.einops.repeat(lucid.tensor([[1.0, 2.0]]), \"h w -> (h 2) w\")\ntensor([[1., 2.], [1., 2.]])"
       ],
       "notes": [
         "For an axis $c$ of size $C$ introduced via `repeat`,\n\n\n\n$$\ny_{b h w c} = x_{b h w}, \\quad c = 1, \\ldots, C.\n$$\n\nNo data is materialised until reading — internally the new axis is\nexpressed as a broadcast / stride manipulation when possible."
@@ -152,7 +183,7 @@
       "kind": "function",
       "labels": [],
       "signature": "einsum(equation: str, operands: Tensor = ())",
-      "source": "https://github.com/ChanLumerico/lucid/blob/4ae9124/lucid/einops/__init__.py#L182",
+      "source": "https://github.com/lucid-official/lucid/blob/0b88312/lucid/einops/__init__.py#L281",
       "subcategory": null,
       "summary": "Evaluate an Einstein-summation expression over the given tensors.",
       "extended": "Implements the general tensor contraction operator: each input is\nindexed by labels declared in `equation` and the output retains\nonly the labels appearing on the right-hand side. Repeated labels\nare summed; matching labels broadcast.",
@@ -196,7 +227,7 @@
     }
   ],
   "summary": "lucid.einops — shape manipulation written in named axes.",
-  "extended": "Four entry points: `rearrange` (permute, reshape, split or merge axes),\n`reduce` (the same, carrying a reduction), `repeat` (the same, carrying a\nbroadcast expansion) and `einsum`.\n\nPatterns are strings of axis names, so the intent is stated in the call\nrather than reconstructed from a run of anonymous `transpose` / `reshape`\nsteps:\n\nlucid.einops.rearrange(x, \"b c h w -> b (h w) c\")   # (2,3,4,5) → (2,20,3)\n\nA mismatch fails with a message naming the axis that did not fit, instead of\nproducing a silently wrong shape that only surfaces layers later.\n\nReachable only as `lucid.einops.*`: there is no top-level `lucid.einsum`\nand no `Tensor.rearrange` method, so each op has exactly one path.",
+  "extended": "Four entry points: `rearrange` (permute, reshape, split or merge axes),\n`reduce` (the same, carrying a reduction), `repeat` (the same, carrying a\nbroadcast expansion) and `einsum`.\n\nPatterns are strings of axis names, so the intent is stated in the call\nrather than reconstructed from a run of anonymous `transpose` / `reshape`\nsteps:\n\nlucid.einops.rearrange(x, \"b c h w -> b (h w) c\")   # (2,3,4,5) → (2,20,3)\n\nThe grammar is the reference einops grammar: names, parenthesised groups\none level deep, `...` for the axes the pattern does not name, `1` or\n`()` for a unit axis and, in `reduce` and `repeat`, a number for an\nunnamed axis of that length.  A keyword length is also a check: an axis\nthe input already fixes must have the length given for it, and a keyword\nnaming no axis of the pattern is refused.  A mismatch fails with a message\nnaming the axis that did not fit, instead of producing a silently wrong\nshape that only surfaces layers later.\n\nReachable only as `lucid.einops.*`: there is no top-level `lucid.einsum`\nand no `Tensor.rearrange` method, so each op has exactly one path.",
   "parameters": [],
   "returns": null,
   "raises": [],

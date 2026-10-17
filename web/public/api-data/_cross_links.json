@@ -1882,12 +1882,6 @@
         "kind": "free_function"
       }
     ],
-    "lucid.ops.pad": [
-      {
-        "name": "pad_op",
-        "kind": "free_function"
-      }
-    ],
     "lucid.linalg.pinv": [
       {
         "name": "pinv_op",
@@ -4207,11 +4201,6 @@
       {
         "path": "lucid.nn.functional.pad",
         "module": "lucid.nn.functional",
-        "kind": "function"
-      },
-      {
-        "path": "lucid.ops.pad",
-        "module": "lucid.ops",
         "kind": "function"
       }
     ],
