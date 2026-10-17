@@ -59,7 +59,9 @@ def _tensor_hook(m: ModuleType, device: str, create_graph: bool, mode: str) -> o
     return seen
 
 
-def _function_backward(m: ModuleType, device: str, create_graph: bool, mode: str) -> object:
+def _function_backward(
+    m: ModuleType, device: str, create_graph: bool, mode: str
+) -> object:
     seen: list[bool] = []
 
     class Twice(m.autograd.Function):
@@ -102,7 +104,9 @@ def _multi_output_function_backward(
     return seen
 
 
-def _hook_built_tensor(m: ModuleType, device: str, create_graph: bool, mode: str) -> object:
+def _hook_built_tensor(
+    m: ModuleType, device: str, create_graph: bool, mode: str
+) -> object:
     class Double(m.nn.Module):
         def forward(self, a: object) -> object:
             return a * 2.0
@@ -138,7 +142,10 @@ def _grad_create_graph_under_no_grad(
     y = Cube.apply(x).sum()
     with _caller_mode(m, mode):
         (g,) = m.autograd.grad(y, x, create_graph=create_graph)
-    return [bool(g.requires_grad), [round(float(v), 5) for v in g.detach().cpu().tolist()]]
+    return [
+        bool(g.requires_grad),
+        [round(float(v), 5) for v in g.detach().cpu().tolist()],
+    ]
 
 
 _SCENARIOS: dict[str, Scenario] = {
@@ -158,7 +165,9 @@ def test_matches_the_reference(
     name: str, create_graph: bool, mode: str, ref: ModuleType, device: str
 ) -> None:
     scenario = _SCENARIOS[name]
-    assert scenario(lucid, device, create_graph, mode) == scenario(ref, "cpu", create_graph, mode)
+    assert scenario(lucid, device, create_graph, mode) == scenario(
+        ref, "cpu", create_graph, mode
+    )
 
 
 @pytest.mark.parametrize("create_graph", [False, True])

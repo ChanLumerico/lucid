@@ -74,7 +74,9 @@ def _full_hook_drops_all(m: ModuleType, device: str) -> object:
 def _full_hook_drops_under_create_graph(m: ModuleType, device: str) -> object:
     mod = _module(m, lambda a, b: a * b, full=lambda _m, gi, go: (None, gi[1]))
     a, b = _operands(m, device)
-    ga, gb = m.autograd.grad(mod(a, b).sum(), (a, b), create_graph=True, allow_unused=True)
+    ga, gb = m.autograd.grad(
+        mod(a, b).sum(), (a, b), create_graph=True, allow_unused=True
+    )
     return [_values(ga), _values(gb)]
 
 
@@ -84,7 +86,9 @@ def _pre_hook_drops_one(m: ModuleType, device: str) -> object:
         m,
         lambda a, b: (a * 2.0, b * 3.0),
         pre=lambda _m, go: (None, go[1]),
-        full=lambda _m, gi, go: seen.append([[_values(g) for g in gi], [_values(g) for g in go]]),
+        full=lambda _m, gi, go: seen.append(
+            [[_values(g) for g in gi], [_values(g) for g in go]]
+        ),
     )
     a, b = _operands(m, device)
     y1, y2 = mod(a, b)
@@ -95,7 +99,9 @@ def _pre_hook_drops_one(m: ModuleType, device: str) -> object:
 def _unused_input(m: ModuleType, device: str) -> object:
     seen: list[object] = []
     mod = _module(
-        m, lambda a, b: a * 2.0, full=lambda _m, gi, go: seen.append([_values(g) for g in gi])
+        m,
+        lambda a, b: a * 2.0,
+        full=lambda _m, gi, go: seen.append([_values(g) for g in gi]),
     )
     a, b = _operands(m, device)
     mod(a, b).sum().backward()
@@ -117,7 +123,9 @@ def _double_backward(m: ModuleType, device: str) -> object:
             return x * x
 
     mod = Square()
-    mod.register_full_backward_pre_hook(lambda _m, go: calls.append(("pre", _values(go[0]))))
+    mod.register_full_backward_pre_hook(
+        lambda _m, go: calls.append(("pre", _values(go[0])))
+    )
     mod.register_full_backward_hook(
         lambda _m, gi, go: calls.append(("full", _values(gi[0]), _values(go[0])))
     )
@@ -198,5 +206,7 @@ def _pre_hook_drops_all(m: ModuleType, device: str) -> object:
     "the inputs' barrier, so it never runs to hand them zeros as the reference's "
     "Function does",
 )
-def test_a_pre_hook_dropping_every_gradient_leaves_zeros(ref: ModuleType, device: str) -> None:
+def test_a_pre_hook_dropping_every_gradient_leaves_zeros(
+    ref: ModuleType, device: str
+) -> None:
     assert _pre_hook_drops_all(lucid, device) == _pre_hook_drops_all(ref, "cpu")

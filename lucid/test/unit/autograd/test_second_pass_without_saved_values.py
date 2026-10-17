@@ -30,7 +30,9 @@ def _values(t: object) -> object:
     return [round(float(v), 5) for v in t.detach().cpu().reshape(-1).tolist()]
 
 
-def _outcome(m: ModuleType, device: str, scenario: Callable[[ModuleType, str], object]) -> object:
+def _outcome(
+    m: ModuleType, device: str, scenario: Callable[[ModuleType, str], object]
+) -> object:
     try:
         return {"value": scenario(m, device)}
     except RuntimeError as e:
@@ -127,7 +129,9 @@ def test_a_graph_that_saves_values_is_still_refused(
 
 
 @pytest.mark.parametrize("graph", list(_SAVE_NOTHING))
-def test_the_same_graph_without_a_second_pass_is_unchanged(graph: str, device: str) -> None:
+def test_the_same_graph_without_a_second_pass_is_unchanged(
+    graph: str, device: str
+) -> None:
     x = _leaf(lucid, device)
     _SAVE_NOTHING[graph](lucid, x).backward()
     once = _values(x.grad)
@@ -142,7 +146,9 @@ def test_the_same_graph_without_a_second_pass_is_unchanged(graph: str, device: s
     [
         _SAVE_NOTHING["add-scalar"],
         _SAVE_NOTHING["cat"],
-        lambda m, x: m.nn.functional.linear(x.reshape(2, 3), m.ones(4, 3, device=x.device)).sum(),
+        lambda m, x: m.nn.functional.linear(
+            x.reshape(2, 3), m.ones(4, 3, device=x.device)
+        ).sum(),
         lambda m, x: m.nn.functional.mse_loss(x, m.zeros(6, device=x.device)),
     ],
     ids=["add-scalar", "cat-of-add", "linear", "mse-loss"],

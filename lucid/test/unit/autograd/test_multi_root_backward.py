@@ -87,7 +87,9 @@ def _bare_leaf_roots(m: ModuleType, device: str) -> object:
     x = m.tensor([1.0, 2.0], requires_grad=True, device=device)
     seen: list[object] = []
     x.register_hook(lambda g: seen.append(_values(g)))
-    m.autograd.backward([x, x], [m.ones(2, device=device), m.ones(2, device=device) * 2])
+    m.autograd.backward(
+        [x, x], [m.ones(2, device=device), m.ones(2, device=device) * 2]
+    )
     return [seen, _values(x.grad)]
 
 
@@ -134,7 +136,9 @@ def _create_graph(m: ModuleType, device: str) -> object:
 def _complex_seed(m: ModuleType, device: str) -> object:
     x = m.tensor([1.0, 2.0], requires_grad=True, device=device)
     z = m.complex(x, x * 3.0)
-    s = m.complex(m.tensor([1.0, 0.5], device=device), m.tensor([2.0, -1.0], device=device))
+    s = m.complex(
+        m.tensor([1.0, 0.5], device=device), m.tensor([2.0, -1.0], device=device)
+    )
     m.autograd.backward([z * 2.0, z], [s, s])
     return _values(x.grad)
 
@@ -154,7 +158,10 @@ def _grad_seeds(m: ModuleType, device: str) -> object:
     gs = m.autograd.grad(
         [y, y * 2],
         [x],
-        grad_outputs=[m.tensor([1.0, 3.0], device=device), m.tensor([2.0, 0.5], device=device)],
+        grad_outputs=[
+            m.tensor([1.0, 3.0], device=device),
+            m.tensor([2.0, 0.5], device=device),
+        ],
     )
     return [_values(g) for g in gs]
 
@@ -163,7 +170,9 @@ def _grad_frees_once(m: ModuleType, device: str) -> object:
     x = m.ones(2, requires_grad=True, device=device)
     y = x * x
     gs = m.autograd.grad([(y * 3).sum(), (y * 4).sum()], x)
-    return [_values(g) for g in gs] + [_outcome(m, device, lambda mm, d: y.sum().backward())]
+    return [_values(g) for g in gs] + [
+        _outcome(m, device, lambda mm, d: y.sum().backward())
+    ]
 
 
 def _grad_create_graph_seed_graph(m: ModuleType, device: str) -> object:
@@ -177,7 +186,9 @@ def _grad_create_graph_seed_graph(m: ModuleType, device: str) -> object:
 
 def _grad_orphan_root(m: ModuleType, device: str) -> object:
     x = m.tensor([1.0, 2.0], requires_grad=True, device=device)
-    gs = m.autograd.grad([x, (x * 4).sum()], x, grad_outputs=[m.ones(2, device=device) * 3, None])
+    gs = m.autograd.grad(
+        [x, (x * 4).sum()], x, grad_outputs=[m.ones(2, device=device) * 3, None]
+    )
     return [_values(g) for g in gs]
 
 
