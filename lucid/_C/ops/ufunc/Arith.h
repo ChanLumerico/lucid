@@ -197,8 +197,9 @@ public:
 //
 // Notes
 // -----
-// Dispatch: Accelerate ``vForce`` reciprocal kernel (CPU) / MLX
-// element-wise reciprocal (GPU).
+// Dispatch: a correctly rounded ``1 / x`` on CPU (``vvrec`` for F64, a plain
+// loop for F32 because ``vvrecf`` is not exact — backend/cpu/Vforce.cpp) /
+// MLX element-wise reciprocal (GPU).
 class LUCID_API ReciprocalBackward : public UnaryOp<ReciprocalBackward> {
 public:
     static const OpSchema schema_v1;

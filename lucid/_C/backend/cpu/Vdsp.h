@@ -138,7 +138,8 @@ LUCID_INTERNAL void vsub_f64(const double* a, const double* b, double* out, std:
 // Accelerate.framework ``vDSP_vmulD``.
 LUCID_INTERNAL void vmul_f64(const double* a, const double* b, double* out, std::size_t n);
 
-// Double-precision elementwise division.  Uses ``vDSP_vdivD``.
+// Double-precision elementwise division, correctly rounded.  A plain loop:
+// ``vDSP_vdivD`` is not correctly rounded (see Vdsp.cpp).
 //
 // Parameters
 // ----------
@@ -148,10 +149,6 @@ LUCID_INTERNAL void vmul_f64(const double* a, const double* b, double* out, std:
 //     Output buffer.
 // n : std::size_t
 //     Element count.
-//
-// References
-// ----------
-// Accelerate.framework ``vDSP_vdivD``.
 LUCID_INTERNAL void vdiv_f64(const double* a, const double* b, double* out, std::size_t n);
 
 // Single-precision elementwise negation.

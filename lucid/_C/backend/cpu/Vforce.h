@@ -59,9 +59,8 @@ LUCID_INTERNAL void vexp_f32(const float* in, float* out, std::size_t n);
 // Accelerate.framework ``vvlogf``.
 LUCID_INTERNAL void vlog_f32(const float* in, float* out, std::size_t n);
 
-// Single-precision elementwise square root.
-//
-// Computes $\text{out}_i = \sqrt{\text{in}_i}$ via ``vvsqrtf``.
+// Single-precision elementwise square root, correctly rounded.  A plain
+// loop: ``vvsqrtf`` is not correctly rounded (see Vforce.cpp).
 //
 // Parameters
 // ----------
@@ -71,10 +70,6 @@ LUCID_INTERNAL void vlog_f32(const float* in, float* out, std::size_t n);
 //     Output buffer.
 // n : std::size_t
 //     Element count.
-//
-// References
-// ----------
-// Accelerate.framework ``vvsqrtf``.
 LUCID_INTERNAL void vsqrt_f32(const float* in, float* out, std::size_t n);
 
 // Single-precision elementwise hyperbolic tangent.
@@ -584,10 +579,9 @@ LUCID_INTERNAL void vfabs_f32(const float* in, float* out, std::size_t n);
 // Accelerate.framework ``vvfabs``.
 LUCID_INTERNAL void vfabs_f64(const double* in, double* out, std::size_t n);
 
-// Single-precision reciprocal.
-//
-// Computes $\text{out}_i = 1 / \text{in}_i$ via ``vvrecf``.  Faster than
-// ``vdiv_f32`` against a constant-one buffer.
+// Single-precision reciprocal $\text{out}_i = 1 / \text{in}_i$, correctly
+// rounded.  A plain loop: ``vvrecf`` is not correctly rounded (see
+// Vforce.cpp).
 //
 // Parameters
 // ----------
@@ -597,10 +591,6 @@ LUCID_INTERNAL void vfabs_f64(const double* in, double* out, std::size_t n);
 //     Output buffer.
 // n : std::size_t
 //     Element count.
-//
-// References
-// ----------
-// Accelerate.framework ``vvrecf``.
 LUCID_INTERNAL void vrec_f32(const float* in, float* out, std::size_t n);
 
 // Double-precision reciprocal.  Uses ``vvrec``.

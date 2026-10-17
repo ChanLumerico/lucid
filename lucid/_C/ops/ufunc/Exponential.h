@@ -165,7 +165,9 @@ public:
 //
 // Notes
 // -----
-// Dispatch: Accelerate ``vvsqrtf``/``vvsqrt`` (CPU) / MLX ``sqrt`` (GPU).
+// Dispatch: a correctly rounded root on CPU (``vvsqrt`` for F64, a plain loop
+// for F32 because ``vvsqrtf`` is not exact — backend/cpu/Vforce.cpp) / MLX
+// ``sqrt`` (GPU).
 // Gradient is unbounded as $x \to 0^+$.
 class LUCID_API SqrtBackward : public UnaryOp<SqrtBackward> {
 public:
@@ -210,7 +212,9 @@ public:
 //
 // Notes
 // -----
-// Dispatch: Accelerate ``vvrsqrtf``/``vvrsqrt`` (CPU) / MLX ``rsqrt`` (GPU).
+// Dispatch: on CPU, the correctly rounded root and then the correctly
+// rounded reciprocal of it, which is how the reference computes it. On GPU,
+// MLX ``rsqrt``.
 class LUCID_API RsqrtBackward : public UnaryOp<RsqrtBackward> {
 public:
     static constexpr bool kSavesInput = false;

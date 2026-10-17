@@ -60,8 +60,23 @@ void vmul_f64(const double* a, const double* b, double* out, std::size_t n) {
     vDSP_vmulD(a, 1, b, 1, out, 1, L(n));
 }
 
+// Deliberately not vDSP_vdivD, which is not correctly rounded.  On 1e6
+// gaussian pairs 41% of its quotients were 1–2 ulp off the IEEE quotient
+// (``1 / 0.001`` came out 999.9999999999999).  A subnormal divisor broke it
+// outright: ``0 / 5e-324`` gave NaN and ``1 / 5e-324`` an infinity of the
+// wrong sign.  The reference divides exactly, so every float64 quotient on
+// the CPU disagreed with it in the last bits.
+//
+// This loop compiles to NEON ``fdiv``, which IEEE 754 requires to be
+// correctly rounded, and it is faster than vDSP_vdivD (0.38 ms against
+// 0.46 ms on 1e6 elements).  vForce's ``vvdiv`` was exact in the same
+// measurement, but nothing documents that it is, and vDSP_vdivD shows that
+// this library will give up the last bit for speed.  ``vDSP_vdiv`` was exact
+// on the same pairs, so the float path stays on it.  The tests pin both
+// widths, so a change in Accelerate shows up as a failure.
 void vdiv_f64(const double* a, const double* b, double* out, std::size_t n) {
-    vDSP_vdivD(b, 1, a, 1, out, 1, L(n));
+    for (std::size_t i = 0; i < n; ++i)
+        out[i] = a[i] / b[i];
 }
 
 void vneg_f32(const float* in, float* out, std::size_t n) {

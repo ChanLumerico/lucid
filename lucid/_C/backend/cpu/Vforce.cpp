@@ -12,7 +12,11 @@
 //
 // The LUCID_VFORCE_UNARY macro at the bottom expands pairs of f32/f64 wrappers
 // for functions that share a uniform (out, in, &count) signature (asin, acos,
-// atan, sinh, cosh, log2, fabs, rec, floor, ceil, round).
+// atan, sinh, cosh, log2, fabs, floor, ceil, round).
+//
+// Square root and reciprocal are IEEE operations the reference rounds
+// correctly, and the float vForce entries for them do not, so their float
+// wrappers are plain loops (see vsqrt_f32 and vrec_f32).
 
 #include "Vforce.h"
 
@@ -49,6 +53,16 @@ inline void split(const T* in, T* out, std::size_t n, F&& fn) {
         fn(out + lo, in + lo, &count);
     });
 }
+
+// ``out[i] = fn(in[i])`` over [0, n), chunked across cores like split().
+// Used where the vForce entry is not exact, and for erf, which vForce lacks.
+template <class T, class F>
+inline void split_map(const T* in, T* out, std::size_t n, F fn) {
+    parallel_for(n, kGrain, [&](std::size_t lo, std::size_t hi) {
+        for (std::size_t i = lo; i < hi; ++i)
+            out[i] = fn(in[i]);
+    });
+}
 }  // namespace
 
 void vexp_f32(const float* in, float* out, std::size_t n) {
@@ -59,8 +73,15 @@ void vlog_f32(const float* in, float* out, std::size_t n) {
     split(in, out, n, [](auto* o, const auto* i, int* c) { vvlogf(o, i, c); });
 }
 
+// Deliberately not vvsqrtf, which is not correctly rounded: on 1e6 gaussian
+// magnitudes 41% of its roots were 1–2 ulp off the IEEE root.  The
+// reference's square root is exact, and so is the one on Metal.  This loop
+// compiles to NEON ``fsqrt``, which IEEE 754 requires to be correctly
+// rounded, and it measured faster on one core (0.17 ms against 0.31 ms on
+// 1e6 elements).  The double path stays on ``vvsqrt``, which was exact on the
+// same data.
 void vsqrt_f32(const float* in, float* out, std::size_t n) {
-    split(in, out, n, [](auto* o, const auto* i, int* c) { vvsqrtf(o, i, c); });
+    split_map(in, out, n, [](float x) { return std::sqrt(x); });
 }
 
 void vtanh_f32(const float* in, float* out, std::size_t n) {
@@ -135,12 +156,24 @@ LUCID_VFORCE_UNARY(vsinh, vvsinhf, vvsinh)
 LUCID_VFORCE_UNARY(vcosh, vvcoshf, vvcosh)
 LUCID_VFORCE_UNARY(vlog2, vvlog2f, vvlog2)
 LUCID_VFORCE_UNARY(vfabs, vvfabsf, vvfabs)
-LUCID_VFORCE_UNARY(vrec, vvrecf, vvrec)
 LUCID_VFORCE_UNARY(vfloor, vvfloorf, vvfloor)
 LUCID_VFORCE_UNARY(vceil, vvceilf, vvceil)
 LUCID_VFORCE_UNARY(vround, vvnintf, vvnint)
 
 #undef LUCID_VFORCE_UNARY
+
+// Deliberately not vvrecf, which is not correctly rounded: on 1e6 gaussian
+// values 34% of its reciprocals were 1 ulp off ``1 / x``.  The reference
+// divides, and sigmoid, rsqrt and the half reciprocals all go through here.
+// ``fdiv`` is exact and measured faster on one core (0.085 ms against
+// 0.15 ms on 1e6 elements).  ``vvrec`` was exact on the same data and stays.
+void vrec_f32(const float* in, float* out, std::size_t n) {
+    split_map(in, out, n, [](float x) { return 1.0f / x; });
+}
+
+void vrec_f64(const double* in, double* out, std::size_t n) {
+    split(in, out, n, [](double* o, const double* i, int* c) { vvrec(o, i, c); });
+}
 
 // erf — Apple Accelerate does not expose a vForce erf symbol.  float32 uses
 // erf_f32 (ErfPoly.h): within 1 ulp of the correctly rounded value and
@@ -155,10 +188,7 @@ void verf_f32(const float* in, float* out, std::size_t n) {
     });
 }
 void verf_f64(const double* in, double* out, std::size_t n) {
-    parallel_for(n, kGrain, [&](std::size_t lo, std::size_t hi) {
-        for (std::size_t i = lo; i < hi; ++i)
-            out[i] = std::erf(in[i]);
-    });
+    split_map(in, out, n, [](double x) { return std::erf(x); });
 }
 
 }  // namespace lucid::backend::cpu

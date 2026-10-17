@@ -47,8 +47,9 @@ namespace lucid {
 //
 // Notes
 // -----
-// CPU dispatch uses Accelerate ``vDSP_vdiv`` / ``vDSP_vdivD`` for F32 / F64.
-// GPU dispatch uses MLX's broadcast-aware ``divide`` primitive.  Division
+// The CPU quotient is correctly rounded at F32 and F64: ``vDSP_vdiv`` for
+// F32, and a plain loop for F64 because ``vDSP_vdivD`` is not exact
+// (backend/cpu/Vdsp.cpp).  GPU dispatch uses MLX's broadcast-aware ``divide`` primitive.  Division
 // by zero follows IEEE-754 semantics (yields $\pm\infty$ or NaN); no
 // explicit guard is inserted.
 //
