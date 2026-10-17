@@ -82,7 +82,7 @@ REPO_ROOT   = Path(__file__).parent.parent.parent  # lucid repo root
 LUCID_SRC   = REPO_ROOT                            # lucid/ lives here
 WEB_ROOT    = Path(__file__).parent.parent         # web/
 OUT_DIR     = WEB_ROOT / "public" / "api-data"
-GITHUB_BASE = "https://github.com/ChanLumerico/lucid/blob"
+GITHUB_BASE = "https://github.com/lucid-official/lucid/blob"
 
 # ---------------------------------------------------------------------------
 # Module manifest — auto-discovered from lucid/ directory structure

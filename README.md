@@ -3,7 +3,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/svg/lucid-lockup-horizontal-on-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="assets/svg/lucid-lockup-horizontal-on-light.svg">
-  <img alt="Lucid" src="https://raw.githubusercontent.com/ChanLumerico/lucid/main/assets/svg/lucid-lockup-horizontal-on-light.svg" width="210">
+  <img alt="Lucid" src="https://raw.githubusercontent.com/lucid-official/lucid/main/assets/svg/lucid-lockup-horizontal-on-light.svg" width="210">
 </picture>
 
 <br>
@@ -15,12 +15,12 @@
 ![PyPI Version](https://img.shields.io/pypi/v/lucid-dl?color=red)
 ![PyPI Downloads](https://img.shields.io/pypi/dm/lucid-dl.svg)
 [![PyPI Total Downloads](https://static.pepy.tech/personalized-badge/lucid-dl?period=total&units=NONE&left_color=GRAY&right_color=yellow&left_text=total%20downloads)](https://pepy.tech/projects/lucid-dl)
-![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ChanLumerico/lucid.svg)
+![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/lucid-official/lucid.svg)
 ![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)
 ![Lines of Code](https://img.shields.io/badge/Lines%20of%20Code-385972-purple)
 
-**[Documentation](https://chanlumerico.github.io/lucid/)** ·
-**[Model Zoo](https://chanlumerico.github.io/lucid/)** ·
+**[Documentation](https://lucid-official.github.io/lucid/)** ·
+**[Model Zoo](https://lucid-official.github.io/lucid/)** ·
 **[Hugging Face](https://huggingface.co/ChanLumerico/lucid)** ·
 **[Changelog](CHANGELOG.md)** ·
 **[Contributing](CONTRIBUTING.md)**
@@ -85,7 +85,7 @@ From source, the C++ engine builds automatically through scikit-build-core + CMa
 (Xcode Command Line Tools required):
 
 ```bash
-git clone https://github.com/ChanLumerico/lucid.git && cd lucid
+git clone https://github.com/lucid-official/lucid.git && cd lucid
 pip install -e ".[dev]"
 ```
 

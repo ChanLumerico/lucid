@@ -82,7 +82,7 @@ matmul) because both `IBackend` subclasses share one virtual interface.
 ## The two carve-outs
 
 The strict CPU=Accelerate / GPU=MLX rule has two named exceptions
-([CLAUDE.md H3](https://github.com/ChanLumerico/lucid/blob/main/CLAUDE.md#h3)):
+([CLAUDE.md H3](https://github.com/lucid-official/lucid/blob/main/CLAUDE.md#h3)):
 
 1. **linalg ops** dispatch MLX on the CPU stream because MLX's linalg
    primitives are themselves CPU-backed.  The result is wrapped back

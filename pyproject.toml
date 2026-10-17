@@ -74,10 +74,10 @@ dependencies = [
 lucid-audit = "lucid._audit_cli:main"
 
 [project.urls]
-Homepage = "https://github.com/ChanLumerico/lucid"
-Documentation = "https://chanlumerico.github.io/lucid/"
-Changelog = "https://github.com/ChanLumerico/lucid/blob/main/CHANGELOG.md"
-Issues = "https://github.com/ChanLumerico/lucid/issues"
+Homepage = "https://github.com/lucid-official/lucid"
+Documentation = "https://lucid-official.github.io/lucid/"
+Changelog = "https://github.com/lucid-official/lucid/blob/main/CHANGELOG.md"
+Issues = "https://github.com/lucid-official/lucid/issues"
 
 [project.optional-dependencies]
 # numpy is now a hard runtime dependency; this extra is kept as a no-op alias

@@ -424,7 +424,7 @@ def render_model_card(
     body = f"""
 # {spec.title}
 {paper_line}
-[Lucid](https://github.com/ChanLumerico/lucid) port of `{spec.source}`,
+[Lucid](https://github.com/lucid-official/lucid) port of `{spec.source}`,
 converted to Lucid-native safetensors.
 
 ## Available weights

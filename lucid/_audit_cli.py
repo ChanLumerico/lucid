@@ -37,7 +37,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(
             "lucid-audit is a development tool and is not part of the "
             "published wheel.\nRun it from a source checkout:\n"
-            "    git clone https://github.com/ChanLumerico/lucid\n"
+            "    git clone https://github.com/lucid-official/lucid\n"
             "    pip install -e ."
         )
         return 2

@@ -84,7 +84,7 @@ when changing engine code.
 ### Install for development
 
 ```bash
-git clone https://github.com/ChanLumerico/lucid.git
+git clone https://github.com/lucid-official/lucid.git
 cd lucid
 uv venv --python 3.14
 uv pip install --python .venv/bin/python setuptools wheel cmake ninja "pybind11>=3.0,<3.1"

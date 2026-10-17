@@ -58,7 +58,7 @@ _LIBCLANG = "/opt/homebrew/opt/llvm/lib/libclang.dylib"
 Config.set_library_file(_LIBCLANG)
 
 
-GITHUB_BASE = "https://github.com/ChanLumerico/lucid/blob"
+GITHUB_BASE = "https://github.com/lucid-official/lucid/blob"
 
 
 def _git_sha() -> str:
