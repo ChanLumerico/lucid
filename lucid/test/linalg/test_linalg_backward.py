@@ -29,6 +29,18 @@ def _spd3() -> lucid.Tensor:
     )
 
 
+def _sym(A: lucid.Tensor) -> lucid.Tensor:
+    """``A`` symmetrised, the input a Cholesky gradient check differentiates.
+
+    The factor reads only one triangle (LCD-165, as the reference's does), so
+    a coordinate-wise difference in the other one moves nothing, while the
+    gradient is the symmetric one.  Checking through ``(A + Aᵀ) / 2`` asks
+    about the symmetric matrices the gradient is defined on, which is how the
+    reference checks its own.
+    """
+    return (A + A.mT) * 0.5
+
+
 def _sq2() -> lucid.Tensor:
     """2×2 invertible matrix."""
     return lucid.tensor([[3.0, 1.0], [1.0, 2.0]], requires_grad=True)
@@ -49,22 +61,29 @@ def _rect23() -> lucid.Tensor:
 
 class TestCholeskyBackward:
     def test_2x2_lower(self) -> None:
-        ok = gradcheck(lambda A: LA.cholesky(A).sum(), [_spd2()], eps=1e-5, atol=2e-3)
+        ok = gradcheck(
+            lambda A: LA.cholesky(_sym(A)).sum(), [_spd2()], eps=1e-5, atol=2e-3
+        )
         assert ok
 
     def test_3x3_lower(self) -> None:
-        ok = gradcheck(lambda A: LA.cholesky(A).sum(), [_spd3()], eps=1e-5, atol=2e-3)
+        ok = gradcheck(
+            lambda A: LA.cholesky(_sym(A)).sum(), [_spd3()], eps=1e-5, atol=2e-3
+        )
         assert ok
 
     def test_upper(self) -> None:
         ok = gradcheck(
-            lambda A: LA.cholesky(A, upper=True).sum(), [_spd2()], eps=1e-5, atol=2e-3
+            lambda A: LA.cholesky(_sym(A), upper=True).sum(),
+            [_spd2()],
+            eps=1e-5,
+            atol=2e-3,
         )
         assert ok
 
     def test_combined_loss(self) -> None:
         def fn(A: lucid.Tensor) -> lucid.Tensor:
-            L = LA.cholesky(A)
+            L = LA.cholesky(_sym(A))
             return (L * L).sum() + L.sum()
 
         ok = gradcheck(fn, [_spd2()], eps=1e-5, atol=2e-3)
@@ -200,6 +219,9 @@ class TestExistingBackwards:
     def test_cholesky_ex(self) -> None:
         # cholesky_ex wraps cholesky → backward flows through.
         ok = gradcheck(
-            lambda A: LA.cholesky_ex(A)[0].sum(), [_spd2()], eps=1e-5, atol=2e-3
+            lambda A: LA.cholesky_ex(_sym(A))[0].sum(),
+            [_spd2()],
+            eps=1e-5,
+            atol=2e-3,
         )
         assert ok
