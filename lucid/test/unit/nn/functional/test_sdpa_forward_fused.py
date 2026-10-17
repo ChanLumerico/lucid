@@ -223,6 +223,24 @@ def test_padded_head_dim_half_matches_cpu(dtype, tol: float, is_causal: bool) ->
     np.testing.assert_allclose(out("metal"), out("cpu"), atol=tol, rtol=tol)
 
 
+@pytest.mark.parametrize("is_causal", [True, False])
+def test_padded_head_dim_takes_head_transposed_operands(is_causal: bool) -> None:
+    """Operands built ``(B, L, H, D)`` and transposed, as multi-head attention does."""
+    if not metal_available():
+        pytest.skip("metal backend unavailable")
+    lucid.manual_seed(0)
+    q, k = (
+        lucid.randn(2, 1024, 4, 32, device="metal").transpose(1, 2) for _ in range(2)
+    )
+    v = lucid.randn(2, 1024, 4, 48, device="metal").transpose(1, 2)
+
+    def out(q, k, v) -> np.ndarray:
+        return F.scaled_dot_product_attention(q, k, v, is_causal=is_causal).numpy()
+
+    cpu = out(q.to("cpu"), k.to("cpu"), v.to("cpu"))
+    np.testing.assert_allclose(out(q, k, v), cpu, atol=1e-5, rtol=1e-4)
+
+
 @pytest.mark.parametrize("config", ["none", "causal", "additive", "bool"])
 def test_with_weights_op_correct_on_metal(config: str) -> None:
     """The weights variant materializes correct dense W + output on metal."""
