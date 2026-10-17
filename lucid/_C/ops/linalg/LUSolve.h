@@ -75,6 +75,12 @@ public:
     TensorImplPtr pivots_;
     std::int64_t pivots_version_ = 0;
 
+    void for_each_owned_tensor(const std::function<void(const TensorImplPtr&)>& fn) const override {
+        FuncOp<LUSolveBackward, 2>::for_each_owned_tensor(fn);
+        if (pivots_)
+            fn(pivots_);
+    }
+
     // The wired slots ``{LU, B}`` are arguments 0 and 2 of
     // ``lu_solve(LU, pivots, B)``; the pivots, argument 1, are held above.
     static constexpr std::array<std::size_t, 2> kArgPositions{0, 2};

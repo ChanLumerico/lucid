@@ -126,6 +126,23 @@ public:
         }
     }
 
+    // Free the values saved for backward, as AutogradNode does.
+    void release_saved() override {
+        saved_inputs_v_.clear();
+        saved_output_ = Storage{CpuStorage{}};
+        input_tensors_v_.clear();
+    }
+
+    // :meth:`apply` reads values from the saved slots only, and no tensor is
+    // kept for graph-mode backward, so ``cat`` and ``stack`` — which keep
+    // none — may run again in either mode.
+    SavedKind saved_kind() const noexcept override {
+        bool holds = ::lucid::holds_saved_values(saved_output_);
+        for (const auto& s : saved_inputs_v_)
+            holds = holds || ::lucid::holds_saved_values(s);
+        return holds ? SavedKind::kEagerValues : SavedKind::kNothing;
+    }
+
     // Weak references to original input tensors; used for version checks.
     std::vector<std::weak_ptr<TensorImpl>> input_tensors_v_;
     // Shapes of the original inputs, preserved for backward shape math.

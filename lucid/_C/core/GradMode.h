@@ -137,4 +137,19 @@ private:
     bool prev_;
 };
 
+// RAII guard that sets gradient tracking to ``enabled`` for its lifetime on
+// the calling thread, and restores the flag it found.  A backward pass runs
+// under one: on only when it records the graph of its own gradients.
+class GradModeGuard {
+public:
+    explicit GradModeGuard(bool enabled);
+    ~GradModeGuard();
+
+    GradModeGuard(const GradModeGuard&) = delete;
+    GradModeGuard& operator=(const GradModeGuard&) = delete;
+
+private:
+    bool prev_;
+};
+
 }  // namespace lucid

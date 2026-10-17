@@ -108,6 +108,10 @@ public:
     // Human-readable node name surfaced in error messages and graph dumps.
     std::string node_name() const override { return "AccumulateGrad"; }
 
+    // A leaf keeps its AccumulateGrad from one graph to the next, and it
+    // holds nothing a pass frees.
+    SavedKind saved_kind() const noexcept override { return SavedKind::kNothing; }
+
     // Accessor for the leaf ``weak_ptr``.
     //
     // Returns

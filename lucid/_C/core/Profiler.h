@@ -84,6 +84,10 @@ namespace lucid {
 //     Estimated floating-point operation count, populated by
 //     :func:`OpScope::set_flops`.  Defaults to ``0`` when the op
 //     does not report a count.
+// backward : bool
+//     Whether the event is backward work — a whole backward pass
+//     (``"backward"``) or one node of it, named after the node
+//     (``"MulBackward"``) — rather than a dispatched op.
 //
 // Notes
 // -----
@@ -97,6 +101,7 @@ struct LUCID_API OpEvent {
     std::int64_t time_ns = 0;
     std::int64_t memory_delta_bytes = 0;
     std::int64_t flops = 0;
+    bool backward = false;
 };
 
 // Thread-safe event collector for op profiling.
@@ -353,6 +358,9 @@ public:
     // event reports ``flops == 0``.  Ops free to omit this if they
     // do not have a meaningful FLOPs count.
     void set_flops(std::int64_t f);
+
+    // Mark the event as backward work (:attr:`OpEvent::backward`).
+    void set_backward() noexcept { event_.backward = true; }
 
 private:
     // Non-owning pointer to the active Profiler; ``nullptr`` if no

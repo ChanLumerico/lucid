@@ -16,6 +16,14 @@
 
 namespace lucid {
 
+// A root of a backward pass and the gradient it is seeded with.  A null
+// ``seed`` stands for ones of ``tensor``'s shape; otherwise it has that shape
+// and dtype (``lucid.autograd`` checks and casts it).
+struct BackwardRoot {
+    std::shared_ptr<TensorImpl> tensor;
+    std::shared_ptr<TensorImpl> seed;
+};
+
 // Reverse-mode autograd engine — drives the backward pass over a recorded
 // computation graph rooted at a single output :class:`TensorImpl`.
 //
@@ -128,6 +136,19 @@ public:
                          bool retain_graph = false,
                          bool create_graph = false);
 
+    // One pass from several roots, each with its seed, as the reference runs
+    // ``backward([a, b])``.  A pass per root freed the graph the roots share
+    // under the second one, and ran the hooks of a shared tensor once per
+    // root, each time on that root's part of its gradient.
+    //
+    // A pass without ``retain_graph`` frees what it ran.  The roots are
+    // severed from their graphs only when that freed values an eager
+    // backward reads (Node::saved_kind): a graph that saved none runs again,
+    // as the reference allows.
+    static void backward(const std::vector<BackwardRoot>& roots,
+                         bool retain_graph = false,
+                         bool create_graph = false);
+
     // Differentiate ``root`` with respect to ``inputs`` without writing any
     // ``.grad``.
     //
@@ -184,6 +205,13 @@ public:
     // :func:`Engine::backward` — the accumulating counterpart.
     static std::vector<TensorImplPtr> grad(const std::shared_ptr<TensorImpl>& root,
                                            Storage grad_seed,
+                                           const std::vector<std::shared_ptr<TensorImpl>>& inputs,
+                                           bool retain_graph = false,
+                                           bool create_graph = false);
+
+    // The same from several roots in one pass (``grad([a, b], x)``): one
+    // gradient per input, the sum over the roots.
+    static std::vector<TensorImplPtr> grad(const std::vector<BackwardRoot>& roots,
                                            const std::vector<std::shared_ptr<TensorImpl>>& inputs,
                                            bool retain_graph = false,
                                            bool create_graph = false);

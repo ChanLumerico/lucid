@@ -427,14 +427,14 @@ bool cpu_storage_has_nan(const CpuStorage& c) {
     }
 }
 
-std::string anomaly_node_name(const Node& node) {
+}  // namespace
+
+std::string backward_node_name(const Node& node) {
     const std::string cls = node.Node::node_name();
     if (cls.size() > 8 && cls.rfind("Backward") == cls.size() - 8)
         return cls;
     return node.node_name();
 }
-
-}  // namespace
 
 bool storage_has_nan(const Storage& s) {
     return std::visit(overloaded{
@@ -463,7 +463,7 @@ void check_anomaly_grads(const Node& node, const std::vector<Storage>& grads) {
             continue;
         if (storage_has_nan(grads[i])) {
             ErrorBuilder("detect_anomaly")
-                .fail("Function '" + anomaly_node_name(node) + "' returned nan values in its " +
+                .fail("Function '" + backward_node_name(node) + "' returned nan values in its " +
                       std::to_string(i) + "th output.");
         }
     }
@@ -478,7 +478,7 @@ void check_anomaly_grads_for_graph(const Node& node,
             continue;
         if (storage_has_nan(grads[i]->storage())) {
             ErrorBuilder("detect_anomaly")
-                .fail("Function '" + anomaly_node_name(node) + "' returned nan values in its " +
+                .fail("Function '" + backward_node_name(node) + "' returned nan values in its " +
                       std::to_string(i) + "th output.");
         }
     }

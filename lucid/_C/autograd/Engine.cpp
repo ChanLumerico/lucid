@@ -24,6 +24,7 @@
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
+#include "../core/Profiler.h"
 #include "../core/TensorImpl.h"
 #include "../ops/gfunc/Gfunc.h"
 #include "AccumulateGrad.h"
@@ -49,9 +50,12 @@ constexpr const char* kSecondPass =
 // Refuse a node whose saved tensors an earlier pass already freed.  Running
 // it read released storage: two losses sharing a graph, each given its own
 // backward() without retain_graph, took the process down with a
-// segmentation fault.
-void refuse_released(const Node& node) {
-    if (node.saved_released())
+// segmentation fault.  An eager pass refuses a node only when what was freed
+// is something its eager backward reads; a create_graph pass refuses any
+// released node, as graph-mode backward reads the tensors the node was
+// handed and every release frees them (Node::saved_kind).
+void refuse_released(const Node& node, bool graph) {
+    if (graph ? node.released() : node.saved_released())
         ErrorBuilder("backward").fail(std::string(kSecondPass) + " (" + node.node_name() + ")");
 }
 
@@ -60,13 +64,13 @@ void refuse_released(const Node& node) {
 // loss quietly wrote the seed into the loss's own .grad.
 //
 // Severing the root is what frees the graph, so this node is all that is
-// left of it: it carries the release marker, which refuses it wherever the
-// marker is checked, and the sequence numbers of the nodes the graph held,
+// left of it: it is marked released, which refuses it wherever that is
+// checked, and carries the sequence numbers of the nodes the graph held,
 // which say where a gradient through it would have gone (``spent_reaches``).
 class SpentGraphNode final : public Node {
 public:
     explicit SpentGraphNode(std::vector<std::uint64_t> held) : held_(std::move(held)) {
-        saved_versions_.reserve(1);
+        mark_released(SavedKind::kEagerValues);
     }
 
     std::vector<Storage> apply(Storage /*grad_out*/) override {
@@ -146,6 +150,8 @@ public:
     }
 
     std::string node_name() const override { return "ZeroDerivativeBackward"; }
+
+    SavedKind saved_kind() const noexcept override { return SavedKind::kNothing; }
 
 private:
     Shape shape_;
@@ -301,16 +307,76 @@ std::vector<TensorImplPtr> apply_node_for_graph(Node& node, const TensorImplPtr&
     return node.apply_for_graph(grad_in);
 }
 
-// Free what ``node`` saved for backward, now that it has run for the last
-// time.  A node that saved tensors can never run again after this, so the
-// hooks of the tensors it produced go too — which breaks the cycle a hook
-// that refers to its own tensor closes through the node.
-void release(Node& node) {
+// Free what ``node`` saved for backward, now that this pass is done with it,
+// and say whether that freed values its eager backward reads.  Such a node
+// can never run again, so the hooks of the tensors it produced go too —
+// which breaks the cycle a hook that refers to its own tensor closes through
+// the node.
+bool release(Node& node) {
+    const Node::SavedKind freed = node.saved_kind();
     node.release_saved();
-    node.forget_saved_versions();
+    node.mark_released(freed);
     if (node.saved_released())
         node.release_tensor_hooks();
+    return freed == Node::SavedKind::kEagerValues;
 }
+
+// ── Profiler events ──────────────────────────────────────────────────────────
+//
+// A backward pass is one event, and each node it runs one more, named after
+// the node (``backward_node_name``) and marked as backward work, so a profile
+// says where a backward spends its time.  With no profiler recording, an
+// event costs a thread-local read.
+
+bool profiling() {
+    const Profiler* prof = current_profiler();
+    return prof != nullptr && prof->is_active();
+}
+
+class BackwardEvent {
+public:
+    // The whole pass, described by its first root.
+    explicit BackwardEvent(const std::vector<BackwardRoot>& roots) {
+        if (roots.empty() || !profiling())
+            return;
+        const TensorImpl& root = *roots.front().tensor;
+        open("backward", root.device(), root.dtype(), root.shape());
+    }
+
+    // One node's run on an eager gradient.  An eager gradient carries no
+    // shape, so the event's is its element count.  A barrier's own gradient
+    // is a placeholder; the first slot it was handed stands in for it.
+    BackwardEvent(const Node& node, const Storage& grad, const Storage* slot) {
+        if (!profiling())
+            return;
+        const Storage& g = slot != nullptr ? *slot : grad;
+        const Dtype dtype = storage_dtype(g);
+        const auto numel = static_cast<std::int64_t>(storage_nbytes(g) / dtype_size(dtype));
+        open(backward_node_name(node), storage_is_gpu(g) ? Device::GPU : Device::CPU, dtype,
+             numel > 0 ? Shape{numel} : Shape{});
+    }
+
+    // One node's run under create_graph.
+    BackwardEvent(const Node& node, const TensorImplPtr& grad) {
+        if (!profiling())
+            return;
+        if (grad)
+            open(backward_node_name(node), grad->device(), grad->dtype(), grad->shape());
+        else
+            open(backward_node_name(node), Device::CPU, Dtype::F32, Shape{});
+    }
+
+    BackwardEvent(const BackwardEvent&) = delete;
+    BackwardEvent& operator=(const BackwardEvent&) = delete;
+
+private:
+    void open(std::string_view name, Device device, Dtype dtype, Shape shape) {
+        scope_.emplace(name, device, dtype, std::move(shape));
+        scope_->set_backward();
+    }
+
+    std::optional<OpScope> scope_;
+};
 
 // Returns true when s carries no data (zero nbytes and null pointer/array).
 // Used to decide whether to synthesise a ones-valued grad_seed.
@@ -324,7 +390,8 @@ bool storage_is_empty(const Storage& s) {
     return false;
 }
 
-// Compute a reverse-topological ordering of the backward graph rooted at root.
+// Compute a reverse-topological ordering of the backward graph below the
+// nodes in ``roots``.
 //
 // Uses an iterative DFS with an explicit frame stack to avoid recursion
 // overflows on deep networks.  Each frame records the node being visited and
@@ -335,11 +402,11 @@ bool storage_is_empty(const Storage& s) {
 //   - When all children are visited, append the node to `order` (post-order)
 //     and pop the frame.
 // Nodes already in the visited set are skipped so that shared sub-graphs are
-// processed only once.
+// processed only once, whichever root they are reached from.
 //
-// After the DFS the vector is reversed so that index 0 is the root node
-// (last node executed in forward, first in backward).
-std::vector<std::shared_ptr<Node>> topo_order(const std::shared_ptr<Node>& root) {
+// After the DFS the vector is reversed so that every node comes before the
+// nodes it sends gradients to — the roots first.
+std::vector<std::shared_ptr<Node>> topo_order(const std::vector<std::shared_ptr<Node>>& roots) {
     std::vector<std::shared_ptr<Node>> order;
     std::unordered_set<Node*> visited;
 
@@ -348,28 +415,116 @@ std::vector<std::shared_ptr<Node>> topo_order(const std::shared_ptr<Node>& root)
         std::size_t edge_idx;
     };
     std::vector<Frame> stack;
-    stack.push_back({root, 0});
-    visited.insert(root.get());
-
-    while (!stack.empty()) {
-        auto& f = stack.back();
-        const auto& edges = f.node->next_edges();
-        if (f.edge_idx < edges.size()) {
-            const auto& edge = edges[f.edge_idx++];
-            auto next = edge.node;
-            if (next && visited.insert(next.get()).second) {
-                stack.push_back({std::move(next), 0});
+    for (const auto& root : roots) {
+        if (!visited.insert(root.get()).second)
+            continue;
+        stack.push_back({root, 0});
+        while (!stack.empty()) {
+            auto& f = stack.back();
+            const auto& edges = f.node->next_edges();
+            if (f.edge_idx < edges.size()) {
+                const auto& edge = edges[f.edge_idx++];
+                auto next = edge.node;
+                if (next && visited.insert(next.get()).second) {
+                    stack.push_back({std::move(next), 0});
+                }
+            } else {
+                // All children visited: this node is ready to be appended.
+                order.push_back(std::move(f.node));
+                stack.pop_back();
             }
-        } else {
-            // All children visited: this node is ready to be appended.
-            order.push_back(std::move(f.node));
-            stack.pop_back();
         }
     }
 
     // Post-order gives leaf-first ordering; reverse to get root-first.
     std::reverse(order.begin(), order.end());
     return order;
+}
+
+// After a pass that did not retain its graph: a leaf root lets go of its
+// AccumulateGrad, and the other roots are severed from the graph when the
+// pass freed values an eager backward reads (``freed``).  A graph that saved
+// none of them stays attached and runs again.  Each root's spent node holds
+// the nodes of its own graph only, so it does not refuse a gradient towards
+// an input only another root reached.
+void sever_roots(const std::vector<BackwardRoot>& roots,
+                 const std::vector<std::shared_ptr<Node>>& order,
+                 bool freed) {
+    std::unordered_set<const TensorImpl*> seen;
+    for (const auto& r : roots) {
+        if (!seen.insert(r.tensor.get()).second)
+            continue;
+        if (r.tensor->is_leaf())
+            r.tensor->clear_grad_fn();
+        else if (!freed || !r.tensor->grad_fn())
+            continue;
+        else if (roots.size() == 1)
+            release_root(r.tensor, order);
+        else
+            release_root(r.tensor, topo_order({r.tensor->grad_fn()}));
+    }
+}
+
+// The node each root seeds — its grad_fn — or null for a leaf with none.
+std::vector<std::shared_ptr<Node>> root_nodes(const std::vector<BackwardRoot>& roots) {
+    std::vector<std::shared_ptr<Node>> nodes;
+    for (const auto& r : roots) {
+        if (r.tensor->grad_fn())
+            nodes.push_back(r.tensor->grad_fn());
+    }
+    return nodes;
+}
+
+void check_roots(const std::vector<BackwardRoot>& roots, const char* op) {
+    for (const auto& r : roots) {
+        if (!r.tensor)
+            ErrorBuilder(op).fail("root is null");
+    }
+}
+
+// A root's seed as an eager pass carries it: ones by default, else a buffer
+// of the seed's values the pass alone owns, since it adds into what it holds.
+Storage eager_seed(const BackwardRoot& r) {
+    const TensorImpl& t = *r.tensor;
+    if (!r.seed)
+        return make_ones_storage(t.shape(), t.dtype(), t.device());
+    return own_grad_copy(grad_slot_buffer(ErrorBuilder("backward"), *r.seed));
+}
+
+// A root's seed under create_graph: the seed tensor itself, graph and all.
+TensorImplPtr graph_seed(const BackwardRoot& r) {
+    if (r.seed)
+        return r.seed;
+    const TensorImpl& t = *r.tensor;
+    return std::make_shared<TensorImpl>(make_ones_storage(t.shape(), t.dtype(), t.device()),
+                                        t.shape(), t.dtype(), t.device(), false);
+}
+
+// The seeds of the roots that are leaves with no graph, summed per leaf, so a
+// leaf given twice sees its whole gradient once, through its hooks.
+template <typename Grad, typename Add>
+std::vector<std::pair<TensorImplPtr, Grad>>
+leaf_seeds(const std::vector<BackwardRoot>& roots, std::vector<Grad>& seeds, Add add) {
+    std::vector<std::pair<TensorImplPtr, Grad>> leaves;
+    for (std::size_t i = 0; i < roots.size(); ++i) {
+        if (roots[i].tensor->grad_fn())
+            continue;
+        auto it = std::find_if(leaves.begin(), leaves.end(),
+                               [&](const auto& l) { return l.first == roots[i].tensor; });
+        if (it == leaves.end())
+            leaves.emplace_back(roots[i].tensor, std::move(seeds[i]));
+        else
+            add(it->second, seeds[i]);
+    }
+    return leaves;
+}
+
+void add_eager(Storage& sum, const Storage& g) {
+    accumulate_into(sum, g);
+}
+
+void add_graph(TensorImplPtr& sum, const TensorImplPtr& g) {
+    sum = add_op(sum, g);
 }
 
 }  // namespace
@@ -395,31 +550,127 @@ TensorImplPtr zero_derivative_through(TensorImplPtr grad, const TensorImplPtr& s
                                    Edge(source->grad_fn(), source->grad_output_nr()));
 }
 
+// ── Running one node ─────────────────────────────────────────────────────────
+
+namespace {
+
+// Run ``node`` on its gradient once its hooks have.  The checks come after
+// the hooks, not before: a hook can run a backward of its own through this
+// node, which frees what it saved, or write into a tensor it saved — checked
+// first, the node then read freed storage and took the process down.
+std::vector<Storage> run_node(Node& node, Storage grad_in, SlotGrads<Storage> slots) {
+    refuse_released(node, /*graph=*/false);
+    node.validate_versions();
+    const BackwardEvent event(node, grad_in, slots.empty() ? nullptr : &slots.front().second);
+    if (!node.is_barrier())
+        return node.apply(std::move(grad_in));
+    for (auto& [slot, grad] : slots)
+        node.accumulate_barrier_grad(slot, std::move(grad));
+    return node.apply_barrier();
+}
+
+std::vector<TensorImplPtr>
+run_node_for_graph(Node& node, TensorImplPtr grad_in, SlotGrads<TensorImplPtr> slots) {
+    refuse_released(node, /*graph=*/true);
+    node.validate_versions();
+    // What eager backward reads by value, graph mode reads through the
+    // tensors the node was handed — and an in-place write since forward
+    // may have rewritten one that validate_versions does not check: a
+    // saved output, or any input while the check is waived.
+    node.restore_saved_for_graph();
+    const BackwardEvent event(node, grad_in || slots.empty() ? grad_in : slots.front().second);
+    if (node.is_barrier())
+        deliver_held_for_graph(node, std::move(slots), grad_in);
+    // apply_for_graph throws NotImplementedError if the op doesn't support
+    // graph mode — gives the user a clear, actionable message.
+    return apply_node_for_graph(node, grad_in);
+}
+
+// Validate size consistency: the number of returned gradients should equal
+// the number of outgoing edges.  A mismatch is only an error when both sides
+// are non-empty; an empty result with edges is permissible when the node
+// intentionally produces no gradients (e.g. a stop-gradient op).
+void check_result_count(const Node& node, std::size_t n) {
+    const auto& edges = node.next_edges();
+    if (n != edges.size() && !edges.empty() && n != 0)
+        ErrorBuilder("Engine::backward").fail("input_grads/next_edges size mismatch");
+}
+
+// The fusion pass (e.g. LinearBackward + ReluBackward into one node), once
+// per graph the roots stand on; anomaly mode reports the unfused nodes.
+void fuse(const std::vector<std::shared_ptr<Node>>& fns) {
+    if (is_anomaly_enabled())
+        return;
+    for (const auto& fn : fns)
+        run_fusion_pass(fn.get());
+}
+
+// Hand each root's seed to its grad_fn, on the slot the root stands for.  A
+// leaf with no graph was given its seed already.
+template <typename Seed, typename Route>
+void seed_roots(const std::vector<BackwardRoot>& roots, std::vector<Seed>& seeds, Route route_one) {
+    for (std::size_t i = 0; i < roots.size(); ++i) {
+        Node* const fn = roots[i].tensor->grad_fn().get();
+        if (fn != nullptr)
+            route_one(fn, roots[i].tensor->grad_output_nr(), std::move(seeds[i]));
+    }
+}
+
+// Send an eager node's results along its edges.  A custom Function's
+// ``None`` arrives as an empty storage: no gradient for that input.  Routed
+// on, it became the leaf's ``.grad`` — the leaf's shape over no memory, read
+// back as whatever the allocator had last left there.
+template <typename Route>
+void route_results(const Node& node, std::vector<Storage>& grads, Route route_one) {
+    const auto& edges = node.next_edges();
+    for (std::size_t i = 0; i < grads.size() && i < edges.size(); ++i) {
+        Node* next = edges[i].node.get();
+        if (next == nullptr || (node.empty_grad_is_none() && storage_is_empty(grads[i])))
+            continue;
+        route_one(next, edges[i].input_nr, std::move(grads[i]));
+    }
+}
+
+// The same under create_graph, where a missing gradient is a null tensor.
+template <typename Route>
+void route_results(const Node& node, const std::vector<TensorImplPtr>& grads, Route route_one) {
+    const auto& edges = node.next_edges();
+    for (std::size_t i = 0; i < grads.size() && i < edges.size(); ++i)
+        route_one(edges[i].node.get(), edges[i].input_nr, grads[i]);
+}
+
+}  // namespace
+
 // ── Graph-mode backward (create_graph=true) ───────────────────────────────────
 //
 // Runs the same topological traversal as backward() but uses TensorImplPtr
 // throughout so that every gradient operation is itself recorded in the
 // autograd graph.  Gradient accumulation at shared nodes is done via add_op
 // (which creates a new backward node) rather than raw storage +=.
-static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
-                               TensorImplPtr grad_seed,
-                               bool retain_graph) {
-    if (!root->grad_fn()) {
-        // Leaf shortcut: the seed is the leaf's gradient.
-        accumulate_leaf_for_graph(root, grad_seed);
-        return;
-    }
+//
+// create_graph=True implies retain_graph=True: the backward computation
+// re-uses forward nodes (through apply_for_graph's saved_impl_inputs_), and a
+// second backward must be able to traverse those nodes, so nothing is
+// released.
+static void backward_for_graph(const std::vector<BackwardRoot>& roots,
+                               std::vector<TensorImplPtr> seeds) {
+    // A leaf with no graph: the seed is its gradient.
+    for (auto& [leaf, seed] : leaf_seeds(roots, seeds, add_graph))
+        accumulate_leaf_for_graph(leaf, seed);
 
-    if (!is_anomaly_enabled())
-        run_fusion_pass(root->grad_fn().get());
-    auto order = topo_order(root->grad_fn());
+    const auto fns = root_nodes(roots);
+    if (fns.empty())
+        return;
+    fuse(fns);
+    const auto order = topo_order(fns);
 
     GraphPending pending;
     HeldGrads<TensorImplPtr> held;
-    Node* const root_fn = root->grad_fn().get();
-    const std::uint32_t root_slot = root->grad_output_nr();
-    route_for_graph(pending, held, root_fn, root_slot, grad_seed,
-                    has_slot_hooks(*root_fn, root_slot));
+    const auto send = [&](Node* next, std::uint32_t slot, const TensorImplPtr& grad) {
+        route_for_graph(pending, held, next, slot, grad,
+                        next != nullptr && has_slot_hooks(*next, slot));
+    };
+    seed_roots(roots, seeds, send);
 
     for (const auto& node : order) {
         auto it = pending.find(node.get());
@@ -429,107 +680,52 @@ static void backward_for_graph(const std::shared_ptr<TensorImpl>& root,
         pending.erase(it);
 
         // The hooks of the tensors this node produced, and retain_grad, see
-        // their whole gradient before the node does — and before the checks
-        // below (see Engine::backward).
+        // their whole gradient before the node does.
         SlotGrads<TensorImplPtr> slots;
         if (node->is_barrier())
             slots = fire_held_for_graph(*node, held);
         else if (node->tensor_hooks() != nullptr)
             grad_in = run_slot_hooks_for_graph(*node, 0, std::move(grad_in));
 
-        refuse_released(*node);
-        node->validate_versions();
-        // What eager backward reads by value, graph mode reads through the
-        // tensors the node was handed — and an in-place write since forward
-        // may have rewritten one that validate_versions does not check: a
-        // saved output, or any input while the check is waived.
-        node->restore_saved_for_graph();
-
-        if (node->is_barrier())
-            deliver_held_for_graph(*node, std::move(slots), grad_in);
-
-        // apply_for_graph throws NotImplementedError if the op doesn't support
-        // graph mode — gives the user a clear, actionable message.
-        const auto input_grads = apply_node_for_graph(*node, grad_in);
-
-        if (!retain_graph)
-            release(*node);
-
+        const auto input_grads = run_node_for_graph(*node, std::move(grad_in), std::move(slots));
         check_anomaly_grads_for_graph(*node, input_grads);
-
-        const auto& edges = node->next_edges();
-        for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
-            Node* next = edges[i].node.get();
-            route_for_graph(pending, held, next, edges[i].input_nr, input_grads[i],
-                            next != nullptr && has_slot_hooks(*next, edges[i].input_nr));
-        }
+        route_results(*node, input_grads, send);
     }
-
-    if (!retain_graph)
-        release_root(root, order);
 }
 
-void Engine::backward(const std::shared_ptr<TensorImpl>& root,
-                      Storage grad_seed,
-                      bool retain_graph,
-                      bool create_graph) {
-    if (!root) {
-        ErrorBuilder("Engine::backward").fail("root is null");
-    }
-    // Barriers discard what an earlier pass left in them (GraphBarrier.h).
-    const BackwardPass pass;
+// The eager pass of Engine::backward.  ``pending`` maps each node to the
+// gradient accumulated for it so far: gradients from several edges into one
+// node are summed there before apply() runs.  ``held`` keeps the gradients of
+// hooked barrier slots until the barrier's turn (see Delivery above).
+static void eager_backward(const std::vector<BackwardRoot>& roots,
+                           std::vector<Storage> seeds,
+                           bool retain_graph) {
+    // A leaf with no graph: the seed is its gradient — through its hooks, as
+    // AccumulateGrad would run them.
+    for (auto& [leaf, seed] : leaf_seeds(roots, seeds, add_eager))
+        accumulate_leaf(*leaf, std::move(seed));
 
-    // Synthesise a ones seed when the caller does not provide one.
-    Storage seed = std::move(grad_seed);
-    if (storage_is_empty(seed)) {
-        seed = make_ones_storage(root->shape(), root->dtype(), root->device());
-    }
-
-    if (create_graph) {
-        // create_graph=True implies retain_graph=True: the backward computation
-        // re-uses forward nodes (through apply_for_graph's saved_impl_inputs_),
-        // and a second backward must be able to traverse those nodes.  Releasing
-        // them would cause use-after-free when the second backward reaches nodes
-        // that were freed by the first.
-        auto seed_impl = std::make_shared<TensorImpl>(std::move(seed), root->shape(), root->dtype(),
-                                                      root->device(), false);
-        backward_for_graph(root, std::move(seed_impl), /*retain_graph=*/true);
+    const auto fns = root_nodes(roots);
+    if (fns.empty()) {
+        if (!retain_graph)
+            sever_roots(roots, {}, /*freed=*/false);
         return;
     }
+    fuse(fns);
+    const auto order = topo_order(fns);
 
-    // Leaf-tensor shortcut: if root has no grad_fn it is itself a leaf.  The
-    // seed is its gradient — through its hooks, as AccumulateGrad would run
-    // them; there is no backward graph to walk.
-    if (!root->grad_fn()) {
-        accumulate_leaf(*root, std::move(seed));
-        return;
-    }
-
-    // Optionally fuse adjacent backward nodes (e.g. LinearBackward + ReluBackward)
-    // into a single fused node before traversal.
-    if (!is_anomaly_enabled())
-        run_fusion_pass(root->grad_fn().get());
-
-    // Build the execution order once; reuse it for the accumulation loop.
-    auto order = topo_order(root->grad_fn());
-
-    // pending maps each node to the gradient that has been accumulated for it
-    // so far.  Gradients from multiple edges pointing to the same node are
-    // summed here before apply() is invoked.  held keeps the gradients of
-    // hooked barrier slots until the barrier's turn (see Delivery above).
     Pending pending;
     HeldGrads<Storage> held;
-    Node* const root_fn = root->grad_fn().get();
-    const std::uint32_t root_slot = root->grad_output_nr();
-    route(pending, held, root_fn, root_slot, std::move(seed), has_slot_hooks(*root_fn, root_slot));
+    const auto send = [&](Node* next, std::uint32_t slot, Storage grad) {
+        route(pending, held, next, slot, std::move(grad), has_slot_hooks(*next, slot));
+    };
+    seed_roots(roots, seeds, send);
 
+    bool freed = false;
     for (const auto& node : order) {
         auto it = pending.find(node.get());
-        if (it == pending.end()) {
-            // This node is not reachable from the root through the pending
-            // map — it had no gradient contribution, so skip it.
-            continue;
-        }
+        if (it == pending.end())
+            continue;  // no gradient reached it
         Storage grad_in = std::move(it->second);
         pending.erase(it);
 
@@ -542,65 +738,60 @@ void Engine::backward(const std::shared_ptr<TensorImpl>& root,
         else if (node->tensor_hooks() != nullptr)
             grad_in = run_slot_hooks(*node, 0, std::move(grad_in));
 
-        // Detect in-place mutations that would corrupt the backward pass, and
-        // a second pass over freed saved state.  After the hooks, not before:
-        // a hook can run a backward of its own through this node, which frees
-        // what it saved, or write into a tensor it saved — checked first, the
-        // node then read freed storage and took the process down.
-        refuse_released(*node);
-        node->validate_versions();
-
-        std::vector<Storage> input_grads;
-        if (node->is_barrier()) {
-            for (auto& [slot, grad] : slots)
-                node->accumulate_barrier_grad(slot, std::move(grad));
-            input_grads = node->apply_barrier();
-        } else {
-            input_grads = node->apply(std::move(grad_in));
-        }
+        std::vector<Storage> input_grads = run_node(*node, std::move(grad_in), std::move(slots));
 
         // Free saved forward tensors immediately unless the caller needs the
         // graph intact for a second backward call.
         if (!retain_graph)
-            release(*node);
+            freed = release(*node) || freed;
 
         check_anomaly_grads(*node, input_grads);
-
-        // Validate size consistency: the number of returned gradients should
-        // equal the number of outgoing edges.  A mismatch is only an error
-        // when both sides are non-empty; an empty result with edges is
-        // permissible when the node intentionally produces no gradients
-        // (e.g. a stop-gradient op).
-        const auto& edges = node->next_edges();
-        if (input_grads.size() != edges.size()) {
-            if (!edges.empty() && !input_grads.empty()) {
-                ErrorBuilder("Engine::backward").fail("input_grads/next_edges size mismatch");
-            }
-        }
-
-        // Distribute computed input gradients to the consumer nodes.
-        // If a consumer already has a partial gradient from another path,
-        // accumulate in-place; otherwise insert directly.
-        for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
-            // A custom Function's ``None`` arrives as an empty storage: no
-            // gradient for that input.  Routed on, it became the leaf's
-            // ``.grad`` — the leaf's shape over no memory, read back as
-            // whatever the allocator had last left there.
-            if (node->empty_grad_is_none() && storage_is_empty(input_grads[i]))
-                continue;
-            Node* next = edges[i].node.get();
-            if (next == nullptr)
-                continue;
-            route(pending, held, next, edges[i].input_nr, input_grads[i],
-                  has_slot_hooks(*next, edges[i].input_nr));
-        }
+        check_result_count(*node, input_grads.size());
+        route_results(*node, input_grads, send);
     }
 
-    // Sever the reference from root back into the graph so the nodes can be
-    // garbage-collected.  Skipped when retain_graph is true.
-    if (!retain_graph) {
-        release_root(root, order);
+    if (!retain_graph)
+        sever_roots(roots, order, freed);
+}
+
+void Engine::backward(const std::shared_ptr<TensorImpl>& root,
+                      Storage grad_seed,
+                      bool retain_graph,
+                      bool create_graph) {
+    if (!root)
+        ErrorBuilder("Engine::backward").fail("root is null");
+    TensorImplPtr seed;
+    if (!storage_is_empty(grad_seed))
+        seed = std::make_shared<TensorImpl>(std::move(grad_seed), root->shape(), root->dtype(),
+                                            root->device(), false);
+    backward({BackwardRoot{root, std::move(seed)}}, retain_graph, create_graph);
+}
+
+void Engine::backward(const std::vector<BackwardRoot>& roots,
+                      bool retain_graph,
+                      bool create_graph) {
+    check_roots(roots, "Engine::backward");
+    // Barriers discard what an earlier pass left in them (GraphBarrier.h).
+    const BackwardPass pass;
+    // The reference runs a backward with grad mode on only when it records
+    // the graph of its gradients: a hook, a module hook or a custom
+    // Function's backward then builds that graph, and otherwise builds none.
+    const GradModeGuard mode(create_graph);
+    const BackwardEvent event(roots);
+
+    if (create_graph) {
+        std::vector<TensorImplPtr> seeds;
+        seeds.reserve(roots.size());
+        for (const auto& r : roots)
+            seeds.push_back(graph_seed(r));
+        backward_for_graph(roots, std::move(seeds));
+        return;
     }
+    std::vector<Storage> seeds;
+    seeds.reserve(roots.size());
+    for (const auto& r : roots)
+        seeds.push_back(eager_seed(r));
+    eager_backward(roots, std::move(seeds), retain_graph);
 }
 
 // ── Functional gradients (no .grad written anywhere) ─────────────────────────
@@ -758,6 +949,201 @@ TensorImplPtr hooked_leaf(const Node& node) {
     return leaf && leaf->requires_grad() ? leaf : nullptr;
 }
 
+// Where the traversal of Engine::grad goes, decided once for every root.
+struct GradPlan {
+    const std::vector<std::shared_ptr<TensorImpl>>& inputs;
+    const CaptureTargets& targets;
+    std::unordered_set<const Node*> reaching;
+
+    // Off every path to a requested input, a node is sent nothing: none of
+    // it runs in this pass, and a barrier handed a gradient it never ran on
+    // kept it — a multi-output Function, which does not discard an earlier
+    // pass's gradients, added them into the next backward()'s.
+    bool on_path(const Node* node) const {
+        return node != nullptr && reaching.find(node) != reaching.end();
+    }
+
+    // The barrier slots whose gradient is held (see Delivery): those whose
+    // hooks run in this pass, those a requested input reads, and every slot
+    // of a barrier that will not run — for the same reason as above.
+    bool hold_at(const Node* next, std::uint32_t slot) const {
+        return next->is_barrier() &&
+               (has_slot_hooks(*next, slot) || captures_at_barrier(next, slot, targets, inputs) ||
+                !propagates(next, reaching, targets));
+    }
+};
+
+// A root that is a leaf with no graph differentiates to itself: dy/dy is the
+// seed, through the leaf's own hooks — once, on the sum of its seeds.
+template <typename Grad, typename Add, typename Capture>
+void capture_leaf_roots(const std::vector<BackwardRoot>& roots,
+                        std::vector<Grad>& seeds,
+                        const CaptureTargets& targets,
+                        std::vector<TensorImplPtr>& results,
+                        Add add,
+                        Capture capture) {
+    for (auto& [leaf, seed] : leaf_seeds(roots, seeds, add)) {
+        auto it = targets.orphans.find(leaf.get());
+        if (it == targets.orphans.end())
+            continue;
+        const TensorImplPtr value = capture(*leaf, std::move(seed));
+        for (const std::size_t s : it->second)
+            results[s] = value;
+    }
+}
+
+// Capture what reaches ``node`` under create_graph for the inputs it stands
+// for.
+void capture_for_graph(const Node& node,
+                       const TensorImplPtr& grad_in,
+                       const SlotGrads<TensorImplPtr>& slots,
+                       const GradPlan& plan,
+                       std::vector<TensorImplPtr>& results) {
+    const auto* wanted = capture_slots(&node, plan.targets);
+    if (wanted == nullptr)
+        return;
+    const TensorImplPtr leaf = hooked_leaf(node);
+    TensorImplPtr leaf_grad;
+    for (const std::size_t s : *wanted) {
+        TensorImplPtr captured = grad_in;
+        if (node.is_barrier()) {
+            const auto* held_grad = held_value(slots, plan.inputs[s]->grad_output_nr());
+            captured = held_grad == nullptr ? nullptr : *held_grad;
+        }
+        if (leaf && captured) {
+            // Once, however many times the leaf is asked for.
+            if (!leaf_grad)
+                leaf_grad = run_leaf_hooks_for_graph(*leaf, gradient_in_dtype_of(captured, leaf));
+            captured = leaf_grad;
+        }
+        results[s] = gradient_in_dtype_of(captured, plan.inputs[s]);
+    }
+}
+
+void grad_for_graph(const std::vector<BackwardRoot>& roots,
+                    std::vector<TensorImplPtr> seeds,
+                    const std::vector<std::shared_ptr<Node>>& order,
+                    const GradPlan& plan,
+                    std::vector<TensorImplPtr>& results) {
+    GraphPending pending;
+    HeldGrads<TensorImplPtr> held;
+    const auto send = [&](Node* next, std::uint32_t slot, const TensorImplPtr& grad) {
+        if (plan.on_path(next))
+            route_for_graph(pending, held, next, slot, grad, plan.hold_at(next, slot));
+    };
+    seed_roots(roots, seeds, send);
+
+    for (const auto& node : order) {
+        auto it = pending.find(node.get());
+        if (it == pending.end())
+            continue;
+        TensorImplPtr grad_in = std::move(it->second);
+        pending.erase(it);
+        // Off every path to a requested input: nothing of it runs.
+        if (!plan.on_path(node.get()))
+            continue;
+
+        const bool runs = propagates(node.get(), plan.reaching, plan.targets);
+
+        // Hooks before the checks, as in backward().
+        SlotGrads<TensorImplPtr> slots;
+        if (node->is_barrier())
+            slots = fire_held_for_graph(*node, held);
+        else if (node->tensor_hooks() != nullptr)
+            grad_in = run_slot_hooks_for_graph(*node, 0, std::move(grad_in));
+
+        capture_for_graph(*node, grad_in, slots, plan, results);
+        if (!runs)
+            continue;
+
+        const auto input_grads = run_node_for_graph(*node, std::move(grad_in), std::move(slots));
+        check_anomaly_grads_for_graph(*node, input_grads);
+        route_results(*node, input_grads, send);
+    }
+}
+
+// Capture what reaches ``node`` for the inputs it stands for.
+void capture_eager(Node& node,
+                   const Storage& grad_in,
+                   const SlotGrads<Storage>& slots,
+                   bool runs,
+                   const GradPlan& plan,
+                   std::vector<TensorImplPtr>& results) {
+    const auto* wanted = capture_slots(&node, plan.targets);
+    if (wanted == nullptr)
+        return;
+    const TensorImplPtr leaf = hooked_leaf(node);
+    std::optional<Storage> leaf_grad;
+    for (const std::size_t s : *wanted) {
+        const auto& inp = plan.inputs[s];
+        const Storage* captured = &grad_in;
+        if (node.is_barrier())
+            captured = held_value(slots, inp->grad_output_nr());
+        if (captured == nullptr)
+            continue;
+        if (leaf) {
+            // Once, however many times the leaf is asked for.
+            if (!leaf_grad)
+                leaf_grad = run_leaf_hooks(*leaf, *captured);
+            captured = &*leaf_grad;
+        }
+        // A barrier that runs is handed the held buffer too, and what it
+        // does with it is its own business.
+        Storage value = runs && node.is_barrier() ? own_grad_copy(*captured) : *captured;
+        results[s] = std::make_shared<TensorImpl>(std::move(value), inp->shape(), inp->dtype(),
+                                                  inp->device(), false);
+    }
+}
+
+void grad_eager(const std::vector<BackwardRoot>& roots,
+                std::vector<Storage> seeds,
+                const std::vector<std::shared_ptr<Node>>& order,
+                const GradPlan& plan,
+                bool retain_graph,
+                std::vector<TensorImplPtr>& results) {
+    Pending pending;
+    HeldGrads<Storage> held;
+    const auto send = [&](Node* next, std::uint32_t slot, Storage grad) {
+        if (plan.on_path(next))
+            route(pending, held, next, slot, std::move(grad), plan.hold_at(next, slot));
+    };
+    seed_roots(roots, seeds, send);
+
+    bool freed = false;
+    for (const auto& node : order) {
+        auto it = pending.find(node.get());
+        if (it == pending.end())
+            continue;
+        Storage grad_in = std::move(it->second);
+        pending.erase(it);
+        // Off every path to a requested input: nothing of it runs.
+        if (!plan.on_path(node.get()))
+            continue;
+
+        const bool runs = propagates(node.get(), plan.reaching, plan.targets);
+
+        // Hooks before the checks, as in backward().
+        SlotGrads<Storage> slots;
+        if (node->is_barrier())
+            slots = fire_held(*node, held);
+        else if (node->tensor_hooks() != nullptr)
+            grad_in = run_slot_hooks(*node, 0, std::move(grad_in));
+
+        capture_eager(*node, grad_in, slots, runs, plan, results);
+        if (!runs)
+            continue;
+
+        std::vector<Storage> input_grads = run_node(*node, std::move(grad_in), std::move(slots));
+        if (!retain_graph)
+            freed = release(*node) || freed;
+        check_anomaly_grads(*node, input_grads);
+        route_results(*node, input_grads, send);
+    }
+
+    if (!retain_graph)
+        sever_roots(roots, order, freed);
+}
+
 }  // namespace
 
 std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
@@ -767,211 +1153,56 @@ std::vector<TensorImplPtr> Engine::grad(const std::shared_ptr<TensorImpl>& root,
                                         bool create_graph) {
     if (!root)
         ErrorBuilder("Engine::grad").fail("root is null");
+    TensorImplPtr seed;
+    if (!storage_is_empty(grad_seed))
+        seed = std::make_shared<TensorImpl>(std::move(grad_seed), root->shape(), root->dtype(),
+                                            root->device(), false);
+    return grad({BackwardRoot{root, std::move(seed)}}, inputs, retain_graph, create_graph);
+}
+
+std::vector<TensorImplPtr> Engine::grad(const std::vector<BackwardRoot>& roots,
+                                        const std::vector<std::shared_ptr<TensorImpl>>& inputs,
+                                        bool retain_graph,
+                                        bool create_graph) {
+    check_roots(roots, "Engine::grad");
     // Barriers discard what an earlier pass left in them (GraphBarrier.h).
     const BackwardPass pass;
+    // Grad mode as in Engine::backward.
+    const GradModeGuard mode(create_graph);
+    const BackwardEvent event(roots);
 
     const CaptureTargets targets = build_targets(inputs);
     std::vector<TensorImplPtr> results(inputs.size());
 
-    Storage seed = std::move(grad_seed);
-    if (storage_is_empty(seed))
-        seed = make_ones_storage(root->shape(), root->dtype(), root->device());
-
-    // A leaf root differentiates to itself: dy/dy is the seed, through the
-    // leaf's own hooks.
-    if (!root->grad_fn()) {
-        auto it = targets.orphans.find(root.get());
-        if (it == targets.orphans.end())
-            return results;
-        if (create_graph) {
-            const TensorImplPtr value = run_leaf_hooks_for_graph(
-                *root, std::make_shared<TensorImpl>(std::move(seed), root->shape(), root->dtype(),
-                                                    root->device(), false));
-            for (const std::size_t s : it->second)
-                results[s] = value;
-            return results;
-        }
-        const Storage value = run_leaf_hooks(*root, std::move(seed));
-        for (const std::size_t s : it->second)
-            results[s] = std::make_shared<TensorImpl>(value, root->shape(), root->dtype(),
-                                                      root->device(), false);
-        return results;
-    }
-
-    if (!create_graph && !is_anomaly_enabled())
-        run_fusion_pass(root->grad_fn().get());
-    const auto order = topo_order(root->grad_fn());
-    const auto reaching = reaching_nodes(order, targets);
-    // Off every path to a requested input, a node is sent nothing: none of it
-    // runs in this pass, and a barrier handed a gradient it never ran on kept
-    // it — a multi-output Function, which does not discard an earlier pass's
-    // gradients, added them into the next backward()'s.
-    const auto on_path = [&](const Node* node) {
-        return node != nullptr && reaching.find(node) != reaching.end();
-    };
-
-    // The barrier slots whose gradient is held (see Delivery): those whose
-    // hooks run in this pass, those a requested input reads, and every slot
-    // of a barrier that will not run — for the same reason as above.
-    const auto hold_at = [&](const Node* next, std::uint32_t slot) {
-        return next->is_barrier() &&
-               (has_slot_hooks(*next, slot) || captures_at_barrier(next, slot, targets, inputs) ||
-                !propagates(next, reaching, targets));
-    };
-
-    Node* const root_fn = root->grad_fn().get();
-    const std::uint32_t root_slot = root->grad_output_nr();
+    const auto fns = root_nodes(roots);
+    if (!create_graph)
+        fuse(fns);
+    const auto order = topo_order(fns);
+    const GradPlan plan{inputs, targets, reaching_nodes(order, targets)};
 
     if (create_graph) {
-        auto seed_impl = std::make_shared<TensorImpl>(std::move(seed), root->shape(), root->dtype(),
-                                                      root->device(), false);
-        GraphPending pending;
-        HeldGrads<TensorImplPtr> held;
-        if (on_path(root_fn))
-            route_for_graph(pending, held, root_fn, root_slot, seed_impl,
-                            hold_at(root_fn, root_slot));
-
-        for (const auto& node : order) {
-            auto it = pending.find(node.get());
-            if (it == pending.end())
-                continue;
-            TensorImplPtr grad_in = std::move(it->second);
-            pending.erase(it);
-            // Off every path to a requested input: nothing of it runs.
-            if (!on_path(node.get()))
-                continue;
-
-            const bool runs = propagates(node.get(), reaching, targets);
-
-            // Hooks before the checks, as in backward().
-            SlotGrads<TensorImplPtr> slots;
-            if (node->is_barrier())
-                slots = fire_held_for_graph(*node, held);
-            else if (node->tensor_hooks() != nullptr)
-                grad_in = run_slot_hooks_for_graph(*node, 0, std::move(grad_in));
-
-            if (const auto* wanted = capture_slots(node.get(), targets)) {
-                const TensorImplPtr leaf = hooked_leaf(*node);
-                TensorImplPtr leaf_grad;
-                for (const std::size_t s : *wanted) {
-                    TensorImplPtr captured = grad_in;
-                    if (node->is_barrier()) {
-                        const auto* held_grad = held_value(slots, inputs[s]->grad_output_nr());
-                        captured = held_grad == nullptr ? nullptr : *held_grad;
-                    }
-                    if (leaf && captured) {
-                        // Once, however many times the leaf is asked for.
-                        if (!leaf_grad)
-                            leaf_grad = run_leaf_hooks_for_graph(
-                                *leaf, gradient_in_dtype_of(captured, leaf));
-                        captured = leaf_grad;
-                    }
-                    results[s] = gradient_in_dtype_of(captured, inputs[s]);
-                }
-            }
-            if (!runs)
-                continue;
-
-            refuse_released(*node);
-            node->validate_versions();
-            node->restore_saved_for_graph();
-            if (node->is_barrier())
-                deliver_held_for_graph(*node, std::move(slots), grad_in);
-            const auto input_grads = apply_node_for_graph(*node, grad_in);
-            check_anomaly_grads_for_graph(*node, input_grads);
-
-            const auto& edges = node->next_edges();
-            for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
-                Node* next = edges[i].node.get();
-                if (on_path(next))
-                    route_for_graph(pending, held, next, edges[i].input_nr, input_grads[i],
-                                    hold_at(next, edges[i].input_nr));
-            }
-        }
+        std::vector<TensorImplPtr> seeds;
+        seeds.reserve(roots.size());
+        for (const auto& r : roots)
+            seeds.push_back(graph_seed(r));
+        capture_leaf_roots(roots, seeds, targets, results, add_graph,
+                           [](const TensorImpl& leaf, TensorImplPtr seed) {
+                               return run_leaf_hooks_for_graph(leaf, std::move(seed));
+                           });
+        grad_for_graph(roots, std::move(seeds), order, plan, results);
         return results;
     }
 
-    Pending pending;
-    HeldGrads<Storage> held;
-    if (on_path(root_fn))
-        route(pending, held, root_fn, root_slot, std::move(seed), hold_at(root_fn, root_slot));
-
-    for (const auto& node : order) {
-        auto it = pending.find(node.get());
-        if (it == pending.end())
-            continue;
-        Storage grad_in = std::move(it->second);
-        pending.erase(it);
-        // Off every path to a requested input: nothing of it runs.
-        if (!on_path(node.get()))
-            continue;
-
-        const bool runs = propagates(node.get(), reaching, targets);
-
-        // Hooks before the checks, as in backward().
-        SlotGrads<Storage> slots;
-        if (node->is_barrier())
-            slots = fire_held(*node, held);
-        else if (node->tensor_hooks() != nullptr)
-            grad_in = run_slot_hooks(*node, 0, std::move(grad_in));
-
-        if (const auto* wanted = capture_slots(node.get(), targets)) {
-            const TensorImplPtr leaf = hooked_leaf(*node);
-            std::optional<Storage> leaf_grad;
-            for (const std::size_t s : *wanted) {
-                const auto& inp = inputs[s];
-                const Storage* captured = &grad_in;
-                if (node->is_barrier())
-                    captured = held_value(slots, inp->grad_output_nr());
-                if (captured == nullptr)
-                    continue;
-                if (leaf) {
-                    // Once, however many times the leaf is asked for.
-                    if (!leaf_grad)
-                        leaf_grad = run_leaf_hooks(*leaf, *captured);
-                    captured = &*leaf_grad;
-                }
-                // A barrier that runs is handed the held buffer too, and what
-                // it does with it is its own business.
-                Storage value = runs && node->is_barrier() ? own_grad_copy(*captured) : *captured;
-                results[s] = std::make_shared<TensorImpl>(std::move(value), inp->shape(),
-                                                          inp->dtype(), inp->device(), false);
-            }
-        }
-        if (!runs)
-            continue;
-
-        refuse_released(*node);
-        node->validate_versions();
-        std::vector<Storage> input_grads;
-        if (node->is_barrier()) {
-            for (auto& [slot, grad] : slots)
-                node->accumulate_barrier_grad(slot, std::move(grad));
-            input_grads = node->apply_barrier();
-        } else {
-            input_grads = node->apply(std::move(grad_in));
-        }
-
-        if (!retain_graph)
-            release(*node);
-
-        check_anomaly_grads(*node, input_grads);
-
-        const auto& edges = node->next_edges();
-        for (std::size_t i = 0; i < input_grads.size() && i < edges.size(); ++i) {
-            Node* next = edges[i].node.get();
-            // As in ``backward``: from these nodes an empty storage is a
-            // ``None``, not a value.
-            if (!on_path(next) || (node->empty_grad_is_none() && storage_is_empty(input_grads[i])))
-                continue;
-            route(pending, held, next, edges[i].input_nr, std::move(input_grads[i]),
-                  hold_at(next, edges[i].input_nr));
-        }
-    }
-
-    if (!retain_graph)
-        release_root(root, order);
-
+    std::vector<Storage> seeds;
+    seeds.reserve(roots.size());
+    for (const auto& r : roots)
+        seeds.push_back(eager_seed(r));
+    capture_leaf_roots(
+        roots, seeds, targets, results, add_eager, [](const TensorImpl& leaf, Storage seed) {
+            return std::make_shared<TensorImpl>(run_leaf_hooks(leaf, std::move(seed)), leaf.shape(),
+                                                leaf.dtype(), leaf.device(), false);
+        });
+    grad_eager(roots, std::move(seeds), order, plan, retain_graph, results);
     return results;
 }
 

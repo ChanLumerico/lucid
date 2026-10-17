@@ -600,7 +600,7 @@ def test_a_backward_without_hooks_calls_no_python() -> None:
 
     sys.setprofile(profile)
     try:
-        _C_engine.engine_backward(root)
+        _C_engine.engine_backward([root], [None])
     finally:
         sys.setprofile(None)
     assert events == []

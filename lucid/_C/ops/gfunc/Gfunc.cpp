@@ -576,6 +576,11 @@ TensorImplPtr scatter_add_op(const TensorImplPtr& base,
         Device device_;
         std::string node_name() const override { return "scatter_add"; }
         void release_saved() override { saved_indices_.reset(); }
+        void
+        for_each_owned_tensor(const std::function<void(const TensorImplPtr&)>& fn) const override {
+            if (saved_indices_)
+                fn(saved_indices_);
+        }
         // The index is the one tensor read by value; base and src only route
         // the gradient.
         void validate_versions() override {
@@ -750,6 +755,13 @@ struct ScatterReduceNode : Node {
         saved_indices_.reset();
         saved_src_.reset();
         saved_out_.reset();
+    }
+
+    void for_each_owned_tensor(const std::function<void(const TensorImplPtr&)>& fn) const override {
+        for (const auto* t : {&saved_base_, &saved_indices_, &saved_src_, &saved_out_}) {
+            if (*t)
+                fn(*t);
+        }
     }
 };
 

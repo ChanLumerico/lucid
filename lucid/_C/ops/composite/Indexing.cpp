@@ -149,6 +149,10 @@ struct ScatterSetNode : Node {
 
     std::string node_name() const override { return "scatter_set"; }
     void release_saved() override { saved_indices_.reset(); }
+    void for_each_owned_tensor(const std::function<void(const TensorImplPtr&)>& fn) const override {
+        if (saved_indices_)
+            fn(saved_indices_);
+    }
     // The index is the one tensor read by value; base and src only route the
     // gradient.
     void validate_versions() override { check_saved_version(saved_indices_, 0, "scatter", 2); }

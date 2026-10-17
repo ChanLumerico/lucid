@@ -2,7 +2,7 @@
 //
 // Exposes the autograd graph and backward engine to Python.  Registers:
 //   - Node / AccumulateGrad — the two graph node types visible from Python
-//   - engine_backward() — triggers reverse-mode AD from a scalar root
+//   - engine_backward() / engine_grad() — one reverse-mode pass from roots
 //   - register_custom_function() — wires up lucid.autograd.Function so Python
 //     subclasses can define custom forward/backward passes (delegates to
 //     CustomFunction.h for the heavy lifting)
@@ -14,6 +14,10 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <optional>
+#include <string>
+#include <vector>
+
 #include "../autograd/AccumulateGrad.h"
 #include "../autograd/CustomFunction.h"
 #include "../autograd/Engine.h"
@@ -22,11 +26,39 @@
 #include "../autograd/ModuleHookNode.h"
 #include "../autograd/Node.h"
 #include "../autograd/TensorHooks.h"
+#include "../core/ErrorBuilder.h"
 #include "../core/TensorImpl.h"
 
 namespace py = pybind11;
 
 namespace lucid::bindings {
+
+namespace {
+
+// The roots of a pass with their seeds, one seed per root.
+//
+// Raises
+// ------
+// LucidError
+//     The counts differ, or a root is None.
+std::vector<BackwardRoot>
+backward_roots(const char* op,
+               const std::vector<std::shared_ptr<TensorImpl>>& roots,
+               const std::vector<std::optional<std::shared_ptr<TensorImpl>>>& seeds) {
+    if (roots.size() != seeds.size())
+        ErrorBuilder(op).fail("got " + std::to_string(roots.size()) + " roots and " +
+                              std::to_string(seeds.size()) + " seeds");
+    std::vector<BackwardRoot> out;
+    out.reserve(roots.size());
+    for (std::size_t i = 0; i < roots.size(); ++i) {
+        if (!roots[i])
+            ErrorBuilder(op).fail("roots[" + std::to_string(i) + "] is None");
+        out.push_back({roots[i], seeds[i].value_or(nullptr)});
+    }
+    return out;
+}
+
+}  // namespace
 
 // Registers the backward engine, autograd node types, and the custom-function
 // registration helper.
@@ -39,6 +71,14 @@ void register_autograd(py::module_& m) {
         .def_property_readonly("sequence_nr", &Node::sequence_nr)
         .def("name", &Node::node_name,
              "The operation this node differentiates, e.g. ``\"MulBackward\"``.")
+        .def(
+            "_owned_tensors",
+            [](const Node& n) {
+                std::vector<TensorImplPtr> owned;
+                n.for_each_owned_tensor([&](const TensorImplPtr& t) { owned.push_back(t); });
+                return owned;
+            },
+            "The tensors this node holds a strong reference to, for the cyclic collector.")
         .def("__repr__", [](const Node& n) {
             return "<lucid.Node " + n.node_name() + " seq=" + std::to_string(n.sequence_nr()) + ">";
         });
@@ -48,19 +88,24 @@ void register_autograd(py::module_& m) {
     py::class_<AccumulateGrad, Node, std::shared_ptr<AccumulateGrad>>(
         m, "AccumulateGrad", py::custom_type_setup(enable_node_autograd_gc));
 
-    // engine_backward seeds the backward pass with a ones_like gradient so
-    // scalar loss tensors do not need an explicit gradient argument.  The
-    // CpuStorage{} seed is an empty storage; Engine::backward constructs the
-    // actual ones tensor internally.
+    // engine_backward runs one pass from every root, each seeded with its
+    // gradient — ones of its shape where that is None — as the reference
+    // runs ``backward([a, b], [ga, gb])``: the graph the roots share is
+    // walked once, and the hooks of a tensor in it see its whole gradient.
     m.def(
         "engine_backward",
-        [](std::shared_ptr<TensorImpl> root, bool retain_graph, bool create_graph) {
-            Engine::backward(root, Storage{CpuStorage{}}, retain_graph, create_graph);
+        [](const std::vector<std::shared_ptr<TensorImpl>>& roots,
+           const std::vector<std::optional<std::shared_ptr<TensorImpl>>>& grad_tensors,
+           bool retain_graph, bool create_graph) {
+            Engine::backward(backward_roots("engine_backward", roots, grad_tensors), retain_graph,
+                             create_graph);
         },
-        py::arg("root"), py::arg("retain_graph") = false, py::arg("create_graph") = false,
-        "Run backward starting at `root` with an implicit ones_like seed. "
-        "If create_graph is True, the backward pass itself is tracked in the "
-        "autograd graph, enabling second-order derivatives (MAML, Hessians, etc.).");
+        py::arg("roots"), py::arg("grad_tensors"), py::arg("retain_graph") = false,
+        py::arg("create_graph") = false,
+        "Run one backward pass from `roots`, each seeded with its entry of "
+        "`grad_tensors` (None: ones of the root's shape). If create_graph is "
+        "True, the backward pass itself is tracked in the autograd graph, "
+        "enabling second-order derivatives (MAML, Hessians, etc.).");
 
     // engine_grad is the functional counterpart: it returns the gradients
     // instead of accumulating them, and touches no tensor's ``.grad`` at
@@ -70,17 +115,20 @@ void register_autograd(py::module_& m) {
     // whatever the traversal deposited.
     m.def(
         "engine_grad",
-        [](std::shared_ptr<TensorImpl> root, const std::vector<std::shared_ptr<TensorImpl>>& inputs,
-           std::shared_ptr<TensorImpl> grad_seed, bool retain_graph, bool create_graph) {
-            Storage seed = grad_seed ? grad_seed->storage() : Storage{CpuStorage{}};
-            return Engine::grad(root, std::move(seed), inputs, retain_graph, create_graph);
+        [](const std::vector<std::shared_ptr<TensorImpl>>& roots,
+           const std::vector<std::shared_ptr<TensorImpl>>& inputs,
+           const std::vector<std::optional<std::shared_ptr<TensorImpl>>>& grad_outputs,
+           bool retain_graph, bool create_graph) {
+            return Engine::grad(backward_roots("engine_grad", roots, grad_outputs), inputs,
+                                retain_graph, create_graph);
         },
-        py::arg("root"), py::arg("inputs"), py::arg("grad_seed") = nullptr,
+        py::arg("roots"), py::arg("inputs"), py::arg("grad_outputs"),
         py::arg("retain_graph") = false, py::arg("create_graph") = false,
-        "Gradients of `root` w.r.t. `inputs`, returned rather than accumulated. "
-        "Never reads or writes a leaf's .grad (a non-leaf that asked for "
-        "retain_grad keeps what reaches it). An entry is None when that "
-        "input lies outside the graph.");
+        "Gradients of `roots` w.r.t. `inputs` from one pass, each root seeded "
+        "with its entry of `grad_outputs` (None: ones), returned rather than "
+        "accumulated. Never reads or writes a leaf's .grad (a non-leaf that "
+        "asked for retain_grad keeps what reaches it). An entry is None when "
+        "that input lies outside the graph.");
 
     m.def(
         "_accumulate_grad",

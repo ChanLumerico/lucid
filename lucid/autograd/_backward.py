@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid.autograd._grad_mode import enable_grad, no_grad
+from lucid.autograd._grad_mode import no_grad
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -127,23 +127,20 @@ def _make_seeds(
     ]
 
 
-def _seeded_root(
-    out: Tensor, seed: Tensor | None, keep_seed_graph: bool
-) -> _C_engine.TensorImpl:
-    """The scalar the engine differentiates: ``out``, or ``sum(out * seed)``.
+def _engine_seeds(
+    seeds: list[Tensor | None], keep_seed_graph: bool
+) -> list[_C_engine.TensorImpl | None]:
+    """The seeds as the engine takes them, one per root: ``None`` is ones.
 
-    Built with grad mode on, so a backward started under ``no_grad`` still
-    reaches ``out``'s graph.  ``keep_seed_graph`` keeps a seed's own graph
+    The engine seeds each root with its gradient as given — the reference's
+    ``grad_tensors``.  ``keep_seed_graph`` keeps a seed's own graph
     attached, so that under ``create_graph`` a gradient is differentiable
     with respect to whatever computed the seed.
     """
-    if seed is None:
-        return _unwrap(out)
-    with enable_grad():
-        s = seed if keep_seed_graph else seed.detach()
-        if out.is_complex():
-            s = _wrap(_C_engine.conj(_unwrap(s)))
-        return _unwrap((out * s).sum())
+    return [
+        None if s is None else _unwrap(s if keep_seed_graph else s.detach())
+        for s in seeds
+    ]
 
 
 def backward(
@@ -287,16 +284,16 @@ def backward(
             create_graph=create_graph,
         )
         return
-    for index, (root, seed) in enumerate(zip(roots, seeds, strict=True)):
-        impl = _seeded_root(root, seed, keep_seed_graph=False)
-        _refuse_trace()
-        # Every root but the last needs the graph kept for the next one:
-        # two roots sharing a node freed it under the second.
-        _C_engine.engine_backward(
-            impl,
-            retain_graph=_retain or index < len(roots) - 1,
-            create_graph=create_graph,
-        )
+    _refuse_trace()
+    # One pass from every root, as the reference runs it: a pass per root
+    # freed the graph the roots share under the second one, and ran the
+    # hooks of a tensor they share once per root, on part of its gradient.
+    _C_engine.engine_backward(
+        [_unwrap(root) for root in roots],
+        _engine_seeds(seeds, keep_seed_graph=False),
+        retain_graph=_retain,
+        create_graph=create_graph,
+    )
 
 
 def _backward_inputs(inputs: Tensor | Sequence[Tensor]) -> list[Tensor]:
@@ -487,28 +484,22 @@ def grad(
 
     _retain = retain_graph if retain_graph is not None else create_graph
 
-    # One engine call per output, summing the contributions.  The engine
-    # returns the gradients rather than accumulating them, so no tensor's
-    # ``.grad`` is read or written — not the requested inputs', and not any
-    # other leaf's.
-    totals: list[Tensor | None] = [None] * len(ins)
-    impls = [_unwrap(inp) for inp in ins]
-    for index, (out, seed) in enumerate(zip(outs, seeds, strict=True)):
-        # Under ``create_graph`` the seed stays attached: the returned
-        # gradient is ``J^T seed``, and a seed computed from something
-        # upstream (the double-backward form of a JVP, a learned weighting)
-        # must be differentiable through it.
-        root = _seeded_root(out, seed, keep_seed_graph=create_graph)
-        # Every output but the last needs the graph kept for the next call.
-        keep = _retain or index < len(outs) - 1
-        _refuse_trace()
-        partials = _C_engine.engine_grad(root, impls, None, keep, create_graph)
-        for slot, impl in enumerate(partials):
-            if impl is None:
-                continue
-            piece = _wrap(impl)
-            current = totals[slot]
-            totals[slot] = piece if current is None else current + piece
+    # One engine pass from every output, which sums their contributions.  The
+    # engine returns the gradients rather than accumulating them, so no
+    # tensor's ``.grad`` is read or written — not the requested inputs', and
+    # not any other leaf's.  Under ``create_graph`` a seed stays attached:
+    # the returned gradient is ``J^T seed``, and a seed computed from
+    # something upstream (the double-backward form of a JVP, a learned
+    # weighting) must be differentiable through it.
+    _refuse_trace()
+    partials = _C_engine.engine_grad(
+        [_unwrap(out) for out in outs],
+        [_unwrap(inp) for inp in ins],
+        _engine_seeds(seeds, keep_seed_graph=create_graph),
+        _retain,
+        create_graph,
+    )
+    totals = [None if impl is None else _wrap(impl) for impl in partials]
 
     if not allow_unused and any(g is None for g in totals):
         raise RuntimeError(

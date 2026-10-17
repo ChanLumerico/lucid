@@ -29,6 +29,8 @@ void register_profiler(py::module_& m) {
         .def_readonly("time_ns", &OpEvent::time_ns)
         .def_readonly("memory_delta_bytes", &OpEvent::memory_delta_bytes)
         .def_readonly("flops", &OpEvent::flops)
+        .def_readonly("backward", &OpEvent::backward,
+                      "Whether the event is backward work: a backward pass or one of its nodes.")
         .def("__repr__", [](const OpEvent& e) {
             return "OpEvent(name='" + e.name + "', time_ns=" + std::to_string(e.time_ns) +
                    ", flops=" + std::to_string(e.flops) + ")";

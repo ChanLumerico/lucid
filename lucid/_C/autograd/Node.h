@@ -15,6 +15,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -371,6 +372,7 @@ public:
     // Default is a no-op.  Subclasses override to reset their saved
     // slots to empty :class:`CpuStorage`.  Called automatically by the
     // engine after :meth:`apply` returns, unless ``retain_graph=True``.
+    // What it frees is said by :meth:`saved_kind`.
     virtual void release_saved() {}
 
     // Make the tensors :meth:`apply_for_graph` reads the ones this node was
@@ -398,6 +400,27 @@ public:
     //     (Through overrides) when such a tensor's values were not kept in a
     //     form the forward-time tensor can be rebuilt from.
     virtual void restore_saved_for_graph() {}
+
+    // What :meth:`release_saved` frees, asked just before it runs.
+    //
+    // ``kNothing``: nothing a pass frees — the node can run again in any
+    // mode (``AccumulateGrad``, which a leaf keeps from graph to graph).
+    // ``kGraphInputs``: only the tensors :meth:`apply_for_graph` reads, so an
+    // eager pass may run the node again and a create_graph pass may not.
+    // ``kEagerValues``: values :meth:`apply` reads, so no pass may.  The
+    // default, for a node that does not say: a node holding a tensor in a
+    // member of its own reads it at backward, and refusing a second pass is
+    // what keeps it from reading freed memory.
+    enum class SavedKind : std::uint8_t { kNothing, kGraphInputs, kEagerValues };
+    virtual SavedKind saved_kind() const noexcept { return SavedKind::kEagerValues; }
+
+    // Call ``fn`` on every tensor this node holds a strong reference to — what
+    // it keeps for backward — so that the cyclic garbage collector, which
+    // reaches the graph only through the engine, can see past the node.  The
+    // default holds none.
+    virtual void for_each_owned_tensor(const std::function<void(const TensorImplPtr&)>& fn) const {
+        static_cast<void>(fn);
+    }
 
     // Monotonically-increasing identifier assigned at construction.
     //
@@ -456,19 +479,27 @@ public:
     //     One counter per forward input.  Moved into the node.
     void set_saved_versions(std::vector<std::int64_t> v) { saved_versions_ = std::move(v); }
 
-    // Called by the engine right after :meth:`release_saved`.  Clearing the
-    // counters while keeping their capacity records that this node held
-    // tensors from forward which are now gone, so a second pass can be
-    // refused instead of reading freed storage — without a new member,
-    // which would change ``Node``'s layout and with it the engine ABI.
-    void forget_saved_versions() noexcept { saved_versions_.clear(); }
-
-    // Whether :meth:`release_saved` has freed what this node saved at
-    // forward.  A node that saved nothing never captured versions
-    // (capacity 0) and may be traversed again, as the reference allows.
-    bool saved_released() const noexcept {
-        return saved_versions_.empty() && saved_versions_.capacity() > 0;
+    // Record that a pass released this node, freeing what ``freed`` says —
+    // :meth:`saved_kind`, read before :meth:`release_saved` ran.  The
+    // version counters go too: nothing they guard is left to check.
+    void mark_released(SavedKind freed) noexcept {
+        if (freed == SavedKind::kNothing)
+            return;
+        release_state_ |= kReleased;
+        if (freed == SavedKind::kEagerValues)
+            release_state_ |= kFreedEagerValues;
+        std::vector<std::int64_t>().swap(saved_versions_);
     }
+
+    // Whether a pass released what this node held for backward.  A
+    // create_graph pass refuses such a node: graph-mode backward reads the
+    // tensors the node was handed, and a release frees them all.
+    bool released() const noexcept { return (release_state_ & kReleased) != 0; }
+
+    // Whether a release freed values this node's eager backward reads, so
+    // that every pass refuses it.  A node that saved none of them — ``add``,
+    // ``sum``, a view — runs eagerly again, as the reference allows.
+    bool saved_released() const noexcept { return (release_state_ & kFreedEagerValues) != 0; }
 
     // The hooks and ``retain_grad`` targets of the tensors this node
     // produced, by output slot (TensorHooks.h), or null when there are none
@@ -506,7 +537,12 @@ protected:
     std::vector<std::int64_t> saved_versions_;
 
 private:
+    static constexpr std::uint8_t kReleased = 1;
+    static constexpr std::uint8_t kFreedEagerValues = 2;
+
     std::unique_ptr<NodeHooks> tensor_hooks_;
+    // What releases have freed (:meth:`mark_released`).
+    std::uint8_t release_state_ = 0;
 };
 
 // Return the next globally-unique node sequence number and advance the

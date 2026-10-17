@@ -32,4 +32,12 @@ NoGradGuard::~NoGradGuard() {
     g_grad_enabled = prev_;
 }
 
+GradModeGuard::GradModeGuard(bool enabled) : prev_(g_grad_enabled) {
+    g_grad_enabled = enabled;
+}
+
+GradModeGuard::~GradModeGuard() {
+    g_grad_enabled = prev_;
+}
+
 }  // namespace lucid

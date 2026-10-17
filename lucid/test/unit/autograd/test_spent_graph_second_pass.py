@@ -210,11 +210,6 @@ def _nothing_saved_backward(m: ModuleType, device: str) -> object:
     return _values(a.grad)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-350: a spent root refuses whatever its graph saved; a graph "
-    "that saves nothing should run again, as the reference allows",
-)
 @pytest.mark.parametrize(
     ("scenario", "expected"),
     [(_nothing_saved_grad, [[1.0, 1.0]]), (_nothing_saved_backward, [2.0, 2.0])],

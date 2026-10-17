@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+#include <type_traits>
 
 #include "../api.h"
 #include "../core/Device.h"
@@ -269,6 +270,31 @@ public:
         for (auto& p : saved_impl_inputs_)
             p.reset();
         saved_impl_output_.reset();
+    }
+
+    // :meth:`apply` reads values from :attr:`saved_inputs_` and
+    // :attr:`saved_output_` only, so a node that kept none there frees just
+    // the tensors graph-mode backward reads.  A member of the derived
+    // class's own is not released, so it is still there for an eager pass.
+    SavedKind saved_kind() const noexcept override {
+        static_assert(
+            std::is_same_v<decltype(&Derived::release_saved), void (AutogradNode::*)()> ||
+                !std::is_same_v<decltype(&Derived::saved_kind),
+                                SavedKind (AutogradNode::*)() const noexcept>,
+            "a node that frees members of its own in release_saved must say in saved_kind "
+            "whether its eager backward reads them");
+        bool holds = ::lucid::holds_saved_values(saved_output_);
+        for (const auto& s : saved_inputs_)
+            holds = holds || ::lucid::holds_saved_values(s);
+        return holds ? SavedKind::kEagerValues : SavedKind::kGraphInputs;
+    }
+
+    // The inputs kept for graph-mode backward; the output is held weakly.
+    void for_each_owned_tensor(const std::function<void(const TensorImplPtr&)>& fn) const override {
+        for (const auto& p : saved_impl_inputs_) {
+            if (p)
+                fn(p);
+        }
     }
 
     std::array<std::weak_ptr<TensorImpl>, N_IN> input_tensors_;

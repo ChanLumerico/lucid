@@ -1189,6 +1189,10 @@ void set_anomaly_enabled(bool v);
 // empty buffers.
 bool storage_has_nan(const Storage& s);
 
+// ``node`` as the anomaly report and the profiler name it: its class when
+// that reads as a backward (``"PermuteBackward"``), else :meth:`node_name`.
+std::string backward_node_name(const Node& node);
+
 // When :func:`is_anomaly_enabled` is ``true``, inspect every storage in
 // ``grads`` and raise a :class:`LucidError` naming ``node`` and the
 // offending output index on the first ``NaN`` encountered.

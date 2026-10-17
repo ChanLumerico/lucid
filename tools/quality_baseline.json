@@ -854,7 +854,6 @@
   "lizard": {
    "function-ccn": {
     "lucid/_C/autograd/CustomFunction.cpp": 1,
-    "lucid/_C/autograd/Engine.cpp": 2,
     "lucid/_C/autograd/FusionPass.cpp": 1,
     "lucid/_C/backend/cpu/CpuBackend.h": 36,
     "lucid/_C/backend/cpu/Pool.cpp": 3,
@@ -1096,7 +1095,6 @@
    },
    "function-length": {
     "lucid/_C/autograd/CustomFunction.cpp": 1,
-    "lucid/_C/autograd/Engine.cpp": 2,
     "lucid/_C/backend/cpu/CpuBackend.h": 15,
     "lucid/_C/backend/gpu/GpuBackend.h": 7,
     "lucid/_C/bindings/bind.cpp": 1,
