@@ -848,6 +848,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - type check_source_rules under mypy --strict
 
+- fractional_max_pool of an empty batch is an empty result
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

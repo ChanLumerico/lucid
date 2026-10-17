@@ -481,6 +481,24 @@ def _fractional_plane(
     return flat.max(dim=-1), index
 
 
+def _no_planes(
+    xb: Tensor, out: tuple[int, ...], unbatched: bool, return_indices: bool
+) -> Tensor | tuple[Tensor, Tensor]:
+    """A fractional pool of a batched input with no ``(N, C)`` plane.
+
+    The answer is empty at the pooled shape, as the reference's is for an
+    empty batch, rather than a stack of nothing; empty channels get the same
+    answer, as every other pool here gives them.  It comes from the input,
+    so it requires grad when the input does.
+    """
+    lead = (int(xb.shape[0]), int(xb.shape[1]))
+    result = _drop_batch_axis(xb.reshape(*lead, *out).clone(), unbatched)
+    if not return_indices:
+        return result
+    where = _lucid.zeros(*lead, *out, dtype=_lucid.int64, device=xb.device)
+    return result, _drop_batch_axis(where, unbatched)
+
+
 def _fractional_max_pool(
     x: Tensor,
     kernel_size: int | Sequence[int],
@@ -510,6 +528,8 @@ def _fractional_max_pool(
             f"{op}: _random_samples must have shape {(batch, channels, n)}, "
             f"got {tuple(samples.shape)}"
         )
+    if batch * channels == 0:
+        return _no_planes(xb, out, unbatched, return_indices)
     # The reference reads a 2-D sample as (width, height) and a 3-D one as
     # (depth, height, width).
     axis_sample = (1, 0) if n == 2 else tuple(range(n))
