@@ -949,8 +949,8 @@ class Tensor:
         (DAG) of such nodes; :meth:`backward` traverses it in reverse
         topological order.
 
-        Leaf tensors (created directly, not via ops) always have
-        ``grad_fn = None``.
+        Leaf tensors always have ``grad_fn = None``, also once used in a graph,
+        where the engine keeps the leaf's gradient accumulator in that slot.
 
         Returns
         -------
@@ -981,7 +981,7 @@ class Tensor:
         where :math:`\mathbf{y} = f(\mathbf{x})` and ``grad_fn`` carries the
         Jacobian-vector product :math:`v \mapsto v \cdot J_f`.
         """
-        return getattr(self._impl, "grad_fn", None)
+        return None if self._impl.is_leaf else self._impl.grad_fn
 
     def requires_grad_(self, requires_grad: bool = True) -> Self:
         r"""Enable or disable gradient tracking for this tensor, in-place.
