@@ -495,22 +495,45 @@ def normalize_factory_kwargs(
         _device = _default_device_enum_cached()
     else:
         _device = _parse_device(dev)
-    if requires_grad and _promotion.is_integral(_dtype):
+    return _dtype, _device, requires_grad
+
+
+def _check_grad_dtype(dtype: _C_engine.Dtype, requires_grad: bool) -> None:
+    """Refuse ``requires_grad=True`` on a bool or integer dtype.
+
+    The one home of this rule.  The engine's flag setters do not check, so
+    every Python path that sets the flag comes through here: an alias
+    through :func:`_impl_with_grad`, the in-place flip through
+    ``Tensor.requires_grad_`` and the property setter.  It checks the
+    tensor's own dtype — checking a factory's *requested* dtype instead,
+    which reads as the default float under ``dtype=None``, is how
+    ``Tensor(int_tensor, requires_grad=True)`` used to get through.
+
+    Raises
+    ------
+    RuntimeError
+        If ``requires_grad`` is set and ``dtype`` is bool or an integer.
+    """
+    if requires_grad and _promotion.is_integral(dtype):
         raise RuntimeError(
             "only Tensors of floating point and complex dtype can require gradients"
         )
-    return _dtype, _device, requires_grad
 
 
 def _impl_with_grad(
     impl: _C_engine.TensorImpl, requires_grad: bool
 ) -> _C_engine.TensorImpl:
-    """Return a new TensorImpl sharing the same storage but with a different requires_grad.
-    Uses clone_with_grad — no data copy, no numpy round-trip."""
-    if requires_grad and _promotion.is_integral(impl.dtype):
-        raise RuntimeError(
-            "only Tensors of floating point and complex dtype can require gradients"
-        )
+    """An alias of ``impl`` — same storage, no copy — with ``requires_grad`` set.
+
+    Python code takes a ``clone_with_grad`` alias only through here, so no
+    alias can carry the flag on a dtype that has no gradient.
+
+    Raises
+    ------
+    RuntimeError
+        If ``requires_grad`` is set and ``impl`` is bool or an integer.
+    """
+    _check_grad_dtype(impl.dtype, requires_grad)
     return impl.clone_with_grad(requires_grad)
 
 

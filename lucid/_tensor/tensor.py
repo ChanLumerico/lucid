@@ -31,7 +31,6 @@ else:
 
     np = _LazyNumpy()
 
-from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dtype import (
     dtype as _dtype_cls,
@@ -49,7 +48,7 @@ from lucid._dtype import (
     complex128,
 )
 from lucid._device import device as _device_cls, _device_from_engine
-from lucid._dispatch import _wrap, _impl_with_grad
+from lucid._dispatch import _check_grad_dtype, _impl_with_grad, _wrap
 from lucid._factories.creation import (
     zeros as _zeros,
     ones as _ones,
@@ -98,16 +97,14 @@ def _set_requires_grad(t: Tensor, requires_grad: bool, *, setter: bool) -> None:
     Raises
     ------
     RuntimeError
-        If ``t`` was computed by an operation and the change is refused.
+        If ``t`` was computed by an operation and the change is refused, or
+        if ``requires_grad`` is set on a bool or integer tensor.
     """
     impl = t._impl
-    if requires_grad and _promotion.is_integral(impl.dtype):
-        raise RuntimeError(
-            "only Tensors of floating point and complex dtype can require gradients"
-        )
     if not isinstance(impl, _C_engine.TensorImpl):
         t._impl = _impl_with_grad(impl, requires_grad)
         return
+    _check_grad_dtype(impl.dtype, requires_grad)
     if not impl.is_leaf:
         if requires_grad and not setter:
             return
