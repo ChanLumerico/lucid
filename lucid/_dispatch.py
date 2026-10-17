@@ -238,6 +238,7 @@ def _unwrap_or_scalar(
     if isinstance(x, _C_engine.TensorImpl):
         return x
 
+    x = _promotion.as_number(x)
     if isinstance(x, _promotion.NUMBER):
         if ref_impl is None:
             return _scalar_impl(x, _promotion.result_type(x), _C_engine.Device.CPU)
@@ -399,9 +400,11 @@ def _binary_operands(
     # number, or a phantom under shadow allocation, takes the general route.
     ai = a if type(a) is _IMPL else getattr(a, "_impl", None)
     if type(ai) is not _IMPL:
+        a = _promotion.as_number(a)
         ai = _tensor_operand(a)
     bi = b if type(b) is _IMPL else getattr(b, "_impl", None)
     if type(bi) is not _IMPL:
+        b = _promotion.as_number(b)
         bi = _tensor_operand(b)
     if ai is not None and bi is not None:
         da = ai.dtype

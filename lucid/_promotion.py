@@ -34,6 +34,7 @@ operands and building scalar operands is :mod:`lucid._dispatch`'s job.
 """
 
 import math
+import numbers
 
 from lucid._C import engine as _C_engine
 from lucid._globals import get_default_dtype
@@ -131,12 +132,33 @@ def can_cast(da: _C_engine.Dtype, db: _C_engine.Dtype) -> bool:
     return _BY_CODE[da.value][0] <= _BY_CODE[db.value][0]
 
 
+def as_number(x: object) -> object:
+    """``x`` as the Python number it holds when it is another library's scalar.
+
+    A NumPy scalar registers with :mod:`numbers` (``float32`` as Real,
+    ``int64`` as Integral) without deriving from the builtin, so it reached
+    the operand checks as neither a tensor nor a number: arithmetic raised
+    and ``==`` handed the comparison to NumPy, which answered with an
+    ndarray.  It is a weak scalar, as the reference takes it.  Anything
+    else — a Python number, a tensor, ``None`` — comes back as is.
+    """
+    if isinstance(x, NUMBER):
+        return x
+    if isinstance(x, numbers.Integral):
+        return int(x)
+    if isinstance(x, numbers.Real):
+        return float(x)
+    if isinstance(x, numbers.Complex):
+        return complex(x)
+    return x
+
+
+_COMPARABLE = (*NUMBER, numbers.Complex, _C_engine.TensorImpl)
+
+
 def is_comparable(other: object) -> bool:
-    """Whether ``other`` is a Tensor or Python number that ``==`` / ``!=`` compares element-wise."""
-    return (
-        isinstance(other, (*NUMBER, _C_engine.TensorImpl))
-        or getattr(other, "_impl", None) is not None
-    )
+    """Whether ``other`` is a Tensor or a number that ``==`` / ``!=`` compares element-wise."""
+    return isinstance(other, _COMPARABLE) or getattr(other, "_impl", None) is not None
 
 
 def check_pow_scalar(d: _C_engine.Dtype, exponent: object) -> None:
