@@ -197,4 +197,3 @@ def test_device_move_preserves_existing_grad() -> None:
     assert m.weight.grad is not None and m.bias.grad is not None
     assert str(m.weight.grad.device) == "device('cpu')"
     np.testing.assert_allclose(m.weight.grad.numpy(), w_grad_cpu, atol=1e-6)
-

@@ -293,7 +293,9 @@ class MeanFlowModel(PretrainedModel):
         tokens = tokens + self.pos_embed
 
         cond = cast(Tensor, self.time_mlps[0](self._time_inputs(r, t)[0]))
-        for mlp, scalar in zip(list(self.time_mlps)[1:], self._time_inputs(r, t)[1:], strict=True):
+        for mlp, scalar in zip(
+            list(self.time_mlps)[1:], self._time_inputs(r, t)[1:], strict=True
+        ):
             cond = cond + cast(Tensor, mlp(scalar))
 
         if labels is None:
@@ -402,9 +404,7 @@ class MeanFlowForImageGeneration(ImageGenerationModel):
         with lucid.no_grad():
             uncond = self.mean_flow(z, t, t, None).sample
             cond = (
-                self.mean_flow(z, t, t, labels).sample
-                if labels is not None
-                else uncond
+                self.mean_flow(z, t, t, labels).sample if labels is not None else uncond
             )
         guided = omega * v + kappa * cond + (1.0 - omega - kappa) * uncond
         return guided * inside + v * (1.0 - inside)

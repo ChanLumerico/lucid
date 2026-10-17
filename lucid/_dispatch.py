@@ -284,9 +284,7 @@ def _cast(
     return _C_engine.astype(impl, dt)
 
 
-def _cannot_cast_inplace(
-    dt: _C_engine.Dtype, target: _C_engine.Dtype
-) -> RuntimeError:
+def _cannot_cast_inplace(dt: _C_engine.Dtype, target: _C_engine.Dtype) -> RuntimeError:
     return RuntimeError(
         f"result type {_ENGINE_TO_DTYPE[dt]} can't be cast to the desired "
         f"output type {_ENGINE_TO_DTYPE[target]}"

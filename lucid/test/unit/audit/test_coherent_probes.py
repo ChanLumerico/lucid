@@ -72,7 +72,8 @@ def test_a_resized_solve_keeps_its_sides_and_pivots_coherent(qualname: str) -> N
             pivots = resized.args[1].numpy()
             assert pivots.shape == tuple(matrix.shape[:-1])
             np.testing.assert_array_equal(
-                pivots, np.broadcast_to(np.arange(1, matrix.shape[-1] + 1), pivots.shape)
+                pivots,
+                np.broadcast_to(np.arange(1, matrix.shape[-1] + 1), pivots.shape),
             )
         fn(*resized.args, **call.kwargs)
 
@@ -138,7 +139,12 @@ def test_view_is_probed_with_a_shape_a_strided_slice_can_express(
 
 @pytest.mark.parametrize(
     "qualname",
-    ["lucid.autograd.grad", "lucid.autograd.vjp", "lucid.autograd.jvp", "Tensor.retain_grad"],
+    [
+        "lucid.autograd.grad",
+        "lucid.autograd.vjp",
+        "lucid.autograd.jvp",
+        "Tensor.retain_grad",
+    ],
 )
 def test_graph_taking_callables_have_an_invocation_that_runs(qualname: str) -> None:
     _first_call(qualname)

@@ -70,7 +70,9 @@ class _OverlapPatchEmbed(nn.Module):
     ) -> None:
         super().__init__()
         padding = patch_size // 2
-        self.proj = nn.Conv2d(in_ch, embed_dim, patch_size, stride=stride, padding=padding)
+        self.proj = nn.Conv2d(
+            in_ch, embed_dim, patch_size, stride=stride, padding=padding
+        )
         self.norm = nn.LayerNorm(embed_dim)
 
     @override
@@ -341,7 +343,14 @@ def _build_pvt(
     reduction *= 4
 
     for i, (dim, depth, heads, sr, mlp_r) in enumerate(
-        zip(cfg.embed_dims, cfg.depths, cfg.num_heads, cfg.sr_ratios, cfg.mlp_ratios, strict=True)
+        zip(
+            cfg.embed_dims,
+            cfg.depths,
+            cfg.num_heads,
+            cfg.sr_ratios,
+            cfg.mlp_ratios,
+            strict=True,
+        )
     ):
         is_first = i == 0
         # patch_size/stride used by downsample in stages 1-3

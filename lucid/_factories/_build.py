@@ -313,5 +313,9 @@ def _fill(
         isinstance(v, int) and not isinstance(v, bool) and abs(v) > _EXACT_IN_DOUBLE
     ):
         scalar = _from_values([v], [], dtype, device)
-        return scalar if not shape else _C_engine.contiguous(_C_engine.broadcast_to(scalar, shape))
+        return (
+            scalar
+            if not shape
+            else _C_engine.contiguous(_C_engine.broadcast_to(scalar, shape))
+        )
     return _C_engine.full(shape, float(v), dtype, device)

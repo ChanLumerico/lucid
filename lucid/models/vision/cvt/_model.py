@@ -308,7 +308,9 @@ class _CvTStage(nn.Module):
             kernel, padding = 7, 2
         else:
             kernel, padding = 3, 1
-        self.embed = _ConvEmbed(in_ch, dim, kernel=kernel, stride=embed_stride, padding=padding)
+        self.embed = _ConvEmbed(
+            in_ch, dim, kernel=kernel, stride=embed_stride, padding=padding
+        )
         # Paper §3.2 / Table 1: K/V conv-projection uses stride=2 in *all*
         # three stages (Q is always stride=1).  This is the key trick that
         # makes CvT attention cheaper than ViT's O(N²).
@@ -379,7 +381,13 @@ def _build_stages(config: CvTConfig) -> tuple[list[_CvTStage], list[FeatureInfo]
     # own linspace(0, drop_path_rate, depth), rather than one schedule spanning
     # the whole trunk.
     for i, (dim, depth, heads, stride) in enumerate(
-        zip(config.dims, config.depths, config.num_heads, config.embed_strides, strict=True)
+        zip(
+            config.dims,
+            config.depths,
+            config.num_heads,
+            config.embed_strides,
+            strict=True,
+        )
     ):
         with_cls = bool(config.cls_token[i]) if i < len(config.cls_token) else False
         if depth > 1:
@@ -583,7 +591,9 @@ class CvTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
         stage_list, _ = _build_stages(config)
         self.stages = nn.ModuleList(stage_list)  # type: ignore[arg-type]
         self.head_norm = nn.LayerNorm(config.dims[-1])
-        self._build_classifier(config.dims[-1], config.num_classes, dropout=config.dropout)
+        self._build_classifier(
+            config.dims[-1], config.num_classes, dropout=config.dropout
+        )
         init_transformer_trunc_normal(self)
 
     @override

@@ -50,7 +50,12 @@ from lucid._dtype import (
 )
 from lucid._device import device as _device_cls, _device_from_engine
 from lucid._dispatch import _wrap, _impl_with_grad
-from lucid._factories.creation import zeros as _zeros, ones as _ones, empty as _empty, full as _full
+from lucid._factories.creation import (
+    zeros as _zeros,
+    ones as _ones,
+    empty as _empty,
+    full as _full,
+)
 from lucid._factories.converters import tensor as _tensor_fn, _to_impl
 from lucid._ops._dims import _wrap_dim
 
@@ -4041,7 +4046,9 @@ class Tensor:
         """
         d = _wrap_dim(dim, len(self._impl.shape), "diff")
         if not self._impl.shape:
-            raise _C_engine.InvalidArgument("diff expects input to be at least one-dimensional")
+            raise _C_engine.InvalidArgument(
+                "diff expects input to be at least one-dimensional"
+            )
         if n < 0:
             raise _C_engine.InvalidArgument(f"order must be non-negative but got {n}")
         result: Self = self

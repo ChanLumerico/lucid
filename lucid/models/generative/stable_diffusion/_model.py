@@ -520,6 +520,4 @@ class StableDiffusionForImageGeneration(ImageGenerationModel):
             :math:`\|\epsilon - \epsilon_\theta\|_2^2` — always present,
             since a task model is called to be trained.
         """
-        return self.stable_diffusion(
-            images, context, timestep, return_loss=True
-        )
+        return self.stable_diffusion(images, context, timestep, return_loss=True)

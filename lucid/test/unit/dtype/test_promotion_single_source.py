@@ -264,7 +264,11 @@ def test_every_spelling_answers_at_the_promoted_dtype(symbol: str, device: str) 
             else:
                 want_inplace_val = repr(op.dunder(a, b).to(a.dtype).tolist())
                 for k, o in inplace.items():
-                    if o[0] != "ok" or o[1] != a.dtype or repr(o[2]) != want_inplace_val:
+                    if (
+                        o[0] != "ok"
+                        or o[1] != a.dtype
+                        or repr(o[2]) != want_inplace_val
+                    ):
                         problems.append(
                             f"{label}: {k} expected ('ok', {a.dtype}, {want_inplace_val}), got {o}"
                         )
@@ -349,9 +353,13 @@ def test_inplace_promotion_matches_reference(symbol: str, ref: ModuleType) -> No
             o = _outcome(call)
             if not ref_ok:
                 if o[:2] != ("refused", "RuntimeError"):
-                    problems.append(f"{label} ({k}): expected RuntimeError, got {o[:2]}")
+                    problems.append(
+                        f"{label} ({k}): expected RuntimeError, got {o[:2]}"
+                    )
             elif o[0] == "ok" and o[1] != a.dtype:
-                problems.append(f"{label} ({k}): mutated dtype from {a.dtype} to {o[1]}")
+                problems.append(
+                    f"{label} ({k}): mutated dtype from {a.dtype} to {o[1]}"
+                )
     assert not problems, f"{len(problems)} cell(s):\n  " + "\n  ".join(problems[:30])
 
 

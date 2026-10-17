@@ -64,7 +64,11 @@ _RAISING: dict[str, tuple[Callable[[Any, Any], Any], str]] = {
 #: reference's (a completed factorisation) or left undefined (Lucid
 #: zero-fills them, the reference leaves the partial factor).
 _EX: dict[str, tuple[Callable[[Any, Any, bool], Any], str, bool]] = {
-    "cholesky_ex": (lambda M, a, c: M.cholesky_ex(a, check_errors=c), "cholesky", False),
+    "cholesky_ex": (
+        lambda M, a, c: M.cholesky_ex(a, check_errors=c),
+        "cholesky",
+        False,
+    ),
     "cholesky_ex_upper": (
         lambda M, a, c: M.cholesky_ex(a, upper=True, check_errors=c),
         "cholesky",
@@ -113,7 +117,9 @@ def _np(x: Any) -> np.ndarray:
 
 _CELLS = [
     pytest.param(
-        fails, batched, id=f"{'fails' if fails else 'succeeds'}-{'batch' if batched else 'one'}"
+        fails,
+        batched,
+        id=f"{'fails' if fails else 'succeeds'}-{'batch' if batched else 'one'}",
     )
     for fails in (False, True)
     for batched in (False, True)
@@ -238,7 +244,9 @@ def test_cholesky_info_matches_the_reference_past_the_blocked_size(
 # ── lu_solve on the factors of a singular matrix ──────────────────────────────
 
 
-def test_lu_solve_through_lu_factor_ex_matches_the_reference(device: str, ref: Any) -> None:
+def test_lu_solve_through_lu_factor_ex_matches_the_reference(
+    device: str, ref: Any
+) -> None:
     """``lu_factor`` refuses a singular matrix; ``lu_factor_ex`` hands its
     factors on, and back substitution through the zero pivot gives the
     IEEE result the reference gives."""
@@ -305,7 +313,9 @@ def test_ldl_info_agrees_wherever_the_factorisations_do(device: str, ref: Any) -
     assert compared > 250
 
 
-def test_lu_info_matches_the_reference_on_non_finite_input(device: str, ref: Any) -> None:
+def test_lu_info_matches_the_reference_on_non_finite_input(
+    device: str, ref: Any
+) -> None:
     rng = np.random.default_rng(11)
     values = np.array([0.0, 0.0, 1.0, -1.0, 2.0, np.nan, np.inf, 0.5, -3.0])
     p = [0.3, 0.2, 0.1, 0.1, 0.1, 0.05, 0.03, 0.06, 0.06]

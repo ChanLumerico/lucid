@@ -77,7 +77,9 @@ def test_higher_rank_batches_match_reference(
     for idx in range(flat_s.shape[0]):
         target_rank = idx % (k + 1)
         scale = 10.0 ** (idx - flat_s.shape[0] // 2)
-        flat_s[idx, :target_rank] = scale * np.arange(target_rank, 0, -1, dtype=np.float32)
+        flat_s[idx, :target_rank] = scale * np.arange(
+            target_rank, 0, -1, dtype=np.float32
+        )
     mat = (u[..., :, :k] * s[..., None, :]) @ v[..., :k, :]
     got = LA.matrix_rank(lucid.tensor(mat, dtype=lucid.float32, device=device))
     want = ref.linalg.matrix_rank(ref.tensor(mat, dtype=ref.float32))

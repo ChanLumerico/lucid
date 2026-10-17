@@ -853,9 +853,7 @@ def test_arithmetic_ops_take_input_and_other_by_keyword(
             lucid.clamp(x, 0.0, 1.0),
         ),
         lambda x, y: (
-            lucid.gather(
-                input=x, dim=0, index=lucid.tensor([2, 0], device=x.device)
-            ),
+            lucid.gather(input=x, dim=0, index=lucid.tensor([2, 0], device=x.device)),
             lucid.gather(x, 0, lucid.tensor([2, 0], device=x.device)),
         ),
         lambda x, y: (
@@ -916,12 +914,12 @@ def test_every_registry_free_fn_advertises_leading_tensor_names() -> None:
         sig = _signature(fn)
         leading = ops._leading_tensor_names(entry)
         sig_leading = tuple(list(sig.parameters)[: len(leading)])
-        assert leading == sig_leading, (
-            f"{fn_name}: _leading_tensor_names={leading} != signature={sig_leading}"
-        )
-        assert not ({"x_impl", "a_impl", "b_impl", "y_impl"} & set(leading)), (
-            f"{fn_name} advertises internal parameter name: {leading}"
-        )
+        assert (
+            leading == sig_leading
+        ), f"{fn_name}: _leading_tensor_names={leading} != signature={sig_leading}"
+        assert not (
+            {"x_impl", "a_impl", "b_impl", "y_impl"} & set(leading)
+        ), f"{fn_name} advertises internal parameter name: {leading}"
 
 
 def test_a_tensor_operand_given_twice_or_skipped_is_refused() -> None:
@@ -941,4 +939,3 @@ def test_atan2_reads_input_over_other(ref: ModuleType, device: str) -> None:
     want = ref.atan2(ref.tensor(x.tolist()), ref.tensor(y.tolist())).tolist()
     for got in (lucid.atan2(x, y), lucid.atan2(input=x, other=y), x.atan2(other=y)):
         assert got.tolist() == pytest.approx(want, rel=1e-6)
-

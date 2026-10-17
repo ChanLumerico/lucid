@@ -1482,9 +1482,7 @@ class BERTForCausalLM(LanguageModelingModel):
         ext_mask = self._causal_attention_mask(attention_mask, B, T, dev)
 
         hidden = self.bert.embeddings(input_ids, token_type_ids=token_type_ids)
-        sequence_output, _, _ = self.bert.encoder(
-            hidden, attention_mask=ext_mask
-        )
+        sequence_output, _, _ = self.bert.encoder(hidden, attention_mask=ext_mask)
         prediction_scores = self.cls(sequence_output)
 
         loss: Tensor | None = None

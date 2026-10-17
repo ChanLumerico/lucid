@@ -13,7 +13,6 @@ import lucid.optim as optim
 from lucid._C import engine as _C_engine
 from lucid._tensor import Tensor
 
-
 OptimizerFactory = Callable[[list[Tensor]], optim.Optimizer]
 
 
@@ -94,7 +93,10 @@ CPP_OPTIMIZER_SPECS: list[tuple[str, OptimizerFactory, list[str], list[str]]] = 
 
 
 def _make_params() -> list[Tensor]:
-    p0 = Tensor(np.array([[1.25, -0.5, 0.75], [0.25, -1.5, 2.0]], dtype=np.float32), requires_grad=True)
+    p0 = Tensor(
+        np.array([[1.25, -0.5, 0.75], [0.25, -1.5, 2.0]], dtype=np.float32),
+        requires_grad=True,
+    )
     p1 = Tensor(np.array([-0.8, 0.4, 1.1, -0.3], dtype=np.float32), requires_grad=True)
     return [p0, p1]
 

@@ -321,7 +321,9 @@ def _identify(package: str) -> tuple[str, int]:
     size = 0
     chunk = bytearray(8 << 20)
     view = memoryview(chunk)
-    for (relative, full), (_r, length, _m, _c, _i) in zip(files, signature, strict=True):
+    for (relative, full), (_r, length, _m, _c, _i) in zip(
+        files, signature, strict=True
+    ):
         size += length
         digest.update(f"\0{relative}\0{length}\0".encode())
         with open(full, "rb") as handle:

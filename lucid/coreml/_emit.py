@@ -420,11 +420,22 @@ def _batch_norm_eval(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 # ── elementwise binary: same table, same reason as the unary one ─────────────
 _BINARY_MIL = {
-    "add": "add", "div": "real_div", "equal": "equal", "floordiv": "floor_div",
-    "fmod": "mod", "greater": "greater", "greater_equal": "greater_equal",
-    "less": "less", "less_equal": "less_equal", "maximum": "maximum",
-    "minimum": "minimum", "mul": "mul", "not_equal": "not_equal", "pow": "pow",
-    "remainder": "mod", "sub": "sub",
+    "add": "add",
+    "div": "real_div",
+    "equal": "equal",
+    "floordiv": "floor_div",
+    "fmod": "mod",
+    "greater": "greater",
+    "greater_equal": "greater_equal",
+    "less": "less",
+    "less_equal": "less_equal",
+    "maximum": "maximum",
+    "minimum": "minimum",
+    "mul": "mul",
+    "not_equal": "not_equal",
+    "pow": "pow",
+    "remainder": "mod",
+    "sub": "sub",
 }
 
 

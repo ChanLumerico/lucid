@@ -127,7 +127,9 @@ def test_matches_the_reference_on_the_grid(
     a = [c[0] for c in _GRID]
     x = [c[1] for c in _GRID]
     ours_fn, ref_fn = (
-        (gammainc, ref.special.gammainc) if lower else (gammaincc, ref.special.gammaincc)
+        (gammainc, ref.special.gammainc)
+        if lower
+        else (gammaincc, ref.special.gammaincc)
     )
     ours = _floats(ours_fn(_lucid(a, dtype, device), _lucid(x, dtype, device)))
     theirs = ref_fn(_ref(ref, a, dtype), _ref(ref, x, dtype)).double().tolist()

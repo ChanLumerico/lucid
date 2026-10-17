@@ -303,7 +303,9 @@ def test_instance_norm_track_running_stats_train_eval_and_state_dict_parity(
 
     # Strict load from reference checkpoint into both eager and lazy Lucid modules:
     ref_sd = {
-        k: lucid.tensor(v.detach().numpy(), dtype=m.state_dict()[k].dtype, device=device)
+        k: lucid.tensor(
+            v.detach().numpy(), dtype=m.state_dict()[k].dtype, device=device
+        )
         for k, v in rm.state_dict().items()
     }
     target_eager = getattr(nn, cls_name)(
@@ -343,4 +345,3 @@ def test_functional_instance_norm_updates_running_stats_in_place(ref) -> None:
     np.testing.assert_allclose(out.numpy(), ref_out.numpy(), atol=1e-5)
     np.testing.assert_allclose(rm.numpy(), r_rm.numpy(), atol=1e-6)
     np.testing.assert_allclose(rv.numpy(), r_rv.numpy(), atol=1e-6)
-

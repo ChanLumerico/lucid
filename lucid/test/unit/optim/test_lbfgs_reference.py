@@ -338,9 +338,10 @@ def test_a_reloaded_state_continues_identically(
         fresh.step(fresh_closure)
         np.testing.assert_array_equal(x.detach().numpy(), y.detach().numpy())
     assert calls[0] == fresh_calls[0]
-    assert fresh.state_dict()["state"][0]["n_iter"] == opt.state_dict()["state"][0][
-        "n_iter"
-    ]
+    assert (
+        fresh.state_dict()["state"][0]["n_iter"]
+        == opt.state_dict()["state"][0]["n_iter"]
+    )
 
 
 @pytest.mark.parity

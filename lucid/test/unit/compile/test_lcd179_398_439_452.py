@@ -46,9 +46,13 @@ class TestFusedStepAutocastScalerAndBatchChange:
         eager_model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)).to(
             COMPILE_DEVICE
         )
-        comp_model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)).to(COMPILE_DEVICE)
+        comp_model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)).to(
+            COMPILE_DEVICE
+        )
         with lucid.no_grad():
-            for pe, pc in zip(eager_model.parameters(), comp_model.parameters(), strict=True):
+            for pe, pc in zip(
+                eager_model.parameters(), comp_model.parameters(), strict=True
+            ):
                 pc.copy_(pe.detach().clone())
 
         opt_eager = optim.AdamW(list(eager_model.parameters()), lr=1e-2)
@@ -78,11 +82,15 @@ class TestFusedStepAutocastScalerAndBatchChange:
             assert abs(float(loss_c.item()) - float(loss_e.item())) < 1e-3
             assert scaler_comp.get_scale() == scaler_eager.get_scale() == 32768.0
             if step_idx == 0:
-                for p_old, p_now in zip(params_before, comp_model.parameters(), strict=True):
+                for p_old, p_now in zip(
+                    params_before, comp_model.parameters(), strict=True
+                ):
                     assert float((p_old - p_now).abs().max().item()) == 0.0
 
         assert step.cache_info()["entries"] == 2
-        for pe, pc in zip(eager_model.parameters(), comp_model.parameters(), strict=True):
+        for pe, pc in zip(
+            eager_model.parameters(), comp_model.parameters(), strict=True
+        ):
             assert float((pe - pc).abs().max().item()) < 1e-3
 
 
@@ -119,7 +127,8 @@ _SUBNORMAL_OPS: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
     "x+(-0.0)": lambda t: t + (-0.0),
     "(-0.0)+x": lambda t: (-0.0) + t,
     "(-0.0)-x": lambda t: (-0.0) - t,
-    "x*ones_reshape": lambda t: t * lucid.ones(1, 2, dtype=t.dtype, device=t.device).reshape(2),
+    "x*ones_reshape": lambda t: t
+    * lucid.ones(1, 2, dtype=t.dtype, device=t.device).reshape(2),
     "mean": lambda t: t[:1].mean(),
 }
 

@@ -472,7 +472,9 @@ def _build_body(
     feature_info: list[FeatureInfo] = []
     reductions = [4, 8, 16, 32]
 
-    for stage_idx, (planes, stride) in enumerate(zip(planes_per_stage, strides, strict=True)):
+    for stage_idx, (planes, stride) in enumerate(
+        zip(planes_per_stage, strides, strict=True)
+    ):
         layer, cur = _make_stage(
             cur,
             planes,

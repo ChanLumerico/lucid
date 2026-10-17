@@ -126,7 +126,9 @@ def _pin(request, reason):
 @pytest.mark.parametrize("dtype_name", ["float32", "float64"])
 @pytest.mark.parametrize("value", _VALUES, ids=_ids)
 @pytest.mark.parametrize("name", list(_ACTIVATIONS))
-def test_activation_gradient_matches_reference(ref, device, name, value, dtype_name, request):
+def test_activation_gradient_matches_reference(
+    ref, device, name, value, dtype_name, request
+):
     call = _ACTIVATIONS[name]
     if name in _KNOWN_WRONG and _KNOWN_WRONG[name](value):
         _pin(request, _PYTHON_SIDE[name])

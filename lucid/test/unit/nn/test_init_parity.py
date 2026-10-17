@@ -160,7 +160,9 @@ class TestZeroElementTensors:
         shape: tuple[int, ...],
     ) -> None:
         t = lucid.zeros(*shape, device=device)
-        with pytest.warns(UserWarning, match="Initializing zero-element tensors is a no-op"):
+        with pytest.warns(
+            UserWarning, match="Initializing zero-element tensors is a no-op"
+        ):
             out = fn(t)
         assert out is t
         assert out.shape == shape

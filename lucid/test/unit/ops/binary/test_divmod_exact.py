@@ -300,7 +300,9 @@ class _FmodPlusOne(nn.Module):
         return lucid.fmod(a, b) + 1
 
 
-@pytest.mark.filterwarnings("ignore::lucid.compile._core.fallback.CompileFallbackWarning")
+@pytest.mark.filterwarnings(
+    "ignore::lucid.compile._core.fallback.CompileFallbackWarning"
+)
 @pytest.mark.parametrize("dtype", [lucid.float32, lucid.int64])
 def test_compiled_fmod_matches_eager_bit_for_bit(dtype: lucid.dtype) -> None:
     """Compiled or not, ``fmod`` is the exact one.

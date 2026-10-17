@@ -991,9 +991,7 @@ class ExponentialFamily(Distribution):
         nparams = [p.detach().requires_grad_(True) for p in self._natural_params]
         with lucid.enable_grad():
             lg_normal = self._log_normalizer(*nparams)
-            gradients = lucid.autograd.grad(
-                lg_normal.sum(), nparams, create_graph=True
-            )
+            gradients = lucid.autograd.grad(lg_normal.sum(), nparams, create_graph=True)
         result: Tensor = lg_normal - self._mean_carrier_measure
         for np, g in zip(nparams, gradients, strict=True):
             assert g is not None

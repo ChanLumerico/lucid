@@ -553,7 +553,9 @@ def vjp(
     xs = _differentiable_inputs(inputs_t, create_graph)
     with enable_grad():
         outputs: Tensor | tuple[Tensor, ...] = func(*xs)
-        outs, one_output = _as_tuple(outputs, "outputs of the user-provided function", "vjp")
+        outs, one_output = _as_tuple(
+            outputs, "outputs of the user-provided function", "vjp"
+        )
         _require_tracked(outs, "outputs", strict)
         seeds = _seeds(v, outs, "the user-provided function returns", "vjp")
         grads = _grad(

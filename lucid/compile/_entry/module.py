@@ -93,7 +93,9 @@ if TYPE_CHECKING:
 #                                                       ("logits", ("tensor", 1))])
 
 
-def _extract_return_impls(value: object, tracer: _TracerLike) -> tuple[object, list[int]]:
+def _extract_return_impls(
+    value: object, tracer: _TracerLike
+) -> tuple[object, list[int]]:
     """Walk ``value`` and replace every Tensor with a slot descriptor.
 
     Returns ``(return_spec, explicit_outputs)`` where:
@@ -416,7 +418,9 @@ class CompiledModule[**P, R](_ModuleWrapper):
         # the attempt never crashes a real model; it just shares one executable
         # where provably safe and recompiles per shape otherwise.  Escape hatch:
         # ``LUCID_COMPILE_DYNAMIC=0`` forces pure static (no symbolic attempt).
-        _symbolic = bool(dynamic) and _os.environ.get("LUCID_COMPILE_DYNAMIC", "1") != "0"
+        _symbolic = (
+            bool(dynamic) and _os.environ.get("LUCID_COMPILE_DYNAMIC", "1") != "0"
+        )
         object.__setattr__(self, "_model", model)
         object.__setattr__(self, "_dynamic", bool(dynamic))  # requested (intent / repr)
         object.__setattr__(self, "_symbolic", _symbolic)  # attempt symbolic?
@@ -854,7 +858,11 @@ class CompiledModule[**P, R](_ModuleWrapper):
             # keys on the concrete shape.  ``_symbolic_resolved`` is the
             # per-instance decision (None until the first trace → tentatively
             # ``_symbolic``).
-            eff = self._symbolic if self._symbolic_resolved is None else self._symbolic_resolved
+            eff = (
+                self._symbolic
+                if self._symbolic_resolved is None
+                else self._symbolic_resolved
+            )
             key = signature_of(
                 self._model,
                 args,
@@ -963,7 +971,9 @@ class CompiledModule[**P, R](_ModuleWrapper):
         state = (*self._model.parameters(), *self._model.buffers())
         given = {id(t._impl) for t in (*leaf_tensors(args, kwargs), *state)}
         return [
-            tuple(impl.shape) for impl in tracer.external_feeds.values() if id(impl) not in given
+            tuple(impl.shape)
+            for impl in tracer.external_feeds.values()
+            if id(impl) not in given
         ]
 
     def _emit(
@@ -1080,7 +1090,9 @@ class CompiledModule[**P, R](_ModuleWrapper):
             # Every live tensor the call reads is watched — its arguments,
             # the model's parameters and buffers — so what the trace does not
             # see is a constant, folded into one feed (``Tracer.fold_constants``).
-            with _tracing(watch=(args, kwargs), module=self._model, fold_constants=True) as tracer:
+            with _tracing(
+                watch=(args, kwargs), module=self._model, fold_constants=True
+            ) as tracer:
                 # Module.__call__ wants Tensor positionals; the runtime
                 # may receive non-Tensor extras (CompileModule preserves
                 # whatever the user passed).  Cast each at the boundary.

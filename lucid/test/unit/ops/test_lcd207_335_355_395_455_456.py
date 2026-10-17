@@ -119,7 +119,7 @@ def test_func_transforms_shared_helpers_and_validation() -> None:
     y = lucid.tensor([4.0, 5.0, 6.0])
 
     (gx, gy), aux = func.grad(f, argnums=(0, 1), has_aux=True)(x, y, 2.0)
-    ((gx2, gy2), (val, aux2)) = func.grad_and_value(f, argnums=(0, 1), has_aux=True)(
+    (gx2, gy2), (val, aux2) = func.grad_and_value(f, argnums=(0, 1), has_aux=True)(
         x, y, 2.0
     )
     np.testing.assert_allclose(gx.numpy(), (y * 2.0).numpy())

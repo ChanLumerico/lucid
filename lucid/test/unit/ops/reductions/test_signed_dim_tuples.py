@@ -50,7 +50,10 @@ _OPS = {
     },
     "var_mean": (_top_level("var_mean", pick=0), True),
     "std_mean": (_top_level("std_mean", pick=0), True),
-    "vector_norm": (lambda lib, t, d, k: lib.linalg.vector_norm(t, dim=d, keepdim=k), True),
+    "vector_norm": (
+        lambda lib, t, d, k: lib.linalg.vector_norm(t, dim=d, keepdim=k),
+        True,
+    ),
     # No keepdim in either signature.
     "count_nonzero": (lambda lib, t, d, k: lib.count_nonzero(t, dim=d), False),
 }
@@ -86,7 +89,9 @@ def test_matches_reference(ref, device, op, keepdim, arity):
         if tuple(y.shape) != tuple(yr.shape):
             failures.append(f"{dims}: shape {tuple(y.shape)} != {tuple(yr.shape)}")
             continue
-        if not np.allclose(y.detach().numpy(), yr.detach().numpy(), rtol=1e-5, atol=1e-5):
+        if not np.allclose(
+            y.detach().numpy(), yr.detach().numpy(), rtol=1e-5, atol=1e-5
+        ):
             failures.append(f"{dims}: forward values differ")
             continue
         if not differentiable:

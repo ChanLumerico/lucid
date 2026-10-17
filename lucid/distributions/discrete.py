@@ -629,7 +629,6 @@ class Binomial(Distribution):
         return self._expand_support(values, expand)
 
 
-
 class NegativeBinomial(Distribution):
     r"""Negative Binomial distribution over the number of failures before r successes.
 

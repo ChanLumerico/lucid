@@ -91,7 +91,9 @@ def _hyperparam_reader(
     return operator.itemgetter(*keys)
 
 
-def _follow(src: _C_engine.TensorImpl, like: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
+def _follow(
+    src: _C_engine.TensorImpl, like: _C_engine.TensorImpl
+) -> _C_engine.TensorImpl:
     """``src`` in ``like``'s dtype and on its device; ``src`` itself when it already is.
 
     The one rule by which optimizer state follows its parameter through a
@@ -150,7 +152,9 @@ def _group_params(group: dict[str, object]) -> list[Parameter]:
     """The parameters of one param group (``add_param_group`` stores a list)."""
     params = group["params"]
     if not isinstance(params, list):
-        raise TypeError(f"a param group's 'params' must be a list, got {type(params).__name__}")
+        raise TypeError(
+            f"a param group's 'params' must be a list, got {type(params).__name__}"
+        )
     return params
 
 
@@ -158,7 +162,9 @@ def _group_float(group: dict[str, object], key: str = "lr") -> float:
     """Read a numeric entry ``key`` from ``group`` as a ``float``."""
     value = group[key]
     if not isinstance(value, (SupportsFloat, SupportsIndex)):
-        raise TypeError(f"a param group's {key!r} must be a number, got {type(value).__name__}")
+        raise TypeError(
+            f"a param group's {key!r} must be a number, got {type(value).__name__}"
+        )
     return float(value)
 
 
@@ -314,7 +320,9 @@ class Optimizer:
             # Default path: no wrapper, user's step() runs raw.
             return
         if "step" in cls.__dict__:
-            _orig: Callable[[Optimizer, _OptimizerClosure], Tensor | None] = cls.__dict__["step"]
+            _orig: Callable[[Optimizer, _OptimizerClosure], Tensor | None] = (
+                cls.__dict__["step"]
+            )
 
             def _step_with_eval(
                 self: Optimizer, closure: _OptimizerClosure = None
@@ -350,7 +358,11 @@ class Optimizer:
         defaults: dict[str, object],
     ) -> None:
         """Initialise the Optimizer.  See the class docstring for parameter semantics."""
-        if isinstance(params, (list, tuple)) and len(params) > 0 and isinstance(params[0], dict):
+        if (
+            isinstance(params, (list, tuple))
+            and len(params) > 0
+            and isinstance(params[0], dict)
+        ):
             param_groups: list[dict[str, object]] = list(params)
         else:
             param_groups = [{"params": list(params)}]
@@ -373,7 +385,9 @@ class Optimizer:
         self._engines: list[_EngineOptimizer] = []
         # Parallel to ``_engines``: the parameters each engine optimizer was
         # built over, and the impls they held at that moment.
-        self._engine_binds: list[tuple[list[Parameter], list[_C_engine.TensorImpl]]] = []
+        self._engine_binds: list[tuple[list[Parameter], list[_C_engine.TensorImpl]]] = (
+            []
+        )
         self._engine_state_reset_warned: bool = False
         self._engines_built: bool = False
         # Parallel to ``param_groups``: each group's hyper-parameters as they
@@ -632,7 +646,9 @@ class Optimizer:
         for idx, group in enumerate(self.param_groups):
             params: list[Parameter] = _group_params(group)
             impls: list[_C_engine.TensorImpl] = binds[idx][1]
-            if len(params) == len(impls) and all(map(operator.is_, map(impl_of, params), impls)):
+            if len(params) == len(impls) and all(
+                map(operator.is_, map(impl_of, params), impls)
+            ):
                 continue
             self._rebuild_engine_optim(idx, group)
 
@@ -874,7 +890,9 @@ class Optimizer:
                         and loaded_impl.dtype == _C_engine.Dtype.F32
                         and k not in ("step", "eta", "mu", "mu_product")
                     ):
-                        loaded_impl = _C_engine.astype(loaded_impl, _C_engine.Dtype.BF16)
+                        loaded_impl = _C_engine.astype(
+                            loaded_impl, _C_engine.Dtype.BF16
+                        )
                     by_name[k][slot] = loaded_impl
             if by_name:
                 eng.load_state_buffers(list(by_name.items()))

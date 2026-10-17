@@ -84,4 +84,3 @@ def test_unconverted_tensor_preserves_requires_grad_and_graph(device: str) -> No
     assert y.requires_grad is True
     y.sum().backward()
     assert w.grad is not None and w.grad.tolist() == [2.0, 2.0]
-

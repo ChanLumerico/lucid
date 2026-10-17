@@ -664,7 +664,9 @@ def local_response_norm(
     return _wrap(_C_engine.div(xi, scale))
 
 
-def normalize(x: Tensor, p: float = 2.0, dim: DimLike = 1, eps: float = 1e-12) -> Tensor:
+def normalize(
+    x: Tensor, p: float = 2.0, dim: DimLike = 1, eps: float = 1e-12
+) -> Tensor:
     r"""Normalize a tensor to unit :math:`L_p` norm along a dimension.
 
     Parameters

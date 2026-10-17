@@ -222,9 +222,7 @@ def _promote_two(
     return dt
 
 
-def _reduced_shape(
-    shape: tuple[int, ...], axes: Any, keepdim: bool
-) -> tuple[int, ...]:
+def _reduced_shape(shape: tuple[int, ...], axes: Any, keepdim: bool) -> tuple[int, ...]:
     """Compute output shape for a reduction along ``axes``."""
     ndim = len(shape)
     if ndim == 0:
@@ -484,9 +482,7 @@ def _flatten_factory(
 def _ravel_factory(impl: Any, *args: Any, **kwargs: Any) -> Any:
     """``ravel(impl)`` — 1-D flattened view."""
     if isinstance(impl, PhantomImpl):
-        return PhantomImpl(
-            (impl.numel(),), impl.dtype, impl.device, impl.requires_grad
-        )
+        return PhantomImpl((impl.numel(),), impl.dtype, impl.device, impl.requires_grad)
     return _ORIGINAL["ravel"](impl, *args, **kwargs)
 
 
@@ -1194,5 +1190,3 @@ def shadow_alloc() -> Iterator[None]:
     finally:
         _SHADOW_ENABLED = False
         _restore_shadow_patches()
-
-

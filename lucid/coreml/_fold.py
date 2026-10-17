@@ -150,7 +150,11 @@ def _constant_op(
 def _opmath_scalar_input(
     op: _Op, meta: Mapping[int, tuple[str, tuple[int, ...]]]
 ) -> int | None:
-    if op.name not in ("mul", "div", "floordiv") or len(op.inputs) != 2 or not op.outputs:
+    if (
+        op.name not in ("mul", "div", "floordiv")
+        or len(op.inputs) != 2
+        or not op.outputs
+    ):
         return None
     if str(op.outputs[0].dtype).split(".")[-1] != "F16":
         return None

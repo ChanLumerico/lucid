@@ -191,4 +191,3 @@ def test_clip_grad_norm_mixed_parameter_dtypes_under_autocast(device: str) -> No
     assert abs(float(norm.cpu().item()) - 10.0) < 1e-2
     assert p_f32.grad.dtype == lucid.float32
     assert p_bf16.grad.dtype == lucid.bfloat16
-

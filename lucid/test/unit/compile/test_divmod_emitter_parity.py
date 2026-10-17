@@ -78,8 +78,7 @@ def test_compiled_integer_divmod_matches_eager_and_oracle(
     assert info["eager_only"] == ()
     assert got.dtype == dtype
     want = [
-        _int_oracle(_KIND[op_name], x, y, bits)
-        for x, y in zip(nums, dens, strict=True)
+        _int_oracle(_KIND[op_name], x, y, bits) for x, y in zip(nums, dens, strict=True)
     ]
     assert got.tolist() == want
     assert got.tolist() == eager.tolist()
@@ -236,9 +235,7 @@ def test_coreml_constant_folded_divmod_and_wide_int64_refusal(
             self.register_buffer(
                 "num", lucid.tensor([17, -17, 25, -25], dtype=lucid.int32)
             )
-            self.register_buffer(
-                "den", lucid.tensor([5, 5, -7, -7], dtype=lucid.int32)
-            )
+            self.register_buffer("den", lucid.tensor([5, 5, -7, -7], dtype=lucid.int32))
 
         def forward(self, x: lucid.Tensor) -> lucid.Tensor:
             c = fn(self.get_buffer("num"), self.get_buffer("den")).to(lucid.float32)

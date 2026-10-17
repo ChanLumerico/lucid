@@ -72,12 +72,14 @@ _REDUCTIONS: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
 }
 
 
-def _run_compiled(fn: Callable[[lucid.Tensor], lucid.Tensor], x: lucid.Tensor) -> lucid.Tensor:
+def _run_compiled(
+    fn: Callable[[lucid.Tensor], lucid.Tensor], x: lucid.Tensor
+) -> lucid.Tensor:
     _C_engine.compile.session_cache_clear()
     out = lucid.compile(fn)(x)
-    assert _C_engine.compile.session_cache_size() >= 1, (
-        "the function ran eagerly, so the comparison below proves nothing"
-    )
+    assert (
+        _C_engine.compile.session_cache_size() >= 1
+    ), "the function ran eagerly, so the comparison below proves nothing"
     return out
 
 
@@ -87,14 +89,16 @@ def _assert_same_bits(eager: lucid.Tensor, compiled: lucid.Tensor, label: str) -
     c = compiled.to(lucid.float32).numpy().reshape(-1)
     assert np.array_equal(np.isnan(e), np.isnan(c)), f"{label}: eager {e}, compiled {c}"
     finite = ~np.isnan(e)
-    assert np.array_equal(e[finite].view(np.uint32), c[finite].view(np.uint32)), (
-        f"{label}: eager {e} (signbit {np.signbit(e)}), compiled {c} (signbit {np.signbit(c)})"
-    )
+    assert np.array_equal(
+        e[finite].view(np.uint32), c[finite].view(np.uint32)
+    ), f"{label}: eager {e} (signbit {np.signbit(e)}), compiled {c} (signbit {np.signbit(c)})"
 
 
 @pytest.mark.parametrize("dtype", _FLOAT_DTYPES, ids=str)
 @pytest.mark.parametrize("name", list(_ELEMENTWISE))
-def test_identity_with_a_zero_constant_matches_eager(name: str, dtype: lucid.dtype) -> None:
+def test_identity_with_a_zero_constant_matches_eager(
+    name: str, dtype: lucid.dtype
+) -> None:
     fn = _ELEMENTWISE[name]
     x = lucid.tensor(_VALUES, dtype=dtype).to(COMPILE_DEVICE)
     _assert_same_bits(fn(x), _run_compiled(fn, x), f"{name} {dtype}")
@@ -102,7 +106,9 @@ def test_identity_with_a_zero_constant_matches_eager(name: str, dtype: lucid.dty
 
 @pytest.mark.parametrize("dtype", _FLOAT_DTYPES, ids=str)
 @pytest.mark.parametrize("name", list(_REDUCTIONS))
-def test_reduction_of_negative_zero_matches_eager(name: str, dtype: lucid.dtype) -> None:
+def test_reduction_of_negative_zero_matches_eager(
+    name: str, dtype: lucid.dtype
+) -> None:
     fn = _REDUCTIONS[name]
     x = lucid.tensor([-0.0], dtype=dtype).to(COMPILE_DEVICE)
     _assert_same_bits(fn(x), _run_compiled(fn, x), f"{name} {dtype}")
@@ -115,7 +121,9 @@ def test_integer_add_of_zero_is_unchanged() -> None:
     assert out.numpy().tolist() == [-3, 0, 7]
 
 
-def _zeros(t: lucid.Tensor, *shape: int, dtype: lucid.dtype | None = None) -> lucid.Tensor:
+def _zeros(
+    t: lucid.Tensor, *shape: int, dtype: lucid.dtype | None = None
+) -> lucid.Tensor:
     return lucid.zeros(*shape, dtype=dtype or t.dtype, device=t.device)
 
 
@@ -149,7 +157,9 @@ _ROUTED: dict[str, Callable[[lucid.Tensor], lucid.Tensor]] = {
 
 @pytest.mark.parametrize("dtype", _FLOAT_DTYPES, ids=str)
 @pytest.mark.parametrize("name", list(_ROUTED))
-def test_zero_routed_through_a_shape_op_matches_eager(name: str, dtype: lucid.dtype) -> None:
+def test_zero_routed_through_a_shape_op_matches_eager(
+    name: str, dtype: lucid.dtype
+) -> None:
     fn = _ROUTED[name]
     x = lucid.tensor(_VALUES, dtype=dtype).to(COMPILE_DEVICE)
     _assert_same_bits(fn(x), _run_compiled(fn, x), f"{name} {dtype}")
@@ -159,7 +169,9 @@ def _add_argument(t: lucid.Tensor, c: object) -> lucid.Tensor:
     return t + c
 
 
-@pytest.mark.parametrize("order", [(0.0, -0.0), (-0.0, 0.0)], ids=["pos-first", "neg-first"])
+@pytest.mark.parametrize(
+    "order", [(0.0, -0.0), (-0.0, 0.0)], ids=["pos-first", "neg-first"]
+)
 def test_python_cache_keeps_zero_arguments_apart(order: tuple[float, float]) -> None:
     x = lucid.tensor([-0.0, 1.0]).to(COMPILE_DEVICE)
     f = lucid.compile(_add_argument)
@@ -235,13 +247,17 @@ def test_fused_step_with_zero_adds_matches_eager(
     eager_model = _MLP().to(COMPILE_DEVICE)
     comp_model = _MLP().to(COMPILE_DEVICE)
     with lucid.no_grad():
-        for pe, pc in zip(eager_model.parameters(), comp_model.parameters(), strict=True):
+        for pe, pc in zip(
+            eager_model.parameters(), comp_model.parameters(), strict=True
+        ):
             pc.copy_(pe.detach().clone())
     x = lucid.randn(5, 4).to(COMPILE_DEVICE)
     target = lucid.randn(5, 2).to(COMPILE_DEVICE)
 
     opt_eager = optim.SGD(list(eager_model.parameters()), lr=0.1)
-    step = fused_step(comp_model, _sum_of_losses, optim.SGD(list(comp_model.parameters()), lr=0.1))
+    step = fused_step(
+        comp_model, _sum_of_losses, optim.SGD(list(comp_model.parameters()), lr=0.1)
+    )
     for _ in range(3):
         opt_eager.zero_grad()
         eager_loss = _sum_of_losses(eager_model(x), target)
@@ -286,7 +302,9 @@ def test_infinite_gradient_passes_the_zero_add(
     opt.step()
 
     comp_model = _Scaled().to(COMPILE_DEVICE)
-    fused_step(comp_model, _exp_sum, optim.SGD(list(comp_model.parameters()), lr=1.0))(x)
+    fused_step(comp_model, _exp_sum, optim.SGD(list(comp_model.parameters()), lr=1.0))(
+        x
+    )
 
     want = eager_model.w.numpy()
     got = comp_model.w.numpy()

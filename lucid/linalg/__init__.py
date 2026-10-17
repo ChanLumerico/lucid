@@ -2531,7 +2531,9 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     """
     xi, yi = _unwrap(x), _unwrap(y)
     if len(xi.shape) != len(yi.shape):
-        raise _C_engine.ShapeMismatch("linalg.cross: inputs must have the same number of dimensions")
+        raise _C_engine.ShapeMismatch(
+            "linalg.cross: inputs must have the same number of dimensions"
+        )
     d = _wrap_dim(dim, len(xi.shape), "linalg.cross")
     if not xi.shape:
         raise IndexError(f"linalg.cross: axis out of range: got {dim} for a 0-D tensor")
@@ -2552,7 +2554,9 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     c0 = _C_engine.sub(_C_engine.mul(x1, y2), _C_engine.mul(x2, y1))
     c1 = _C_engine.sub(_C_engine.mul(x2, y0), _C_engine.mul(x0, y2))
     c2 = _C_engine.sub(_C_engine.mul(x0, y1), _C_engine.mul(x1, y0))
-    return _wrap(_C_engine.concatenate([_C_engine.unsqueeze(c, d) for c in (c0, c1, c2)], d))
+    return _wrap(
+        _C_engine.concatenate([_C_engine.unsqueeze(c, d) for c in (c0, c1, c2)], d)
+    )
 
 
 def vecdot(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:

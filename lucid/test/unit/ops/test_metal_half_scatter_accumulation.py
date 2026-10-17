@@ -102,9 +102,7 @@ def test_thousand_duplicate_scatter_reduce_sum_and_mean(
 
 @pytest.mark.parametrize("device", _DEVICES)
 @pytest.mark.parametrize("dtype", _HALF_DTYPES)
-def test_thousand_duplicate_embedding_backward(
-    device: str, dtype: lucid.dtype
-) -> None:
+def test_thousand_duplicate_embedding_backward(device: str, dtype: lucid.dtype) -> None:
     idx = lucid.zeros(1000, dtype=lucid.int64, device=device)
     weight = lucid.ones(4, 2, dtype=dtype, device=device, requires_grad=True)
     out = F.embedding(idx, weight)
@@ -279,4 +277,3 @@ def test_bfloat16_scatter_reduce_amax_ties_and_grid_sample_backward(
     assert x.grad is not None
     assert x.grad.dtype == lucid.bfloat16
     assert x.grad[0, 0, 0, 0].to("cpu").to(lucid.float32).item() == 1000.0
-

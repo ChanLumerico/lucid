@@ -731,9 +731,7 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
             for c in range(1, cfg.num_classes):  # skip background slot 0
                 bx_class = bx_i[:, c, :]  # (N_i, 4)
                 mask = [
-                    i
-                    for i, row in enumerate(host_scores)
-                    if row[c] > cfg.score_thresh
+                    i for i, row in enumerate(host_scores) if row[c] > cfg.score_thresh
                 ]
                 if not mask:
                     continue

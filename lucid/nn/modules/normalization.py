@@ -1241,9 +1241,11 @@ class _InstanceNormBase(Module):
             self.register_buffer("running_var", None)
         self.register_buffer(
             "num_batches_tracked",
-            _lucid.zeros((), dtype=_lucid.int64, device=device)
-            if track_running_stats
-            else None,
+            (
+                _lucid.zeros((), dtype=_lucid.int64, device=device)
+                if track_running_stats
+                else None
+            ),
         )
 
     def _check_input_dim(self, x: Tensor) -> None:
@@ -1274,12 +1276,8 @@ class _InstanceNormBase(Module):
         # eval mode + track_running_stats=True ⇒ use running stats path.
         use_input_stats: bool = self.training or not self.track_running_stats
         use_running: bool = self.track_running_stats and not use_input_stats
-        rm: Tensor | None = (
-            self._buffers.get("running_mean") if use_running else None
-        )
-        rv: Tensor | None = (
-            self._buffers.get("running_var") if use_running else None
-        )
+        rm: Tensor | None = self._buffers.get("running_mean") if use_running else None
+        rv: Tensor | None = self._buffers.get("running_var") if use_running else None
         # Update running stats during training (tracks per-instance stats
         # averaged across the batch — matches the reference framework).
         _tracing_active = _C_engine.compile.current_tracer() is not None

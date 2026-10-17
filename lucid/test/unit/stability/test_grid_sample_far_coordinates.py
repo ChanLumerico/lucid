@@ -332,9 +332,9 @@ def test_far_coordinates(
     stand_in: list[float],
 ) -> None:
     got = _result(device, name)
-    assert "crash" not in got, (
-        f"{name} on {device} killed the interpreter: {got['crash']}"
-    )
+    assert (
+        "crash" not in got
+    ), f"{name} on {device} killed the interpreter: {got['crash']}"
     want = _reference(ref, shape, mode, pad, align, point)
     kinds = {k for k in _kinds(shape, mode, pad, align, point) if k is not None}
     if not kinds:
@@ -368,9 +368,9 @@ def test_rotate_far_or_nan_centre(
     # A far centre puts every source outside the image (zeros); a NaN
     # position reads sample 0, the one rule both devices share.
     got = _result(device, name)
-    assert "crash" not in got, (
-        f"{name} on {device} killed the interpreter: {got['crash']}"
-    )
+    assert (
+        "crash" not in got
+    ), f"{name} on {device} killed the interpreter: {got['crash']}"
     y = _array(got["y"])
     far = math.isinf(cx) or abs(cy) > 1e9
     np.testing.assert_array_equal(y, np.zeros(16) if far else np.full(16, 1.0))

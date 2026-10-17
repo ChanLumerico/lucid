@@ -559,9 +559,7 @@ def masked_scatter(input: Tensor, mask: Tensor, source: Tensor) -> Tensor:
             f"has only {available}"
         )
     picked = source.reshape(-1).narrow(0, 0, count)
-    out = _C_engine.scatter_set(
-        _unwrap(values), _unwrap(positions), _unwrap(picked), 0
-    )
+    out = _C_engine.scatter_set(_unwrap(values), _unwrap(positions), _unwrap(picked), 0)
     return _wrap(_C_engine.reshape(out, shape))
 
 

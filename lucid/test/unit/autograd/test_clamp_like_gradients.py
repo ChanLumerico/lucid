@@ -23,7 +23,24 @@ import lucid
 
 _NAN = float("nan")
 _INF = float("inf")
-_BASE = [0.5, -1.0, 2.0, 0.25, -3.0, 0.0, 0.75, -0.5, 1.25, 0.1, -2.0, 0.3, 0.6, -0.7, 0.9, 1.1]
+_BASE = [
+    0.5,
+    -1.0,
+    2.0,
+    0.25,
+    -3.0,
+    0.0,
+    0.75,
+    -0.5,
+    1.25,
+    0.1,
+    -2.0,
+    0.3,
+    0.6,
+    -0.7,
+    0.9,
+    1.1,
+]
 _SLOT = 5
 
 
@@ -50,7 +67,10 @@ def _grads(lib, call, columns, **kw):
 
 def _graph_grads(call, columns, device):
     ts = [lucid.tensor(c, device=device, requires_grad=True) for c in columns]
-    return [g.tolist() for g in lucid.autograd.grad(call(lucid, *ts).sum(), ts, create_graph=True)]
+    return [
+        g.tolist()
+        for g in lucid.autograd.grad(call(lucid, *ts).sum(), ts, create_graph=True)
+    ]
 
 
 # ── clamp with a scalar bound ───────────────────────────────────────────────

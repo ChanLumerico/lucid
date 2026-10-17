@@ -83,7 +83,9 @@ def test_an_axis_past_the_last_is_refused(ref, device, op, shape):
 
 _STRAGGLERS = {
     "Tensor.diff": lambda lib, d: lib.tensor([1.0, 2.0, 4.0]).diff(dim=d),
-    "linalg.cross": lambda lib, d: lib.linalg.cross(lib.ones(3, 3), lib.ones(3, 3), dim=d),
+    "linalg.cross": lambda lib, d: lib.linalg.cross(
+        lib.ones(3, 3), lib.ones(3, 3), dim=d
+    ),
 }
 
 
@@ -250,14 +252,18 @@ def test_cross_refuses_0d_and_non_3_axes(ref, device, dim):
             ref.linalg.cross(ref.ones(2, 2), ref.ones(2, 2), dim=dim)
         with pytest.raises(RuntimeError, match="must have length 3"):
             lucid.linalg.cross(
-                lucid.ones(2, 2, device=device), lucid.ones(2, 2, device=device), dim=dim
+                lucid.ones(2, 2, device=device),
+                lucid.ones(2, 2, device=device),
+                dim=dim,
             )
 
 
 def test_take_along_dim_on_a_0d_tensor(ref, device):
     x = lucid.tensor(5.0, device=device, requires_grad=True)
     xr = ref.tensor(5.0, requires_grad=True)
-    got = lucid.take_along_dim(x, lucid.tensor(0, dtype=lucid.int64, device=device), dim=None)
+    got = lucid.take_along_dim(
+        x, lucid.tensor(0, dtype=lucid.int64, device=device), dim=None
+    )
     want = ref.take_along_dim(xr, ref.tensor(0, dtype=ref.int64), dim=None)
     assert tuple(got.shape) == tuple(want.shape) == (1,)
     np.testing.assert_allclose(got.numpy(), want.detach().numpy())
@@ -336,8 +342,9 @@ def test_sort_and_argsort_on_a_0d_tensor(ref, device, dim, descending):
             else t.sort(dim=dim, descending=descending)[0]
         ),
     )
-    got_idx = lucid.argsort(lucid.tensor(1.5, device=device), dim=dim, descending=descending)
+    got_idx = lucid.argsort(
+        lucid.tensor(1.5, device=device), dim=dim, descending=descending
+    )
     want_idx = ref.argsort(ref.tensor(1.5), dim=dim, descending=descending)
     assert got_idx.shape == () and got_idx.dtype == lucid.int64
     assert got_idx.item() == want_idx.item() == 0
-

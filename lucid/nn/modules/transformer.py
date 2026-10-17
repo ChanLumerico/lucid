@@ -244,12 +244,22 @@ class TransformerEncoderLayer(Module):
         attn_p = dropout if attention_dropout is None else attention_dropout
         self.attention_dropout_val = attn_p
         self.self_attn = MultiheadAttention(
-            d_model, nhead, attn_p, bias, batch_first=batch_first, device=device, dtype=dtype
+            d_model,
+            nhead,
+            attn_p,
+            bias,
+            batch_first=batch_first,
+            device=device,
+            dtype=dtype,
         )
         self.linear1 = Linear(d_model, dim_feedforward, bias, device, dtype)
         self.linear2 = Linear(dim_feedforward, d_model, bias, device, dtype)
-        self.norm1 = LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype)
-        self.norm2 = LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype)
+        self.norm1 = LayerNorm(
+            d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype
+        )
+        self.norm2 = LayerNorm(
+            d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype
+        )
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
         self.dropout3 = Dropout(dropout)
@@ -800,16 +810,34 @@ class TransformerDecoderLayer(Module):
         attn_p = dropout if attention_dropout is None else attention_dropout
         self.attention_dropout_val = attn_p
         self.self_attn = MultiheadAttention(
-            d_model, nhead, attn_p, bias, batch_first=batch_first, device=device, dtype=dtype
+            d_model,
+            nhead,
+            attn_p,
+            bias,
+            batch_first=batch_first,
+            device=device,
+            dtype=dtype,
         )
         self.multihead_attn = MultiheadAttention(
-            d_model, nhead, attn_p, bias, batch_first=batch_first, device=device, dtype=dtype
+            d_model,
+            nhead,
+            attn_p,
+            bias,
+            batch_first=batch_first,
+            device=device,
+            dtype=dtype,
         )
         self.linear1 = Linear(d_model, dim_feedforward, bias, device, dtype)
         self.linear2 = Linear(dim_feedforward, d_model, bias, device, dtype)
-        self.norm1 = LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype)
-        self.norm2 = LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype)
-        self.norm3 = LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype)
+        self.norm1 = LayerNorm(
+            d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype
+        )
+        self.norm2 = LayerNorm(
+            d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype
+        )
+        self.norm3 = LayerNorm(
+            d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype
+        )
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
         self.dropout3 = Dropout(dropout)
@@ -1319,8 +1347,11 @@ class Transformer(Module):
         custom_encoder: TransformerEncoder | None = None,
         custom_decoder: TransformerDecoder | None = None,
         layer_norm_eps: float = 1e-5,
-        batch_first: bool = False, norm_first: bool = False, bias: bool = True,
-        device: DeviceLike = None, dtype: DTypeLike = None,
+        batch_first: bool = False,
+        norm_first: bool = False,
+        bias: bool = True,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
         *,
         attention_dropout: float | None = None,
     ) -> None:
@@ -1346,7 +1377,9 @@ class Transformer(Module):
                     attention_dropout=attention_dropout,
                 ),
                 num_encoder_layers,
-                norm=LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype),
+                norm=LayerNorm(
+                    d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype
+                ),
             )
         )
         self.decoder = (
@@ -1368,7 +1401,9 @@ class Transformer(Module):
                     attention_dropout=attention_dropout,
                 ),
                 num_decoder_layers,
-                norm=LayerNorm(d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype),
+                norm=LayerNorm(
+                    d_model, layer_norm_eps, bias=bias, device=device, dtype=dtype
+                ),
             )
         )
         self.d_model = d_model

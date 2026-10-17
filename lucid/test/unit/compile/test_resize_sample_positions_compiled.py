@@ -172,7 +172,9 @@ def test_backward_matches_eager(
 
 def test_a_dynamic_batch_compiles_the_resize() -> None:
     """Only the trailing axes are gathered, so a symbolic batch rides through."""
-    fn = lambda t: F.interpolate(t, size=(13, 5, 17), mode="trilinear") * 1  # noqa: E731
+    fn = (
+        lambda t: F.interpolate(t, size=(13, 5, 17), mode="trilinear") * 1
+    )  # noqa: E731
     _C_engine.compile.session_cache_clear()
     compiled = lucid.compile(fn, dynamic=True)
     for batch in (1, 3):

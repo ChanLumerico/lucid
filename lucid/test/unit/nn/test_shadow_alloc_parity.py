@@ -21,7 +21,6 @@ from lucid._dtype import dtype as DType
 from lucid._tensor.tensor import Tensor
 from lucid.nn._shadow import PhantomImpl, shadow_alloc
 
-
 # ── Binary operators, free functions, and Tensor methods (tensor × tensor) ────
 
 _BINARY_SPECS: list[tuple[str, Callable[[Tensor, Tensor], Tensor]]] = [
@@ -77,9 +76,7 @@ _BROADCAST_SHAPE_PAIRS: list[tuple[tuple[int, ...], tuple[int, ...]]] = [
 _FLOAT_DTYPES = (lucid.float16, lucid.bfloat16, lucid.float32, lucid.float64)
 
 
-@pytest.mark.parametrize(
-    "name,op", _BINARY_SPECS, ids=[s[0] for s in _BINARY_SPECS]
-)
+@pytest.mark.parametrize("name,op", _BINARY_SPECS, ids=[s[0] for s in _BINARY_SPECS])
 @pytest.mark.parametrize(
     "dt_a,dt_b",
     _TENSOR_DTYPE_PAIRS,
@@ -155,7 +152,14 @@ _SCALAR_BINARY_SPECS: list[tuple[str, Callable[[Tensor, int | float], Tensor]]] 
 )
 @pytest.mark.parametrize(
     "dt",
-    [lucid.int8, lucid.int32, lucid.int64, lucid.float16, lucid.bfloat16, lucid.float32],
+    [
+        lucid.int8,
+        lucid.int32,
+        lucid.int64,
+        lucid.float16,
+        lucid.bfloat16,
+        lucid.float32,
+    ],
 )
 @pytest.mark.parametrize("scalar", [2, 0.5], ids=["int_scalar", "float_scalar"])
 @pytest.mark.parametrize("shape", [(3, 4), (4,), ()], ids=["2d", "1d", "0d"])
@@ -285,7 +289,20 @@ def test_unary_free_fn_and_method_parity(
 
 @pytest.mark.parametrize(
     "op_name",
-    ["sum", "mean", "prod", "max", "min", "var", "std", "argmax", "argmin", "any", "all", "logsumexp"],
+    [
+        "sum",
+        "mean",
+        "prod",
+        "max",
+        "min",
+        "var",
+        "std",
+        "argmax",
+        "argmin",
+        "any",
+        "all",
+        "logsumexp",
+    ],
 )
 @pytest.mark.parametrize("dt", [lucid.int32, lucid.int64, lucid.float16, lucid.float32])
 @pytest.mark.parametrize("dim", [None, 1, -1])

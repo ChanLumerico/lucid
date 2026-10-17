@@ -59,7 +59,15 @@ TARGETS: dict[str, list[tuple[int, ...]]] = {
         (-1,),
     ],
     "row_offset": [(6,), (3, 2), (-1,), (1, 2, 3, 1)],
-    "transposed": [(2, 2, 3), (4, 3, 1), (1, 4, 3), (12,), (3, 4), (4, 3, 1, 1), (2, 6)],
+    "transposed": [
+        (2, 2, 3),
+        (4, 3, 1),
+        (1, 4, 3),
+        (12,),
+        (3, 4),
+        (4, 3, 1, 1),
+        (2, 6),
+    ],
     "expanded_outer": [(2, 1, 3), (2, 3, 1), (1, 2, 3), (6,), (3, 2)],
     "expanded_inner": [(3, 2, 2), (3, 4, 1), (12,), (6, 2), (-1, 2, 2)],
     "expanded_scalar": [(6,), (3, 2), (6, 1), (1, 1, 6)],
@@ -76,7 +84,9 @@ IDS = [f"{layout}-{'x'.join(map(str, t)) or 'scalar'}" for layout, t in CASES]
 def _lucid_layout(name: str, device: str) -> tuple[lucid.Tensor, lucid.Tensor]:
     n, shape, stride, offset = LAYOUTS[name]
     base = lucid.arange(float(n)).to(device)
-    impl = _C_engine.TensorImpl._make_view(base._impl, list(shape), list(stride), offset)
+    impl = _C_engine.TensorImpl._make_view(
+        base._impl, list(shape), list(stride), offset
+    )
     return base, _wrap(impl)
 
 
@@ -160,17 +170,23 @@ def test_gradient_flows_through_a_merged_or_split_view(
 
     # Second order through the view.
     x2 = lucid.tensor(data, device=device, requires_grad=True)
-    (g,) = lucid.autograd.grad((_strided(x2).view(*target) ** 3).sum(), x2, create_graph=True)
+    (g,) = lucid.autograd.grad(
+        (_strided(x2).view(*target) ** 3).sum(), x2, create_graph=True
+    )
     g.sum().backward()
     rx2 = ref.tensor(data, requires_grad=True)
-    (rg,) = ref.autograd.grad((_strided(rx2).view(target) ** 3).sum(), rx2, create_graph=True)
+    (rg,) = ref.autograd.grad(
+        (_strided(rx2).view(target) ** 3).sum(), rx2, create_graph=True
+    )
     rg.sum().backward()
     np.testing.assert_allclose(x2.grad.numpy(), rx2.grad.numpy(), rtol=1e-5, atol=1e-6)
 
 
 @pytest.mark.parity
 @pytest.mark.parametrize("device", DEVICES)
-def test_in_place_write_through_a_merged_view_reaches_the_base(ref: Any, device: str) -> None:
+def test_in_place_write_through_a_merged_view_reaches_the_base(
+    ref: Any, device: str
+) -> None:
     data = np.random.default_rng(2).standard_normal((2, 3, 9)).astype(np.float32)
 
     x = lucid.tensor(data, device=device, requires_grad=True)

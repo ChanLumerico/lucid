@@ -419,4 +419,3 @@ def test_integral_and_bool_tensors_refuse_requires_grad(
     assert t.requires_grad_(False) is t
     t.requires_grad = False
     assert not t.requires_grad
-

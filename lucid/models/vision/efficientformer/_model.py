@@ -653,7 +653,9 @@ class EfficientFormerOutput(ImageClassificationOutput):
     head_dist_logits: Tensor | None = None
 
 
-class EfficientFormerForImageClassification(ImageClassificationModel, ClassificationHeadMixin):
+class EfficientFormerForImageClassification(
+    ImageClassificationModel, ClassificationHeadMixin
+):
     r"""EfficientFormer with a distilled dual classification head (Li et al., 2022).
 
     Wraps the same trunk as :class:`EfficientFormer` and adds a final
@@ -758,7 +760,8 @@ class EfficientFormerForImageClassification(ImageClassificationModel, Classifica
             # distillation reads ``head_dist_logits`` and applies its own
             # objective.
             loss = (
-                F.cross_entropy(head_logits, labels) + F.cross_entropy(head_dist_logits, labels)
+                F.cross_entropy(head_logits, labels)
+                + F.cross_entropy(head_dist_logits, labels)
             ) / 2.0
 
         return EfficientFormerOutput(

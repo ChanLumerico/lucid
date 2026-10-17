@@ -260,9 +260,11 @@ class Flexibility:
         """Per axis: open or not, and the size — at every probe when open."""
         seen = self.probes.get(value_id) or []
         return [
-            (True, tuple(shape[axis] for shape in seen) or None)
-            if size < 0
-            else (False, size)
+            (
+                (True, tuple(shape[axis] for shape in seen) or None)
+                if size < 0
+                else (False, size)
+            )
             for axis, size in enumerate(dims)
         ]
 

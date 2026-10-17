@@ -235,9 +235,7 @@ class _DecoderBlock(nn.Module):
         # The deepest stage is handed the projected gating signal; shallower
         # stages gate on the previous decoder output, as the reference does.
         g_src = x if gate is None else gate
-        gated_skip: Tensor = (
-            skip if self.gate is None else self.gate(skip, g_src)
-        )
+        gated_skip: Tensor = skip if self.gate is None else self.gate(skip, g_src)
         # The decoder's own upsample is also a fixed factor of 2, so pad it
         # up to the skip whenever the encoder's floor-division lost a row or
         # column.  Same guard the sibling U-Net applies.

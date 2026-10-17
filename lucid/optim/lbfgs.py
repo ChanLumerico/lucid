@@ -71,7 +71,9 @@ def _restore(params: list[Tensor], saved: list[Tensor]) -> None:
         p.copy_(value)
 
 
-def _evaluate(closure: Callable[[], Tensor], params: list[Tensor]) -> tuple[float, Tensor]:
+def _evaluate(
+    closure: Callable[[], Tensor], params: list[Tensor]
+) -> tuple[float, Tensor]:
     with lucid.enable_grad():
         loss = closure()
     return float(loss), _flat_grad(params)
@@ -321,7 +323,9 @@ class _LBFGSState:
         def tensors(key: str) -> list[Tensor]:
             v = snap.get(key, [])
             if not isinstance(v, list):
-                raise TypeError(f"LBFGS state '{key}' must be a list, got {type(v).__name__}")
+                raise TypeError(
+                    f"LBFGS state '{key}' must be a list, got {type(v).__name__}"
+                )
             return [tensor(x, key) for x in v]
 
         def optional_tensor(key: str) -> Tensor | None:
@@ -387,8 +391,10 @@ def _should_stop(
         return True
     if flat_grad.abs().max() <= cfg.tolerance_grad:
         return True
-    if st.d is not None and st.t is not None and (
-        (st.d * st.t).abs().max() <= cfg.tolerance_change
+    if (
+        st.d is not None
+        and st.t is not None
+        and ((st.d * st.t).abs().max() <= cfg.tolerance_change)
     ):
         return True
     return st.prev_loss is not None and abs(loss - st.prev_loss) < cfg.tolerance_change
@@ -580,7 +586,9 @@ class LBFGS(Optimizer):
 
     def _params(self) -> list[Tensor]:
         params = self.param_groups[0]["params"]
-        if not isinstance(params, list) or not all(isinstance(p, Tensor) for p in params):
+        if not isinstance(params, list) or not all(
+            isinstance(p, Tensor) for p in params
+        ):
             raise TypeError("LBFGS: the parameter group must hold a list of tensors")
         return params
 
@@ -757,7 +765,9 @@ class LBFGS(Optimizer):
 
         # The group is read below as it is; an edited one is checked first.
         self._sync_hyperparams()
-        cfg = _Settings(**self._hyperparam_dict(self._hyperparams_of(self.param_groups[0])))
+        cfg = _Settings(
+            **self._hyperparam_dict(self._hyperparams_of(self.param_groups[0]))
+        )
         params = self._params()
         with lucid.no_grad():
             with lucid.enable_grad():
@@ -800,7 +810,9 @@ class LBFGS(Optimizer):
             if cfg.line_search_fn is not None:
                 obj = partial(self._probe, closure, params, _snapshot(params), d)
                 start = _LinePoint(0.0, loss, flat_grad, gtd)
-                point, evals = _strong_wolfe(obj, d, start, t, cfg.max_eval - current_evals)
+                point, evals = _strong_wolfe(
+                    obj, d, start, t, cfg.max_eval - current_evals
+                )
                 loss, flat_grad, st.t = point.f, point.g, point.t
                 _add_step(params, point.t, d)
             else:

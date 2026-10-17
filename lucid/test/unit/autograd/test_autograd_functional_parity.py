@@ -263,9 +263,7 @@ def test_unused_input_device_and_dtype_preserved(device: str) -> None:
 
 
 @pytest.mark.parity
-@pytest.mark.parametrize(
-    "fn_name", ["jacobian", "hessian", "vjp", "jvp", "vhp", "hvp"]
-)
+@pytest.mark.parametrize("fn_name", ["jacobian", "hessian", "vjp", "jvp", "vhp", "hvp"])
 def test_non_tensor_or_non_tuple_containers_raise_type_error(
     ref: ModuleType, fn_name: str
 ) -> None:

@@ -20,7 +20,10 @@ _N_AFTER: int = 2
 
 _OPTIMIZER_SPECS: list[tuple[str, _OptimizerFactory]] = [
     ("SGD_plain", lambda ps: optim.SGD(ps, lr=0.05)),
-    ("SGD_momentum", lambda ps: optim.SGD(ps, lr=0.05, momentum=0.9, weight_decay=1e-4)),
+    (
+        "SGD_momentum",
+        lambda ps: optim.SGD(ps, lr=0.05, momentum=0.9, weight_decay=1e-4),
+    ),
     (
         "SGD_nesterov",
         lambda ps: optim.SGD(
@@ -31,11 +34,17 @@ _OPTIMIZER_SPECS: list[tuple[str, _OptimizerFactory]] = [
     ("Adam", lambda ps: optim.Adam(ps, lr=0.01, weight_decay=1e-4)),
     ("Adam_amsgrad", lambda ps: optim.Adam(ps, lr=0.01, amsgrad=True)),
     ("AdamW", lambda ps: optim.AdamW(ps, lr=0.01, weight_decay=0.02)),
-    ("AdamW_amsgrad", lambda ps: optim.AdamW(ps, lr=0.01, weight_decay=0.02, amsgrad=True)),
+    (
+        "AdamW_amsgrad",
+        lambda ps: optim.AdamW(ps, lr=0.01, weight_decay=0.02, amsgrad=True),
+    ),
     ("Adamax", lambda ps: optim.Adamax(ps, lr=0.01, weight_decay=1e-4)),
     ("NAdam", lambda ps: optim.NAdam(ps, lr=0.01, weight_decay=1e-4)),
     ("RAdam", lambda ps: optim.RAdam(ps, lr=0.01, weight_decay=1e-4)),
-    ("Adagrad", lambda ps: optim.Adagrad(ps, lr=0.05, lr_decay=1e-3, weight_decay=1e-4)),
+    (
+        "Adagrad",
+        lambda ps: optim.Adagrad(ps, lr=0.05, lr_decay=1e-3, weight_decay=1e-4),
+    ),
     ("Adadelta", lambda ps: optim.Adadelta(ps, lr=0.5, rho=0.9, weight_decay=1e-4)),
     ("RMSprop", lambda ps: optim.RMSprop(ps, lr=0.01, momentum=0.9, centered=True)),
     ("Rprop", lambda ps: optim.Rprop(ps, lr=0.01, etas=(0.5, 1.2))),

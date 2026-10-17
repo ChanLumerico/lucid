@@ -12,7 +12,9 @@ from tools.quality_gate.collectors.deadcode import (
 from tools.quality_gate.core import Scope
 
 
-def _collect_single_file(tmp_path: Path, source: str) -> dict[tuple[str, str, str], int]:
+def _collect_single_file(
+    tmp_path: Path, source: str
+) -> dict[tuple[str, str, str], int]:
     pkg = tmp_path / "lucid"
     pkg.mkdir(parents=True, exist_ok=True)
     target = pkg / "sample.py"
@@ -87,9 +89,7 @@ def test_registry_decorators_are_not_flagged_while_unused_function_is(
             "    UPNDOWN = 2\n"
             "    IMAGENET1K_512 = 3\n"
             "Weights()\n",
-            "class _DeadWeights:\n"
-            "    TRULY_DEAD_MEMBER = 99\n"
-            "_DeadWeights()\n",
+            "class _DeadWeights:\n" "    TRULY_DEAD_MEMBER = 99\n" "_DeadWeights()\n",
             "unused-variable",
         ),
         (

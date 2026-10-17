@@ -779,9 +779,11 @@ def broadcast_shapes(*shapes: Sequence[int]) -> tuple[int, ...]:
     ()
     """
     norm: list[tuple[int, ...]] = [
-        (operator.index(s),)
-        if isinstance(s, SupportsIndex)
-        else tuple(operator.index(d) for d in s)
+        (
+            (operator.index(s),)
+            if isinstance(s, SupportsIndex)
+            else tuple(operator.index(d) for d in s)
+        )
         for s in shapes
     ]
     for s in norm:

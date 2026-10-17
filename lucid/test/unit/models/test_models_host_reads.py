@@ -66,7 +66,9 @@ def test_postprocess_reads_do_not_grow_with_detections(
     few = _detections_and_reads(host_reads, name, 5)
     many = _detections_and_reads(host_reads, name, 30)
     assert many[0] > few[0] > 0, (few, many)
-    assert many[1] == few[1], f"{few[1]} reads for {few[0]} boxes, {many[1]} for {many[0]}"
+    assert (
+        many[1] == few[1]
+    ), f"{few[1]} reads for {few[0]} boxes, {many[1]} for {many[0]}"
 
 
 def _generate_reads(host_reads: HostReads, steps: int) -> int:
@@ -193,7 +195,9 @@ def _per_element_reads(source: str) -> Iterator[int]:
             for child in (*node.body, *node.orelse):
                 yield from visit(child, inner)
             return
-        if isinstance(node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+        if isinstance(
+            node, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)
+        ):
             inner = loop_names.union(
                 *(_bound_names(gen.target) for gen in node.generators)
             )

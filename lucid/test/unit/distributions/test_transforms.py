@@ -473,7 +473,11 @@ def _transform_constraint_cases(ref):
             T.LowerCholeskyTransform(),
             rt.LowerCholeskyTransform(),
             [[[1.0, 0.0], [0.5, 2.0]], [[1.0, 2.0], [0.5, -1.0]]],
-            [[[1.0, 0.0], [0.5, 2.0]], [[1.0, 2.0], [0.5, 2.0]], [[1.0, 0.0], [0.5, -1.0]]],
+            [
+                [[1.0, 0.0], [0.5, 2.0]],
+                [[1.0, 2.0], [0.5, 2.0]],
+                [[1.0, 0.0], [0.5, -1.0]],
+            ],
         ),
         (
             "CorrCholeskyTransform",
@@ -536,8 +540,12 @@ def _transform_constraint_cases(ref):
         ),
         (
             "ComposeTransform",
-            T.ComposeTransform([T.ExpTransform(), T.IndependentTransform(T.SigmoidTransform(), 1)]),
-            rt.ComposeTransform([rt.ExpTransform(), rt.IndependentTransform(rt.SigmoidTransform(), 1)]),
+            T.ComposeTransform(
+                [T.ExpTransform(), T.IndependentTransform(T.SigmoidTransform(), 1)]
+            ),
+            rt.ComposeTransform(
+                [rt.ExpTransform(), rt.IndependentTransform(rt.SigmoidTransform(), 1)]
+            ),
             [[-1.0, 0.0], [1.0, 2.0]],
             [[0.2, 0.8], [-0.1, 0.8], [0.2, 1.2]],
         ),
@@ -553,9 +561,15 @@ def _transform_constraint_cases(ref):
 
 def test_every_transform_declares_matching_domain_and_codomain(ref):
     for name, ours, theirs, dom_vals, cod_vals in _transform_constraint_cases(ref):
-        assert ours.domain.event_dim == theirs.domain.event_dim, f"{name} domain.event_dim"
-        assert ours.domain.is_discrete == theirs.domain.is_discrete, f"{name} domain.is_discrete"
-        assert ours.codomain.event_dim == theirs.codomain.event_dim, f"{name} codomain.event_dim"
+        assert (
+            ours.domain.event_dim == theirs.domain.event_dim
+        ), f"{name} domain.event_dim"
+        assert (
+            ours.domain.is_discrete == theirs.domain.is_discrete
+        ), f"{name} domain.is_discrete"
+        assert (
+            ours.codomain.event_dim == theirs.codomain.event_dim
+        ), f"{name} codomain.event_dim"
         assert (
             ours.codomain.is_discrete == theirs.codomain.is_discrete
         ), f"{name} codomain.is_discrete"
@@ -590,7 +604,10 @@ def test_transformed_distribution_reexport_and_support_validation(ref):
     )
     ref_dist = ref.distributions.TransformedDistribution(
         ref.distributions.Normal(ref.tensor(0.0), ref.tensor(1.0)),
-        [ref.distributions.transforms.AffineTransform(0.0, 1.0), ref.distributions.transforms.ExpTransform()],
+        [
+            ref.distributions.transforms.AffineTransform(0.0, 1.0),
+            ref.distributions.transforms.ExpTransform(),
+        ],
         validate_args=True,
     )
     assert dist.support is not None
@@ -615,4 +632,3 @@ def test_sigmoid_transform_inverse_clamps_to_finfo_bounds(dtype_name, ref):
     want = ref.distributions.transforms.SigmoidTransform()._inverse(pts_r).numpy()
     assert np.isfinite(got).all()
     assert np.allclose(got, want, rtol=1e-6, atol=1e-6)
-

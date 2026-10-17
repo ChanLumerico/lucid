@@ -26,7 +26,10 @@ from lucid.distributions.kl import (
 )
 from lucid.distributions.matrix import Wishart
 from lucid.distributions.normal import LogNormal, Normal
-from lucid.distributions.transformed_distribution import Transform, TransformedDistribution
+from lucid.distributions.transformed_distribution import (
+    Transform,
+    TransformedDistribution,
+)
 from lucid.distributions.transforms import ExpTransform
 from lucid.distributions.uniform import Uniform
 from lucid.special import multigammaln, xlog1py
@@ -61,7 +64,9 @@ def _value_eq(a: object, b: object) -> bool:
     if isinstance(a, Transform) and isinstance(b, Transform):
         return _transform_eq(a, b)
     if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
-        return len(a) == len(b) and all(_value_eq(x, y) for x, y in zip(a, b, strict=False))
+        return len(a) == len(b) and all(
+            _value_eq(x, y) for x, y in zip(a, b, strict=False)
+        )
     return bool(a == b)
 
 
@@ -71,9 +76,21 @@ def _register_inf_pairs() -> None:
         (ContinuousBernoulli, (Pareto,), "probs"),
         (Exponential, (Beta, ContinuousBernoulli, Pareto, Uniform), "rate"),
         (Gamma, (Beta, ContinuousBernoulli, Pareto, Uniform), "concentration"),
-        (Gumbel, (Beta, ContinuousBernoulli, Exponential, Gamma, Pareto, Uniform), "loc"),
-        (Laplace, (Beta, ContinuousBernoulli, Exponential, Gamma, Pareto, Uniform), "loc"),
-        (Normal, (Beta, ContinuousBernoulli, Exponential, Gamma, Pareto, Uniform), "loc"),
+        (
+            Gumbel,
+            (Beta, ContinuousBernoulli, Exponential, Gamma, Pareto, Uniform),
+            "loc",
+        ),
+        (
+            Laplace,
+            (Beta, ContinuousBernoulli, Exponential, Gamma, Pareto, Uniform),
+            "loc",
+        ),
+        (
+            Normal,
+            (Beta, ContinuousBernoulli, Exponential, Gamma, Pareto, Uniform),
+            "loc",
+        ),
         (Pareto, (Beta, ContinuousBernoulli, Uniform), "scale"),
         (Poisson, (Bernoulli, Binomial), "rate"),
     )
@@ -97,7 +114,9 @@ def _kl_binomial_binomial(p: Binomial, q: Binomial) -> Tensor:
         raise NotImplementedError(
             "KL between Binomials where q.total_count > p.total_count is not implemented"
         )
-    kl = p.total_count * (p.probs * (p.logits - q.logits) + (-p.probs).log1p() - (-q.probs).log1p())
+    kl = p.total_count * (
+        p.probs * (p.logits - q.logits) + (-p.probs).log1p() - (-q.probs).log1p()
+    )
     return lucid.where(p.total_count > q.total_count, float("inf"), kl)
 
 
@@ -127,7 +146,9 @@ def _kl_expfamily_expfamily(p: ExponentialFamily, q: ExponentialFamily) -> Tenso
 
 
 @register_kl(OneHotCategorical, OneHotCategorical)
-def _kl_onehotcategorical_onehotcategorical(p: OneHotCategorical, q: OneHotCategorical) -> Tensor:
+def _kl_onehotcategorical_onehotcategorical(
+    p: OneHotCategorical, q: OneHotCategorical
+) -> Tensor:
     return _kl_categorical_categorical(p._cat, q._cat)
 
 
@@ -150,7 +171,9 @@ def _kl_inversegamma_inversegamma(p: InverseGamma, q: InverseGamma) -> Tensor:
 
 @register_kl(Weibull, Weibull)
 def _kl_weibull_weibull(p: Weibull, q: Weibull) -> Tensor:
-    if not (_value_eq(p.concentration, q.concentration) and _value_eq(p.scale, q.scale)):
+    if not (
+        _value_eq(p.concentration, q.concentration) and _value_eq(p.scale, q.scale)
+    ):
         raise NotImplementedError
     return lucid.zeros_like(p.scale)
 
@@ -180,9 +203,9 @@ def _kl_wishart_wishart(p: Wishart, q: Wishart) -> Tensor:
 
     def _log_norm(x: Tensor, y: Tensor) -> Tensor:
         half_df = y + 0.5 * (dim + 1.0)
-        return half_df * (-lucid.linalg.slogdet(-2.0 * x)[1] + math.log(2.0) * dim) + multigammaln(
-            half_df, dim
-        )
+        return half_df * (
+            -lucid.linalg.slogdet(-2.0 * x)[1] + math.log(2.0) * dim
+        ) + multigammaln(half_df, dim)
 
     lg_p = _log_norm(p_nparams[0], p_nparams[1])
     grads = lucid.autograd.grad(lg_p.sum(), p_nparams, create_graph=True)
@@ -193,7 +216,9 @@ def _kl_wishart_wishart(p: Wishart, q: Wishart) -> Tensor:
 
 
 @register_kl(TransformedDistribution, TransformedDistribution)
-def _kl_transformed_transformed(p: TransformedDistribution, q: TransformedDistribution) -> Tensor:
+def _kl_transformed_transformed(
+    p: TransformedDistribution, q: TransformedDistribution
+) -> Tensor:
     if not _value_eq(p.transforms, q.transforms) or p.event_shape != q.event_shape:
         raise NotImplementedError
     return kl_divergence(p.base_dist, q.base_dist)
@@ -223,7 +248,9 @@ def _kl_uniform_uniform(p: Uniform, q: Uniform) -> Tensor:
 def _kl_geometric_geometric(p: Geometric, q: Geometric) -> Tensor:
     pp, qp = p.probs, q.probs
     mean_failures = (1.0 - pp) / pp
-    return pp.log() - qp.log() + xlog1py(mean_failures, -pp) - xlog1py(mean_failures, -qp)
+    return (
+        pp.log() - qp.log() + xlog1py(mean_failures, -pp) - xlog1py(mean_failures, -qp)
+    )
 
 
 @register_kl(Independent, Independent)
@@ -232,7 +259,9 @@ def _kl_independent_independent(p: Independent, q: Independent) -> Tensor:
         raise NotImplementedError(
             "kl_divergence(Independent, Independent) requires equal reinterpreted_batch_ndims."
         )
-    return _sum_rightmost(kl_divergence(p.base_dist, q.base_dist), p.reinterpreted_batch_ndims)
+    return _sum_rightmost(
+        kl_divergence(p.base_dist, q.base_dist), p.reinterpreted_batch_ndims
+    )
 
 
 @register_kl(Bernoulli, Poisson)
@@ -258,7 +287,9 @@ def _kl_beta_exponential(p: Beta, q: Exponential) -> Tensor:
 def _kl_beta_gamma(p: Beta, q: Gamma) -> Tensor:
     sum_p = p.concentration1 + p.concentration0
     t2 = lucid.lgamma(q.concentration) - q.concentration * q.rate.log()
-    t3 = (q.concentration - 1.0) * (lucid.digamma(p.concentration1) - lucid.digamma(sum_p))
+    t3 = (q.concentration - 1.0) * (
+        lucid.digamma(p.concentration1) - lucid.digamma(sum_p)
+    )
     return -p.entropy() + t2 - t3 + q.rate * p.concentration1 / sum_p
 
 
@@ -266,7 +297,10 @@ def _kl_beta_gamma(p: Beta, q: Gamma) -> Tensor:
 def _kl_beta_normal(p: Beta, q: Normal) -> Tensor:
     e_beta = p.concentration1 / (p.concentration1 + p.concentration0)
     var_normal = q.scale**2
-    t3 = (e_beta * (1.0 - e_beta) / (p.concentration1 + p.concentration0 + 1.0) + e_beta**2) * 0.5
+    t3 = (
+        e_beta * (1.0 - e_beta) / (p.concentration1 + p.concentration0 + 1.0)
+        + e_beta**2
+    ) * 0.5
     return (
         -p.entropy()
         + 0.5 * (var_normal * 2.0 * math.pi).log()
@@ -281,7 +315,9 @@ def _kl_beta_uniform(p: Beta, q: Uniform) -> Tensor:
 
 
 @register_kl(ContinuousBernoulli, Exponential)
-def _kl_continuous_bernoulli_exponential(p: ContinuousBernoulli, q: Exponential) -> Tensor:
+def _kl_continuous_bernoulli_exponential(
+    p: ContinuousBernoulli, q: Exponential
+) -> Tensor:
     return -p.entropy() - q.rate.log() + q.rate * p.mean
 
 
@@ -432,7 +468,11 @@ def _kl_pareto_gamma(p: Pareto, q: Gamma) -> Tensor:
 def _kl_pareto_normal(p: Pareto, q: Normal) -> Tensor:
     var_n, c = 2.0 * (q.scale**2), p.scale / (p.alpha - 1.0)
     t1 = (math.sqrt(2.0 * math.pi) * q.scale * p.alpha / p.scale).log() - 1.0 / p.alpha
-    res = t1 + (p.alpha * (c**2) / (p.alpha - 2.0) + (p.alpha * c - q.loc) ** 2) / var_n - 1.0
+    res = (
+        t1
+        + (p.alpha * (c**2) / (p.alpha - 2.0) + (p.alpha * c - q.loc) ** 2) / var_n
+        - 1.0
+    )
     return lucid.where(p.alpha <= 2.0, float("inf"), res)
 
 
@@ -440,13 +480,19 @@ def _kl_pareto_normal(p: Pareto, q: Normal) -> Tensor:
 def _kl_uniform_beta(p: Uniform, q: Beta) -> Tensor:
     c = p.high - p.low
     t2 = (q.concentration1 - 1.0) * (_x_log_x(p.high) - _x_log_x(p.low) - c) / c
-    t3 = (q.concentration0 - 1.0) * (_x_log_x(1.0 - p.high) - _x_log_x(1.0 - p.low) + c) / c
+    t3 = (
+        (q.concentration0 - 1.0)
+        * (_x_log_x(1.0 - p.high) - _x_log_x(1.0 - p.low) + c)
+        / c
+    )
     t4 = (
         lucid.lgamma(q.concentration1)
         + lucid.lgamma(q.concentration0)
         - lucid.lgamma(q.concentration1 + q.concentration0)
     )
-    return lucid.where((p.high > 1.0) | (p.low < 0.0), float("inf"), t3 + t4 - c.log() - t2)
+    return lucid.where(
+        (p.high > 1.0) | (p.low < 0.0), float("inf"), t3 + t4 - c.log() - t2
+    )
 
 
 @register_kl(Uniform, ContinuousBernoulli)

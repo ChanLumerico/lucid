@@ -315,7 +315,9 @@ def test_engine_scope_untraced_and_autocast_dtype() -> None:
     with autocast(device_type="cpu", dtype=lucid.bfloat16):
         assert _C_engine.amp_active_dtype(_C_engine.Device.CPU) == _C_engine.Dtype.BF16
         with autocast_dtype():
-            assert _C_engine.amp_active_dtype(_C_engine.Device.CPU) == _C_engine.Dtype.F32
+            assert (
+                _C_engine.amp_active_dtype(_C_engine.Device.CPU) == _C_engine.Dtype.F32
+            )
         assert _C_engine.amp_active_dtype(_C_engine.Device.CPU) == _C_engine.Dtype.BF16
         _ = bn(x)
         _ = inorm(x)
@@ -323,4 +325,3 @@ def test_engine_scope_untraced_and_autocast_dtype() -> None:
         assert bn.running_mean.dtype == lucid.float32  # type: ignore[union-attr]
         assert inorm.running_mean.dtype == lucid.float32  # type: ignore[union-attr]
         assert rm.dtype == lucid.float32
-

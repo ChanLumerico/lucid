@@ -85,7 +85,9 @@ class _LRScheduler:
         self, optimizer: Optimizer, last_epoch: int = -1, verbose: bool = False
     ) -> None:
         self.optimizer = optimizer
-        self.last_epoch = last_epoch + 1  # starts at 0; after N step() calls, last_epoch == N
+        self.last_epoch = (
+            last_epoch + 1
+        )  # starts at 0; after N step() calls, last_epoch == N
         self._step_count = 0
         self.verbose = verbose
         # The rate before any scheduler touched it, kept on the group: the
@@ -1859,7 +1861,9 @@ class ChainedScheduler:
         # step-0 rate, and some read that rate back (StepLR).  Start every
         # track from the base instead.
         for sched in schedulers:
-            for group, base in zip(sched.optimizer.param_groups, sched.base_lrs, strict=True):
+            for group, base in zip(
+                sched.optimizer.param_groups, sched.base_lrs, strict=True
+            ):
                 group["lr"] = base
             sched._last_lr = list(sched.get_lr())
         self._compose()
@@ -1930,12 +1934,13 @@ class ChainedScheduler:
             # group's current rate (ExponentialLR, StepLR), and that rate is
             # the chain's product — the previous child's factor would be
             # applied again.
-            for group, lr in zip(sched.optimizer.param_groups, sched._last_lr, strict=True):
+            for group, lr in zip(
+                sched.optimizer.param_groups, sched._last_lr, strict=True
+            ):
                 group["lr"] = lr
             sched.step()
         self._compose()
 
     def get_last_lr(self) -> list[float]:
-        """Return the composed learning rates the chain last wrote.
-        """
+        """Return the composed learning rates the chain last wrote."""
         return list(self._last_lr)

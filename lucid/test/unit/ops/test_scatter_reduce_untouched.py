@@ -117,7 +117,11 @@ def _integer_cases():
             for reduce in ("sum", "mean", "amax", "amin"):
                 marks = ()
                 # MLX scatters no int64 operand; the CPU runs every integer.
-                if reduce in ("amax", "amin") and device == "metal" and dtype == "int64":
+                if (
+                    reduce in ("amax", "amin")
+                    and device == "metal"
+                    and dtype == "int64"
+                ):
                     marks = (
                         pytest.mark.xfail(
                             raises=ValueError,

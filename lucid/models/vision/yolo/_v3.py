@@ -1033,7 +1033,9 @@ class YOLOV3ForObjectDetection(ObjectDetectionModel):
 
         all_conf: list[Tensor] = []
 
-        for raw_pred, anch_wh, stride in zip(raw_preds, scale_anchors, scale_strides, strict=True):
+        for raw_pred, anch_wh, stride in zip(
+            raw_preds, scale_anchors, scale_strides, strict=True
+        ):
             logits_s, boxes_s, conf_s = _decode_predictions(raw_pred, anch_wh, stride)
             all_logits.append(logits_s)
             all_boxes.append(boxes_s)
@@ -1202,7 +1204,9 @@ class YOLOV3TinyForObjectDetection(ObjectDetectionModel):
         all_boxes: list[Tensor] = []
         all_conf: list[Tensor] = []
 
-        for raw_pred, anch_wh, stride in zip(raw_preds, scale_anchors, scale_strides, strict=True):
+        for raw_pred, anch_wh, stride in zip(
+            raw_preds, scale_anchors, scale_strides, strict=True
+        ):
             logits_s, boxes_s, conf_s = _decode_predictions(raw_pred, anch_wh, stride)
             all_logits.append(logits_s)
             all_boxes.append(boxes_s)

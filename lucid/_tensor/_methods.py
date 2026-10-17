@@ -235,14 +235,11 @@ def _bincount(
     return _bc(self, weights=weights, minlength=minlength)
 
 
-def _take_along_dim(
-    self: Tensor, indices: Tensor, dim: int | None = None
-) -> Tensor:
+def _take_along_dim(self: Tensor, indices: Tensor, dim: int | None = None) -> Tensor:
     """Select values from ``self`` at ``indices`` along ``dim``."""
     from lucid._ops.composite.shape import take_along_dim as _tad
 
     return _tad(self, indices, dim=dim)
-
 
 
 _EXTRA_METHODS = (

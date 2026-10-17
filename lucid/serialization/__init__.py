@@ -198,7 +198,11 @@ def _extract_metal_cluster_bytes(
             if c_lo <= cluster_lo and c_hi >= cluster_hi:
                 raw = bytes(c._impl.to_bytes())
                 rel = cluster_lo - c_lo
-                return raw if (rel == 0 and len(raw) == nbytes) else raw[rel : rel + nbytes]
+                return (
+                    raw
+                    if (rel == 0 and len(raw) == nbytes)
+                    else raw[rel : rel + nbytes]
+                )
 
     buf = bytearray(nbytes)
     for _lo, _hi, f_addr, sh, st, t, _rt in cluster_items:
@@ -241,14 +245,10 @@ def _tensor_span(
     itemsize = int(root.element_size())
     first_addr = int(root.data_ptr()) + rel_off * itemsize
     min_off = sum(
-        (d - 1) * s
-        for d, s in zip(shape, stride_elems, strict=True)
-        if d > 1 and s < 0
+        (d - 1) * s for d, s in zip(shape, stride_elems, strict=True) if d > 1 and s < 0
     )
     max_off = sum(
-        (d - 1) * s
-        for d, s in zip(shape, stride_elems, strict=True)
-        if d > 1 and s > 0
+        (d - 1) * s for d, s in zip(shape, stride_elems, strict=True) if d > 1 and s > 0
     )
     lo_addr = first_addr + min_off * itemsize
     hi_addr = first_addr + (max_off + 1) * itemsize
@@ -411,11 +411,7 @@ def _resolve_target_device(
     map_location: str | Callable[..., Any] | dict[str, str] | None,
 ) -> str:
     if isinstance(map_location, str):
-        return (
-            "metal"
-            if ("metal" in map_location or "gpu" in map_location)
-            else "cpu"
-        )
+        return "metal" if ("metal" in map_location or "gpu" in map_location) else "cpu"
     if isinstance(map_location, dict):
         mapped = map_location.get(device_str, device_str)
         return "metal" if ("metal" in mapped or "gpu" in mapped) else "cpu"
@@ -442,9 +438,7 @@ def _load_v3_11tuple(
         raw_bytes,
     ) = pid
     target_dev = _resolve_target_device(device_str, map_location)
-    eng_device = (
-        _C_engine.Device.GPU if target_dev == "metal" else _C_engine.Device.CPU
-    )
+    eng_device = _C_engine.Device.GPU if target_dev == "metal" else _C_engine.Device.CPU
     eng_dtype = to_engine_dtype(_resolve_dtype_name(dtype_name))
     itemsize = _ENGINE_TO_DTYPE[eng_dtype].itemsize
     base_impl = storages.get(int(sid))

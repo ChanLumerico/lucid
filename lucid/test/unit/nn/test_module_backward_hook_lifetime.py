@@ -237,9 +237,7 @@ def test_custom_function_cycle_through_ctx_or_module_is_freed(
             return out
 
         @staticmethod
-        def backward(
-            ctx: object, grad_out: lucid.Tensor
-        ) -> tuple[lucid.Tensor, None]:
+        def backward(ctx: object, grad_out: lucid.Tensor) -> tuple[lucid.Tensor, None]:
             (out,) = ctx.saved_tensors  # type: ignore[attr-defined]
             return grad_out * (out * 0 + 2), None
 

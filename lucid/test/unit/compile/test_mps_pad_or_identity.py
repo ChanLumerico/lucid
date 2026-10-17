@@ -73,14 +73,12 @@ class _FnModule(nn.Module):
         probe = self._probes.get(y_shape)
         if probe is None:
             with lucid.no_grad():
-                probe = (
-                    lucid.arange(
-                        1,
-                        y.numel() + 1,
-                        dtype=y.dtype,
-                        device=COMPILE_DEVICE,
-                    ).reshape(y_shape)
-                )
+                probe = lucid.arange(
+                    1,
+                    y.numel() + 1,
+                    dtype=y.dtype,
+                    device=COMPILE_DEVICE,
+                ).reshape(y_shape)
             self._probes[y_shape] = probe
         return (y * probe).sum()
 

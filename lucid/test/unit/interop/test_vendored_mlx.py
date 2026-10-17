@@ -44,7 +44,9 @@ def _pinned_version() -> str:
     # passes the pin it was built with.
     pin = os.environ.get("LUCID_MLX_PIN")
     if not pin:
-        pytest.skip("pyproject.toml is not beside the lucid package and LUCID_MLX_PIN is unset")
+        pytest.skip(
+            "pyproject.toml is not beside the lucid package and LUCID_MLX_PIN is unset"
+        )
     return pin
 
 
@@ -97,8 +99,7 @@ def test_metal_device_info_names_the_device() -> None:
 
 
 # Runs in a fresh interpreter: argv[1] says which side is imported first.
-_COEXIST = textwrap.dedent(
-    """
+_COEXIST = textwrap.dedent("""
     import sys
 
     if sys.argv[1] == "mlx_first":
@@ -127,8 +128,7 @@ _COEXIST = textwrap.dedent(
     assert adopted.tolist() == [[7.0, 10.0], [15.0, 22.0]]
 
     print(_C_engine.mlx_runtime_version(), mx.__version__)
-    """
-)
+    """)
 
 
 @_requires_metal

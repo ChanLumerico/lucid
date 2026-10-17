@@ -187,7 +187,9 @@ def _resolve_grid(t: Tensor | Sequence[float]) -> list[float]:
             raise ValueError(f"t must hold finite time points, found {value!r}")
 
     ascending = grid[1] > grid[0]
-    for prev, cur in zip(grid, grid[1:], strict=False):  # adjacent pairs: grid[1:] is 1 shorter
+    for prev, cur in zip(
+        grid, grid[1:], strict=False
+    ):  # adjacent pairs: grid[1:] is 1 shorter
         if (cur > prev) != ascending or cur == prev:
             raise ValueError(
                 "t must be strictly monotonic (ascending or descending); "

@@ -124,9 +124,7 @@ def test_float64_stays_float64_across_policies_and_backward(
         pytest.param(
             "metal",
             lucid.complex64,
-            marks=pytest.mark.skipif(
-                not metal_available(), reason="Metal unavailable"
-            ),
+            marks=pytest.mark.skipif(not metal_available(), reason="Metal unavailable"),
         ),
     ],
 )
@@ -179,7 +177,9 @@ def test_complex_stays_complex_under_autocast(
 
 @pytest.mark.parametrize(
     ("device", "dtype"),
-    device_dtype_params([lucid.int8, lucid.int16, lucid.int32, lucid.int64, lucid.bool]),
+    device_dtype_params(
+        [lucid.int8, lucid.int16, lucid.int32, lucid.int64, lucid.bool]
+    ),
 )
 def test_integer_and_bool_dtypes_under_autocast(
     ref: ModuleType, device: str, dtype: lucid.dtype

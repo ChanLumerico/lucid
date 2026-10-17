@@ -75,9 +75,7 @@ class TestBERTSubmoduleHooks:
             "encoder.layer.0.attention.self",
         ],
     )
-    def test_bert_model_submodule_forward_hook_fires(
-        self, submodule_path: str
-    ) -> None:
+    def test_bert_model_submodule_forward_hook_fires(self, submodule_path: str) -> None:
         model = BERTModel(self._tiny_bert_config()).eval()
         target: nn.Module = model
         for part in submodule_path.split("."):

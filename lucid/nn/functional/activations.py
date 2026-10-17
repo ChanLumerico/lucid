@@ -9,7 +9,10 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._dims import _dim_size, _wrap_dim
 from lucid._ops._reduce import _require_floating
-from lucid._tensor._metal_views import _check as _metal_check, write_back as _metal_write_back
+from lucid._tensor._metal_views import (
+    _check as _metal_check,
+    write_back as _metal_write_back,
+)
 from lucid._types import GeluApproximate
 from lucid.nn.functional._inplace import _in_place
 from lucid.nn.functional.normalization import normalize
@@ -1074,7 +1077,9 @@ def tanhshrink(x: Tensor) -> Tensor:
     return _wrap(_C_engine.sub(xi, _C_engine.tanh(xi)))
 
 
-def cosine_similarity(x1: Tensor, x2: Tensor, dim: int = 1, eps: float = 1e-8) -> Tensor:
+def cosine_similarity(
+    x1: Tensor, x2: Tensor, dim: int = 1, eps: float = 1e-8
+) -> Tensor:
     r"""Cosine similarity between two tensors along a dimension.
 
     Measures the angle between two vectors irrespective of their

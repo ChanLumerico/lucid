@@ -32,7 +32,9 @@ def _flat(t: lucid.Tensor) -> list[float]:
     return [float(v) for v in t.reshape(-1).tolist()]
 
 
-def _view(base: lucid.Tensor, shape: list[int], stride: list[int], offset: int) -> lucid.Tensor:
+def _view(
+    base: lucid.Tensor, shape: list[int], stride: list[int], offset: int
+) -> lucid.Tensor:
     """A member of ``base``'s family with any geometry, in elements."""
     return _wrap(_C_engine.TensorImpl._make_view(base._impl, shape, stride, offset))
 
@@ -224,7 +226,10 @@ def test_a_write_to_the_base_of_a_saved_cpu_view_is_refused() -> None:
     y = x * 1.0
     v = y.view(2, 2)
     z = (v * v).sum()
-    with lucid.no_grad(), pytest.raises(NotImplementedError, match="saved for backward"):
+    with (
+        lucid.no_grad(),
+        pytest.raises(NotImplementedError, match="saved for backward"),
+    ):
         y.add_(1.0)
     assert z.requires_grad
 
@@ -289,7 +294,9 @@ def test_gradcheck_of_a_recorded_write_with_a_live_view_cpu() -> None:
     assert lucid.autograd.gradcheck(_recorded_family_write, [x])
 
 
-def test_a_recorded_write_with_a_live_view_matches_finite_differences_on_metal() -> None:
+def test_a_recorded_write_with_a_live_view_matches_finite_differences_on_metal() -> (
+    None
+):
     # Metal has no float64, so the central difference runs in float32.
     values = [0.3, -1.2, 0.7, 2.0]
     x = lucid.tensor(values).reshape(2, 2).to("metal").requires_grad_()

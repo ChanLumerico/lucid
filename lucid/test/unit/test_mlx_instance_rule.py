@@ -66,8 +66,10 @@ def _loads_mlx(node: ast.AST) -> bool:
         return node.level == 0 and _is_mlx(node.module)
     if isinstance(node, ast.Call) and _loader_name(node.func) in _LOADERS and node.args:
         first = node.args[0]
-        return isinstance(first, ast.Constant) and isinstance(first.value, str) and _is_mlx(
-            first.value
+        return (
+            isinstance(first, ast.Constant)
+            and isinstance(first.value, str)
+            and _is_mlx(first.value)
         )
     return False
 
@@ -120,13 +122,16 @@ def test_only_interop_tests_load_the_mlx_package() -> None:
     hits = _scan(files)
     assert not hits, (
         "the `mlx` package is a different MLX instance from the engine's; use the "
-        "engine bindings (lucid._C.engine.metal_* / synchronize_gpu):\n" + "\n".join(hits)
+        "engine bindings (lucid._C.engine.metal_* / synchronize_gpu):\n"
+        + "\n".join(hits)
     )
 
 
 def test_the_rule_fires_where_mlx_is_loaded_on_purpose() -> None:
     """A positive control: without it, a scanner that never fires would pass."""
-    assert _scan(_python_files(_INTEROP)), "the interop tests load mlx; the scan saw none"
+    assert _scan(
+        _python_files(_INTEROP)
+    ), "the interop tests load mlx; the scan saw none"
 
 
 # Assembled so that this file does not trip its own rule.

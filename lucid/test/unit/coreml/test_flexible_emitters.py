@@ -254,9 +254,11 @@ def test_several_ranged_axes_are_told_apart(
         shape
         for shape in _PLANES
         if all(
-            ranges[axis][0] <= size <= ranges[axis][1]
-            if axis in ranges
-            else size == default[axis]
+            (
+                ranges[axis][0] <= size <= ranges[axis][1]
+                if axis in ranges
+                else size == default[axis]
+            )
             for axis, size in enumerate(shape)
         )
     ]

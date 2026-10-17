@@ -338,9 +338,7 @@ class TestWeightsOnlyWhitelistAndMapLocationContainers:
         }
         loaded = self._save_load(payload, weights_only=True)
         assert isinstance(loaded, dict)
-        for orig_dt, loaded_dt in zip(
-            payload["dtypes"], loaded["dtypes"], strict=True
-        ):
+        for orig_dt, loaded_dt in zip(payload["dtypes"], loaded["dtypes"], strict=True):
             assert loaded_dt is orig_dt
             assert loaded_dt == orig_dt
             assert hash(loaded_dt) == hash(orig_dt)
@@ -403,5 +401,3 @@ class TestWeightsOnlyWhitelistAndMapLocationContainers:
         assert remapped["nt"].left.tolist() == [3.0]
         assert remapped["nt"].right.tolist() == [4.0]
         assert remapped["s"] == {1, 2}
-
-

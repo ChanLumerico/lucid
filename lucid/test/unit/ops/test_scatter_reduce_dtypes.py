@@ -55,7 +55,9 @@ def test_cpu_scatter_reduce_2d_inner_axis(dtype: lucid.dtype, reduce: str) -> No
     src = lucid.tensor([[3, 7, 1, 4], [6, 2, 9, 8]]).to(dtype)
     out = lucid.scatter_reduce(base, 1, index, src, reduce)
     rows = []
-    for b_row, i_row, s_row in zip(base.tolist(), index.tolist(), src.tolist(), strict=True):
+    for b_row, i_row, s_row in zip(
+        base.tolist(), index.tolist(), src.tolist(), strict=True
+    ):
         row = list(b_row)
         for i, s in zip(i_row, s_row, strict=True):
             j = i % 3
@@ -131,4 +133,3 @@ def test_scatter_reduce_amax_amin_nan_propagates(
         base_nan, 0, idx_2, src_finite, reduce, include_self=include_self
     )
     assert lucid.isnan(out_base).tolist() == [include_self, False]
-

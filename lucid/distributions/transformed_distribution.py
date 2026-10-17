@@ -583,4 +583,3 @@ class TransformedDistribution(Distribution):
             )
             - log_det
         )
-

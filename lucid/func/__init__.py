@@ -90,9 +90,7 @@ def _normalise_argnums(
     return False, tuple(argnums)
 
 
-def _prepare_grad_args(
-    args: tuple[Any, ...], argnums: tuple[int, ...]
-) -> list[Any]:
+def _prepare_grad_args(args: tuple[Any, ...], argnums: tuple[int, ...]) -> list[Any]:
     from lucid._tensor.tensor import Tensor as _T
 
     args_list = list(args)
@@ -184,9 +182,7 @@ def _validate_vmap_batch_size(
         ndim = len(a.shape)
         bd = d if d >= 0 else ndim + d
         if bd < 0 or bd >= ndim:
-            raise ValueError(
-                f"vmap: in_dim {d} is out of range for a {ndim}-D tensor"
-            )
+            raise ValueError(f"vmap: in_dim {d} is out of range for a {ndim}-D tensor")
         bs = int(a.shape[bd])
         if batch_size is None:
             batch_size = bs
@@ -211,9 +207,7 @@ def _vectorized_vmap_call(
     output: Any = func(*moved, **kwargs)
     if isinstance(output, tuple):
         od_list = (
-            [out_dims] * len(output)
-            if isinstance(out_dims, int)
-            else list(out_dims)
+            [out_dims] * len(output) if isinstance(out_dims, int) else list(out_dims)
         )
         return tuple(
             _move_from_front(o, od) if isinstance(o, _T) else o
@@ -835,10 +829,12 @@ def _jacfwd_block(
     for col in range(x.numel()):
         t = _one_hot_tangent(x, col)
         tans = tuple(
-            t
-            if argn2 == argn or not isinstance(x2, _T)
-            else _T.__new_from_impl__(
-                _C_engine.zeros(list(x2.shape) if x2.shape else [], dtype, dev)
+            (
+                t
+                if argn2 == argn or not isinstance(x2, _T)
+                else _T.__new_from_impl__(
+                    _C_engine.zeros(list(x2.shape) if x2.shape else [], dtype, dev)
+                )
             )
             for argn2, x2 in zip(argnums, primals_sel, strict=True)
         )
@@ -996,9 +992,7 @@ def jacfwd(
         with _RandGuard(randomness):
             with lucid.no_grad():
                 ref_out = func(*args, **kwargs)
-            sample_out, aux = _unpack_has_aux(
-                ref_out, has_aux=has_aux, name="jacfwd"
-            )
+            sample_out, aux = _unpack_has_aux(ref_out, has_aux=has_aux, name="jacfwd")
             out_shape = list(sample_out.shape) if isinstance(sample_out, _T) else []
 
             def _wrapped(*sel: Tensor) -> Tensor:

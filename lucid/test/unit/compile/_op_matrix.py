@@ -306,8 +306,16 @@ def _cases() -> list[Case]:
     add("invert", lambda t: ~t, dtypes=("i64", "i32", "bool"))
     add("bitwise_or", lambda t: t | t.flip([0]), dtypes=("i64", "i32", "bool"))
     add("bitwise_xor", lambda t: t ^ t.flip([0]), dtypes=("i64", "i32", "bool"))
-    add("shift_left", lambda t: t << t.flip([0]).abs().clamp(max=3), dtypes=("i64", "i32"))
-    add("shift_right", lambda t: t >> t.flip([0]).abs().clamp(max=3), dtypes=("i64", "i32"))
+    add(
+        "shift_left",
+        lambda t: t << t.flip([0]).abs().clamp(max=3),
+        dtypes=("i64", "i32"),
+    )
+    add(
+        "shift_right",
+        lambda t: t >> t.flip([0]).abs().clamp(max=3),
+        dtypes=("i64", "i32"),
+    )
     add("shift_right_scalar", lambda t: t >> 1, dtypes=("i64", "i32"))
 
     # ── reductions

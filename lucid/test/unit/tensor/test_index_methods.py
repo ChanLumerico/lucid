@@ -599,7 +599,9 @@ class TestNewTensorMethodsLCD340:
         assert v.grad is not None and v.grad.item() == 1.0
 
         with pytest.raises(RuntimeError, match="0-dimensional"):
-            lucid.zeros(3, device=device).masked_fill_(mask, lucid.ones(1, device=device))
+            lucid.zeros(3, device=device).masked_fill_(
+                mask, lucid.ones(1, device=device)
+            )
 
     def test_scatter_and_scatter_add_inplace(self, device: str) -> None:
         x = lucid.zeros(4, device=device)
@@ -669,7 +671,10 @@ class TestNewTensorMethodsLCD340:
         idx = lucid.tensor([0, 1, 1, 3], dtype=lucid.int64, device=device)
         assert idx.bincount().tolist() == [1, 2, 0, 1]
         w = lucid.tensor([0.5, 1.0, 2.0, 4.0], device=device)
-        assert_close(idx.bincount(weights=w, minlength=5), np.array([0.5, 3.0, 0.0, 4.0, 0.0], dtype=np.float32))
+        assert_close(
+            idx.bincount(weights=w, minlength=5),
+            np.array([0.5, 3.0, 0.0, 4.0, 0.0], dtype=np.float32),
+        )
 
         mat = lucid.tensor([[10.0, 20.0, 30.0], [40.0, 50.0, 60.0]], device=device)
         take_idx = lucid.tensor([[2, 0], [1, 2]], dtype=lucid.int64, device=device)
@@ -677,4 +682,3 @@ class TestNewTensorMethodsLCD340:
             mat.take_along_dim(take_idx, dim=1),
             np.array([[30.0, 10.0], [50.0, 60.0]], dtype=np.float32),
         )
-

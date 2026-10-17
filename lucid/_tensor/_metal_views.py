@@ -269,9 +269,7 @@ def _view_strides(
     return _chunk_strides(in_shape, in_stride, out_shape)
 
 
-def _probe_stride(
-    link: _Link, in_stride: tuple[int, ...]
-) -> tuple[int, ...] | None:
+def _probe_stride(link: _Link, in_stride: tuple[int, ...]) -> tuple[int, ...] | None:
     from lucid._dispatch import _wrap
     from lucid.compile import _host_check
 
@@ -286,9 +284,7 @@ def _probe_stride(
         )
         seed = _C_engine.empty([span], _C_engine.I8, _C_engine.CPU)
         probe = _wrap(
-            _C_engine.TensorImpl._make_view(
-                seed, list(link.shape), list(in_stride), 0
-            )
+            _C_engine.TensorImpl._make_view(seed, list(link.shape), list(in_stride), 0)
         )
         if link.kind == _KEY:
             traced = probe[link.key]

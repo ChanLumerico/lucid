@@ -39,26 +39,54 @@ DIFF_BINARY_OPS = [
     ("remainder", lambda a, b: a % b, lambda a, b: torch.remainder(a, b)),
     ("atan2", lambda a, b: lucid.atan2(a, b), lambda a, b: torch.atan2(a, b)),
     ("hypot", lambda a, b: lucid.hypot(a, b), lambda a, b: torch.hypot(a, b)),
-    ("logaddexp", lambda a, b: lucid.logaddexp(a, b), lambda a, b: torch.logaddexp(a, b)),
+    (
+        "logaddexp",
+        lambda a, b: lucid.logaddexp(a, b),
+        lambda a, b: torch.logaddexp(a, b),
+    ),
     ("xlogy", lambda a, b: lucid.xlogy(a, b), lambda a, b: torch.xlogy(a, b)),
-    ("xlog1py", lambda a, b: lucid.special.xlog1py(a, b), lambda a, b: torch.special.xlog1py(a, b)),
+    (
+        "xlog1py",
+        lambda a, b: lucid.special.xlog1py(a, b),
+        lambda a, b: torch.special.xlog1py(a, b),
+    ),
 ]
 
 # ── Non-differentiable / special binary ops ─────────────────────────────────
 
 NONDIFF_FLOAT_BINARY_OPS = [
-    ("floordiv", lambda a, b: a // b, lambda a, b: torch.div(a, b, rounding_mode="floor")),
+    (
+        "floordiv",
+        lambda a, b: a // b,
+        lambda a, b: torch.div(a, b, rounding_mode="floor"),
+    ),
     ("equal", lambda a, b: a == b, lambda a, b: a == b),
     ("not_equal", lambda a, b: a != b, lambda a, b: a != b),
     ("less", lambda a, b: a < b, lambda a, b: a < b),
     ("less_equal", lambda a, b: a <= b, lambda a, b: a <= b),
     ("greater", lambda a, b: a > b, lambda a, b: a > b),
     ("greater_equal", lambda a, b: a >= b, lambda a, b: a >= b),
-    ("nextafter", lambda a, b: lucid.nextafter(a, b), lambda a, b: torch.nextafter(a, b)),
+    (
+        "nextafter",
+        lambda a, b: lucid.nextafter(a, b),
+        lambda a, b: torch.nextafter(a, b),
+    ),
     ("isclose", lambda a, b: lucid.isclose(a, b), lambda a, b: torch.isclose(a, b)),
-    ("logical_and", lambda a, b: lucid.logical_and(a, b), lambda a, b: torch.logical_and(a, b)),
-    ("logical_or", lambda a, b: lucid.logical_or(a, b), lambda a, b: torch.logical_or(a, b)),
-    ("logical_xor", lambda a, b: lucid.logical_xor(a, b), lambda a, b: torch.logical_xor(a, b)),
+    (
+        "logical_and",
+        lambda a, b: lucid.logical_and(a, b),
+        lambda a, b: torch.logical_and(a, b),
+    ),
+    (
+        "logical_or",
+        lambda a, b: lucid.logical_or(a, b),
+        lambda a, b: torch.logical_or(a, b),
+    ),
+    (
+        "logical_xor",
+        lambda a, b: lucid.logical_xor(a, b),
+        lambda a, b: torch.logical_xor(a, b),
+    ),
     (
         "igamma",
         lambda a, b: lucid.special.gammainc(a, b),
@@ -69,7 +97,11 @@ NONDIFF_FLOAT_BINARY_OPS = [
         lambda a, b: lucid.special.gammaincc(a, b),
         lambda a, b: torch.special.gammaincc(a, b),
     ),
-    ("zeta", lambda a, b: lucid.special.zeta(a, b), lambda a, b: torch.special.zeta(a, b)),
+    (
+        "zeta",
+        lambda a, b: lucid.special.zeta(a, b),
+        lambda a, b: torch.special.zeta(a, b),
+    ),
 ]
 
 BITWISE_INT_OPS = [
@@ -94,10 +126,14 @@ INPLACE_OPS = [
 # ── 1. Forward + backward for (0-d CPU, Metal) and (Metal, 0-d CPU) ────────
 
 
-@pytest.mark.parametrize("name,l_fn,t_fn", DIFF_BINARY_OPS, ids=[x[0] for x in DIFF_BINARY_OPS])
+@pytest.mark.parametrize(
+    "name,l_fn,t_fn", DIFF_BINARY_OPS, ids=[x[0] for x in DIFF_BINARY_OPS]
+)
 @pytest.mark.parametrize("cpu_first", [True, False], ids=["cpu0_metal", "metal_cpu0"])
 @pytest.mark.parametrize("metal_is_0d", [False, True], ids=["shaped_metal", "0d_metal"])
-@pytest.mark.parametrize("grad_cpu,grad_metal", [(False, False), (True, False), (False, True), (True, True)])
+@pytest.mark.parametrize(
+    "grad_cpu,grad_metal", [(False, False), (True, False), (False, True), (True, True)]
+)
 def test_diff_binary_zero_dim_cpu_with_metal(
     name, l_fn, t_fn, cpu_first, metal_is_0d, grad_cpu, grad_metal
 ):
@@ -109,7 +145,9 @@ def test_diff_binary_zero_dim_cpu_with_metal(
     )
 
     c_l = lucid.tensor(c_val, dtype=lucid.float32, device="cpu", requires_grad=grad_cpu)
-    m_l = lucid.tensor(m_val, dtype=lucid.float32, device="metal", requires_grad=grad_metal)
+    m_l = lucid.tensor(
+        m_val, dtype=lucid.float32, device="metal", requires_grad=grad_metal
+    )
 
     c_t = torch.tensor(c_val, dtype=torch.float32, requires_grad=grad_cpu)
     m_t = torch.tensor(m_val, dtype=torch.float32, requires_grad=grad_metal)
@@ -119,7 +157,9 @@ def test_diff_binary_zero_dim_cpu_with_metal(
 
     assert out_l.device.type == "metal"
     assert tuple(out_l.shape) == tuple(out_t.shape)
-    np.testing.assert_allclose(out_l.numpy(), out_t.detach().numpy(), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        out_l.numpy(), out_t.detach().numpy(), rtol=1e-5, atol=1e-5
+    )
 
     if grad_cpu or grad_metal:
         out_l.sum().backward()
@@ -152,7 +192,9 @@ def test_diff_binary_zero_dim_cpu_with_metal(
     ids=[x[0] for x in NONDIFF_FLOAT_BINARY_OPS],
 )
 @pytest.mark.parametrize("cpu_first", [True, False], ids=["cpu0_metal", "metal_cpu0"])
-def test_nondiff_and_special_binary_zero_dim_cpu_with_metal(name, l_fn, t_fn, cpu_first):
+def test_nondiff_and_special_binary_zero_dim_cpu_with_metal(
+    name, l_fn, t_fn, cpu_first
+):
     c_val = np.array(2.5, dtype=np.float32)
     m_val = np.array([1.5, 2.5, 3.5], dtype=np.float32)
 
@@ -170,7 +212,9 @@ def test_nondiff_and_special_binary_zero_dim_cpu_with_metal(name, l_fn, t_fn, cp
     np.testing.assert_allclose(out_l.numpy(), out_t.numpy(), rtol=1e-5, atol=1e-5)
 
 
-@pytest.mark.parametrize("name,l_fn,t_fn", BITWISE_INT_OPS, ids=[x[0] for x in BITWISE_INT_OPS])
+@pytest.mark.parametrize(
+    "name,l_fn,t_fn", BITWISE_INT_OPS, ids=[x[0] for x in BITWISE_INT_OPS]
+)
 @pytest.mark.parametrize("cpu_first", [True, False], ids=["cpu0_metal", "metal_cpu0"])
 def test_bitwise_int_zero_dim_cpu_with_metal(name, l_fn, t_fn, cpu_first):
     c_val = np.array(2, dtype=np.int32)
@@ -193,7 +237,9 @@ def test_bitwise_int_zero_dim_cpu_with_metal(name, l_fn, t_fn, cpu_first):
 # ── 2. Rejection of non-(0-d CPU) cross-device pairs ───────────────────────
 
 
-@pytest.mark.parametrize("name,l_fn,_", DIFF_BINARY_OPS, ids=[x[0] for x in DIFF_BINARY_OPS])
+@pytest.mark.parametrize(
+    "name,l_fn,_", DIFF_BINARY_OPS, ids=[x[0] for x in DIFF_BINARY_OPS]
+)
 @pytest.mark.parametrize(
     "a_spec,b_spec",
     [
@@ -202,11 +248,20 @@ def test_bitwise_int_zero_dim_cpu_with_metal(name, l_fn, t_fn, cpu_first):
         ((1, "cpu"), (1, "metal")),
         ((1, "metal"), (1, "cpu")),
     ],
-    ids=["0d_metal_shaped_cpu", "shaped_cpu_0d_metal", "shaped_cpu_metal", "shaped_metal_cpu"],
+    ids=[
+        "0d_metal_shaped_cpu",
+        "shaped_cpu_0d_metal",
+        "shaped_cpu_metal",
+        "shaped_metal_cpu",
+    ],
 )
 def test_binary_rejects_disallowed_cross_device_pairs(name, l_fn, _, a_spec, b_spec):
     def _make(ndim: int, dev: str) -> lucid.Tensor:
-        arr = np.array(2.0, dtype=np.float32) if ndim == 0 else np.array([1.5, 2.5], dtype=np.float32)
+        arr = (
+            np.array(2.0, dtype=np.float32)
+            if ndim == 0
+            else np.array([1.5, 2.5], dtype=np.float32)
+        )
         return lucid.tensor(arr, dtype=lucid.float32, device=dev)
 
     a = _make(*a_spec)
@@ -229,9 +284,15 @@ def test_binary_rejects_disallowed_cross_device_pairs(name, l_fn, _, a_spec, b_s
     ],
     ids=["0d_metal_shaped_cpu", "shaped_cpu_0d_metal", "shaped_cpu_metal"],
 )
-def test_nondiff_binary_rejects_disallowed_cross_device_pairs(name, l_fn, _, a_spec, b_spec):
+def test_nondiff_binary_rejects_disallowed_cross_device_pairs(
+    name, l_fn, _, a_spec, b_spec
+):
     def _make(ndim: int, dev: str) -> lucid.Tensor:
-        arr = np.array(2.0, dtype=np.float32) if ndim == 0 else np.array([1.5, 2.5], dtype=np.float32)
+        arr = (
+            np.array(2.0, dtype=np.float32)
+            if ndim == 0
+            else np.array([1.5, 2.5], dtype=np.float32)
+        )
         return lucid.tensor(arr, dtype=lucid.float32, device=dev)
 
     a = _make(*a_spec)
@@ -261,17 +322,21 @@ def test_where_allows_zero_dim_cpu_operands_with_metal(cond_dev, x_dev, y_dev):
         device=cond_dev,
     )
     x_l = lucid.tensor(
-        np.array(3.0, dtype=np.float32)
-        if x_dev == "cpu"
-        else np.array([1.0, 2.0, 3.0], dtype=np.float32),
+        (
+            np.array(3.0, dtype=np.float32)
+            if x_dev == "cpu"
+            else np.array([1.0, 2.0, 3.0], dtype=np.float32)
+        ),
         dtype=lucid.float32,
         device=x_dev,
         requires_grad=True,
     )
     y_l = lucid.tensor(
-        np.array(-4.0, dtype=np.float32)
-        if y_dev == "cpu"
-        else np.array([4.0, 5.0, 6.0], dtype=np.float32),
+        (
+            np.array(-4.0, dtype=np.float32)
+            if y_dev == "cpu"
+            else np.array([4.0, 5.0, 6.0], dtype=np.float32)
+        ),
         dtype=lucid.float32,
         device=y_dev,
         requires_grad=True,
@@ -286,15 +351,21 @@ def test_where_allows_zero_dim_cpu_operands_with_metal(cond_dev, x_dev, y_dev):
 
     assert out_l.device.type == "metal"
     assert tuple(out_l.shape) == tuple(out_t.shape)
-    np.testing.assert_allclose(out_l.numpy(), out_t.detach().numpy(), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        out_l.numpy(), out_t.detach().numpy(), rtol=1e-5, atol=1e-5
+    )
 
     out_l.sum().backward()
     out_t.sum().backward()
 
     assert x_l.grad is not None and x_l.grad.device.type == x_dev
     assert y_l.grad is not None and y_l.grad.device.type == y_dev
-    np.testing.assert_allclose(x_l.grad.numpy(), x_t.grad.detach().numpy(), rtol=1e-5, atol=1e-5)
-    np.testing.assert_allclose(y_l.grad.numpy(), y_t.grad.detach().numpy(), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        x_l.grad.numpy(), x_t.grad.detach().numpy(), rtol=1e-5, atol=1e-5
+    )
+    np.testing.assert_allclose(
+        y_l.grad.numpy(), y_t.grad.detach().numpy(), rtol=1e-5, atol=1e-5
+    )
 
 
 @pytest.mark.parametrize(
@@ -313,12 +384,20 @@ def test_where_rejects_shaped_cpu_with_metal(cond_spec, x_spec, y_spec):
         device=cond_spec[1],
     )
     x = lucid.tensor(
-        np.array(1.0, dtype=np.float32) if x_spec[0] == 0 else np.array([1.0, 2.0], dtype=np.float32),
+        (
+            np.array(1.0, dtype=np.float32)
+            if x_spec[0] == 0
+            else np.array([1.0, 2.0], dtype=np.float32)
+        ),
         dtype=lucid.float32,
         device=x_spec[1],
     )
     y = lucid.tensor(
-        np.array(3.0, dtype=np.float32) if y_spec[0] == 0 else np.array([3.0, 4.0], dtype=np.float32),
+        (
+            np.array(3.0, dtype=np.float32)
+            if y_spec[0] == 0
+            else np.array([3.0, 4.0], dtype=np.float32)
+        ),
         dtype=lucid.float32,
         device=y_spec[1],
     )
@@ -331,7 +410,9 @@ def test_where_rejects_shaped_cpu_with_metal(cond_spec, x_spec, y_spec):
 
 @pytest.mark.parametrize("name,l_fn,t_fn", INPLACE_OPS, ids=[x[0] for x in INPLACE_OPS])
 def test_inplace_metal_target_with_zero_dim_cpu_rhs(name, l_fn, t_fn):
-    a_base = lucid.tensor([1.5, 2.5, 3.5], dtype=lucid.float32, device="metal", requires_grad=True)
+    a_base = lucid.tensor(
+        [1.5, 2.5, 3.5], dtype=lucid.float32, device="metal", requires_grad=True
+    )
     a_l = a_base * 1.0
     b_l = lucid.tensor(2.0, dtype=lucid.float32, device="cpu", requires_grad=True)
 
@@ -344,17 +425,25 @@ def test_inplace_metal_target_with_zero_dim_cpu_rhs(name, l_fn, t_fn):
 
     assert res_l is a_l
     assert a_l.device.type == "metal"
-    np.testing.assert_allclose(a_l.numpy(), res_t.detach().numpy(), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        a_l.numpy(), res_t.detach().numpy(), rtol=1e-5, atol=1e-5
+    )
 
     a_l.sum().backward()
     res_t.sum().backward()
 
     assert a_base.grad is not None and a_base.grad.device.type == "metal"
-    assert b_l.grad is not None and b_l.grad.device.type == "cpu" and tuple(b_l.grad.shape) == ()
+    assert (
+        b_l.grad is not None
+        and b_l.grad.device.type == "cpu"
+        and tuple(b_l.grad.shape) == ()
+    )
     np.testing.assert_allclose(
         a_base.grad.numpy(), a_t_base.grad.detach().numpy(), rtol=1e-4, atol=1e-4
     )
-    np.testing.assert_allclose(b_l.grad.numpy(), b_t.grad.detach().numpy(), rtol=1e-4, atol=1e-4)
+    np.testing.assert_allclose(
+        b_l.grad.numpy(), b_t.grad.detach().numpy(), rtol=1e-4, atol=1e-4
+    )
 
 
 @pytest.mark.parametrize("name,l_fn,_", INPLACE_OPS, ids=[x[0] for x in INPLACE_OPS])
@@ -366,16 +455,31 @@ def test_inplace_metal_target_with_zero_dim_cpu_rhs(name, l_fn, t_fn):
         ((1, "cpu"), (0, "metal")),
         ((1, "metal"), (1, "cpu")),
     ],
-    ids=["0d_cpu_target_0d_metal", "0d_cpu_target_shaped_metal", "shaped_cpu_target", "shaped_cpu_rhs"],
+    ids=[
+        "0d_cpu_target_0d_metal",
+        "0d_cpu_target_shaped_metal",
+        "shaped_cpu_target",
+        "shaped_cpu_rhs",
+    ],
 )
-def test_inplace_rejects_cpu_target_with_metal_rhs_or_shaped_cpu_rhs(name, l_fn, _, a_spec, b_spec):
+def test_inplace_rejects_cpu_target_with_metal_rhs_or_shaped_cpu_rhs(
+    name, l_fn, _, a_spec, b_spec
+):
     a = lucid.tensor(
-        np.array(2.0, dtype=np.float32) if a_spec[0] == 0 else np.array([1.0, 2.0], dtype=np.float32),
+        (
+            np.array(2.0, dtype=np.float32)
+            if a_spec[0] == 0
+            else np.array([1.0, 2.0], dtype=np.float32)
+        ),
         dtype=lucid.float32,
         device=a_spec[1],
     )
     b = lucid.tensor(
-        np.array(3.0, dtype=np.float32) if b_spec[0] == 0 else np.array([3.0, 4.0], dtype=np.float32),
+        (
+            np.array(3.0, dtype=np.float32)
+            if b_spec[0] == 0
+            else np.array([3.0, 4.0], dtype=np.float32)
+        ),
         dtype=lucid.float32,
         device=b_spec[1],
     )
@@ -395,7 +499,9 @@ def test_half_metal_with_zero_dim_cpu_float32_scalar(dtype, cpu_first):
     out = (c0 * m1) if cpu_first else (m1 * c0)
     assert out.device.type == "metal"
     assert out.dtype == dtype
-    np.testing.assert_allclose(out.to(lucid.float32).numpy(), np.array([3.0, 6.0]), rtol=1e-2)
+    np.testing.assert_allclose(
+        out.to(lucid.float32).numpy(), np.array([3.0, 6.0]), rtol=1e-2
+    )
     out.sum().backward()
     assert m1.grad is not None and m1.grad.device.type == "metal"
 
@@ -403,12 +509,18 @@ def test_half_metal_with_zero_dim_cpu_float32_scalar(dtype, cpu_first):
 @pytest.mark.parametrize("cpu_first", [True, False], ids=["cpu0_metal", "metal_cpu0"])
 def test_complex_allows_zero_dim_cpu_with_metal(cpu_first):
     c0 = lucid.tensor(1.5, dtype=lucid.float32, device="cpu", requires_grad=True)
-    m1 = lucid.tensor([2.0, -3.0], dtype=lucid.float32, device="metal", requires_grad=True)
+    m1 = lucid.tensor(
+        [2.0, -3.0], dtype=lucid.float32, device="metal", requires_grad=True
+    )
 
     z = lucid.complex(c0, m1) if cpu_first else lucid.complex(m1, c0)
     assert z.device.type == "metal"
     assert tuple(z.shape) == (2,)
     loss = (lucid.real(z) + lucid.imag(z)).sum()
     loss.backward()
-    assert c0.grad is not None and c0.grad.device.type == "cpu" and tuple(c0.grad.shape) == ()
+    assert (
+        c0.grad is not None
+        and c0.grad.device.type == "cpu"
+        and tuple(c0.grad.shape) == ()
+    )
     assert m1.grad is not None and m1.grad.device.type == "metal"

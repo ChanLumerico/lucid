@@ -1944,8 +1944,19 @@ class Builder:
 #: needs its axis moved and knows to ask.
 _UNIT_AXIS_SAFE = frozenset(
     {
-        "add", "div", "floordiv", "fmod", "mul", "remainder", "sub",
-        "maximum", "minimum", "pow", "reshape", "squeeze", "unsqueeze",
+        "add",
+        "div",
+        "floordiv",
+        "fmod",
+        "mul",
+        "remainder",
+        "sub",
+        "maximum",
+        "minimum",
+        "pow",
+        "reshape",
+        "squeeze",
+        "unsqueeze",
         "split_at",
     }
 )
@@ -2929,7 +2940,12 @@ def build_package(
         # token ids — must reach its lookup as an integer; casting it to
         # half would turn indices into approximations of themselves.  A
         # float16 interface is already what the body reads.
-        if half and not half_in and tensor.dtype == lucid.float32 and tid not in f32_opmath_scalars:
+        if (
+            half
+            and not half_in
+            and tensor.dtype == lucid.float32
+            and tid not in f32_opmath_scalars
+        ):
             cast_name = f"_cast_in_{name}"
             mil_type, raw = emit_cast(builder, source, "fp16")
             program.add_op(mil_type, _operands(raw), cast_name, (body_mil, shape))
@@ -2949,7 +2965,8 @@ def build_package(
     carried_out = {spec.output for spec in (state or [])}
     cast_out = half and not (half_io and classifier is None)
     wanted_name: dict[int, str] = {
-        tid: field for field, tid, t in outputs
+        tid: field
+        for field, tid, t in outputs
         if field not in carried_out and not (cast_out and t.dtype == lucid.float32)
     }
     # A value the graph recomputes on every prediction although nothing

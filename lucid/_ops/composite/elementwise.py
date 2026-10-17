@@ -1143,7 +1143,9 @@ def fmax(input: TensorOrScalar, other: TensorOrScalar) -> Tensor:
     tensor([2., 2., 3.])
     """
     input, other = _promote_pair(input, other)
-    return lucid.where(lucid.logical_or(input >= other, lucid.isnan(other)), input, other)
+    return lucid.where(
+        lucid.logical_or(input >= other, lucid.isnan(other)), input, other
+    )
 
 
 def fmin(input: TensorOrScalar, other: TensorOrScalar) -> Tensor:
@@ -1190,7 +1192,9 @@ def fmin(input: TensorOrScalar, other: TensorOrScalar) -> Tensor:
     tensor([1., 2., 3.])
     """
     input, other = _promote_pair(input, other)
-    return lucid.where(lucid.logical_or(input <= other, lucid.isnan(other)), input, other)
+    return lucid.where(
+        lucid.logical_or(input <= other, lucid.isnan(other)), input, other
+    )
 
 
 # ── Special math functions ─────────────────────────────────────────────────
@@ -1316,7 +1320,9 @@ def ldexp(input: Tensor, other: Tensor | Scalar) -> Tensor:
     frexp : inverse decomposition into mantissa / exponent.
     """
     orig_dtype = input.dtype
-    work_dtype = orig_dtype if orig_dtype in (lucid.float32, lucid.float64) else lucid.float32
+    work_dtype = (
+        orig_dtype if orig_dtype in (lucid.float32, lucid.float64) else lucid.float32
+    )
     work = input if orig_dtype == work_dtype else input.to(dtype=work_dtype)
     exp_t: Tensor = (
         other.to(dtype=work_dtype)
@@ -1341,12 +1347,16 @@ def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
     ``NaN -> (NaN, 0)``, ``±inf -> (±inf, 0)``, ``±0.0 -> (±0.0, 0)``.
     """
     orig_dtype = input.dtype
-    work_dtype = orig_dtype if orig_dtype in (lucid.float32, lucid.float64) else lucid.float32
+    work_dtype = (
+        orig_dtype if orig_dtype in (lucid.float32, lucid.float64) else lucid.float32
+    )
     work = input if orig_dtype == work_dtype else input.to(dtype=work_dtype)
     abs_x = lucid.abs(work)
     special = (abs_x == 0.0) | lucid.isinf(work) | lucid.isnan(work)
     safe_abs = lucid.where(special, lucid.full_like(work, 1.0), abs_x)
-    e_float = lucid.where(special, lucid.zeros_like(work), lucid.floor(lucid.log2(safe_abs)) + 1.0)
+    e_float = lucid.where(
+        special, lucid.zeros_like(work), lucid.floor(lucid.log2(safe_abs)) + 1.0
+    )
     e1 = lucid.trunc(e_float * 0.5)
     m = (work * _pow2(-e1)) * _pow2(-(e_float - e1))
     hi = (~special) & (lucid.abs(m) >= 1.0)
@@ -1354,7 +1364,9 @@ def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
     lo = (~special) & (lucid.abs(m) < 0.5)
     m, e_float = lucid.where(lo, m * 2.0, m), lucid.where(lo, e_float - 1.0, e_float)
     m = lucid.where(special, work, m)
-    return (m.to(dtype=orig_dtype) if orig_dtype != work_dtype else m), e_float.to(dtype=lucid.int32)
+    return (m.to(dtype=orig_dtype) if orig_dtype != work_dtype else m), e_float.to(
+        dtype=lucid.int32
+    )
 
 
 # ── Integer math (non-differentiable) ────────────────────────────────────
@@ -1364,7 +1376,9 @@ def _per_element(fn: Callable[[int, int], int], input: Tensor, other: Tensor) ->
     """``fn`` of each pair of same-shape integer elements, through Python."""
     a, b = input.reshape(-1), other.reshape(-1)
     result = [fn(int(a[i].item()), int(b[i].item())) for i in range(int(a.shape[0]))]
-    return lucid.tensor(result, dtype=input.dtype, device=input.device).reshape(input.shape)
+    return lucid.tensor(result, dtype=input.dtype, device=input.device).reshape(
+        input.shape
+    )
 
 
 def gcd(input: Tensor, other: Tensor) -> Tensor:
@@ -1506,16 +1520,22 @@ def _i0_as_fit(input: Tensor) -> Tensor:
     ax = lucid.abs(input)
     ax_safe = lucid.clamp(ax, min=3.75)
     t_small = (lucid.clip(input, -3.75, 3.75) * (1.0 / 3.75)) ** 2
-    val_small, t_pow = lucid.full_like(input, _bessel._AS_I0_SMALL[0]), lucid.ones_like(input)
+    val_small, t_pow = lucid.full_like(input, _bessel._AS_I0_SMALL[0]), lucid.ones_like(
+        input
+    )
     for c in _bessel._AS_I0_SMALL[1:]:
         t_pow = t_pow * t_small
         val_small = val_small + c * t_pow
     y_large = 3.75 / ax_safe
-    val_large, y_pow = lucid.full_like(input, _bessel._AS_I0_LARGE[0]), lucid.ones_like(input)
+    val_large, y_pow = lucid.full_like(input, _bessel._AS_I0_LARGE[0]), lucid.ones_like(
+        input
+    )
     for c in _bessel._AS_I0_LARGE[1:]:
         y_pow = y_pow * y_large
         val_large = val_large + c * y_pow
-    return lucid.where(ax <= 3.75, val_small, val_large * lucid.exp(ax_safe) / lucid.sqrt(ax_safe))
+    return lucid.where(
+        ax <= 3.75, val_small, val_large * lucid.exp(ax_safe) / lucid.sqrt(ax_safe)
+    )
 
 
 def softmax(input: Tensor, dim: int | None = None) -> Tensor:
@@ -1579,11 +1599,41 @@ def log_softmax(input: Tensor, dim: int | None = None) -> Tensor:
 
 
 __all__ = [
-    "absolute", "negative", "positive", "subtract", "multiply", "divide",
-    "true_divide", "rsub", "arctan2", "arccosh", "acosh", "arcsinh", "asinh",
-    "arctanh", "atanh", "expm1", "sinc", "heaviside", "xlogy", "logit",
-    "signbit", "float_power", "fmax", "fmin", "erfc", "copysign", "ldexp",
-    "frexp", "gcd", "lcm", "lgamma", "digamma", "i0", "softmax", "log_softmax",
+    "absolute",
+    "negative",
+    "positive",
+    "subtract",
+    "multiply",
+    "divide",
+    "true_divide",
+    "rsub",
+    "arctan2",
+    "arccosh",
+    "acosh",
+    "arcsinh",
+    "asinh",
+    "arctanh",
+    "atanh",
+    "expm1",
+    "sinc",
+    "heaviside",
+    "xlogy",
+    "logit",
+    "signbit",
+    "float_power",
+    "fmax",
+    "fmin",
+    "erfc",
+    "copysign",
+    "ldexp",
+    "frexp",
+    "gcd",
+    "lcm",
+    "lgamma",
+    "digamma",
+    "i0",
+    "softmax",
+    "log_softmax",
 ]
 
 

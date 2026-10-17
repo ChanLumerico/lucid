@@ -125,7 +125,10 @@ def test_detect_anomaly_custom_function_and_decorator(device: str) -> None:
             ctx: FunctionCtx, grad_out: lucid.Tensor
         ) -> tuple[None, lucid.Tensor]:
             nan_t = lucid.full(
-                grad_out.shape, float("nan"), dtype=grad_out.dtype, device=grad_out.device
+                grad_out.shape,
+                float("nan"),
+                dtype=grad_out.dtype,
+                device=grad_out.device,
             )
             return None, nan_t
 
@@ -143,9 +146,7 @@ def test_detect_anomaly_custom_function_and_decorator(device: str) -> None:
     assert not is_anomaly_enabled()
 
 
-@pytest.mark.parametrize(
-    "dtype", [lucid.float16, lucid.bfloat16], ids=["f16", "bf16"]
-)
+@pytest.mark.parametrize("dtype", [lucid.float16, lucid.bfloat16], ids=["f16", "bf16"])
 def test_detect_anomaly_half_precision(device: str, dtype: lucid.dtype) -> None:
     x = lucid.tensor([0.0], dtype=dtype, device=device, requires_grad=True)
     with pytest.raises(

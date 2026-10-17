@@ -25,8 +25,42 @@ _INF = float("inf")
 _WIDTH = 16
 _SLOT = 5
 # Background values that never tie between the operands.
-_BASE_A = [0.5, -1.0, 2.0, 0.25, -3.0, 0.0, 0.75, -0.5, 1.25, 0.1, -2.0, 0.3, 0.6, -0.7, 0.9, 1.1]
-_BASE_B = [1.5, -2.0, 0.5, 1.25, -1.0, 0.0, -0.75, 0.5, 0.25, 0.9, -0.2, 0.8, -0.6, 0.7, 1.9, -1.1]
+_BASE_A = [
+    0.5,
+    -1.0,
+    2.0,
+    0.25,
+    -3.0,
+    0.0,
+    0.75,
+    -0.5,
+    1.25,
+    0.1,
+    -2.0,
+    0.3,
+    0.6,
+    -0.7,
+    0.9,
+    1.1,
+]
+_BASE_B = [
+    1.5,
+    -2.0,
+    0.5,
+    1.25,
+    -1.0,
+    0.0,
+    -0.75,
+    0.5,
+    0.25,
+    0.9,
+    -0.2,
+    0.8,
+    -0.6,
+    0.7,
+    1.9,
+    -1.1,
+]
 # Distinct weights so a gradient landing on the wrong slot shows.
 _WEIGHTS = [float(i + 1) for i in range(_WIDTH)]
 
@@ -89,7 +123,9 @@ def test_first_derivative_matches_reference(ref, device, op, pair, dtype_name):
     _same(y.grad.tolist(), want_y)
 
     x, y, w = _operands(lucid, _PAIRS[pair], dtype, device=device)
-    gx, gy = lucid.autograd.grad((getattr(lucid, op)(x, y) * w).sum(), (x, y), create_graph=True)
+    gx, gy = lucid.autograd.grad(
+        (getattr(lucid, op)(x, y) * w).sum(), (x, y), create_graph=True
+    )
     _same(gx.tolist(), want_x)
     _same(gy.tolist(), want_y)
     # The masks are constants of the inputs: a linear loss leaves the
@@ -107,7 +143,9 @@ def _second(lib, op, pair, dtype, **kw):
 
 # A squared output takes the infinities to inf * 0 inside the reference's
 # own second-derivative formula; the finite and NaN pairs carry the rule.
-_FINITE = [name for name, pair in _PAIRS.items() if not any(math.isinf(v) for v in pair)]
+_FINITE = [
+    name for name, pair in _PAIRS.items() if not any(math.isinf(v) for v in pair)
+]
 
 
 @pytest.mark.parametrize("pair", _FINITE)
@@ -166,7 +204,24 @@ _REDUCE_TIES = {
 def test_reduction_ties_split_evenly(ref, device, name):
     """The siblings' rule: ``amax``/``amin`` and the full ``max``/``min``
     split a tie evenly across every extremum, as the reference does."""
-    vals = [5.0, 5.0, 1.0, 5.0, -2.0, -2.0, -2.0, 0.0, -0.0, 0.0, -1.0, 1.0, 3.0, 3.0, 3.0, 3.0]
+    vals = [
+        5.0,
+        5.0,
+        1.0,
+        5.0,
+        -2.0,
+        -2.0,
+        -2.0,
+        0.0,
+        -0.0,
+        0.0,
+        -1.0,
+        1.0,
+        3.0,
+        3.0,
+        3.0,
+        3.0,
+    ]
     call = _REDUCE_TIES[name]
 
     def run(lib, **kw):

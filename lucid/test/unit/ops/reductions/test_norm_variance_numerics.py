@@ -88,9 +88,9 @@ def _assert_matches(
     """
     assert ours.shape == theirs.shape, f"{what}: shape {ours.shape} vs {theirs.shape}"
     finite = np.isfinite(theirs)
-    assert np.isfinite(ours[finite]).all(), (
-        f"{what}: nan/inf where the reference is finite\n{ours}\nvs\n{theirs}"
-    )
+    assert np.isfinite(
+        ours[finite]
+    ).all(), f"{what}: nan/inf where the reference is finite\n{ours}\nvs\n{theirs}"
     np.testing.assert_allclose(
         ours[finite], theirs[finite], rtol=rtol, atol=rtol, err_msg=what
     )

@@ -103,7 +103,9 @@ def test_submodule_dropout_eval_flip_retraces_make_step() -> None:
     loss_compiled = step(x)
     loss_compiled.backward()
     assert len(step.cache) == 2
-    grads_compiled = [p.grad.numpy().copy() for p in m.parameters() if p.grad is not None]
+    grads_compiled = [
+        p.grad.numpy().copy() for p in m.parameters() if p.grad is not None
+    ]
 
     for p in m.parameters():
         p.grad = None
@@ -136,7 +138,9 @@ def test_nested_batchnorm_submodule_mode_flip_compiled_module_and_step() -> None
     assert m.training is False
     _ = cm(x)
     rm_after = bn.running_mean.numpy().copy()  # type: ignore[union-attr]
-    assert not np.allclose(rm_before, rm_after), "training BN submodule must update running_mean"
+    assert not np.allclose(
+        rm_before, rm_after
+    ), "training BN submodule must update running_mean"
 
     # Under make_step, flipping bn.eval() <-> bn.train() switches between
     # compiled eval BN (no running stat write-back) and compiled train BN.
@@ -327,13 +331,17 @@ def test_forward_pre_hook_and_output_transform_hook() -> None:
             p.grad = None
         loss_step = step(x)
         loss_step.backward()
-        grads_step = [p.grad.numpy().copy() for p in m.parameters() if p.grad is not None]
+        grads_step = [
+            p.grad.numpy().copy() for p in m.parameters() if p.grad is not None
+        ]
 
         for p in m.parameters():
             p.grad = None
         loss_eager = (m(x) ** 2).sum()
         loss_eager.backward()
-        grads_eager = [p.grad.numpy().copy() for p in m.parameters() if p.grad is not None]
+        grads_eager = [
+            p.grad.numpy().copy() for p in m.parameters() if p.grad is not None
+        ]
 
         assert np.isclose(float(loss_step.item()), float(loss_eager.item()), rtol=1e-5)
         for gs, ge in zip(grads_step, grads_eager):
@@ -384,13 +392,17 @@ def test_backward_hooks_on_submodule_under_make_step() -> None:
         loss_step.backward()
         assert len(bwd_pre_seen) == 1
         assert len(bwd_seen) == 1
-        grads_step = [p.grad.numpy().copy() for p in m.parameters() if p.grad is not None]
+        grads_step = [
+            p.grad.numpy().copy() for p in m.parameters() if p.grad is not None
+        ]
 
         for p in m.parameters():
             p.grad = None
         loss_eager = loss_fn(m(x))
         loss_eager.backward()
-        grads_eager = [p.grad.numpy().copy() for p in m.parameters() if p.grad is not None]
+        grads_eager = [
+            p.grad.numpy().copy() for p in m.parameters() if p.grad is not None
+        ]
 
         for gs, ge in zip(grads_step, grads_eager):
             assert np.allclose(gs, ge, rtol=1e-4, atol=1e-5)

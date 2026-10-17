@@ -37,6 +37,11 @@
    "date": "2026-10-11",
    "reason": "LCD-410: split ConvTranspose* out of nn/modules/conv.py (LOC cap) into conv_transpose.py + _conv_common.py \u2014 type-ignore[assignment], lizard internal-args, TRY004 and jscpd counts move with the code (conv.py drops by the same amount; jscpd net -7: conv.py 56 -> 21, conv_transpose.py 23, _conv_common.py 5); plus Generator.seed type-ignore[override] (reference reseed method vs engine property, user decision 2026-10-11 reference signatures, no deprecation)",
    "by": "chanlee"
+  },
+  {
+   "date": "2026-10-17",
+   "reason": "User-directed editor formatting (black, 88 columns) committed on the user's instruction (2026-10-17: '\ud3ec\ub9f7\ud305\uc740 \uadf8\ub0e5 \uac19\uc774 \uc5ee\uc5b4\uc11c \ucee4\ubc0b\ud574\uc918 \uc55e\uc73c\ub85c\ub3c4'). Format-only and AST-identical; the only rises are line-based (file-loc-over-cap) and jscpd clone tokenization caused by the re-wrapping. Every other count is lowered to HEAD (the baseline was left stale by the Gemini-landed range).",
+   "by": "chanlee"
   }
  ],
  "counts": {
@@ -186,30 +191,30 @@
    },
    "file-loc-over-cap": {
     "lucid/_C/backend/cpu/CpuBackend.h": 10537,
-    "lucid/_C/backend/gpu/GpuBackend.h": 4550,
-    "lucid/_ops/composite/elementwise.py": 122,
-    "lucid/_tensor/_dunders.py": 218,
-    "lucid/_tensor/tensor.py": 2786,
-    "lucid/compile/_optim/compiler.py": 752,
-    "lucid/coreml/_build.py": 1726,
-    "lucid/coreml/_emit.py": 1176,
-    "lucid/distributions/transforms.py": 281,
+    "lucid/_C/backend/gpu/GpuBackend.h": 4531,
+    "lucid/_ops/composite/elementwise.py": 146,
+    "lucid/_tensor/_dunders.py": 249,
+    "lucid/_tensor/tensor.py": 2793,
+    "lucid/compile/_optim/compiler.py": 774,
+    "lucid/coreml/_build.py": 1743,
+    "lucid/coreml/_emit.py": 1184,
+    "lucid/distributions/transforms.py": 286,
     "lucid/fft/__init__.py": 379,
-    "lucid/linalg/__init__.py": 2341,
-    "lucid/models/_utils/_detection.py": 1329,
-    "lucid/models/generative/diamond/_model.py": 728,
+    "lucid/linalg/__init__.py": 2323,
+    "lucid/models/_utils/_detection.py": 1340,
+    "lucid/models/generative/diamond/_model.py": 730,
     "lucid/models/generative/rectified_flow/_model.py": 289,
     "lucid/models/vision/mask2former/_model.py": 83,
-    "lucid/nn/functional/activations.py": 441,
-    "lucid/nn/functional/loss.py": 828,
-    "lucid/nn/functional/pooling.py": 36,
+    "lucid/nn/functional/activations.py": 446,
+    "lucid/nn/functional/loss.py": 878,
+    "lucid/nn/functional/pooling.py": 39,
     "lucid/nn/modules/activation.py": 727,
-    "lucid/nn/modules/loss.py": 1071,
-    "lucid/nn/modules/normalization.py": 882,
+    "lucid/nn/modules/loss.py": 1090,
+    "lucid/nn/modules/normalization.py": 870,
     "lucid/nn/modules/pooling.py": 808,
     "lucid/nn/modules/rnn.py": 87,
-    "lucid/optim/lr_scheduler.py": 441,
-    "lucid/special/__init__.py": 892,
+    "lucid/optim/lr_scheduler.py": 446,
+    "lucid/special/__init__.py": 916,
     "lucid/utils/transforms/_color.py": 274
    },
    "noqa[ANN401]": {
@@ -280,7 +285,6 @@
     "lucid/distributions/discrete.py": 2,
     "lucid/distributions/extra.py": 1,
     "lucid/distributions/relaxed.py": 2,
-    "lucid/func/__init__.py": 1,
     "lucid/linalg/__init__.py": 23,
     "lucid/metal/__init__.py": 4,
     "lucid/models/_output.py": 3,
@@ -302,7 +306,6 @@
     "lucid/nn/utils/weight_norm.py": 1,
     "lucid/quantization/_fake_quantize.py": 2,
     "lucid/quantization/observer.py": 1,
-    "lucid/serialization/__init__.py": 1,
     "lucid/utils/checkpoint.py": 1,
     "lucid/utils/data/_rng.py": 1,
     "lucid/utils/data/dataloader.py": 3
@@ -310,7 +313,6 @@
    "type-ignore[assignment]": {
     "lucid/_tensor/_metal_views.py": 1,
     "lucid/_tensor/tensor.py": 2,
-    "lucid/func/__init__.py": 4,
     "lucid/models/vision/pvt/_model.py": 2,
     "lucid/nn/module.py": 1,
     "lucid/nn/modules/attention.py": 4,
@@ -371,7 +373,6 @@
     "lucid/_tensor/tensor.py": 33,
     "lucid/amp/autocast.py": 1,
     "lucid/autograd/_grad_mode.py": 2,
-    "lucid/func/__init__.py": 6,
     "lucid/linalg/__init__.py": 6,
     "lucid/nn/init.py": 1,
     "lucid/nn/module.py": 1,
@@ -594,7 +595,7 @@
     "lucid/models/text/bert/_tokenizer.py": 4,
     "lucid/models/text/bert/_weights.py": 7,
     "lucid/models/text/gpt/_config.py": 1,
-    "lucid/models/text/gpt/_model.py": 26,
+    "lucid/models/text/gpt/_model.py": 27,
     "lucid/models/text/gpt/_pretrained.py": 1,
     "lucid/models/text/gpt/_tokenizer.py": 2,
     "lucid/models/text/gpt/_weights.py": 1,
@@ -604,7 +605,7 @@
     "lucid/models/text/gpt2/_tokenizer.py": 2,
     "lucid/models/text/gpt2/_weights.py": 7,
     "lucid/models/text/roformer/_config.py": 1,
-    "lucid/models/text/roformer/_model.py": 27,
+    "lucid/models/text/roformer/_model.py": 28,
     "lucid/models/text/roformer/_pretrained.py": 3,
     "lucid/models/text/roformer/_tokenizer.py": 4,
     "lucid/models/text/roformer/_weights.py": 1,
@@ -747,7 +748,7 @@
     "lucid/nn/modules/positional.py": 1,
     "lucid/nn/modules/rnn.py": 11,
     "lucid/nn/modules/sparse.py": 2,
-    "lucid/nn/modules/transformer.py": 13,
+    "lucid/nn/modules/transformer.py": 14,
     "lucid/nn/modules/upsampling.py": 5,
     "lucid/nn/qat/conv.py": 27,
     "lucid/nn/qat/linear.py": 7,
@@ -895,7 +896,6 @@
     "lucid/diffeq/_fixed.py": 1,
     "lucid/diffeq/_multistep.py": 1,
     "lucid/diffeq/_tableau.py": 1,
-    "lucid/func/__init__.py": 4,
     "lucid/linalg/__init__.py": 3,
     "lucid/models/_mixins.py": 1,
     "lucid/models/_utils/_common.py": 1,
@@ -1011,10 +1011,9 @@
     "lucid/diffeq/_multistep.py": 1,
     "lucid/diffeq/_solvers.py": 2,
     "lucid/fft/__init__.py": 2,
-    "lucid/func/__init__.py": 5,
+    "lucid/func/__init__.py": 1,
     "lucid/linalg/__init__.py": 7,
     "lucid/models/_auto.py": 1,
-    "lucid/models/_base.py": 1,
     "lucid/models/_meta.py": 1,
     "lucid/models/_mixins.py": 2,
     "lucid/models/_registry.py": 1,
@@ -1113,7 +1112,7 @@
     "lucid/compile/_entry/function.py": 1,
     "lucid/compile/_entry/step.py": 1,
     "lucid/diffeq/_flatten.py": 1,
-    "lucid/func/__init__.py": 11,
+    "lucid/func/__init__.py": 3,
     "lucid/models/_meta.py": 2,
     "lucid/models/generative/_common/_config.py": 1,
     "lucid/models/vision/crossvit/_config.py": 1,
@@ -1132,7 +1131,6 @@
     "lucid/autograd/function.py": 1,
     "lucid/compile/_entry/segmented_step.py": 1,
     "lucid/coreml/_emit.py": 40,
-    "lucid/func/__init__.py": 2,
     "lucid/nn/_state_dict.py": 3,
     "lucid/nn/functional/loss.py": 1,
     "lucid/nn/utils/clip_grad.py": 1,
@@ -1166,7 +1164,6 @@
    "B007": {
     "lucid/_dtype.py": 1,
     "lucid/coreml/_model.py": 1,
-    "lucid/func/__init__.py": 1,
     "lucid/models/vision/efficientdet/_model.py": 1,
     "lucid/models/vision/efficientnet/_model.py": 1,
     "lucid/models/vision/mask_rcnn/_model.py": 1,
@@ -1188,7 +1185,6 @@
     "lucid/compile/_optim/compiler.py": 1
    },
    "B905": {
-    "lucid/func/__init__.py": 4,
     "lucid/models/vision/mask_rcnn/_model.py": 1
    },
    "B912": {
@@ -1216,7 +1212,6 @@
     "lucid/diffeq/_event.py": 1,
     "lucid/diffeq/_fixed.py": 1,
     "lucid/diffeq/_tableau.py": 1,
-    "lucid/func/__init__.py": 7,
     "lucid/linalg/__init__.py": 3,
     "lucid/models/_auto.py": 1,
     "lucid/models/_mixins.py": 1,
@@ -1372,7 +1367,6 @@
     "lucid/diffeq/_event.py": 1,
     "lucid/diffeq/_fixed.py": 1,
     "lucid/diffeq/_tableau.py": 1,
-    "lucid/func/__init__.py": 4,
     "lucid/linalg/__init__.py": 2,
     "lucid/models/_mixins.py": 1,
     "lucid/models/_utils/_common.py": 1,
@@ -1413,7 +1407,6 @@
     "lucid/compile/_entry/segmented_step.py": 2,
     "lucid/compile/_entry/step.py": 1,
     "lucid/coreml/_build.py": 1,
-    "lucid/func/__init__.py": 4,
     "lucid/linalg/__init__.py": 1,
     "lucid/models/_utils/_detection.py": 1,
     "lucid/models/generative/ddpm/_model.py": 1,
@@ -1439,7 +1432,6 @@
     "lucid/autograd/checkpoint.py": 1,
     "lucid/compile/_entry/module.py": 1,
     "lucid/distributions/student.py": 1,
-    "lucid/func/__init__.py": 1,
     "lucid/models/text/gpt/_model.py": 1,
     "lucid/models/text/gpt2/_model.py": 1,
     "lucid/models/text/transformer/_model.py": 1,
@@ -1690,9 +1682,6 @@
    "unused-method": {
     "lucid/models/_utils/_detection.py": 1
    },
-   "unused-property": {
-    "lucid/distributions/distribution.py": 1
-   },
    "unused-variable": {
     "lucid/__init__.py": 1,
     "lucid/_ctx.py": 1,
@@ -1701,7 +1690,6 @@
     "lucid/_types.py": 1,
     "lucid/autograd/_backward.py": 1,
     "lucid/coreml/_spec.py": 1,
-    "lucid/distributions/distribution.py": 1,
     "lucid/models/generative/planet/_config.py": 1,
     "lucid/models/vision/densenet/_model.py": 2,
     "lucid/models/vision/efficientnet/_model.py": 1,
@@ -1709,8 +1697,7 @@
     "lucid/models/vision/yolo/_v3.py": 1,
     "lucid/nn/functional/loss.py": 1,
     "lucid/nn/utils/clip_grad.py": 1,
-    "lucid/profiler/__init__.py": 1,
-    "lucid/utils/transforms/_autoaugment.py": 1
+    "lucid/profiler/__init__.py": 1
    }
   }
  }

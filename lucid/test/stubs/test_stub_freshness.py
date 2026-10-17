@@ -39,7 +39,7 @@ def test_gen_pyi_script_present() -> None:
     assert _GEN_PYI.exists(), f"{_GEN_PYI} missing"
 
 
-_NS_STUB = '''
+_NS_STUB = """
 class _demo_namespace:
     @staticmethod
     def kept(a: int, b: int = ...) -> int: ...
@@ -50,7 +50,7 @@ class _demo_namespace:
     LIMIT: int
 
 demo: _demo_namespace
-'''
+"""
 
 
 def _bound(signature: str) -> object:
@@ -129,7 +129,9 @@ def test_class_check_reports_every_kind_of_drift() -> None:
     from tools.stub_namespaces import class_drift
 
     problems = class_drift(
-        _CLASS_STUB, Demo, lambda name: ["mask", "value"] if name == "forwarded" else None
+        _CLASS_STUB,
+        Demo,
+        lambda name: ["mask", "value"] if name == "forwarded" else None,
     )
     assert problems == [
         "Demo.gone: in the stub, not at runtime",

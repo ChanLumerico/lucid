@@ -85,7 +85,20 @@ def test_frexp_matches_reference_across_full_range(
     l_dt = getattr(lucid, dtype_name)
     r_dt = getattr(ref, dtype_name)
     if dtype_name in ("float16", "bfloat16"):
-        vals = [0.0, -0.0, 0.5, -0.5, 1.0, -1.0, 1e-4, 60000.0, -60000.0, INF, -INF, NAN]
+        vals = [
+            0.0,
+            -0.0,
+            0.5,
+            -0.5,
+            1.0,
+            -1.0,
+            1e-4,
+            60000.0,
+            -60000.0,
+            INF,
+            -INF,
+            NAN,
+        ]
     else:
         vals = [
             0.0,
@@ -153,15 +166,24 @@ def test_ldexp_extreme_exponents_and_gradients(
             assert math.copysign(1.0, g) == math.copysign(1.0, w)
 
     # Differentiable in both arguments (first and second derivatives).
-    x = lucid.tensor([0.75, -1.25], dtype=lucid.float32, device=device, requires_grad=True)
-    k = lucid.tensor([-4.0, 0.0], dtype=lucid.float32, device=device, requires_grad=True)
+    x = lucid.tensor(
+        [0.75, -1.25], dtype=lucid.float32, device=device, requires_grad=True
+    )
+    k = lucid.tensor(
+        [-4.0, 0.0], dtype=lucid.float32, device=device, requires_grad=True
+    )
     y = lucid.ldexp(x, k)
     gx, gk = lucid.autograd.grad(y.sum(), [x, k], create_graph=True)
-    g2k, = lucid.autograd.grad(gk.sum(), [k])
-    np.testing.assert_allclose(gx.numpy(), np.array([2.0**-4.0, 1.0], dtype=np.float32), rtol=1e-6)
+    (g2k,) = lucid.autograd.grad(gk.sum(), [k])
+    np.testing.assert_allclose(
+        gx.numpy(), np.array([2.0**-4.0, 1.0], dtype=np.float32), rtol=1e-6
+    )
     np.testing.assert_allclose(
         gk.numpy(),
-        np.array([0.75 * (2.0**-4.0) * math.log(2.0), -1.25 * math.log(2.0)], dtype=np.float32),
+        np.array(
+            [0.75 * (2.0**-4.0) * math.log(2.0), -1.25 * math.log(2.0)],
+            dtype=np.float32,
+        ),
         rtol=1e-6,
     )
     np.testing.assert_allclose(
@@ -207,9 +229,14 @@ def test_grid_sample_near_float_max_and_mixed_infinite_coords(
         pytest.skip("5-D grid_sample supports bilinear and nearest only")
     coords = point if len(shape) == 4 else [point[0], point[1], 0.25]
     # Known 5-D PyTorch forward/backward NaN-clamp divergence on non-finite border/reflection.
-    if len(shape) == 5 and any(not math.isfinite(c) for c in coords) and padding_mode in (
-        "border",
-        "reflection",
+    if (
+        len(shape) == 5
+        and any(not math.isfinite(c) for c in coords)
+        and padding_mode
+        in (
+            "border",
+            "reflection",
+        )
     ):
         return
     if len(shape) == 5 and padding_mode == "zeros" and mode == "bilinear":
@@ -224,7 +251,9 @@ def test_grid_sample_near_float_max_and_mixed_infinite_coords(
     lx.requires_grad_(True)
     lg = lucid.tensor(coords, dtype=lucid.float32, device=device).reshape(*grid_shape)
     lg.requires_grad_(True)
-    ly = F.grid_sample(lx, lg, mode=mode, padding_mode=padding_mode, align_corners=align_corners)
+    ly = F.grid_sample(
+        lx, lg, mode=mode, padding_mode=padding_mode, align_corners=align_corners
+    )
     ly.sum().backward()
 
     rx = ref.tensor(img_vals, dtype=ref.float32).reshape(*shape).requires_grad_(True)
@@ -234,9 +263,15 @@ def test_grid_sample_near_float_max_and_mixed_infinite_coords(
     )
     ry.sum().backward()
 
-    np.testing.assert_allclose(ly.numpy(), ry.detach().numpy(), atol=1e-5, equal_nan=True)
-    np.testing.assert_allclose(lx.grad.numpy(), rx.grad.numpy(), atol=1e-5, equal_nan=True)
-    np.testing.assert_allclose(lg.grad.numpy(), rg.grad.numpy(), atol=1e-5, equal_nan=True)
+    np.testing.assert_allclose(
+        ly.numpy(), ry.detach().numpy(), atol=1e-5, equal_nan=True
+    )
+    np.testing.assert_allclose(
+        lx.grad.numpy(), rx.grad.numpy(), atol=1e-5, equal_nan=True
+    )
+    np.testing.assert_allclose(
+        lg.grad.numpy(), rg.grad.numpy(), atol=1e-5, equal_nan=True
+    )
 
 
 @pytest.mark.parametrize("bad_mode,bad_pad", [(2, 0), (-1, 0), (0, 2), (0, -1)])
@@ -258,7 +293,17 @@ def test_engine_grid_sample_refuses_unlowered_mode_or_padding(
 
 @pytest.mark.parametrize(
     "dtype_name",
-    ["bool", "int8", "int16", "int32", "int64", "float16", "bfloat16", "float32", "float64"],
+    [
+        "bool",
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float16",
+        "bfloat16",
+        "float32",
+        "float64",
+    ],
 )
 def test_engine_unique_supports_all_real_and_bool_dtypes(
     ref: ModuleType,
@@ -269,7 +314,11 @@ def test_engine_unique_supports_all_real_and_bool_dtypes(
         pytest.skip("Metal does not support float64")
     l_dt = getattr(lucid, dtype_name)
     r_dt = getattr(ref, dtype_name)
-    data = [True, False, True, True] if dtype_name == "bool" else [3, 1, 3, -1, 2, 1, 0, -1]
+    data = (
+        [True, False, True, True]
+        if dtype_name == "bool"
+        else [3, 1, 3, -1, 2, 1, 0, -1]
+    )
     lx = lucid.tensor(data, dtype=l_dt, device=device)
     rx = ref.tensor(data, dtype=r_dt)
     got_eng = lucid.Tensor.__new_from_impl__(_C_engine.unique(lx._impl))

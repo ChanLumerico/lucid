@@ -262,9 +262,9 @@ def test_vmap_grad_cross_entropy_with_unsqueeze0(
             (x @ w).unsqueeze(0), t.unsqueeze(0), reduction=reduction
         )
 
-    gw_l, gx_l = func.vmap(
-        func.grad(loss_l, argnums=(0, 1)), in_dims=(None, 0, 0)
-    )(w_l, x_l, t_l)
+    gw_l, gx_l = func.vmap(func.grad(loss_l, argnums=(0, 1)), in_dims=(None, 0, 0))(
+        w_l, x_l, t_l
+    )
     gw_r, gx_r = ref.func.vmap(
         ref.func.grad(loss_r, argnums=(0, 1)), in_dims=(None, 0, 0)
     )(w_r, x_r, t_r)

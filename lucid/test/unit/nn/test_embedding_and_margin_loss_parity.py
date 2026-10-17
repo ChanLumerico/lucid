@@ -117,7 +117,9 @@ class TestCosineEmbeddingLossLabelParity:
         assert _close(_vals(lx1.grad), rx1.grad.tolist(), tol=1e-4)
         assert _close(_vals(lx2.grad), rx2.grad.tolist(), tol=1e-4)
 
-    def test_1d_inputs_with_non_binary_scalar_target_give_zero(self, device: str) -> None:
+    def test_1d_inputs_with_non_binary_scalar_target_give_zero(
+        self, device: str
+    ) -> None:
         x1 = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True, device=device)
         x2 = lucid.tensor([2.0, 1.0, 0.5], requires_grad=True, device=device)
         y = lucid.tensor(0, device=device)

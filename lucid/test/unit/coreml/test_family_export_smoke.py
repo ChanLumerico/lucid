@@ -401,9 +401,7 @@ def test_a_multi_output_family_exports_and_matches(factory, shape, tmp_path):
 @pytest.mark.parametrize(
     ("factory", "make_inputs"), MULTI_INPUT, ids=[f for f, _m in MULTI_INPUT]
 )
-def test_a_multi_input_family_exports_and_matches(
-    factory, make_inputs, tmp_path
-):
+def test_a_multi_input_family_exports_and_matches(factory, make_inputs, tmp_path):
     """A network of a sample and a time, or of two token streams.
 
     ``relative=True`` because these return outputs of different

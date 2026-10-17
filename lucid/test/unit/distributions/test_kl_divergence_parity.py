@@ -237,9 +237,9 @@ def test_all_distribution_pairs_match_reference(place: Any, ref: Any) -> None:
             ours_np = np.asarray(ours.detach().numpy(), dtype=np.float64)
             theirs_np = np.asarray(theirs.detach().numpy(), dtype=np.float64)
             assert ours_np.shape == theirs_np.shape, f"({pn}, {qn}) shape mismatch"
-            assert np.allclose(ours_np, theirs_np, rtol=rtol, atol=atol, equal_nan=True), (
-                f"({pn}, {qn}) value mismatch on {device}/{dtype}: {ours_np} vs {theirs_np}"
-            )
+            assert np.allclose(
+                ours_np, theirs_np, rtol=rtol, atol=atol, equal_nan=True
+            ), f"({pn}, {qn}) value mismatch on {device}/{dtype}: {ours_np} vs {theirs_np}"
 
 
 @pytest.mark.parametrize("place", _PLACES, ids=_PLACE_IDS)
@@ -343,9 +343,9 @@ def test_piecewise_support_boundaries_match_reference(place: Any, ref: Any) -> N
             ref.distributions.kl_divergence(p_r, q_r).detach().numpy(),
             dtype=np.float64,
         )
-        assert np.allclose(ours, theirs, rtol=1e-4, atol=1e-5, equal_nan=True), (
-            f"{label} mismatch: {ours} vs {theirs}"
-        )
+        assert np.allclose(
+            ours, theirs, rtol=1e-4, atol=1e-5, equal_nan=True
+        ), f"{label} mismatch: {ours} vs {theirs}"
 
     # Binomial with p.total_count < q.total_count raises NotImplementedError.
     with pytest.raises(NotImplementedError):

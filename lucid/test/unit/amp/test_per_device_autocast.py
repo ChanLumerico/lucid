@@ -86,9 +86,9 @@ def test_cpu_autocast_does_not_cast_metal_ops() -> None:
     for op_name, dt in metal_dtypes.items():
         assert dt == lucid.float32, f"Metal {op_name} was cast under CPU autocast: {dt}"
     for op_name, dt in cpu_dtypes.items():
-        assert dt == lucid.bfloat16, (
-            f"CPU {op_name} was not cast under CPU autocast: {dt}"
-        )
+        assert (
+            dt == lucid.bfloat16
+        ), f"CPU {op_name} was not cast under CPU autocast: {dt}"
     # Metal batch_norm was not affected by CPU autocast (stays bfloat16);
     # CPU batch_norm was ForceFP32-promoted to float32.
     assert metal_bn == lucid.bfloat16
@@ -119,9 +119,9 @@ def test_metal_autocast_does_not_cast_cpu_ops() -> None:
     assert cpu_bn == lucid.bfloat16
     assert (cpu_rm, cpu_rv) == (lucid.float32, lucid.float32)
     for op_name, dt in metal_dtypes.items():
-        assert dt == lucid.bfloat16, (
-            f"Metal {op_name} was not cast under Metal autocast: {dt}"
-        )
+        assert (
+            dt == lucid.bfloat16
+        ), f"Metal {op_name} was not cast under Metal autocast: {dt}"
     if metal_available():
         assert metal_bn == lucid.float32
         assert (metal_rm, metal_rv) == (lucid.float32, lucid.float32)
@@ -218,7 +218,9 @@ def test_var_std_logsumexp_float32_stay_float32_under_autocast(
     """LCD-120: ``var``, ``std``, and ``logsumexp`` of float32 inputs stay float32
     under autocast even though their composite steps use elementwise helpers."""
     vals = [[1.0, 2.5, -0.5, 4.0], [0.25, -1.5, 3.25, 2.0]]
-    x = lucid.tensor(vals, dtype=lucid.float32, device=device, requires_grad=requires_grad)
+    x = lucid.tensor(
+        vals, dtype=lucid.float32, device=device, requires_grad=requires_grad
+    )
     rx = ref.tensor(vals, dtype=ref.float32, requires_grad=requires_grad)  # type: ignore[attr-defined]
 
     with autocast(device_type=device, dtype=amp_dtype):
@@ -241,7 +243,9 @@ def test_var_std_logsumexp_float32_stay_float32_under_autocast(
         ("std(unbiased=False)", s_biased, rs_biased),
         ("logsumexp", lse, rlse),
     ]:
-        assert got.dtype == lucid.float32, f"{name} returned {got.dtype}, expected float32"
+        assert (
+            got.dtype == lucid.float32
+        ), f"{name} returned {got.dtype}, expected float32"
         np.testing.assert_allclose(
             got.numpy(), want.detach().numpy(), rtol=1e-5, atol=1e-5
         )

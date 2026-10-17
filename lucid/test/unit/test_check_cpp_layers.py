@@ -138,7 +138,9 @@ def test_injected_violation_is_reported(
     assert check_cpp_layers.check(engine, allowlist={}) == 1
 
 
-def test_canonical_owner_files_and_downward_includes_are_allowed(tmp_path: Path) -> None:
+def test_canonical_owner_files_and_downward_includes_are_allowed(
+    tmp_path: Path,
+) -> None:
     engine = tmp_path / "lucid" / "_C"
     _write(engine, "api.h", "#pragma once\n")
     _write(engine, "core/TensorImpl.h", '#include "../api.h"\n')

@@ -230,9 +230,7 @@ def _emit_f32_fmod_bindings(
     neg_zero = b.emit(
         "logical_and", [("x", a_eq), ("y", inv_neg)], dims, dtype=_MIL_BOOL
     )
-    a_sign = b.emit(
-        "logical_or", [("x", a_lt), ("y", neg_zero)], dims, dtype=_MIL_BOOL
-    )
+    a_sign = b.emit("logical_or", [("x", a_lt), ("y", neg_zero)], dims, dtype=_MIL_BOOL)
     neg_r = b.emit("mul", [("x", r), ("y", c_neg_one)], dims, dtype=f32)
     return "select", [("cond", a_sign), ("a", neg_r), ("b", r)]
 
@@ -255,7 +253,10 @@ def _emit_f32_floordiv_bindings(
     q_exact = b.emit("real_div", [("x", num), ("y", b_val)], dims, dtype=f32)
     q_minus_one = b.emit("sub", [("x", q_exact), ("y", c_one)], dims, dtype=f32)
     div = b.emit(
-        "select", [("cond", adjust), ("a", q_minus_one), ("b", q_exact)], dims, dtype=f32
+        "select",
+        [("cond", adjust), ("a", q_minus_one), ("b", q_exact)],
+        dims,
+        dtype=f32,
     )
     whole = b.emit("floor", [("x", div)], dims, dtype=f32)
     frac = b.emit("sub", [("x", div), ("y", whole)], dims, dtype=f32)
@@ -267,7 +268,10 @@ def _emit_f32_floordiv_bindings(
     signed_zero = b.emit("mul", [("x", raw_div), ("y", c_zero)], dims, dtype=f32)
     div_zero = b.emit("equal", [("x", div), ("y", c_zero)], dims, dtype=_MIL_BOOL)
     res = b.emit(
-        "select", [("cond", div_zero), ("a", signed_zero), ("b", whole)], dims, dtype=f32
+        "select",
+        [("cond", div_zero), ("a", signed_zero), ("b", whole)],
+        dims,
+        dtype=f32,
     )
     b_zero = b.emit("equal", [("x", b_val), ("y", c_zero)], dims, dtype=_MIL_BOOL)
     return "select", [("cond", b_zero), ("a", raw_div), ("b", res)]

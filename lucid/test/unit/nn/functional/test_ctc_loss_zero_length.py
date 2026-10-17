@@ -100,9 +100,7 @@ def test_ctc_loss_mixed_zero_and_nonzero_batch_advances_target_offset(
     padded_np = np.array([[1, 2], [3, 4], [2, 1]], dtype=np.int64)
     il_list = [0, 0, 4]
     tl_list = [0, 2, 2]
-    tgt_np = (
-        np.array([3, 4, 2, 1], dtype=np.int64) if concatenated else padded_np
-    )
+    tgt_np = np.array([3, 4, 2, 1], dtype=np.int64) if concatenated else padded_np
 
     lp = lucid.tensor(lp_np, dtype=lucid.float32, device=device, requires_grad=True)
     targets = lucid.tensor(tgt_np, dtype=lucid.int64, device=device)

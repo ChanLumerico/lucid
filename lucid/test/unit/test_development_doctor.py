@@ -103,7 +103,9 @@ def test_an_mlx_below_the_interop_floor_warns_without_failing(
     assert "[warn] mlx (interop)" in capsys.readouterr().out
 
 
-def test_a_macos_below_the_pinned_floor_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_macos_below_the_pinned_floor_is_an_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(doctor.fetch_mlx, "read_pin", lambda path: _PIN)
     monkeypatch.setattr(doctor.platform, "mac_ver", lambda: ("26.1", ("", "", ""), ""))
     monkeypatch.setattr(doctor, "_vendored_mlx_checks", lambda pin: [])
@@ -113,9 +115,13 @@ def test_a_macos_below_the_pinned_floor_is_an_error(monkeypatch: pytest.MonkeyPa
     assert "26.2" in check["detail"]
 
 
-def test_an_engine_on_another_mlx_names_the_rebuild(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_engine_on_another_mlx_names_the_rebuild(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     def probe(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(["python"], 0, '{"mlx_runtime": "0.32.0"}', "")
+        return subprocess.CompletedProcess(
+            ["python"], 0, '{"mlx_runtime": "0.32.0"}', ""
+        )
 
     monkeypatch.setattr(doctor.subprocess, "run", probe)
     check = _named(doctor._runtime_checks(_PIN, 1.0), "mlx_runtime")

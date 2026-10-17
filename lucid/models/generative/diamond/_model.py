@@ -940,7 +940,9 @@ class _ActorCritic(nn.Module):
             nn.Conv2d(config.in_channels, config.actor_channels[0], 3, padding=1)
         ]
         width = config.actor_channels[0]
-        for out_ch, count in zip(config.actor_channels, config.actor_layers, strict=True):
+        for out_ch, count in zip(
+            config.actor_channels, config.actor_layers, strict=True
+        ):
             for _ in range(count):
                 layers.append(_SimpleResBlock(width, out_ch))
                 width = out_ch
