@@ -16,6 +16,7 @@
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
+#include "GraphOps.h"
 #include "Helpers.h"
 #include "TensorHooks.h"
 
@@ -47,16 +48,33 @@ void FunctionCtx::clear() noexcept {
 }
 
 PythonBackwardNode::~PythonBackwardNode() {
-    grad_slots_.clear();
+    slots_ = {};
     release_py_object(py_ctx);
     release_py_object(py_backward_fn);
 }
 
 void PythonBackwardNode::release_saved() {
     Node::release_saved();
-    grad_slots_.clear();
+    slots_ = {};
     release_py_object(py_ctx);
     release_py_object(py_backward_fn);
+}
+
+void PythonBackwardNode::for_each_owned_tensor(
+    const std::function<void(const TensorImplPtr&)>& fn) const {
+    for (const auto& g : slots_.graph) {
+        if (g)
+            fn(g);
+    }
+}
+
+void PythonBackwardNode::enter_pass() {
+    if (passes_.is_running())
+        return;
+    Slots empty;
+    empty.eager.resize(out_shapes.size());
+    empty.graph.resize(out_shapes.size());
+    passes_.enter(slots_, std::move(empty));
 }
 
 // Invoke the Python backward function and collect the resulting gradients.
@@ -94,21 +112,7 @@ std::vector<Storage> PythonBackwardNode::apply(Storage grad_out) {
     return invoke_backward(grads);
 }
 
-std::vector<TensorImplPtr> PythonBackwardNode::apply_for_graph(const TensorImplPtr& grad_out) {
-    py::gil_scoped_acquire gil;
-    if (!py_backward_fn || py_backward_fn.is_none())
-        ErrorBuilder("PythonBackwardNode::apply_for_graph").fail("backward function is not set");
-    if (out_shapes.size() > 1)
-        ErrorBuilder("custom Function")
-            .not_implemented("create_graph=True through a Function with several outputs");
-    if (once_differentiable)
-        ErrorBuilder("custom Function")
-            .not_implemented("create_graph=True through a Function whose backward is "
-                             "once_differentiable — it does not record its own graph");
-
-    // An exception raised by ``backward`` propagates untouched, as in
-    // invoke_backward.
-    py::object result = py_backward_fn(py_ctx, py::cast(grad_out));
+std::vector<TensorImplPtr> PythonBackwardNode::graph_results(const py::object& result) const {
     std::vector<TensorImplPtr> grads;
     if (py::isinstance<py::tuple>(result) || py::isinstance<py::list>(result)) {
         for (auto item : result)
@@ -119,19 +123,37 @@ std::vector<TensorImplPtr> PythonBackwardNode::apply_for_graph(const TensorImplP
     return grads;
 }
 
+std::vector<TensorImplPtr> PythonBackwardNode::apply_for_graph(const TensorImplPtr& grad_out) {
+    py::gil_scoped_acquire gil;
+    if (!py_backward_fn || py_backward_fn.is_none())
+        ErrorBuilder("PythonBackwardNode::apply_for_graph").fail("backward function is not set");
+    if (once_differentiable)
+        ErrorBuilder("custom Function")
+            .not_implemented("create_graph=True through a Function whose backward is "
+                             "once_differentiable — it does not record its own graph");
+
+    // An exception raised by ``backward`` propagates untouched, as in
+    // invoke_backward.
+    return graph_results(py_backward_fn(py_ctx, py::cast(grad_out)));
+}
+
 void PythonBackwardNode::accumulate_barrier_grad(std::uint32_t input_nr, Storage grad) {
     if (saved_released())
         return;
-    if (grad_slots_.size() < out_shapes.size())
-        grad_slots_.resize(out_shapes.size());
-    if (input_nr >= grad_slots_.size())
+    enter_pass();
+    if (input_nr >= slots_.eager.size())
         return;
 
-    auto& slot = grad_slots_[input_nr];
-    if (!slot.has_value())
+    auto& slot = slots_.eager[input_nr];
+    if (!slot.has_value()) {
         slot = std::move(grad);
-    else
-        accumulate_into(*slot, grad);
+        return;
+    }
+    // The first buffer may be one the engine also routed elsewhere; a CPU
+    // add would write into it in place, so sum into a copy this slot owns.
+    Storage sum = own_grad_copy(*slot);
+    accumulate_into(sum, grad);
+    slot = std::move(sum);
 }
 
 std::vector<Storage> PythonBackwardNode::apply_barrier() {
@@ -140,24 +162,60 @@ std::vector<Storage> PythonBackwardNode::apply_barrier() {
     if (!py_backward_fn || py_backward_fn.is_none()) {
         ErrorBuilder("PythonBackwardNode::apply_barrier").fail("backward function is not set");
     }
+    enter_pass();
 
     const std::size_t n = out_shapes.size();
-    grad_slots_.resize(n);
-
     py::tuple grads(n);
     for (std::size_t i = 0; i < n; ++i) {
         // An output the loss never used contributes nothing, but ``backward``
         // is still written against a fixed argument list, so give it zeros
         // rather than ``None`` and let the arithmetic take care of itself.
-        Storage g = grad_slots_[i].has_value()
-                        ? std::move(*grad_slots_[i])
+        Storage g = slots_.eager[i].has_value()
+                        ? std::move(*slots_.eager[i])
                         : make_zero_storage(out_shapes[i], out_dtypes[i], out_devices[i]);
         grads[i] = py::cast(std::make_shared<TensorImpl>(std::move(g), out_shapes[i], out_dtypes[i],
                                                          out_devices[i], false));
     }
-    grad_slots_.clear();
+    std::fill(slots_.eager.begin(), slots_.eager.end(), std::nullopt);
 
     return invoke_backward(grads);
+}
+
+void PythonBackwardNode::accumulate_barrier_grad_for_graph(std::uint32_t input_nr,
+                                                           TensorImplPtr grad) {
+    if (released() || !grad)
+        return;
+    enter_pass();
+    if (input_nr >= slots_.graph.size())
+        return;
+    auto& slot = slots_.graph[input_nr];
+    slot = slot ? add_op(slot, grad) : std::move(grad);
+}
+
+std::vector<TensorImplPtr> PythonBackwardNode::apply_barrier_for_graph() {
+    py::gil_scoped_acquire gil;
+    if (!py_backward_fn || py_backward_fn.is_none())
+        ErrorBuilder("PythonBackwardNode::apply_barrier_for_graph")
+            .fail("backward function is not set");
+    if (once_differentiable)
+        ErrorBuilder("custom Function")
+            .not_implemented("create_graph=True through a Function whose backward is "
+                             "once_differentiable — it does not record its own graph");
+    enter_pass();
+
+    const std::size_t n = out_shapes.size();
+    py::tuple grads(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        // An output no gradient reached is handed zeros, as in apply_barrier;
+        // they are a constant, so nothing differentiates through them.
+        TensorImplPtr g = std::move(slots_.graph[i]);
+        if (!g)
+            g = std::make_shared<TensorImpl>(
+                make_zero_storage(out_shapes[i], out_dtypes[i], out_devices[i]), out_shapes[i],
+                out_dtypes[i], out_devices[i], false);
+        grads[i] = py::cast(std::move(g));
+    }
+    return graph_results(py_backward_fn(py_ctx, *grads));
 }
 
 std::vector<Storage> PythonBackwardNode::invoke_backward(const py::tuple& grads) {

@@ -134,7 +134,8 @@ HookTuple output_side(ModuleBackwardHookState& state) {
 // Put a hook's ``result`` in place of the gradients ``side`` holds.
 //
 // ``None`` keeps them all.  Anything else is a tuple or list with one entry
-// per position: ``None`` keeps that gradient, and a tensor replaces it when
+// per position: ``None`` drops that gradient, as the reference does — the
+// tuple is what flows on — and a tensor replaces it when
 // it has the kind of the gradient it replaces — the one the hook was handed,
 // or where none arrived the tensor the slot stands for.  The engine reads a
 // slot as that kind, so a short gradient was read past its end and a float16
@@ -188,7 +189,7 @@ void replace_from_hook(py::handle result, const HookTuple& side, bool graph) {
         replaced[pos] = graph ? std::move(g) : as_tensor(grad_slot_buffer(err, *g), meta);
     }
     for (std::size_t pos = 0; pos < n; ++pos) {
-        if (replaced[pos])
+        if (side.slots[pos] != nullptr)
             *side.slots[pos] = std::move(replaced[pos]);
     }
 }
@@ -201,6 +202,22 @@ void replace_from_hook(py::handle result, const HookTuple& side, bool graph) {
 void run_hook_kind(const py::object& results, const HookTuple& side, bool graph) {
     for (const py::handle result : results)
         replace_from_hook(result, side, graph);
+}
+
+// Give every input slot no gradient reached a zero one.  The reference wraps
+// a hooked module's inputs in a Function that materializes the gradients it
+// is not handed, so once any gradient reaches the inputs the full hooks see
+// zeros for the rest — an input the body never used included — and so do
+// the inputs themselves.
+void materialize_missing_inputs(ModuleBackwardHookState& state) {
+    for (std::size_t i = 0; i < state.grad_inputs.size(); ++i) {
+        if (state.grad_inputs[i])
+            continue;
+        const ModuleHookTensorMeta& meta = state.input_metas[i];
+        state.grad_inputs[i] =
+            std::make_shared<TensorImpl>(make_zero_storage(meta.shape, meta.dtype, meta.device),
+                                         meta.shape, meta.dtype, meta.device, false);
+    }
 }
 
 // Run ``body``, the hooks of one barrier; if it throws — a hook raised, or
@@ -251,12 +268,19 @@ ModuleBackwardHookState::~ModuleBackwardHookState() {
 }
 
 void ModuleBackwardHookState::enter_pass() {
-    const std::uint64_t current = BackwardPass::current();
-    if (current == pass) {
+    if (passes.is_running())
         return;
-    }
-    reset();
-    pass = current;
+    PassState live{std::move(grad_inputs), std::move(grad_outputs), pre_hooks_ran, full_hooks_ran,
+                   outputs_ran};
+    PassState empty;
+    empty.grad_inputs.resize(live.grad_inputs.size());
+    empty.grad_outputs.resize(live.grad_outputs.size());
+    passes.enter(live, std::move(empty));
+    grad_inputs = std::move(live.grad_inputs);
+    grad_outputs = std::move(live.grad_outputs);
+    pre_hooks_ran = live.pre_hooks_ran;
+    full_hooks_ran = live.full_hooks_ran;
+    outputs_ran = live.outputs_ran;
 }
 
 void ModuleBackwardHookState::reset() {
@@ -264,6 +288,7 @@ void ModuleBackwardHookState::reset() {
     std::fill(grad_outputs.begin(), grad_outputs.end(), nullptr);
     pre_hooks_ran = false;
     full_hooks_ran = false;
+    outputs_ran = false;
 }
 
 void ModuleBackwardHookState::clear() noexcept {
@@ -299,6 +324,7 @@ void ModuleOutputHookNode::accumulate_barrier_grad_for_graph(std::uint32_t input
 
 void ModuleOutputHookNode::run_hooks(bool graph) {
     state_->enter_pass();
+    state_->outputs_ran = true;
     py::gil_scoped_acquire gil;
     run_or_reset(*state_, [&] {
         if (!state_->pre_hooks_ran && !state_->pre_runner.is_none()) {
@@ -380,9 +406,13 @@ void ModuleInputHookNode::accumulate_barrier_grad_for_graph(std::uint32_t input_
 
 void ModuleInputHookNode::run_hooks(bool graph) {
     state_->enter_pass();
+    materialize_missing_inputs(*state_);
     py::gil_scoped_acquire gil;
     run_or_reset(*state_, [&] {
-        if (!state_->full_hooks_ran && !state_->full_runner.is_none()) {
+        // A gradient that reached the inputs without passing through the
+        // outputs — a double backward through what the body saved — has no
+        // grad_output to show the hooks, and the reference does not run them.
+        if (state_->outputs_ran && !state_->full_hooks_ran && !state_->full_runner.is_none()) {
             run_hook_kind(state_->full_runner(input_tuple(*state_), output_tuple(*state_)),
                           input_side(*state_), graph);
             state_->full_hooks_ran = true;

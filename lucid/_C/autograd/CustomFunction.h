@@ -29,6 +29,7 @@
 #include "../api.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
+#include "GraphBarrier.h"
 #include "Node.h"
 
 namespace py = pybind11;
@@ -188,7 +189,7 @@ private:
 // --------
 // :class:`lucid.autograd.Function` — Python base class users subclass.
 // :class:`FunctionCtx` — context object carrying saved state.
-class LUCID_API PythonBackwardNode : public Node {
+class LUCID_API PythonBackwardNode : public Node, public GraphBarrier {
 public:
     PythonBackwardNode() = default;
     ~PythonBackwardNode() override;
@@ -274,9 +275,10 @@ public:
     // its results are returned as tensors rather than storages.  Written in
     // Lucid ops, as a backward is, it records its own graph the way any
     // other code does when grad mode is on, so a custom Function
-    // differentiates twice without saying anything about it.  One output
-    // only: several outputs' gradients arrive separately, which the graph
-    // engine does not yet collect per output.
+    // differentiates twice without saying anything about it.  The engine
+    // calls it for a single-output Function; one with several outputs is a
+    // barrier and collects its gradients per output
+    // (:meth:`apply_barrier_for_graph`).
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 
     // Whether this node stands behind several forward outputs.
@@ -318,11 +320,35 @@ public:
     //     One :class:`Storage` per forward input, as for :func:`apply`.
     std::vector<Storage> apply_barrier() override;
 
+    // The create_graph half of the barrier: an output's gradient is parked
+    // as the tensor it arrived as, and ``backward`` runs once on them all,
+    // as :meth:`apply_barrier` runs it on the eager ones.
+    void accumulate_barrier_grad_for_graph(std::uint32_t input_nr, TensorImplPtr grad) override;
+    std::vector<TensorImplPtr> apply_barrier_for_graph() override;
+
     void release_saved() override;
 
+    // The create_graph gradients parked for the running pass.  What
+    // ``backward`` saved belongs to :attr:`py_ctx`, whose own traversal
+    // reaches it.
+    void for_each_owned_tensor(const std::function<void(const TensorImplPtr&)>& fn) const override;
+
 private:
-    // One slot per forward output; engaged once a gradient has arrived.
-    std::vector<std::optional<Storage>> grad_slots_;
+    // One slot per forward output, engaged once a gradient has arrived — a
+    // buffer in an eager pass, a tensor under create_graph.
+    struct Slots {
+        std::vector<std::optional<Storage>> eager;
+        std::vector<TensorImplPtr> graph;
+    };
+
+    // Make the slots the running pass's (GraphBarrier.h).
+    void enter_pass();
+
+    // The user's ``backward`` result under create_graph, as tensors.
+    std::vector<TensorImplPtr> graph_results(const py::object& result) const;
+
+    Slots slots_;
+    PassSlots<Slots> passes_;
 
     // Shared tail of ``apply`` and ``apply_barrier``: call into Python with
     // the prepared gradient tensors and unpack the returned per-input

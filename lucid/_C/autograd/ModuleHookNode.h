@@ -87,8 +87,14 @@ struct ModuleHookTensorMeta {
 //     backward pass even when the barrier is visited from multiple edges.
 // full_hooks_ran : bool
 //     Same guard for the full-backward hook batch.
-// pass : std::uint64_t
-//     The :class:`BackwardPass` whose gradients the state holds.
+// outputs_ran : bool
+//     Whether the output barrier ran in this pass.  A gradient can reach
+//     the inputs without passing through the outputs — a double backward
+//     through what the module body saved — and the full hooks then do not
+//     run, as in the reference, which has no ``grad_output`` to hand them.
+// passes : PassSlots<PassState>
+//     The :class:`BackwardPass` the per-pass members above belong to, and
+//     those an outer pass set aside while a nested one crosses the module.
 // input_arg_indices : std::vector<std::uint32_t>
 //     Maps each edge slot in :attr:`grad_inputs` back to its original
 //     positional argument index in the Python signature.
@@ -131,8 +137,9 @@ public:
     ModuleBackwardHookState(std::size_t n_inputs, py::object pre_runner, py::object full_runner);
     ~ModuleBackwardHookState();
 
-    // Discard what an earlier backward pass left behind, if the running pass
-    // is a different one.  Called before every read or write of the slots.
+    // Make the per-pass members the running pass's (PassSlots): what an
+    // earlier pass left is dropped, what an outer pass still running left is
+    // set aside.  Called before every read or write of the slots.
     void enter_pass();
 
     // Forget every gradient and hook guard of the current pass — once the
@@ -143,13 +150,23 @@ public:
     // Release all Python runners and saved gradients under the GIL.
     void clear() noexcept;
 
+    // The members a pass owns, set aside together.
+    struct PassState {
+        std::vector<TensorImplPtr> grad_inputs;
+        std::vector<TensorImplPtr> grad_outputs;
+        bool pre_hooks_ran = false;
+        bool full_hooks_ran = false;
+        bool outputs_ran = false;
+    };
+
     py::object pre_runner;
     py::object full_runner;
     std::size_t n_inputs = 0;
     std::size_t n_outputs = 0;
     bool pre_hooks_ran = false;
     bool full_hooks_ran = false;
-    std::uint64_t pass = 0;
+    bool outputs_ran = false;
+    PassSlots<PassState> passes;
 
     std::vector<std::uint32_t> input_arg_indices;
     std::vector<ModuleHookTensorMeta> input_metas;

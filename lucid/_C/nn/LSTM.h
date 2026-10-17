@@ -296,8 +296,8 @@ public:
 private:
     // One slot per output; engaged once a gradient has arrived.
     std::array<std::optional<Storage>, 3> grad_slots_;
-    // The backward pass the slots were filled in (BackwardPass id).
-    std::uint64_t slots_pass_ = 0;
+    // The backward pass the slots belong to, and those of outer passes.
+    PassSlots<std::array<std::optional<Storage>, 3>> passes_;
 };
 
 // Run a single-layer LSTM forward pass and return ``{output, hn, cn}``.

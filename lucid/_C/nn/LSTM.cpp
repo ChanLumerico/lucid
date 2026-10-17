@@ -122,13 +122,10 @@ void LstmBackward::accumulate_barrier_grad(std::uint32_t input_nr, Storage grad)
     if (input_nr >= grad_slots_.size())
         ErrorBuilder("LstmBackward")
             .fail("gradient for output slot " + std::to_string(input_nr) + " of a 3-output node");
-    // Slots belong to one backward pass: what a pass delivered and never ran
-    // (an exception, a pruned autograd.grad) must not seed the next one.
-    const std::uint64_t pass = BackwardPass::current();
-    if (pass != slots_pass_) {
-        grad_slots_ = {};
-        slots_pass_ = pass;
-    }
+    // Slots belong to one backward pass (PassSlots): what a pass delivered
+    // and never ran (an exception, a pruned autograd.grad) must not seed the
+    // next one, nor a pass nested in this one take what it holds.
+    passes_.enter(grad_slots_, {});
     auto& slot = grad_slots_[input_nr];
     if (!slot.has_value()) {
         slot = std::move(grad);
@@ -142,6 +139,7 @@ void LstmBackward::accumulate_barrier_grad(std::uint32_t input_nr, Storage grad)
 }
 
 std::vector<Storage> LstmBackward::apply_barrier() {
+    passes_.enter(grad_slots_, {});
     const auto shapes = lstm_output_shapes(opts);
     std::array<Storage, 3> grads;
     for (std::size_t i = 0; i < grads.size(); ++i) {

@@ -7,8 +7,10 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "../api.h"
@@ -57,25 +59,86 @@ inline GraphBarrier* graph_barrier_of(Node* node) {
 // holding gradients from a different pass discards them first.
 //
 // A pass opened inside another — a hook that calls ``autograd.grad`` — gets
-// its own id and hands the outer one back when it closes, so the barriers of
-// the outer pass keep what they hold.
+// its own id and hands the outer one back when it closes.  The outer pass is
+// still open meanwhile, and what it delivered to a barrier the inner pass
+// crosses is set aside rather than discarded (:class:`PassSlots`).
 class BackwardPass {
 public:
-    BackwardPass() noexcept : outer_(current_) {
-        current_ = next_id_.fetch_add(1, std::memory_order_relaxed) + 1;
+    BackwardPass() noexcept
+        : id_(next_id_.fetch_add(1, std::memory_order_relaxed) + 1), outer_(innermost_) {
+        innermost_ = this;
     }
-    ~BackwardPass() { current_ = outer_; }
+    ~BackwardPass() { innermost_ = outer_; }
 
     BackwardPass(const BackwardPass&) = delete;
     BackwardPass& operator=(const BackwardPass&) = delete;
 
     // Id of the innermost pass open on this thread; ``0`` outside any pass.
-    static std::uint64_t current() noexcept { return current_; }
+    static std::uint64_t current() noexcept { return innermost_ != nullptr ? innermost_->id_ : 0; }
+
+    // Whether pass ``id`` is open on this thread — running, or waiting for
+    // a pass opened inside it to finish.
+    static bool is_open(std::uint64_t id) noexcept {
+        for (const BackwardPass* p = innermost_; p != nullptr; p = p->outer_) {
+            if (p->id_ == id)
+                return true;
+        }
+        return false;
+    }
 
 private:
-    std::uint64_t outer_;
-    static inline thread_local std::uint64_t current_ = 0;
+    std::uint64_t id_;
+    const BackwardPass* outer_;
+    // The passes open on this thread, innermost first, linked through
+    // ``outer_`` — a pointer, so the thread-local needs no initialisation.
+    static inline thread_local const BackwardPass* innermost_ = nullptr;
     static inline std::atomic<std::uint64_t> next_id_{0};
+};
+
+// A barrier's slots, kept per backward pass.
+//
+// What a barrier is handed belongs to the pass that handed it.  A pass that
+// delivered and never gave the barrier its turn — an exception, a pruned
+// ``autograd.grad`` — must not seed the next pass.  A pass opened inside
+// another that crosses the same barrier must neither add onto the outer
+// pass's gradients nor wipe them: they are set aside while it runs and put
+// back when the outer pass resumes, as each pass of the reference has input
+// buffers of its own.
+//
+// The barrier keeps the running pass's slots where it reads them; this keeps
+// the pass they belong to and those of outer passes still open.
+template <typename Slots>
+class PassSlots {
+public:
+    // Make ``live`` the running pass's slots.  When they belong to another
+    // pass they are set aside if that pass is still open and dropped if it
+    // is not; ``live`` becomes what the running pass set aside earlier, or
+    // ``empty``.  Returns whether ``live`` changed hands.
+    bool enter(Slots& live, Slots empty) {
+        const std::uint64_t running = BackwardPass::current();
+        if (running == pass_)
+            return false;
+        if (pass_ != 0 && BackwardPass::is_open(pass_))
+            outer_.emplace_back(pass_, std::move(live));
+        live = std::move(empty);
+        for (auto it = outer_.begin(); it != outer_.end(); ++it) {
+            if (it->first == running) {
+                live = std::move(it->second);
+                outer_.erase(it);
+                break;
+            }
+        }
+        std::erase_if(outer_, [](const auto& held) { return !BackwardPass::is_open(held.first); });
+        pass_ = running;
+        return true;
+    }
+
+    // Whether the slots the barrier holds are the running pass's already.
+    bool is_running() const noexcept { return BackwardPass::current() == pass_; }
+
+private:
+    std::uint64_t pass_ = 0;
+    std::vector<std::pair<std::uint64_t, Slots>> outer_;
 };
 
 }  // namespace lucid
