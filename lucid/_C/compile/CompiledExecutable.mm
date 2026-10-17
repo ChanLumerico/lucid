@@ -24,6 +24,7 @@
 #include "../backend/gpu/MlxBridge.h"
 #include "../backend/gpu/mps/MpsBridge.h"
 #include "../core/Determinism.h"
+#include "../core/ElementWrite.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 #include "CompiledExecutable.h"
@@ -360,6 +361,17 @@ inline void run_or_throw(MPSGraphExecutable* exe,
     }
 }
 
+// The target's own MTLBuffer, for ``LUCID_COMPILE_ALIAS_INPLACE`` to bind as
+// its result slot, or nil when the mode is off.  Only a target whose buffer
+// is its elements has one: a Metal view of part of a tensor reads a packed
+// copy of them, so it gets a fresh buffer and the swap.
+inline id<MTLBuffer> alias_buffer(bool alias_mode, const TensorImpl& target) {
+    if (!alias_mode || !buffer_is_elements(target))
+        return nil;
+    const auto& gs = std::get<GpuStorage>(target.storage());
+    return (__bridge id<MTLBuffer>)lucid::gpu::mps::array_to_buffer(*gs.arr).mtl_buffer;
+}
+
 }  // namespace detail
 
 std::vector<std::string> executable_feed_names(const CompiledExecutable* exe) {
@@ -581,40 +593,44 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
     return outputs;
 }
 
+// Swap-buffer variant: instead of allocating fresh MTLBuffers per
+// output and returning new TensorImpls, allocate one fresh
+// MTLBuffer per output target and then *replace* the target's
+// ``GpuStorage::arr`` pointer with a new MLX array wrapping the
+// fresh buffer.  No ``mlx::copy`` runs — the target's old MLX
+// array (and the buffer it owned) is released, and the new buffer
+// takes over.  Conceptually equivalent to ``target.copy_(new_t)``
+// but free of the per-output MLX evaluation sync.
+//
+// Why not bind the target's existing buffer as the output target?
+// MPSGraph's executable doesn't guarantee read-before-write
+// ordering when the same MTLBuffer appears in both the inputs and
+// results arrays.  Optimizer-step graphs frequently have the
+// momentum / m / v state on both sides of the dataflow (read old,
+// write new) — aliasing the buffer corrupts the read.  The
+// swap-buffer path sidesteps the hazard by always producing
+// outputs in a fresh allocation, then replacing the target's
+// pointer atomically once the executable has finished.
+//
+// Contract:
+//   * Each target must be on Device::GPU with a GpuStorage.
+//   * Shape + dtype must match ``exe->output_shapes[j]`` /
+//     ``output_dtypes[j]`` exactly; we do NOT broadcast.  Every target
+//     is checked before the run, so a mismatch leaves all of them as
+//     they were.
+//   * A target whose buffer is its elements has its ``GpuStorage::arr``
+//     replaced by the fresh array; any external references to the
+//     previous ``arr`` remain valid (MLX's own refcounting keeps the
+//     old buffer alive until they drop).  A Metal view of part of a
+//     tensor has the fresh values written into its part of the
+//     family's root instead (``write_elements``).
+//   * Each target's version moves so autograd's mutation tracker sees
+//     the write.
 LUCID_API std::vector<GpuStorage>
 run_executable_inplace_outputs(CompiledExecutable* exe,
                                const std::vector<TensorImplPtr>& traced_feeds,
                                const std::vector<TensorImplPtr>& output_targets) {
     const std::vector<TensorImplPtr> input_feeds = redraw_rng_feeds(traced_feeds);
-    // Swap-buffer variant: instead of allocating fresh MTLBuffers per
-    // output and returning new TensorImpls, allocate one fresh
-    // MTLBuffer per output target and then *replace* the target's
-    // ``GpuStorage::arr`` pointer with a new MLX array wrapping the
-    // fresh buffer.  No ``mlx::copy`` runs — the target's old MLX
-    // array (and the buffer it owned) is released, and the new buffer
-    // takes over.  Conceptually equivalent to ``target.copy_(new_t)``
-    // but free of the per-output MLX evaluation sync.
-    //
-    // Why not bind the target's existing buffer as the output target?
-    // MPSGraph's executable doesn't guarantee read-before-write
-    // ordering when the same MTLBuffer appears in both the inputs and
-    // results arrays.  Optimizer-step graphs frequently have the
-    // momentum / m / v state on both sides of the dataflow (read old,
-    // write new) — aliasing the buffer corrupts the read.  The
-    // swap-buffer path sidesteps the hazard by always producing
-    // outputs in a fresh allocation, then replacing the target's
-    // pointer atomically once the executable has finished.
-    //
-    // Contract:
-    //   * Each target must be on Device::GPU with a GpuStorage.
-    //   * Shape + dtype must match ``exe->output_shapes[j]`` /
-    //     ``output_dtypes[j]`` exactly; we do NOT broadcast.
-    //   * The target's ``GpuStorage::arr`` is replaced by a fresh
-    //     array; any external references to the previous ``arr``
-    //     remain valid (MLX's own refcounting keeps the old buffer
-    //     alive until they drop).
-    //   * ``bump_version()`` is called on each target so autograd's
-    //     mutation tracker sees the write.
     if (exe == nullptr)
         throw std::invalid_argument("run_executable_inplace: null executable");
     if (input_feeds.size() != exe->input_ids.size())
@@ -639,7 +655,6 @@ run_executable_inplace_outputs(CompiledExecutable* exe,
         if (!target)
             throw std::invalid_argument("run_executable_inplace: null output target at slot " +
                                         std::to_string(j));
-        target->check_wholesale_writable("run_executable_inplace");
         if (target->device() != Device::GPU)
             throw std::invalid_argument(
                 "run_executable_inplace: output target not on GPU at slot " + std::to_string(j));
@@ -722,14 +737,10 @@ run_executable_inplace_outputs(CompiledExecutable* exe,
                 ns_shape = detail::shape_to_nsarray(exe->output_shapes[j]);
             MPSDataType ns_dt = mps_dtype_or_throw(exe->output_dtypes[j]);
 
-            id<MTLBuffer> out_buf;
-            if (alias_mode) {
-                // Reuse the target's existing MTLBuffer as the result
-                // slot.  No allocation, no swap.
-                const auto& target = output_targets[j];
-                const auto& gs = std::get<GpuStorage>(target->storage());
-                lucid::gpu::mps::BufferView v = lucid::gpu::mps::array_to_buffer(*gs.arr);
-                out_buf = (__bridge id<MTLBuffer>)v.mtl_buffer;
+            id<MTLBuffer> out_buf = detail::alias_buffer(alias_mode, *output_targets[j]);
+            if (out_buf != nil) {
+                // The target's existing MTLBuffer is the result slot.  No
+                // allocation, no swap.
                 fresh_out_bufs.push_back(nil);  // sentinel: no swap needed
             } else {
                 const std::size_t nbytes =
@@ -791,12 +802,23 @@ LUCID_API void swap_executable_inplace_targets(const std::vector<TensorImplPtr>&
         throw std::invalid_argument(
             "swap_executable_inplace_targets: target/output count mismatch");
     for (std::size_t j = 0; j < output_targets.size(); ++j) {
-        const auto& target = output_targets[j];
-        if (fresh_outputs[j].arr) {
-            auto& gs = std::get<GpuStorage>(target->mutable_storage());
-            gs.arr = std::move(fresh_outputs[j].arr);
+        TensorImplPtr target = output_targets[j];
+        auto& fresh = fresh_outputs[j].arr;
+        if (!fresh) {
+            // Alias mode: the executable wrote the target's own buffer.
+            target->bump_version();
+            continue;
         }
-        target->bump_version();
+        // The fresh array is the target's elements, dense.  A target whose
+        // buffer is its elements takes it as its array; a Metal view of part
+        // of a tensor has it written into its part of the family's root, as
+        // the eager optimizer step does (LCD-497).  A target whose elements
+        // overlap is refused there, after the targets ahead of it took
+        // theirs, as in the eager step.
+        write_elements(target, [&](TensorImplPtr& elems) {
+            std::get<GpuStorage>(elems->mutable_storage()).arr = std::move(fresh);
+            elems->bump_version();
+        });
     }
 }
 

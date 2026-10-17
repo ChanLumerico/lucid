@@ -351,12 +351,6 @@ void register_compile(py::module_& m) {
         [](const std::shared_ptr<PyCompiledExecutable>& wrapper,
            const std::vector<lucid::TensorImplPtr>& inputs,
            const std::vector<lucid::TensorImplPtr>& output_targets) -> void {
-            // Every target is checked before anything runs, so a refused one
-            // (a Metal view of part of a tensor) leaves all of them as they
-            // were rather than the ones swapped before it written.
-            for (const auto& target : output_targets)
-                if (target)
-                    target->check_wholesale_writable("run_executable_inplace");
             if (!wrapper)
                 throw std::invalid_argument("run_executable_inplace: null wrapper");
             const auto feeds = resolve_feeds(inputs);

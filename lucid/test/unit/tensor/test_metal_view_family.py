@@ -211,13 +211,8 @@ def test_a_running_stat_write_lands_in_its_part_of_the_base(device: str) -> None
     assert bn.num_batches_tracked.item() == 1
 
 
-def test_a_refused_compiled_step_target_leaves_every_target_as_it_was() -> None:
-    a = lucid.ones(3, device="metal")
-    base = lucid.zeros(6, device="metal")
-    b = _view(base, [3], [1], 2)
-    with pytest.raises(NotImplementedError, match="part of a tensor"):
-        _C_engine.compile.run_executable_inplace(None, [], [a._impl, b._impl])
-    assert _flat(a) == [1.0] * 3
+# A compiled step's write into a view of part of a tensor (LCD-497):
+# compile/test_compiled_step_strided_params.py.
 
 
 # ── autograd: versions, refusals, re-derived views ──────────────────────────

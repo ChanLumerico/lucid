@@ -134,18 +134,19 @@ LUCID_API std::vector<TensorImplPtr> run_executable(CompiledExecutable* exe,
 // input_feeds : vector<TensorImplPtr>
 //     Inputs in ``input_ids`` order — same as :func:`run_executable`.
 // output_targets : vector<TensorImplPtr>
-//     Pre-existing tensors whose buffers receive the executable's
+//     Pre-existing tensors whose elements receive the executable's
 //     outputs.  Must equal ``output_ids.size() + grad_output_ids.size()``
 //     in length, and each target must match its slot's shape and dtype
-//     exactly (no broadcasting).
+//     exactly (no broadcasting).  A target may be a Metal view of part of
+//     a tensor: its elements are written into its part of the base.
 //
 // Notes
 // -----
 // Not supported in dynamic-batch mode (output shapes vary per call,
-// no stable target buffers).  Each target's ``bump_version`` is
-// called after the write so autograd's mutation tracker sees the
-// update.  The target's MLX array reference is replaced with a
-// fresh one wrapping the same buffer to invalidate any cached MLX
+// no stable target buffers).  Each target's version moves after the
+// write so autograd's mutation tracker sees the update.  A target whose
+// buffer is its elements has its MLX array reference replaced with a
+// fresh one wrapping the output buffer, which also drops any cached MLX
 // dependency state.
 LUCID_API void run_executable_inplace(CompiledExecutable* exe,
                                       const std::vector<TensorImplPtr>& input_feeds,
@@ -162,9 +163,16 @@ run_executable_inplace_outputs(CompiledExecutable* exe,
                                const std::vector<TensorImplPtr>& output_targets);
 
 // Install the outputs returned by :func:`run_executable_inplace_outputs` into
-// ``output_targets`` and bump each target's version counter.  Replaces any
-// Metal view-family root and drops sibling caches, so callers must hold the
-// Python GIL when other Python threads may read the family.
+// ``output_targets``' own elements (``write_elements``) and bump each target's
+// version counter.  Replaces any Metal view-family root and drops sibling
+// caches, so callers must hold the Python GIL when other Python threads may
+// read the family.
+//
+// Raises
+// ------
+// LucidError
+//     A target's elements overlap (an expanded view).  The targets ahead of
+//     it have taken their outputs, as in the eager optimizer step.
 LUCID_API void swap_executable_inplace_targets(const std::vector<TensorImplPtr>& output_targets,
                                                std::vector<GpuStorage>& fresh_outputs);
 
