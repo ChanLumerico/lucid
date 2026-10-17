@@ -896,13 +896,12 @@ class Module:
                 continue
             param_grad = param.grad
             converted = fn(param)
-            # A real dtype/device cast is a differentiable op (non-leaf); detach
-            # back to a leaf and restore requires_grad so backward accumulates on
-            # the parameter rather than flowing through the cast node.
-            if not converted._impl.is_leaf:
-                converted = converted.detach()
-                converted.requires_grad = param.requires_grad
-            param._impl = converted._impl  # mutate in-place — keeps object identity
+            # ``.data =`` keeps the Parameter object and its requires_grad and
+            # records no graph, so backward accumulates on the parameter, not
+            # through a cast node.  An unchanged impl stays, or an optimizer
+            # would see a replaced parameter.
+            if converted._impl is not param._impl:
+                param.data = converted
             if param_grad is not None:
                 grad_conv = fn(param_grad)
                 if not grad_conv._impl.is_leaf:

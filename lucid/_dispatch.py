@@ -537,6 +537,42 @@ def _impl_with_grad(
     return impl.clone_with_grad(requires_grad)
 
 
+def _swap_data(
+    old: _C_engine.TensorImpl, value: _C_engine.TensorImpl
+) -> _C_engine.TensorImpl:
+    """The impl a tensor holding ``old`` takes for ``.data = value``.
+
+    The one home of that swap (``Tensor.data``'s setter, and ``Module._apply``
+    through it).  The result aliases ``value``'s storage — its shape, dtype
+    and device — and carries what ``old`` is to autograd: its
+    ``requires_grad``, and its gradient while that still fits the new data.
+    It has no ``grad_fn``, so the swap records nothing in a graph, and
+    ``value``'s own flag and graph stay with ``value``.
+
+    Raises
+    ------
+    RuntimeError
+        If ``old`` is not a leaf — its place in the graph cannot move to new
+        storage — or it requires grad and ``value`` is bool or an integer.
+    """
+    if not old.is_leaf:
+        raise RuntimeError(
+            "cannot set .data of a tensor that is not a leaf: the graph that "
+            "computed it would be lost; set it on a detached tensor instead"
+        )
+    new = _impl_with_grad(value, old.requires_grad)
+    grad = old.grad_to_tensor()
+    # The reference keeps any gradient; here a gradient must match its
+    # tensor, so one of the old shape, dtype or device is dropped.
+    if grad is not None and (grad.shape, grad.dtype, grad.device) == (
+        new.shape,
+        new.dtype,
+        new.device,
+    ):
+        new.set_grad(grad)
+    return new
+
+
 def _parse_device(d: device | _C_engine.Device | str) -> _C_engine.Device:
     """Convert device/string/engine Device → engine Device enum."""
     if isinstance(d, _C_engine.Device):

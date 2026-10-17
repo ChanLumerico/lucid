@@ -48,7 +48,7 @@ from lucid._dtype import (
     complex128,
 )
 from lucid._device import device as _device_cls, _device_from_engine
-from lucid._dispatch import _check_grad_dtype, _impl_with_grad, _wrap
+from lucid._dispatch import _check_grad_dtype, _impl_with_grad, _swap_data, _wrap
 from lucid._factories.creation import (
     zeros as _zeros,
     ones as _ones,
@@ -2023,12 +2023,13 @@ class Tensor:
         ``self``'s views, so an in-place write through it reaches ``self``
         without autograd recording it.  Outside ``no_grad`` a write through
         the ``.data`` of a leaf that requires grad is refused, as a write to
-        the leaf itself would be.  There is no setter.
+        the leaf itself would be.
 
-        Returns
-        -------
-        Tensor
-            A non-differentiable view of the same data.
+        ``t.data = value`` gives ``t`` the storage, shape, dtype and device of
+        the Tensor ``value``, uncopied.  ``t`` stays the same object — a
+        Parameter stays registered — with its ``requires_grad`` and a ``.grad``
+        that still fits, and no graph records the swap.  A non-leaf ``t``, or
+        an integer ``value`` for a ``t`` that requires grad, raises RuntimeError.
 
         Examples
         --------
@@ -2036,19 +2037,18 @@ class Tensor:
         >>> x = lucid.tensor([1.0, 2.0], requires_grad=True)
         >>> x.data.requires_grad
         False
-        >>> x.data
-        tensor([1., 2.])
-
-        Notes
-        -----
-        Aliases the same storage as ``self`` with the gradient flag
-        cleared. Mathematically the same identity as :meth:`detach` —
-        equal values, zero Jacobian — but unlike :meth:`detach` writes
-        through ``data`` propagate back to ``self``'s underlying buffer
-        without participating in autograd. Prefer :meth:`detach` for new
-        code; ``data`` is retained for API compatibility.
+        >>> x.data = lucid.zeros(3)
+        >>> x.shape, x.requires_grad
+        ((3,), True)
         """
         return Tensor.__new_from_impl__(self._impl.data_alias())  # type: ignore[return-value]
+
+    @data.setter
+    def data(self, value: Tensor) -> None:
+        """Give this tensor ``value``'s storage in place; see :attr:`data`."""
+        if not isinstance(value, Tensor):
+            raise TypeError(f"data has to be a Tensor, but got {type(value).__name__}")
+        self._impl = _swap_data(self._impl, value._impl)
 
     # ── device/dtype conversion ───────────────────────────────────────────────
     # Injected by _tensor/_to.py after class definition.
