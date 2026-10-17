@@ -39,7 +39,7 @@ _INSTANCES = {
     "TensorImpl": "obj = lucid.randn(3)._impl",
     "Node": "x = lucid.randn(3, requires_grad=True)\nobj = (x * 2).grad_fn",
     "AccumulateGrad": (
-        "x = lucid.randn(3, requires_grad=True)\ny = x * 2\nobj = x.grad_fn"
+        "x = lucid.randn(3, requires_grad=True)\ny = x * 2\nobj = x._impl.grad_fn"
     ),
     "_PythonBackwardNode": "obj = E._PythonBackwardNode()\nobj.ctx = E.FunctionCtx()",
     "FunctionCtx": "obj = E.FunctionCtx()\nobj.payload = [1, 2]",
@@ -134,7 +134,7 @@ def test_a_hooked_cycle_is_still_freed_while_subclass_nodes_are_alive() -> None:
     y = module(x)
     module.last = y
     y.sum().backward()
-    leaf_node = x.grad_fn
+    leaf_node = x._impl.grad_fn
     python_node = E._PythonBackwardNode()
     assert type(leaf_node).__name__ == "AccumulateGrad"
     module_ref = weakref.ref(module)
