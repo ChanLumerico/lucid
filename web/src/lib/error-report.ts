@@ -10,7 +10,7 @@
  * actually closes the loop with users who hit a real error.
  */
 
-const REPO = "ChanLumerico/lucid";
+import { REPO_URL } from "@/lib/site";
 
 interface BuildIssueArgs {
   title: string;
@@ -64,5 +64,5 @@ export function buildIssueUrl({ title, error, section }: BuildIssueArgs): string
     body: bodyLines.join("\n"),
     labels: "docs,bug",
   });
-  return `https://github.com/${REPO}/issues/new?${params.toString()}`;
+  return `${REPO_URL}/issues/new?${params.toString()}`;
 }

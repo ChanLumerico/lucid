@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { Metadata } from "next";
+import { canonical } from "@/lib/site";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { FadeIn } from "@/components/motion/FadeIn";
@@ -9,6 +10,7 @@ import { ChangelogAccordion, type ChangelogVersion } from "@/components/layout/C
 export const metadata: Metadata = {
   title: "Changelog",
   description: "What's new in Lucid.",
+  alternates: canonical("/changelog"),
 };
 
 function parseChangelog(raw: string): ChangelogVersion[] {

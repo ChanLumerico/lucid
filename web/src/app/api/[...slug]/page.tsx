@@ -9,6 +9,7 @@ import { FunctionSignature } from "@/components/api/FunctionSignature";
 import { PageTableOfContents } from "@/components/layout/TableOfContents";
 import { FadeIn } from "@/components/motion/FadeIn";
 import { BreadcrumbStep, type BreadcrumbSibling } from "@/components/api/BreadcrumbStep";
+import { canonical } from "@/lib/site";
 
 // ---------------------------------------------------------------------------
 // Static generation
@@ -58,15 +59,18 @@ export async function generateMetadata({
 
   try {
     const data = loadApiData(moduleSlug);
+    const alternates = canonical(`/api/${slug.join("/")}`);
     if (memberName) {
       return {
         title: `${memberName} — ${data.name}`,
         description: `API reference for ${memberName} in ${data.path}`,
+        alternates,
       };
     }
     return {
       title: data.name,
       description: data.summary ?? `API reference for ${data.path}`,
+      alternates,
     };
   } catch {
     return { title: "API Reference" };

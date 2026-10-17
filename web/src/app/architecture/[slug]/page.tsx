@@ -15,6 +15,7 @@ import {
   getDiagrams,
   type Diagram,
 } from "@/lib/architecture";
+import { REPO_URL, canonical } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 type Params = Promise<{ slug: string }>;
@@ -27,7 +28,13 @@ export function generateStaticParams() {
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const diagram = getDiagram((await params).slug);
-  return diagram ? { title: diagram.title, description: diagram.summary } : {};
+  return diagram
+    ? {
+        title: diagram.title,
+        description: diagram.summary,
+        alternates: canonical(`/architecture/${diagram.slug}`),
+      }
+    : {};
 }
 
 /** Columns per item count that never leave a card alone on a row. */
@@ -169,7 +176,7 @@ export default async function DiagramPage({ params }: { params: Params }) {
               <span>
                 {diagram.sourceLinks} source links pinned to{" "}
                 <a
-                  href={`https://github.com/ChanLumerico/lucid/tree/${diagram.sourceRevision}`}
+                  href={`${REPO_URL}/tree/${diagram.sourceRevision}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-mono text-lucid-text-mid transition-colors hover:text-lucid-primary"

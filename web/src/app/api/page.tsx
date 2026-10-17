@@ -34,10 +34,12 @@ import { Card } from "@/components/ui/Card";
 import { cn } from "@/lib/utils";
 import { loadApiData } from "@/lib/api-loader";
 import { isApiModule, isApiClassModule } from "@/lib/types";
+import { canonical } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "API Reference",
   description: "Complete API reference for the Lucid ML framework.",
+  alternates: canonical("/api"),
 };
 
 interface ModuleCard {

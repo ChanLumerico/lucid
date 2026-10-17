@@ -6,6 +6,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { REPO_URL } from "@/lib/site";
 
 export interface BuildMeta {
   lucid_version: string | null;
@@ -46,5 +47,5 @@ export function sourceUrl(relPath: string, line?: number): string | null {
   const sha = buildMeta.git_sha_full ?? buildMeta.git_branch;
   if (!sha) return null;
   const lineFragment = line ? `#L${line}` : "";
-  return `https://github.com/ChanLumerico/lucid/blob/${sha}/${relPath}${lineFragment}`;
+  return `${REPO_URL}/blob/${sha}/${relPath}${lineFragment}`;
 }

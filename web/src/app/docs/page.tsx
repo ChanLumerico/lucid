@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { canonical } from "@/lib/site";
 import Link from "next/link";
 import { FadeIn } from "@/components/motion/FadeIn";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +8,7 @@ import { ArrowRight } from "lucide-react";
 export const metadata: Metadata = {
   title: "Documentation",
   description: "Lucid documentation — guides, concepts, and tutorials.",
+  alternates: canonical("/docs"),
 };
 
 const QUICK_LINKS = [

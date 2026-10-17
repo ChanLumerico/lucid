@@ -3,20 +3,12 @@ import { getAllModuleSlugs, loadApiData } from "@/lib/api-loader";
 import { isApiModule, isApiClassModule } from "@/lib/types";
 import { getAllDocSlugs } from "@/lib/mdx-compile";
 import { getDiagrams } from "@/lib/architecture";
+import { SITE_URL } from "@/lib/site";
 
 // ``output: export`` (in next.config.ts) needs every route to be
 // explicitly static; pin ``dynamic = "force-static"`` so the static
 // export collector treats sitemap.xml as a build-time artifact.
 export const dynamic = "force-static";
-
-/** Site identity for the sitemap.  Lives in the build-meta hint when set
- *  (e.g. ``LUCID_DOCS_ORIGIN=https://lucid.docs.example.com``); falls
- *  back to a sensible default that crawlers can still discover via the
- *  ``<link rel="canonical">`` tags Next emits per page. */
-const ORIGIN =
-  process.env.LUCID_DOCS_ORIGIN ??
-  process.env.NEXT_PUBLIC_LUCID_DOCS_ORIGIN ??
-  "https://lucid.docs.local";
 
 const now = new Date();
 
@@ -26,17 +18,17 @@ const now = new Date();
  *  actual published surface. */
 export default function sitemap(): MetadataRoute.Sitemap {
   const entries: MetadataRoute.Sitemap = [
-    { url: `${ORIGIN}/`,           lastModified: now, changeFrequency: "weekly",  priority: 1.0 },
-    { url: `${ORIGIN}/api`,        lastModified: now, changeFrequency: "weekly",  priority: 0.9 },
-    { url: `${ORIGIN}/docs`,       lastModified: now, changeFrequency: "weekly",  priority: 0.7 },
-    { url: `${ORIGIN}/architecture`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
-    { url: `${ORIGIN}/changelog`,  lastModified: now, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${SITE_URL}/`,           lastModified: now, changeFrequency: "weekly",  priority: 1.0 },
+    { url: `${SITE_URL}/api`,        lastModified: now, changeFrequency: "weekly",  priority: 0.9 },
+    { url: `${SITE_URL}/docs`,       lastModified: now, changeFrequency: "weekly",  priority: 0.7 },
+    { url: `${SITE_URL}/architecture`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
+    { url: `${SITE_URL}/changelog`,  lastModified: now, changeFrequency: "monthly", priority: 0.4 },
   ];
 
   // Architecture diagram pages.
   for (const d of getDiagrams()) {
     entries.push({
-      url: `${ORIGIN}/architecture/${d.slug}`,
+      url: `${SITE_URL}/architecture/${d.slug}`,
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.5,
@@ -46,7 +38,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   // API module + member pages.
   for (const slug of getAllModuleSlugs()) {
     entries.push({
-      url: `${ORIGIN}/api/${slug}`,
+      url: `${SITE_URL}/api/${slug}`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.6,
@@ -56,7 +48,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       if (isApiModule(data)) {
         for (const m of data.members) {
           entries.push({
-            url: `${ORIGIN}/api/${slug}/${m.name}`,
+            url: `${SITE_URL}/api/${slug}/${m.name}`,
             lastModified: now,
             changeFrequency: "weekly",
             priority: 0.5,
@@ -65,7 +57,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
       } else if (isApiClassModule(data)) {
         for (const meth of data.methods) {
           entries.push({
-            url: `${ORIGIN}/api/${slug}/${meth.name}`,
+            url: `${SITE_URL}/api/${slug}/${meth.name}`,
             lastModified: now,
             changeFrequency: "weekly",
             priority: 0.5,
@@ -82,7 +74,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   try {
     for (const slugParts of getAllDocSlugs()) {
       entries.push({
-        url: `${ORIGIN}/docs/${slugParts.join("/")}`,
+        url: `${SITE_URL}/docs/${slugParts.join("/")}`,
         lastModified: now,
         changeFrequency: "weekly",
         priority: 0.7,

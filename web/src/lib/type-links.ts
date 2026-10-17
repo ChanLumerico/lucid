@@ -8,18 +8,15 @@
  */
 
 import { getAllModuleSlugs, loadApiData } from "@/lib/api-loader";
+import { BASE_PATH } from "@/lib/site";
 import { isApiClass, isApiClassModule, isApiModule } from "@/lib/types";
 
-// Mirror of ``next.config.ts``'s ``basePath`` (``/lucid`` in prod, ``""`` in
-// dev).  The type-link map stores base-relative hrefs (``/api/…``) because
-// its other consumer — ``TypeAnnotation`` — feeds them to Next's ``<Link>``,
-// which prepends the basePath itself.  ``linkifyTypesInHtml`` instead emits a
-// raw ``<a>`` into a ``dangerouslySetInnerHTML`` string, which Next does NOT
-// rewrite, so it must prepend the basePath manually (otherwise every linked
+// The type-link map stores base-relative hrefs (``/api/…``) because its other
+// consumer — ``TypeAnnotation`` — feeds them to Next's ``<Link>``, which
+// prepends the basePath itself.  ``linkifyTypesInHtml`` instead emits a raw
+// ``<a>`` into a ``dangerouslySetInnerHTML`` string, which Next does NOT
+// rewrite, so it must prepend ``BASE_PATH`` manually (otherwise every linked
 // type in a code signature 404s on GitHub Pages, escaping the ``/lucid`` base).
-// Exported for the other raw-URL consumers (e.g. the architecture viewer's
-// iframe ``src``), which Next doesn't rewrite either.
-export const BASE_PATH = process.env.NODE_ENV === "production" ? "/lucid" : "";
 
 /** Type name (basename, e.g. ``"Tensor"`` / ``"Module"``) → docs URL. */
 let _typeLinkCache: ReadonlyMap<string, string> | null = null;

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { canonical } from "@/lib/site";
 import type { LucideIcon } from "lucide-react";
 import { GitCommitHorizontal, HardDrive, Layers, Repeat, Zap } from "lucide-react";
 import { Header } from "@/components/layout/Header";
@@ -16,6 +17,7 @@ import {
 export const metadata: Metadata = {
   title: "Architecture",
   description: "Interactive diagrams of how Lucid works, traced from the source.",
+  alternates: canonical("/architecture"),
 };
 
 const KIND_ICON: Record<DiagramKind, LucideIcon> = {

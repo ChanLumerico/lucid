@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getAllDocSlugs, compileDoc } from "@/lib/mdx-compile";
+import { canonical } from "@/lib/site";
 import { getMDXComponents } from "@/components/mdx";
 import { DocTableOfContents } from "@/components/layout/TableOfContents";
 
@@ -22,6 +23,7 @@ export async function generateMetadata({
   return {
     title: doc.frontmatter.title,
     description: doc.frontmatter.description,
+    alternates: canonical(`/docs/${slug.join("/")}`),
   };
 }
 

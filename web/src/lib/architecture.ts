@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { BASE_PATH } from "@/lib/type-links";
+import { BASE_PATH } from "@/lib/site";
 
 /**
  * Architecture tab — interactive archify diagrams of how Lucid works.
