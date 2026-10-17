@@ -310,7 +310,7 @@ def build():
     lx = (OW - lock_w) / 2; base = OH / 2 + capb / 2 - 48
     mb = mark_d((lx + mhb / 2, base - capb / 2), Ab)
     pwt, _ = WORD.path("Lucid", capb, lx + mhb + gapb - wx0, base)
-    tag = "A Torch-like deep learning framework, built from scratch on NumPy & MLX"
+    tag = "Deep learning framework built from scratch for Apple Silicon"
     capt = 22.0
     pt, _ = TAG.path(tag, capt)
     (tx0, _, tx1, _) = pt.bounds
