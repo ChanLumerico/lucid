@@ -255,7 +255,10 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
         ("_IndexType", "lucid._types", "_IndexType"),
     ),
-    "lucid._tensor._methods": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
+    "lucid._tensor._methods": (
+        ("Tensor", "lucid._tensor.tensor", "Tensor"),
+        ("TensorOrScalar", "lucid._types", "TensorOrScalar"),
+    ),
     "lucid._tensor._repr": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid._tensor._to": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid._tensor.tensor": (

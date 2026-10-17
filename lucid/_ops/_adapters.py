@@ -1049,8 +1049,13 @@ def _clip_scalar_bounds(
     min: TensorOrScalar | None,
     max: TensorOrScalar | None,
     is_float: bool,
+    clip: Callable[[_Impl, float, float], _Impl] = _C_engine.clip,
 ) -> _Impl | None:
-    """Fast path when ``min`` and ``max`` are Python numbers or ``None``."""
+    """Fast path when ``min`` and ``max`` are Python numbers or ``None``.
+
+    ``clip`` is the engine kernel — ``clip_`` for ``Tensor.clamp_``, so the
+    in-place form takes the fast path exactly when this one does.
+    """
     if not isinstance(min, (int, float, type(None))) or not isinstance(
         max, (int, float, type(None))
     ):
@@ -1058,10 +1063,30 @@ def _clip_scalar_bounds(
     if is_float:
         lo_f = -math.inf if min is None else float(min)
         hi_f = math.inf if max is None else float(max)
-        return _C_engine.clip(x_impl, lo_f, hi_f)
+        return clip(x_impl, lo_f, hi_f)
     if min is not None and max is not None:
-        return _C_engine.clip(x_impl, float(min), float(max))
+        return clip(x_impl, float(min), float(max))
     return None
+
+
+def _clip_dtype(
+    x_impl: _Impl,
+    min: TensorOrScalar | None,
+    max: TensorOrScalar | None,
+) -> _C_engine.Dtype:
+    """The dtype ``clip(x, min, max)`` computes in: ``x``'s, promoted with its bounds.
+
+    One rule for ``clamp`` and ``clamp_``: the in-place form refuses a dtype
+    ``x`` cannot hold where this one returns it.
+    """
+    if min is None and max is None:
+        raise ValueError("clip: at least one of min or max must be given")
+    bounds: list[_promotion.Operand] = [
+        b if isinstance(b, _promotion.NUMBER) else _unwrap(b)
+        for b in (min, max)
+        if b is not None
+    ]
+    return _promotion.result_type(x_impl, *bounds)
 
 
 def _clip_adapter(
@@ -1079,14 +1104,7 @@ def _clip_adapter(
     propagate NaN across floating-point operands) to match the reference
     framework's ``clamp(Tensor, min=Tensor, max=Tensor)`` overload.
     """
-    if min is None and max is None:
-        raise ValueError("clip: at least one of min or max must be given")
-    bounds: list[_promotion.Operand] = [
-        b if isinstance(b, _promotion.NUMBER) else _unwrap(b)
-        for b in (min, max)
-        if b is not None
-    ]
-    tgt = _promotion.result_type(x_impl, *bounds)
+    tgt = _clip_dtype(x_impl, min, max)
     if tgt != x_impl.dtype:
         x_impl = _C_engine.astype(x_impl, tgt)
 

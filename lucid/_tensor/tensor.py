@@ -1374,8 +1374,8 @@ class Tensor:
 
     def clamp_(
         self,
-        min: float | None = None,
-        max: float | None = None,
+        min: Tensor | float | None = None,
+        max: Tensor | float | None = None,
     ) -> Self:
         r"""Clamp all elements of this tensor to ``[min, max]``, in-place.
 
@@ -1387,22 +1387,23 @@ class Tensor:
 
         Parameters
         ----------
-        min : float, optional
+        min : Tensor or scalar, optional
             Lower bound.  Elements below this value are raised to ``min``.
-            Defaults to :math:`-\infty` (no lower clamp).
-        max : float, optional
+        max : Tensor or scalar, optional
             Upper bound.  Elements above this value are lowered to ``max``.
-            Defaults to :math:`+\infty` (no upper clamp).
 
         Returns
         -------
         Tensor
             ``self`` after clamping.
 
-        Notes
-        -----
-        At least one of ``min`` or ``max`` should be specified.  If both are
-        ``None`` the call is a no-op.
+        Raises
+        ------
+        ValueError
+            If neither bound is given, as :meth:`clamp` refuses it.
+        RuntimeError
+            If the bounds promote ``self``'s dtype, as :meth:`clamp` promotes
+            it, to one ``self`` cannot hold: ``int64.clamp_(0.5, 1.5)``.
 
         Examples
         --------
@@ -1411,19 +1412,16 @@ class Tensor:
         >>> x.clamp_(min=-1.0, max=2.0)
         tensor([-1., 0.5, 2.])
         """
-        lo = min if min is not None else float("-inf")
-        hi = max if max is not None else float("inf")
-        self._impl = _C_engine.clip_(self._impl, lo, hi)
-        return self
+        return _clamp_inplace(self, min, max, "clamp_")
 
-    def clamp_min_(self, min: float) -> Self:
+    def clamp_min_(self, min: Tensor | float) -> Self:
         r"""Raise all elements below ``min`` to ``min``, in-place.
 
         Shorthand for ``clamp_(min=min)``.
 
         Parameters
         ----------
-        min : float
+        min : Tensor or scalar
             Lower bound.  Elements strictly less than ``min`` are set to
             ``min``.
 
@@ -1451,16 +1449,16 @@ class Tensor:
         :math:`[0, 1]`; autograd selects ``1`` for :math:`x > \text{min}`
         and ``0`` otherwise.
         """
-        return self.clamp_(min=min)
+        return _clamp_inplace(self, min, None, "clamp_min_")
 
-    def clamp_max_(self, max: float) -> Self:
+    def clamp_max_(self, max: Tensor | float) -> Self:
         r"""Lower all elements above ``max`` to ``max``, in-place.
 
         Shorthand for ``clamp_(max=max)``.
 
         Parameters
         ----------
-        max : float
+        max : Tensor or scalar
             Upper bound.  Elements strictly greater than ``max`` are set to
             ``max``.
 
@@ -1486,7 +1484,7 @@ class Tensor:
 
         The gradient is the indicator :math:`\mathbf{1}\{x_i < \text{max}\}`.
         """
-        return self.clamp_(max=max)
+        return _clamp_inplace(self, None, max, "clamp_max_")
 
     def clone(self) -> Self:
         r"""Return a deep copy of this tensor, preserving autograd history.
@@ -4256,7 +4254,7 @@ def _tensor_unpickle(
 from lucid._tensor._repr import tensor_repr as _tensor_repr  # noqa: E402
 from lucid._tensor._indexing import _select_slice as _ss  # noqa: E402
 from lucid._tensor._dunders import _inject_dunders  # noqa: E402
-from lucid._tensor._methods import _inject_methods  # noqa: E402
+from lucid._tensor._methods import _clamp_inplace, _inject_methods  # noqa: E402
 from lucid._tensor._to import _inject_to, _legacy_type_name, _type_target  # noqa: E402
 
 # ``register_hook`` is annotated ``-> _RemovableHandle``, imported under

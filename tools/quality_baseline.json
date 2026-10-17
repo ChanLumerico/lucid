@@ -250,7 +250,7 @@
     "lucid/_C/backend/gpu/GpuBackend.h": 4512,
     "lucid/_ops/composite/elementwise.py": 146,
     "lucid/_tensor/_dunders.py": 249,
-    "lucid/_tensor/tensor.py": 2773,
+    "lucid/_tensor/tensor.py": 2771,
     "lucid/compile/_optim/compiler.py": 774,
     "lucid/coreml/_build.py": 1743,
     "lucid/coreml/_emit.py": 1184,

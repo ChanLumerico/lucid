@@ -1,22 +1,40 @@
 """
-Auto-inject Tensor methods from the ops registry.
+Auto-inject Tensor methods from the ops registry, and the in-place methods
+no engine kernel writes.
 
-Every method is generated from an ``OpEntry`` in ``_registry.py``; signature
-translation (``dim=None|int|list``, ``keepdim``, ``correction`` ...) lives
-in ``_adapters.py``.  Only ``eval`` — which calls into the impl handle
-directly and isn't an engine op — is special-cased below.
+Every registry method is generated from an ``OpEntry`` in ``_registry.py``;
+signature translation (``dim=None|int|list``, ``keepdim``, ``correction``
+...) lives in ``_adapters.py``.
+
+The in-place forms whose op has no in-place kernel — the index writes
+(``masked_fill_``, ``scatter_`` ...), and ``clamp_`` with a bound that is a
+tensor or widens the computation — compute the out-of-place op and write its
+result into ``self`` through ``lucid._ops.composite.indexing._write_inplace``:
+into ``self``'s storage, refusing a result dtype ``self`` cannot hold,
+bumping its version.  ``clamp_`` called the engine kernel without the
+promotion ``clamp`` does, so ``int64.clamp_(0.5, 1.5)`` wrote ``[0, 1, 1, 1]``.
 
 Called once at module import time by ``tensor.py``.
 """
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
-from lucid._dispatch import _unwrap, _wrap
+from lucid import _promotion
+from lucid._C import engine as _C_engine
+from lucid._dispatch import (
+    _REAL_FLOATS,
+    _cannot_cast_inplace,
+    _unwrap,
+    _wrap,
+)
 from lucid._tensor._indexing import _adopt_inplace
+from lucid._ops._adapters import _clip_adapter, _clip_dtype, _clip_scalar_bounds
 from lucid._ops._registry import _REGISTRY, OpEntry, _bind_leading
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
+    from lucid._types import TensorOrScalar
 
 
 _OPERANDS: dict[str, tuple[str, ...]] = {}
@@ -240,6 +258,57 @@ def _take_along_dim(self: Tensor, indices: Tensor, dim: int | None = None) -> Te
     from lucid._ops.composite.shape import take_along_dim as _tad
 
     return _tad(self, indices, dim=dim)
+
+
+# ── in-place forms with no engine kernel ─────────────────────────────────────
+
+
+def _write(
+    self: Tensor, name: str, result_of: Callable[[Tensor], Tensor], *args: object
+) -> Tensor:
+    """Make ``result_of(self)`` the values of ``self`` in place; return ``self``.
+
+    ``args`` are the op's other arguments: the tensors among them may carry
+    gradient, which decides whether the write records.
+    """
+    from lucid._ops.composite._shared import _is_tensor
+    from lucid._ops.composite.indexing import _write_inplace
+
+    return _write_inplace(self, name, result_of, *(a for a in args if _is_tensor(a)))
+
+
+def _clamp_inplace(
+    self: Tensor,
+    min: TensorOrScalar | None,
+    max: TensorOrScalar | None,
+    name: str,
+) -> Tensor:
+    """``self`` clamped to ``[min, max]`` in place, by :meth:`Tensor.clamp`'s rules.
+
+    The bounds promote ``self``'s dtype as they do out of place
+    (:func:`lucid._ops._adapters._clip_dtype`), and a dtype ``self`` cannot
+    hold is refused before anything runs, with the error ``add_`` gives.
+    Number bounds that leave the dtype alone take the engine's ``clip_``
+    where ``clamp`` takes its ``clip``; anything else is ``clamp``'s result,
+    written through :func:`_write`.  One helper for ``clamp_``, ``clip_``,
+    ``clamp_min_`` and ``clamp_max_``, so each public spelling is one
+    in-place write (one Metal write-back) and names itself in its errors.
+    """
+    impl = self._impl
+    dt = _clip_dtype(impl, min, max)
+    if dt != impl.dtype:
+        if not _promotion.can_cast(dt, impl.dtype):
+            raise _cannot_cast_inplace(dt, impl.dtype)
+    else:
+        is_float = dt in _REAL_FLOATS
+        kernel = _clip_scalar_bounds(impl, min, max, is_float, _C_engine.clip_)
+        if kernel is not None:
+            return _adopt_inplace(self, kernel, name)
+
+    def result_of(base: Tensor) -> Tensor:
+        return _wrap(_clip_adapter(base._impl, min, max))
+
+    return _write(self, name, result_of, min, max)
 
 
 _EXTRA_METHODS = (
