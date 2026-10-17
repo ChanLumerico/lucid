@@ -1,13 +1,13 @@
 // lucid/_C/core/AmpPolicy.cpp
 //
-// Thread-local AMP state and AutocastGuard implementation.
-// g_active tracks whether autocast is in effect; g_target holds the requested
-// compute dtype (e.g. F16 for GPU half-precision training).  Both are
-// thread_local so different Python threads or OpenMP worker threads can each
-// have independent AMP settings.
+// The compiled policy table, thread-local AMP state and the AutocastGuard
+// implementation.  The AMP state is thread_local so different Python
+// threads or OpenMP worker threads can each have independent settings.
 
 #include "AmpPolicy.h"
 
+#include <algorithm>
+#include <iterator>
 #include <stdexcept>
 
 #include "Error.h"
@@ -23,11 +23,57 @@ const char* amp_policy_name(AmpPolicy p) {
         return "KeepInput";
     case AmpPolicy::ForceFP32:
         return "ForceFP32";
+    case AmpPolicy::PromoteWidest:
+        return "PromoteWidest";
     }
     ErrorBuilder("amp_policy_name").fail("unknown AmpPolicy");
 }
 
 namespace amp {
+
+namespace {
+
+// The spellings ``AmpPolicyTable.def`` uses for its columns.
+namespace column {
+constexpr AmpPolicy LOWER = AmpPolicy::Promote;
+constexpr AmpPolicy FP32 = AmpPolicy::ForceFP32;
+constexpr AmpPolicy KEEP = AmpPolicy::KeepInput;
+constexpr AmpPolicy WIDEST = AmpPolicy::PromoteWidest;
+}  // namespace column
+
+constexpr PolicyRow kRows[] = {
+#define LUCID_AMP_ROW(name, metal, cpu) PolicyRow{#name, column::metal, column::cpu},
+#include "AmpPolicyTable.def"
+#undef LUCID_AMP_ROW
+};
+
+// ``policy_for`` binary-searches the rows, so an out-of-order or repeated
+// name would make some op silently fall back to KeepInput.
+constexpr bool rows_sorted_and_unique() {
+    for (std::size_t i = 1; i < std::size(kRows); ++i) {
+        if (!(kRows[i - 1].name < kRows[i].name))
+            return false;
+    }
+    return true;
+}
+static_assert(rows_sorted_and_unique(),
+              "AmpPolicyTable.def: rows must be sorted by name, each name once");
+
+}  // namespace
+
+AmpPolicy policy_for(std::string_view op, Device device) {
+    const auto* const end = std::end(kRows);
+    const auto* const it = std::lower_bound(
+        std::begin(kRows), end, op,
+        [](const PolicyRow& row, std::string_view name) { return row.name < name; });
+    if (it == end || it->name != op)
+        return AmpPolicy::KeepInput;
+    return device == Device::CPU ? it->cpu : it->metal;
+}
+
+std::span<const PolicyRow> policy_table() {
+    return kRows;
+}
 
 namespace {
 struct DeviceAmpState {

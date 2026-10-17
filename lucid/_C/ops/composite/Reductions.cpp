@@ -3,12 +3,13 @@
 // ``logsumexp`` composes max + sub + exp + sum + log + add to recover the
 // stable formula without registering a new schema.  The reduction runs with
 // keepdims and the reduced axes are dropped by one reshape when ``keepdims``
-// is false.
+// is false.  An :class:`AmpScope` applies the composite's row at the entry,
+// so autocast does not reach the parts.
 
 #include "Reductions.h"
 
 #include "../../autograd/Helpers.h"
-#include "../../core/AmpPolicy.h"
+#include "../../core/ErrorBuilder.h"
 #include "../bfunc/Add.h"
 #include "../bfunc/Sub.h"
 #include "../gfunc/Gfunc.h"
@@ -16,15 +17,17 @@
 #include "../ufunc/Exponential.h"
 #include "../ufunc/Predicate.h"
 #include "../ufunc/Reductions.h"
+#include "../utils/Promote.h"
 #include "../utils/Select.h"
 #include "../utils/View.h"
 
 namespace lucid {
 
-TensorImplPtr logsumexp_op(const TensorImplPtr& a, const std::vector<int>& axes, bool keepdims) {
-    // Disable autocast inside composite logsumexp so Promote elementwise ops
-    // (sub_op, add_op) do not downcast float32 inputs to half/bfloat16.
-    amp::AutocastGuard amp_off(Dtype::F32, a->device(), /*enabled=*/false);
+TensorImplPtr logsumexp_op(const TensorImplPtr& a_in, const std::vector<int>& axes, bool keepdims) {
+    if (!a_in)
+        ErrorBuilder("logsumexp").fail("null input");
+    const AmpScope amp{"logsumexp", a_in->device()};
+    const TensorImplPtr a = amp.cast(a_in);
     // A float16 / bfloat16 input is evaluated in float32 and the answer
     // rounded back.  The sum of exp(x - max) is up to the length of the
     // reduced axis, which float16 cannot hold past 65504: logsumexp of

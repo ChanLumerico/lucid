@@ -4,16 +4,19 @@
 //
 // Every op in Lucid is described by a constexpr :class:`OpSchema` instance —
 // conventionally a public static member named ``schema_v1`` on the op's
-// backward class.  The schema records the op's name, version, AMP policy,
-// determinism contract, arity, and a list of "stable" inputs that autograd
-// must guard against in-place mutation.
+// backward class.  The schema records the op's name, version, declared AMP
+// policy, determinism contract, arity, and a list of "stable" inputs that
+// autograd must guard against in-place mutation.
 //
 // The schema is registered with the global :class:`OpRegistry` at static
 // initialisation time (see :file:`OpRegistry.h`'s ``LUCID_REGISTER_OP``
 // macro) and consulted by :class:`SchemaGuard` at every op dispatch to:
 //
 //   1. Reject calls that violate the current determinism setting.
-//   2. Compute the effective compute dtype under AMP.
+//   2. Compute the effective compute dtype — under AMP from the op's row in
+//      the per-device policy table (``AmpPolicyTable.def``, looked up by
+//      ``name``), and for an integer input from ``real_valued`` /
+//      ``declared_amp_policy``.
 //
 // Versioning contract
 // -------------------
@@ -27,7 +30,7 @@
 // --------
 // :class:`OpRegistry`     — the global name → schema map.
 // :class:`SchemaGuard`    — runtime gate that consumes the schema.
-// :enum:`AmpPolicy`       — per-op autocast policy stored in ``amp_policy``.
+// :func:`amp::policy_for` — the per-device autocast policy table.
 
 #pragma once
 
@@ -59,9 +62,13 @@ namespace lucid {
 //     Monotonic schema version starting at 1.  Bump on backwards-
 //     incompatible changes — bumping invalidates checkpoints / traces that
 //     reference the previous version.
-// amp_policy : AmpPolicy
-//     How this op responds to an active autocast context.  See
-//     :enum:`AmpPolicy` for the three values.
+// declared_amp_policy : AmpPolicy
+//     The policy the op author declared.  Autocast does not read it: an
+//     op's autocast behaviour is its row in the per-device table
+//     (:func:`amp::policy_for`), which can differ between Metal and CPU
+//     and which one field could not express.  What the field still
+//     decides is integer-input promotion outside autocast — ``ForceFP32``
+//     here, like ``real_valued``, promotes an integer input to float32.
 // deterministic : bool
 //     ``true`` if the op produces bit-identical results given identical
 //     inputs and configuration.  ``false`` for ops that rely on atomics,
@@ -93,7 +100,7 @@ struct LUCID_API OpSchema {
     std::string_view name;
     int version;
 
-    AmpPolicy amp_policy;
+    AmpPolicy declared_amp_policy;
     bool deterministic;
     std::string_view determinism_note;
 
@@ -114,7 +121,7 @@ struct LUCID_API OpSchema {
     // so an integer input is promoted to float rather than truncated or
     // refused.  ``exp(1)`` is 2.718, not 2.
     //
-    // Deliberately not inferred from ``amp_policy``.  The two say different
+    // Deliberately not inferred from the AMP policy.  The two say different
     // things: the policy answers "*which* float under autocast", and
     // ``AmpPolicy::Promote`` is worn by ``matmul``, whose integer answer is
     // an integer.  Forcing these ops to ``ForceFP32`` instead would have
@@ -124,7 +131,7 @@ struct LUCID_API OpSchema {
     bool real_valued = false;
 
     // When true, an integer or bool input keeps its own dtype although
-    // ``amp_policy`` is ``ForceFP32``: the op has an exact answer in that
+    // ``declared_amp_policy`` is ``ForceFP32``: the op has an exact answer in that
     // type, and the policy speaks for floating inputs only.  ``pow`` is the
     // case.  ``int64 ** 2`` is an integer, exact past 2**53 where float32 is
     // not, while ``f16 ** f16`` under autocast runs in float32 as the
@@ -141,7 +148,7 @@ struct LUCID_API OpSchema {
     // v : int
     //     Schema version (start at 1).
     // ap : AmpPolicy
-    //     AMP dispatch policy.
+    //     Sets ``declared_amp_policy``.
     // det : bool, default=true
     //     Determinism flag.
     // note : std::string_view, default=""
@@ -165,7 +172,7 @@ struct LUCID_API OpSchema {
                        bool closed = false)
         : name(n),
           version(v),
-          amp_policy(ap),
+          declared_amp_policy(ap),
           deterministic(det),
           determinism_note(note),
           real_valued(real),
@@ -181,7 +188,7 @@ struct LUCID_API OpSchema {
     // v : int
     //     Schema version.
     // ap : AmpPolicy
-    //     AMP dispatch policy.
+    //     Sets ``declared_amp_policy``.
     // det : bool
     //     Determinism flag.
     // note : std::string_view
@@ -206,7 +213,7 @@ struct LUCID_API OpSchema {
              bool real = false)
         : name(n),
           version(v),
-          amp_policy(ap),
+          declared_amp_policy(ap),
           deterministic(det),
           determinism_note(note),
           input_arity(in_arity),
@@ -218,9 +225,9 @@ struct LUCID_API OpSchema {
 
 // Computes a 64-bit FNV-1a fingerprint of an op's behavioural schema.
 //
-// The hash mixes the schema's ``name``, ``version``, ``amp_policy``, and
-// ``deterministic`` flag — fields that together define how the op
-// behaves.  ``stable_input_indices``, ``internal``, and arity counts are
+// The hash mixes the schema's ``name``, ``version``, the op's autocast
+// policy on each device (its row in the policy table, Metal then CPU), and
+// the ``deterministic`` flag — what together defines how the op behaves.  ``stable_input_indices``, ``internal``, and arity counts are
 // excluded because they describe shape rather than semantics.
 //
 // Used for change-detection: cached graph compilations, profiler entries,
@@ -244,8 +251,8 @@ struct LUCID_API OpSchema {
 //    h_{i+1} = (h_i \oplus b_i) \cdot \text{0x100000001b3} \pmod{2^{64}}, $$
 //
 // where $b_i$ ranges over the bytes of ``name``, a null separator,
-// the little-endian bytes of ``version``, the ``amp_policy`` byte, and
-// finally the ``deterministic`` flag (0 or 1).
+// the little-endian bytes of ``version``, the Metal and CPU policy bytes,
+// and finally the ``deterministic`` flag (0 or 1).
 //
 // Notes
 // -----

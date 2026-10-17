@@ -4,12 +4,17 @@
 // forward graph from existing differentiable ``*_op`` calls; the chain rule
 // is provided automatically by the primitives' backward nodes (LogBackward,
 // ExpBackward, MulBackward, etc.) so no new schemas are registered here.
+//
+// Each opens with an :class:`AmpScope` under its own name, so autocast
+// applies the composite's row once to its inputs and the primitives inside
+// compute in that dtype.
 
 #include "Math.h"
 
 #include <cmath>
 #include <limits>
 #include <string>
+#include <utility>
 
 #include "../../core/Dtype.h"
 #include "../../core/ErrorBuilder.h"
@@ -29,15 +34,36 @@
 #include "../ufunc/Exponential.h"
 #include "../ufunc/Predicate.h"
 #include "../ufunc/Trig.h"
+#include "../utils/Promote.h"
 #include "../utils/Select.h"
 
 namespace lucid {
+
+namespace {
+
+// The operand of a unary composite, null-checked before its device is read.
+const TensorImplPtr& unary_input(const TensorImplPtr& a, const char* op) {
+    if (!a)
+        ErrorBuilder(op).fail("null input");
+    return a;
+}
+
+// The two operands of a binary composite, cast together by its scope.
+std::pair<TensorImplPtr, TensorImplPtr>
+cast_operands(const AmpScope& amp, const TensorImplPtr& a, const TensorImplPtr& b) {
+    auto cast = amp.cast_widest({a, b});
+    return {std::move(cast[0]), std::move(cast[1])};
+}
+
+}  // namespace
 
 // ── unary compositions ──────────────────────────────────────────────────────
 
 // ``log10(x) = log(x) / log(10)``.  Materialises ``log(10)`` as a same-shape
 // constant so the divide kernel does not need scalar broadcasting.
-TensorImplPtr log10_op(const TensorImplPtr& a) {
+TensorImplPtr log10_op(const TensorImplPtr& a_in) {
+    const AmpScope amp{"log10", unary_input(a_in, "log10")->device()};
+    const TensorImplPtr a = amp.cast(a_in);
     auto log_a = log_op(a);
     auto ln10 = full_like_op(log_a, std::log(10.0));
     return div_op(log_a, ln10);
@@ -67,7 +93,9 @@ TensorImplPtr log10_op(const TensorImplPtr& a) {
 // (+inf, -inf at -1, NaN below -1 and at NaN).  ``x / (u - 1)`` is
 // divided before it multiplies, since it is about 1 and ``log(u) · x``
 // overflows float32 from x ≈ 4e36.
-TensorImplPtr log1p_op(const TensorImplPtr& a) {
+TensorImplPtr log1p_op(const TensorImplPtr& a_in) {
+    const AmpScope amp{"log1p", unary_input(a_in, "log1p")->device()};
+    const TensorImplPtr a = amp.cast(a_in);
     auto ones = full_like_op(a, 1.0);
     auto u = add_op(a, ones);
     auto plain = log_op(u);
@@ -90,14 +118,18 @@ TensorImplPtr log1p_op(const TensorImplPtr& a) {
 
 // ``exp2(x) = exp(x · log(2))``.  Multiplying against a constant tensor keeps
 // the gradient chain visible to ``MulBackward`` and ``ExpBackward``.
-TensorImplPtr exp2_op(const TensorImplPtr& a) {
+TensorImplPtr exp2_op(const TensorImplPtr& a_in) {
+    const AmpScope amp{"exp2", unary_input(a_in, "exp2")->device()};
+    const TensorImplPtr a = amp.cast(a_in);
     auto ln2 = full_like_op(a, std::log(2.0));
     return exp_op(mul_op(a, ln2));
 }
 
 // Fractional part — the ``trunc`` term contributes zero gradient, so the
 // gradient w.r.t. ``a`` is just the upstream gradient.
-TensorImplPtr frac_op(const TensorImplPtr& a) {
+TensorImplPtr frac_op(const TensorImplPtr& a_in) {
+    const AmpScope amp{"frac", unary_input(a_in, "frac")->device()};
+    const TensorImplPtr a = amp.cast(a_in);
     return sub_op(a, trunc_op(a));
 }
 
@@ -110,7 +142,9 @@ TensorImplPtr atan2_op(const TensorImplPtr& y_in, const TensorImplPtr& x_in) {
     constexpr double pi = 3.14159265358979323846;
     if (!y_in || !x_in)
         ErrorBuilder("atan2").fail("null input");
-    const auto [y, x] = detail::align_binary_devices(y_in, x_in, "atan2");
+    const auto [y_dev, x_dev] = detail::align_binary_devices(y_in, x_in, "atan2");
+    const AmpScope amp{"atan2", y_dev->device()};
+    const auto [y, x] = cast_operands(amp, y_dev, x_dev);
 
     auto zero_x = full_like_op(x, 0.0);
     auto zero_y = full_like_op(y, 0.0);
@@ -179,7 +213,9 @@ TensorImplPtr hypot_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in) {
     if (!a_in || !b_in)
         ErrorBuilder("hypot").fail("null input");
     require_floating("hypot", a_in, b_in);
-    const auto [a, b] = detail::align_binary_devices(a_in, b_in, "hypot");
+    const auto [a_dev, b_dev] = detail::align_binary_devices(a_in, b_in, "hypot");
+    const AmpScope amp{"hypot", a_dev->device()};
+    const auto [a, b] = cast_operands(amp, a_dev, b_dev);
     auto abs_a = abs_op(a);
     auto abs_b = abs_op(b);
     auto big = maximum_op(abs_a, abs_b);
@@ -196,7 +232,9 @@ TensorImplPtr logaddexp_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in)
     if (!a_in || !b_in)
         ErrorBuilder("logaddexp").fail("null input");
     require_floating("logaddexp", a_in, b_in);
-    const auto [a, b] = detail::align_binary_devices(a_in, b_in, "logaddexp");
+    const auto [a_dev, b_dev] = detail::align_binary_devices(a_in, b_in, "logaddexp");
+    const AmpScope amp{"logaddexp", a_dev->device()};
+    const auto [a, b] = cast_operands(amp, a_dev, b_dev);
     auto m = maximum_op(a, b);
     auto exp_a = exp_op(sub_op(a, m));
     auto exp_b = exp_op(sub_op(b, m));
@@ -210,7 +248,9 @@ TensorImplPtr
 isclose_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in, double rtol, double atol) {
     if (!a_in || !b_in)
         ErrorBuilder("isclose").fail("null input");
-    const auto [a, b] = detail::align_binary_devices(a_in, b_in, "isclose");
+    const auto [a_dev, b_dev] = detail::align_binary_devices(a_in, b_in, "isclose");
+    const AmpScope amp{"isclose", a_dev->device()};
+    const auto [a, b] = cast_operands(amp, a_dev, b_dev);
     TensorImplPtr diff;
     TensorImplPtr abs_b;
     if (!is_floating_point(a->dtype()) && !is_floating_point(b->dtype())) {

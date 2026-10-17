@@ -104,6 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - the brand kit's logo, icons and social card on the site
 
+- autocast policy from one per-device table (LCD-500)
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

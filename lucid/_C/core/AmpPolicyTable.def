@@ -1,0 +1,139 @@
+// lucid/_C/core/AmpPolicyTable.def
+//
+// The autocast policy of every op that has one, per device.  This is the
+// only place an op's autocast behaviour is decided: ``SchemaGuard`` reads
+// it for engine primitives, ``AmpScope`` for engine composites, and the
+// Python layer through ``engine.amp_policy_for``.
+//
+//     LUCID_AMP_ROW(name, METAL, CPU)
+//
+// ``name`` is the op's schema name, or the composite's name.  The columns:
+//
+//   LOWER   cast floating inputs to the autocast dtype (CPU float16
+//           computes in float32 — Accelerate has no float16 arithmetic)
+//   FP32    cast floating inputs to float32
+//   WIDEST  cast floating inputs to the widest floating dtype among them
+//   KEEP    leave the inputs alone
+//
+// An op with no row keeps its inputs' dtype on both devices, which is also
+// the reference framework's default; a KEEP column only appears beside a
+// non-KEEP one.  The METAL column follows the reference framework's MPS
+// list and the CPU column its CPU list.  Where the reference decomposes an
+// op that Lucid runs as one (``square`` and ``cube`` into ``pow``,
+// ``trace`` into ``sum``, ``cross_entropy_loss`` into ``log_softmax`` and
+// ``nll_loss``), the row carries the decomposition's effective policy.
+// ``ctc_loss`` is FP32 on Metal too: the reference has no MPS kernel for
+// it, and the CPU answer is the one it is compared against.
+//
+// Rows are sorted by name, each name once — ``AmpPolicy.cpp`` refuses to
+// compile otherwise.  ``lucid/test/unit/amp/test_autocast_policy_table.py``
+// checks that every name is an op Lucid has.
+
+LUCID_AMP_ROW(adaptive_avg_pool3d,          KEEP,   FP32)
+LUCID_AMP_ROW(adaptive_max_pool3d,          KEEP,   FP32)
+LUCID_AMP_ROW(addbmm,                       LOWER,  LOWER)
+LUCID_AMP_ROW(addcdiv,                      WIDEST, KEEP)
+LUCID_AMP_ROW(addcmul,                      WIDEST, KEEP)
+LUCID_AMP_ROW(addmm,                        LOWER,  LOWER)
+LUCID_AMP_ROW(addmv,                        LOWER,  KEEP)
+LUCID_AMP_ROW(addr,                         LOWER,  KEEP)
+LUCID_AMP_ROW(affine_grid,                  LOWER,  LOWER)
+LUCID_AMP_ROW(arccos,                       FP32,   KEEP)
+LUCID_AMP_ROW(arcsin,                       FP32,   KEEP)
+LUCID_AMP_ROW(atan2,                        WIDEST, KEEP)
+LUCID_AMP_ROW(avg_pool3d,                   KEEP,   FP32)
+LUCID_AMP_ROW(baddbmm,                      LOWER,  LOWER)
+LUCID_AMP_ROW(batch_norm,                   FP32,   KEEP)
+LUCID_AMP_ROW(batch_norm1d,                 FP32,   KEEP)
+LUCID_AMP_ROW(batch_norm3d,                 FP32,   KEEP)
+LUCID_AMP_ROW(batch_norm_eval,              FP32,   KEEP)
+LUCID_AMP_ROW(bce_loss,                     KEEP,   FP32)
+LUCID_AMP_ROW(bce_with_logits,              FP32,   FP32)
+LUCID_AMP_ROW(bilinear_layer,               WIDEST, KEEP)
+LUCID_AMP_ROW(bmm,                          LOWER,  LOWER)
+LUCID_AMP_ROW(cdist,                        FP32,   FP32)
+LUCID_AMP_ROW(concatenate,                  KEEP,   WIDEST)
+LUCID_AMP_ROW(conv1d,                       LOWER,  LOWER)
+LUCID_AMP_ROW(conv2d,                       LOWER,  LOWER)
+LUCID_AMP_ROW(conv3d,                       LOWER,  LOWER)
+LUCID_AMP_ROW(conv_transpose1d,             LOWER,  LOWER)
+LUCID_AMP_ROW(conv_transpose2d,             LOWER,  LOWER)
+LUCID_AMP_ROW(conv_transpose3d,             FP32,   LOWER)
+LUCID_AMP_ROW(cosh,                         FP32,   KEEP)
+LUCID_AMP_ROW(cosine_embedding_loss,        FP32,   FP32)
+LUCID_AMP_ROW(cosine_similarity,            FP32,   KEEP)
+LUCID_AMP_ROW(cross,                        WIDEST, KEEP)
+LUCID_AMP_ROW(cross_entropy_loss,           FP32,   FP32)
+LUCID_AMP_ROW(ctc_loss,                     FP32,   FP32)
+LUCID_AMP_ROW(cube,                         FP32,   KEEP)
+LUCID_AMP_ROW(cube_root,                    FP32,   KEEP)
+LUCID_AMP_ROW(cumprod,                      FP32,   KEEP)
+LUCID_AMP_ROW(cumsum,                       FP32,   KEEP)
+LUCID_AMP_ROW(dot_1d,                       WIDEST, KEEP)
+LUCID_AMP_ROW(einsum,                       LOWER,  LOWER)
+LUCID_AMP_ROW(erfinv,                       FP32,   KEEP)
+LUCID_AMP_ROW(exp,                          FP32,   KEEP)
+LUCID_AMP_ROW(expm1,                        FP32,   KEEP)
+LUCID_AMP_ROW(fft,                          KEEP,   FP32)
+LUCID_AMP_ROW(gaussian_nll_loss,            FP32,   KEEP)
+LUCID_AMP_ROW(grid_sample,                  WIDEST, FP32)
+LUCID_AMP_ROW(group_norm,                   FP32,   KEEP)
+LUCID_AMP_ROW(hinge_embedding_loss,         FP32,   FP32)
+LUCID_AMP_ROW(huber_loss,                   FP32,   FP32)
+LUCID_AMP_ROW(index_copy,                   KEEP,   WIDEST)
+LUCID_AMP_ROW(index_put,                    WIDEST, KEEP)
+LUCID_AMP_ROW(index_scatter,                WIDEST, KEEP)
+LUCID_AMP_ROW(instance_norm,                FP32,   KEEP)
+LUCID_AMP_ROW(inv,                          KEEP,   FP32)
+LUCID_AMP_ROW(kl_div,                       FP32,   FP32)
+LUCID_AMP_ROW(l1_loss,                      FP32,   FP32)
+LUCID_AMP_ROW(layer_norm,                   FP32,   KEEP)
+LUCID_AMP_ROW(linear,                       LOWER,  LOWER)
+LUCID_AMP_ROW(local_response_norm,          FP32,   KEEP)
+LUCID_AMP_ROW(log,                          FP32,   KEEP)
+LUCID_AMP_ROW(log10,                        FP32,   KEEP)
+LUCID_AMP_ROW(log1p,                        FP32,   KEEP)
+LUCID_AMP_ROW(log2,                         FP32,   KEEP)
+LUCID_AMP_ROW(log_softmax,                  FP32,   KEEP)
+LUCID_AMP_ROW(logsumexp,                    FP32,   KEEP)
+LUCID_AMP_ROW(margin_ranking_loss,          FP32,   FP32)
+LUCID_AMP_ROW(matmul,                       LOWER,  LOWER)
+LUCID_AMP_ROW(matrix_norm,                  FP32,   KEEP)
+LUCID_AMP_ROW(max_pool3d,                   KEEP,   FP32)
+LUCID_AMP_ROW(mm,                           LOWER,  LOWER)
+LUCID_AMP_ROW(mse_loss,                     FP32,   FP32)
+LUCID_AMP_ROW(multi_dot,                    LOWER,  LOWER)
+LUCID_AMP_ROW(multi_margin_loss,            FP32,   FP32)
+LUCID_AMP_ROW(multilabel_margin_loss,       FP32,   FP32)
+LUCID_AMP_ROW(mv,                           LOWER,  KEEP)
+LUCID_AMP_ROW(nll_loss,                     FP32,   FP32)
+LUCID_AMP_ROW(norm,                         FP32,   KEEP)
+LUCID_AMP_ROW(poisson_nll_loss,             FP32,   FP32)
+LUCID_AMP_ROW(polar,                        KEEP,   FP32)
+LUCID_AMP_ROW(pow,                          FP32,   KEEP)
+LUCID_AMP_ROW(pow_scalar,                   FP32,   KEEP)
+LUCID_AMP_ROW(prelu,                        LOWER,  LOWER)
+LUCID_AMP_ROW(prod,                         FP32,   FP32)
+LUCID_AMP_ROW(quantile,                     KEEP,   FP32)
+LUCID_AMP_ROW(reciprocal,                   FP32,   KEEP)
+LUCID_AMP_ROW(rpow_scalar,                  FP32,   KEEP)
+LUCID_AMP_ROW(rsqrt,                        FP32,   KEEP)
+LUCID_AMP_ROW(scaled_dot_product_attention, LOWER,  LOWER)
+LUCID_AMP_ROW(sinh,                         FP32,   KEEP)
+LUCID_AMP_ROW(smooth_l1_loss,               FP32,   FP32)
+LUCID_AMP_ROW(soft_margin_loss,             FP32,   FP32)
+LUCID_AMP_ROW(softmax,                      FP32,   KEEP)
+LUCID_AMP_ROW(softmin,                      FP32,   KEEP)
+LUCID_AMP_ROW(softplus,                     FP32,   KEEP)
+LUCID_AMP_ROW(solve,                        KEEP,   FP32)
+LUCID_AMP_ROW(square,                       FP32,   KEEP)
+LUCID_AMP_ROW(stack,                        KEEP,   WIDEST)
+LUCID_AMP_ROW(stft,                         KEEP,   FP32)
+LUCID_AMP_ROW(sum,                          FP32,   KEEP)
+LUCID_AMP_ROW(tan,                          FP32,   KEEP)
+LUCID_AMP_ROW(tensordot,                    WIDEST, LOWER)
+LUCID_AMP_ROW(trace,                        FP32,   FP32)
+LUCID_AMP_ROW(triplet_margin_loss,          FP32,   FP32)
+LUCID_AMP_ROW(vdot,                         WIDEST, KEEP)
+LUCID_AMP_ROW(vecdot,                       FP32,   LOWER)
+LUCID_AMP_ROW(vector_norm,                  FP32,   KEEP)

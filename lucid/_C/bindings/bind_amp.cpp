@@ -1,14 +1,20 @@
 // lucid/_C/bindings/bind_amp.cpp
 //
 // Exposes the Automatic Mixed Precision (AMP) subsystem to Python.  Registers:
-//   - AmpPolicy enum (Promote, KeepInput, ForceFP32)
+//   - AmpPolicy enum (Promote, KeepInput, ForceFP32, PromoteWidest)
 //   - amp_policy_name() string helper
+//   - amp_policy_for() / amp_policy_table() — the per-device policy table
 //   - AutocastGuard context manager (wraps amp::AutocastGuard)
 //   - amp_active_dtype() / amp_is_active() query functions
 //
 // Python usage: `with engine.AutocastGuard(engine.Dtype.F16): ...`
 
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
+#include <string>
+#include <tuple>
+#include <vector>
 
 #include "../core/AmpPolicy.h"
 
@@ -16,8 +22,8 @@ namespace py = pybind11;
 
 namespace lucid::bindings {
 
-// Registers the AmpPolicy enum, the AutocastGuard context manager, and the
-// AMP query helpers.
+// Registers the AmpPolicy enum, the policy table, the AutocastGuard context
+// manager, and the AMP query helpers.
 void register_amp(py::module_& m) {
     // AmpPolicy controls how dtype promotion is applied inside an autocast
     // scope.  export_values() lets callers use engine.Promote etc. directly.
@@ -25,10 +31,24 @@ void register_amp(py::module_& m) {
         .value("Promote", AmpPolicy::Promote)
         .value("KeepInput", AmpPolicy::KeepInput)
         .value("ForceFP32", AmpPolicy::ForceFP32)
+        .value("PromoteWidest", AmpPolicy::PromoteWidest)
         .export_values();
     // amp_policy_name converts the enum to a human-readable string for repr
     // and error messages; the lambda materialises the string_view as std::string.
     m.def("amp_policy_name", [](AmpPolicy p) { return std::string(amp_policy_name(p)); });
+
+    // The table the engine applies, so Python composites and tooling read
+    // the same rows rather than a copy of them.
+    m.def(
+        "amp_policy_for",
+        [](const std::string& name, Device device) { return amp::policy_for(name, device); },
+        py::arg("name"), py::arg("device"));
+    m.def("amp_policy_table", []() {
+        std::vector<std::tuple<std::string, AmpPolicy, AmpPolicy>> rows;
+        for (const auto& row : amp::policy_table())
+            rows.emplace_back(std::string(row.name), row.metal, row.cpu);
+        return rows;
+    });
 
     // AutocastGuard is a RAII scope that pushes a target Dtype onto the AMP
     // stack on construction and pops it on destruction.  The context-manager

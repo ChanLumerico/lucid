@@ -14,19 +14,27 @@
 //      error message includes the op's ``determinism_note`` so users
 //      know which aspect of the op is non-reproducible.
 //
-//   2. Effective dtype resolution — if AMP is active on the current
-//      thread (:func:`amp::is_active` returns true) and ``input_dtype``
-//      is autocast-eligible (``F16``, ``BF16``, or ``F32``), the input
-//      dtype is transformed according to the schema's :enum:`AmpPolicy`:
-//        Promote   — switch to the autocast dtype, except that
-//                    ``(CPU, F16)`` is clamped to F32 because Apple
-//                    Accelerate has no native F16 BLAS path.
-//        KeepInput — return ``input_dtype`` unchanged.
-//        ForceFP32 — always return :class:`Dtype::F32`.
+//   2. Effective dtype resolution — if AMP is active for ``device`` on the
+//      current thread and ``input_dtype`` is autocast-eligible (``F16``,
+//      ``BF16``, or ``F32``), the input dtype is transformed according to
+//      the op's row in the per-device policy table
+//      (:func:`amp::policy_for` on ``schema.name``):
+//        Promote       — switch to the autocast dtype, except that
+//                        ``(CPU, F16)`` is clamped to F32 because Apple
+//                        Accelerate has no native F16 BLAS path.
+//        KeepInput     — return ``input_dtype`` unchanged (also every op
+//                        without a row).
+//        ForceFP32     — always return :class:`Dtype::F32`.
+//        PromoteWidest — ``input_dtype``: one input is its own widest.
 //      Non-eligible dtypes (``F64``, ``C64``, ``C128``, integers, ``Bool``)
 //      and calls outside AMP return ``input_dtype`` unchanged (or ``F32``
-//      when an integral/bool input enters a real-valued / ``ForceFP32`` op
-//      whose schema is not ``integral_closed``).
+//      when an integral/bool input enters a real-valued / declared
+//      ``ForceFP32`` op whose schema is not ``integral_closed``).
+//
+// While AMP is active the guard also turns it off on ``device`` for its own
+// lifetime, as the reference framework's autocast wrappers do: the op has
+// chosen its dtype at the entry, and the ops its body is built from must
+// not apply their own rows again.
 //
 // :func:`check_schema_determinism` exposes the determinism gate as a
 // standalone function for callers (e.g. custom-function wrappers,
@@ -35,10 +43,12 @@
 //
 // See Also
 // --------
-// :class:`OpSchema`  — static metadata that drives the guard.
-// :enum:`AmpPolicy`  — autocast dispatch policy values.
+// :class:`OpSchema`        — static metadata that drives the guard.
+// :func:`amp::policy_for`  — the per-device autocast policy table.
 
 #pragma once
+
+#include <optional>
 
 #include "../api.h"
 #include "AmpPolicy.h"
@@ -83,9 +93,9 @@ LUCID_API void check_schema_determinism(const OpSchema& schema);
 // constructor performs both checks; subsequent code reads the resolved
 // dtype via :func:`effective_dtype`.
 //
-// Despite the "Guard" suffix this is not an RAII resource holder — it
-// owns no locks, allocations, or thread-local state.  The name reflects
-// its role as a gate at the entry of the op, not a scope object.
+// Inside an autocast scope the guard is an RAII scope: autocast stays off
+// on the op's device until the guard is destroyed, so it must live as long
+// as the op's body.  Outside one it owns nothing.
 //
 // Examples
 // --------
@@ -112,9 +122,9 @@ public:
     //     The dtype of the op's primary input — the starting point for
     //     AMP dtype resolution.
     // device : Device, default=Device::CPU
-    //     The device on which the op will execute.  Used to apply the
-    //     CPU-F16 → F32 demotion rule under ``AmpPolicy::Promote``,
-    //     since Accelerate has no native F16 path.
+    //     The device on which the op will execute.  Selects the table's
+    //     column, and applies the CPU-F16 → F32 demotion rule under
+    //     ``AmpPolicy::Promote``, since Accelerate has no native F16 path.
     //
     // Raises
     // ------
@@ -125,13 +135,17 @@ public:
     //     format.
     SchemaGuard(const OpSchema& schema, Dtype input_dtype, Device device = Device::CPU);
 
+    SchemaGuard(const SchemaGuard&) = delete;
+    SchemaGuard& operator=(const SchemaGuard&) = delete;
+
     // Returns the dtype that the op should use for its computation.
     //
     // May differ from the ``input_dtype`` passed at construction when
-    // AMP is active and the schema's :enum:`AmpPolicy` is ``Promote``
+    // AMP is active and the op's policy on the device is ``Promote``
     // (returns the autocast dtype, possibly demoted on CPU) or
     // ``ForceFP32`` (returns :class:`Dtype::F32`).  Equals
-    // ``input_dtype`` for ``KeepInput`` and when AMP is not active.
+    // ``input_dtype`` for ``KeepInput`` / ``PromoteWidest`` and when AMP
+    // is not active.
     //
     // Returns
     // -------
@@ -146,6 +160,8 @@ public:
 
 private:
     Dtype effective_dtype_;
+    // Engaged only while AMP was active at construction.
+    std::optional<amp::AutocastGuard> autocast_off_;
 };
 
 }  // namespace lucid

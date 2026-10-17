@@ -19,6 +19,8 @@
 #include <mutex>
 #include <shared_mutex>
 
+#include "AmpPolicy.h"
+
 namespace lucid {
 
 namespace {
@@ -78,9 +80,11 @@ std::size_t OpRegistry::size() {
     return r.map.size();
 }
 
-// FNV-1a 64-bit hash of the schema's name, version bytes, amp_policy byte,
-// and deterministic flag.  The null byte between name and version acts as a
-// separator to prevent length-extension collisions.
+// FNV-1a 64-bit hash of the schema's name, version bytes, the op's Metal and
+// CPU autocast policy bytes, and deterministic flag.  The policies come from
+// the table rather than ``declared_amp_policy``, which autocast no longer
+// reads.  The null byte between name and version acts as a separator to
+// prevent length-extension collisions.
 std::uint64_t schema_hash(const OpSchema& s) {
     constexpr std::uint64_t kFnvOffset = 0xcbf29ce484222325ull;
     constexpr std::uint64_t kFnvPrime = 0x100000001b3ull;
@@ -99,7 +103,8 @@ std::uint64_t schema_hash(const OpSchema& s) {
     // Hash version as 4 little-endian bytes.
     for (int i = 0; i < 4; ++i)
         mix(static_cast<std::uint8_t>((s.version >> (i * 8)) & 0xff));
-    mix(static_cast<std::uint8_t>(s.amp_policy));
+    mix(static_cast<std::uint8_t>(amp::policy_for(s.name, Device::GPU)));
+    mix(static_cast<std::uint8_t>(amp::policy_for(s.name, Device::CPU)));
     mix(s.deterministic ? 1 : 0);
     return h;
 }

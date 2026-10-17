@@ -9,6 +9,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "../core/AmpPolicy.h"
 #include "../core/OpRegistry.h"
 #include "../core/OpSchema.h"
 
@@ -25,7 +26,15 @@ void register_op_registry(py::module_& m) {
     py::class_<OpSchema>(m, "OpSchema")
         .def_property_readonly("name", [](const OpSchema& s) { return std::string(s.name); })
         .def_readonly("version", &OpSchema::version)
-        .def_readonly("amp_policy", &OpSchema::amp_policy)
+        // ``amp_policy`` is what autocast does with the op on Metal, read
+        // from the policy table; ``declared_amp_policy`` is the schema's
+        // own field, which now only drives integer-input promotion.
+        .def_property_readonly(
+            "amp_policy", [](const OpSchema& s) { return amp::policy_for(s.name, Device::GPU); })
+        .def_property_readonly(
+            "amp_policy_cpu",
+            [](const OpSchema& s) { return amp::policy_for(s.name, Device::CPU); })
+        .def_readonly("declared_amp_policy", &OpSchema::declared_amp_policy)
         .def_readonly("deterministic", &OpSchema::deterministic)
         .def_property_readonly("determinism_note",
                                [](const OpSchema& s) { return std::string(s.determinism_note); })

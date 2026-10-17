@@ -1,23 +1,27 @@
 // lucid/_C/core/AmpPolicy.h
 //
-// Automatic Mixed Precision (AMP) policy enum and thread-local autocast state.
+// Automatic Mixed Precision (AMP) policy enum, the per-device policy table,
+// and thread-local autocast state.
 //
 // AMP lets a model run most ops in a lower-precision dtype (typically BF16 or
 // F16) for memory- and bandwidth-bound speedups, while keeping a small set of
-// numerically sensitive ops at F32.  Lucid implements this with two pieces:
+// numerically sensitive ops at F32.  Lucid implements this with three pieces:
 //
-//   1. ``AmpPolicy`` — a static per-op enum baked into each op's
-//      :class:`OpSchema`.  Set once by the op author, never changed at
-//      runtime.  Tells the dispatcher whether to cast, ignore the autocast
-//      request, or force F32.
-//   2. ``amp::AutocastGuard`` — an RAII guard that activates AMP on the
+//   1. ``AmpPolicy`` — what an op does with its floating inputs inside an
+//      autocast scope.
+//   2. The policy table (``AmpPolicyTable.def``) — one row per op that has
+//      a policy, with a column per device.  :func:`amp::policy_for` reads it;
+//      an op with no row keeps its inputs' dtype.
+//   3. ``amp::AutocastGuard`` — an RAII guard that activates AMP on the
 //      current thread for the lifetime of the guard.  The Python
 //      ``lucid.amp.autocast`` context manager (see ``lucid/amp/autocast.py``)
 //      drives this guard from user code.
 //
-// :class:`SchemaGuard` combines both at op-dispatch time: it reads
-// ``amp::active_dtype()`` and the op's ``AmpPolicy`` to compute the effective
-// compute dtype.
+// :class:`SchemaGuard` applies the table at an engine primitive's entry and
+// ``AmpScope`` (``ops/utils/Promote.h``) at an engine composite's.  Both turn
+// autocast off on the op's device while the op runs, so the ops it is built
+// from compute in the dtype the entry chose instead of applying their own
+// rows a second time.
 //
 // References
 // ----------
@@ -28,6 +32,8 @@
 #pragma once
 
 #include <optional>
+#include <span>
+#include <string_view>
 
 #include "../api.h"
 #include "Device.h"
@@ -35,46 +41,42 @@
 
 namespace lucid {
 
-// Mixed-precision dispatch policy attached to each registered op.
+// What an op does with its floating inputs inside an autocast scope.
 //
-// Each backward class declares its policy in its ``schema_v1`` constant
-// (e.g. ``AmpPolicy::Promote`` for matmul, ``AmpPolicy::ForceFP32`` for
-// softmax).  The value never changes for the lifetime of the process —
-// it is part of the op's static contract, not a runtime knob.
+// Only float16, bfloat16 and float32 inputs are ever cast; float64, complex,
+// integer and bool inputs keep their dtype under every policy.
 //
 // Attributes
 // ----------
 // Promote : AmpPolicy
-//     Cast inputs to the currently active autocast dtype before forward.
-//     Used for compute-bound ops where reduced precision yields a large
-//     speedup with negligible accuracy impact — linear, conv, matmul.
-//     On the CPU stream, F16 is silently demoted to F32 because Apple
-//     Accelerate does not implement native F16 BLAS kernels.
+//     Cast inputs to the currently active autocast dtype (the table's
+//     ``LOWER``).  Used for compute-bound ops where reduced precision
+//     yields a large speedup with negligible accuracy impact — linear,
+//     conv, matmul.  On the CPU stream, F16 is computed in F32 because
+//     Apple Accelerate does not implement native F16 BLAS kernels.
 // KeepInput : AmpPolicy
-//     Run in the input tensor's native dtype regardless of the autocast
-//     setting.  Used for ops that either do not benefit from reduced
-//     precision (memory-bound element-wise ops), are dtype-polymorphic
-//     (cast, copy), or maintain accumulators that must not be downcast
-//     (batch-norm running statistics).
+//     Run in the inputs' own dtype (the table's ``KEEP``, and every op
+//     without a row).
 // ForceFP32 : AmpPolicy
-//     Always cast to F32 inside the op, regardless of the active autocast
-//     dtype.  Used for ops with severe numerical sensitivity — softmax,
-//     log, exponentials, loss reductions, normalisation statistics — where
-//     BF16/F16 would cause catastrophic cancellation or overflow.
+//     Cast inputs to F32 (the table's ``FP32``).  Used for ops with severe
+//     numerical sensitivity — softmax, log, exponentials, loss reductions,
+//     normalisation statistics — where BF16/F16 would cause catastrophic
+//     cancellation or overflow.
+// PromoteWidest : AmpPolicy
+//     Cast inputs to the widest floating dtype among them (the table's
+//     ``WIDEST``), for ops that take several floating operands and have
+//     no kernel for a mixed pair.  For a single input it is ``KeepInput``.
 //
 // Notes
 // -----
 // The enum has fixed underlying type ``std::uint8_t`` so it packs tightly
 // into :class:`OpSchema` and into the FNV-1a hash computed by
-// :func:`schema_hash`.
-//
-// References
-// ----------
-// Micikevicius et al., "Mixed Precision Training" (ICLR 2018).
+// :func:`schema_hash`.  New values are appended, never inserted.
 enum class AmpPolicy : std::uint8_t {
-    Promote,    // Use autocast dtype (CPU F16 → F32).
-    KeepInput,  // Ignore autocast; always use the input tensor's dtype.
-    ForceFP32,  // Always use F32, regardless of autocast setting.
+    Promote,        // Use autocast dtype (CPU F16 → F32).
+    KeepInput,      // Ignore autocast; always use the input tensor's dtype.
+    ForceFP32,      // Always use F32, regardless of autocast setting.
+    PromoteWidest,  // Use the widest floating dtype among the inputs.
 };
 
 // Returns the human-readable name of an AMP policy.
@@ -90,9 +92,9 @@ enum class AmpPolicy : std::uint8_t {
 // Returns
 // -------
 // const char*
-//     A pointer to a static C string — ``"Promote"``, ``"KeepInput"`` or
-//     ``"ForceFP32"``.  The pointer is stable for the lifetime of the
-//     process.
+//     A pointer to a static C string — ``"Promote"``, ``"KeepInput"``,
+//     ``"ForceFP32"`` or ``"PromoteWidest"``.  The pointer is stable for
+//     the lifetime of the process.
 //
 // Raises
 // ------
@@ -102,6 +104,50 @@ enum class AmpPolicy : std::uint8_t {
 LUCID_API const char* amp_policy_name(AmpPolicy p);
 
 namespace amp {
+
+// One row of the policy table: an op and its policy on each device.
+struct PolicyRow {
+    std::string_view name;
+    AmpPolicy metal;
+    AmpPolicy cpu;
+};
+
+// The policy ``op`` takes on ``device`` under autocast.
+//
+// ``op`` is a schema name or an engine composite's name.  An op without a
+// row in ``AmpPolicyTable.def`` keeps its inputs' dtype, so the answer for
+// it is ``AmpPolicy::KeepInput`` — whatever its schema declares.
+LUCID_API AmpPolicy policy_for(std::string_view op, Device device);
+
+// Every row of the policy table, sorted by name.
+LUCID_API std::span<const PolicyRow> policy_table();
+
+// Whether autocast may recast a tensor of this dtype.  float64, complex,
+// integer and bool tensors keep their dtype under every policy.
+constexpr bool is_autocast_eligible(Dtype dt) noexcept {
+    return dt == Dtype::F16 || dt == Dtype::BF16 || dt == Dtype::F32;
+}
+
+// The dtype one eligible input computes in under ``policy`` while
+// ``autocast_dt`` is active on ``device``.
+//
+// ``PromoteWidest`` needs the other inputs to mean anything, so for one
+// input it is ``KeepInput``; ``AmpScope::cast_widest`` resolves it over all
+// of them.  ``Promote`` with float16 on the CPU computes in float32, because
+// Accelerate has no float16 arithmetic.
+constexpr Dtype
+policy_dtype(AmpPolicy policy, Dtype input, Dtype autocast_dt, Device device) noexcept {
+    switch (policy) {
+    case AmpPolicy::Promote:
+        return (device == Device::CPU && autocast_dt == Dtype::F16) ? Dtype::F32 : autocast_dt;
+    case AmpPolicy::ForceFP32:
+        return Dtype::F32;
+    case AmpPolicy::KeepInput:
+    case AmpPolicy::PromoteWidest:
+        return input;
+    }
+    return input;
+}
 
 // Returns the active autocast dtype for ``device`` on the calling thread.
 //

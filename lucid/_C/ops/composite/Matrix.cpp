@@ -9,6 +9,9 @@
 // followed by a size-1 placeholder for ``b`` and vice versa, multiply with
 // broadcasting, then collapse the interleaved pairs back into the result
 // shape (sa[i] · sb[i]).
+//
+// Each opens with an :class:`AmpScope` under its own name, so autocast
+// applies the composite's row to its operands once.
 
 #include "Matrix.h"
 
@@ -16,6 +19,7 @@
 #include "../../core/TensorImpl.h"
 #include "../bfunc/Matmul.h"
 #include "../bfunc/Mul.h"
+#include "../utils/Promote.h"
 #include "../utils/View.h"
 
 namespace lucid {
@@ -25,7 +29,8 @@ TensorImplPtr mm_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         ErrorBuilder("mm").fail("null input");
     if (a->shape().size() != 2 || b->shape().size() != 2)
         ErrorBuilder("mm").fail("both operands must be 2-D");
-    return matmul_op(a, b);
+    const AmpScope amp{"mm", a->device()};
+    return matmul_op(amp.cast(a), amp.cast(b));
 }
 
 TensorImplPtr bmm_op(const TensorImplPtr& a, const TensorImplPtr& b) {
@@ -35,12 +40,17 @@ TensorImplPtr bmm_op(const TensorImplPtr& a, const TensorImplPtr& b) {
         ErrorBuilder("bmm").fail("both operands must be 3-D");
     if (a->shape()[0] != b->shape()[0])
         ErrorBuilder("bmm").fail("batch dimensions must match");
-    return matmul_op(a, b);
+    const AmpScope amp{"bmm", a->device()};
+    return matmul_op(amp.cast(a), amp.cast(b));
 }
 
-TensorImplPtr kron_op(const TensorImplPtr& a, const TensorImplPtr& b) {
-    if (!a || !b)
+TensorImplPtr kron_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in) {
+    if (!a_in || !b_in)
         ErrorBuilder("kron").fail("null input");
+    const AmpScope amp{"kron", a_in->device()};
+    const auto cast = amp.cast_widest({a_in, b_in});
+    const TensorImplPtr& a = cast[0];
+    const TensorImplPtr& b = cast[1];
     const auto& sa = a->shape();
     const auto& sb = b->shape();
     if (sa.size() != sb.size())
