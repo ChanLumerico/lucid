@@ -20,10 +20,13 @@
 // least twice that.  Below the cutoff the scores are under
 // 4·(Lq + Lk)·width, so the forward's extra memory is linear in the
 // lengths on both sides of it.  Short calls also stay unfused because
-// there the fallback's matmuls win: non-causal at L = 256 the padded call
-// was 1.2-1.3x slower, and at the cutoff (L = 8·width) within 10%, while
-// past it causal runs 0.4-0.6x (LCD-498).  The cutoff also implies MLX's
-// own condition of more than 8 queries.
+// there the fallback's matmuls win: on an M1 Pro, padded to 64 in float32,
+// a non-causal call at L = 256 was 1.2-1.3x slower and at the cutoff
+// (L = 8·width) within 10%, while causal ran 0.4-0.6x from the cutoff on.
+// Padded to 128, float32 non-causal stays 1.3-1.9x slower at every length:
+// MLX's float32 kernel at that width is slow, and it fuses a native 128
+// the same way (LCD-498).  The cutoff also implies MLX's own condition of
+// more than 8 queries.
 #pragma once
 
 #include <algorithm>
