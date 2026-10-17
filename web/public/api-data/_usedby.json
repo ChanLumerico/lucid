@@ -50,6 +50,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid._ops._autocast"
+    },
+    {
+      "kind": "module",
       "module": "lucid._ops._dims"
     },
     {
@@ -103,6 +107,10 @@
     {
       "kind": "module",
       "module": "lucid._tensor._metal_views"
+    },
+    {
+      "kind": "module",
+      "module": "lucid._tensor._methods"
     },
     {
       "kind": "module",
@@ -13020,6 +13028,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.nn.modules._recurrent_layout"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn.modules.activation"
     },
     {
@@ -13133,6 +13145,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.functional"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules._recurrent_layout"
     },
     {
       "kind": "module",
@@ -13327,6 +13343,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.functional"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules._recurrent_layout"
     },
     {
       "kind": "module",
