@@ -8,8 +8,8 @@ from typing import cast, override
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
-from lucid.nn.parameter import Parameter, UninitializedParameter
-from lucid.nn.modules._lazy import fill as _fill
+from lucid.nn.parameter import Parameter
+from lucid.nn.modules._lazy import _LazyModule, fill as _fill
 import lucid.nn.init as init
 from lucid._factories.creation import empty
 from lucid.nn.functional.linear import (
@@ -561,7 +561,7 @@ class Bilinear(Module):
         )
 
 
-class LazyLinear(Module):
+class LazyLinear(_LazyModule):
     r"""Linear layer whose input dimension is inferred on the first forward call.
 
     ``LazyLinear`` defers weight allocation until it receives its first input
@@ -663,6 +663,9 @@ class LazyLinear(Module):
     512
     """
 
+    weight: Parameter
+    bias: Parameter | None
+
     def __init__(
         self,
         out_features: int,
@@ -682,8 +685,8 @@ class LazyLinear(Module):
         # in, or the layer never trains.  ``bias=False`` still registers
         # ``None`` — a parameter that will never exist is not a pending
         # one, and conflating the two makes every check downstream wrong.
-        self.register_parameter("weight", UninitializedParameter())
-        self.register_parameter("bias", UninitializedParameter() if bias else None)
+        self.register_parameter("weight", self._placeholder())
+        self.register_parameter("bias", self._placeholder() if bias else None)
 
     def _initialize(self, in_features: int) -> None:
         """Internal helper for the LazyLinear module."""
@@ -719,55 +722,26 @@ class LazyLinear(Module):
         unexpected_keys: list[str],
         error_msgs: list[str],
     ) -> None:
-        """Internal helper for the LazyLinear module."""
-        # If still uninitialized, materialize from the checkpoint shape first.
-        if self.in_features is None:
-            weight = state_dict.get(f"{prefix}weight")
-            if weight is not None:
-                if len(weight.shape) != 2:
-                    error_msgs.append(
-                        f"LazyLinear expected 2-D weight at '{prefix}weight', "
-                        f"got {tuple(weight.shape)}"
-                    )
-                    return
-                if int(weight.shape[0]) != self.out_features:
-                    error_msgs.append(
-                        f"LazyLinear out_features mismatch at '{prefix}weight': "
-                        f"expected {self.out_features}, got {int(weight.shape[0])}"
-                    )
-                    return
-                self.in_features = int(weight.shape[1])
-                param_dtype = self._dtype or weight.dtype
-                param_device = self._device or weight.device
-                self.weight = Parameter(
-                    empty(
-                        self.out_features,
-                        self.in_features,
-                        dtype=param_dtype,
-                        device=param_device,
-                    )
+        """Size a still-lazy layer from the checkpoint's weight, then load it."""
+        weight = state_dict.get(f"{prefix}weight")
+        if self.in_features is None and weight is not None:
+            if len(weight.shape) != 2:
+                error_msgs.append(
+                    f"LazyLinear expected 2-D weight at '{prefix}weight', "
+                    f"got {tuple(weight.shape)}"
                 )
-                if self._has_bias:
-                    bias = state_dict.get(f"{prefix}bias")
-                    bias_dtype = self._dtype or (
-                        bias.dtype if bias is not None else weight.dtype
-                    )
-                    bias_device = self._device or (
-                        bias.device if bias is not None else weight.device
-                    )
-                    _fill(
-                        self,
-                        "bias",
-                        Parameter(
-                            empty(
-                                self.out_features,
-                                dtype=bias_dtype,
-                                device=bias_device,
-                            )
-                        ),
-                    )
-                else:
-                    self.bias = None
+                return
+            if int(weight.shape[0]) != self.out_features:
+                error_msgs.append(
+                    f"LazyLinear out_features mismatch at '{prefix}weight': "
+                    f"expected {self.out_features}, got {int(weight.shape[0])}"
+                )
+                return
+            # Made where the layer was asked for, else where the checkpoint is;
+            # ``_initialize`` fills the placeholders an optimizer may hold.
+            self._dtype = self._dtype or weight.dtype
+            self._device = self._device or weight.device
+            self._initialize(int(weight.shape[1]))
         # Delegate the actual copy / shape-check to the default loader.
         from lucid.nn._state_dict import _default_load_from_state_dict
 

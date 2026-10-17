@@ -7,8 +7,8 @@ from typing import ClassVar, override
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
 from lucid.nn.module import Module
-from lucid.nn.parameter import Parameter, UninitializedParameter
-from lucid.nn.modules._lazy import fill as _fill
+from lucid.nn.parameter import Parameter
+from lucid.nn.modules._lazy import _LazyModule, fill as _fill
 from lucid._factories.creation import ones, zeros
 import lucid as _lucid
 from lucid._C import engine as _C_engine
@@ -1511,7 +1511,7 @@ class LocalResponseNorm(Module):
 # from ``_BatchNormBase``.
 
 
-class _LazyBatchNormMixin(_BatchNormBase):
+class _LazyBatchNormMixin(_LazyModule, _BatchNormBase):
     r"""Shared lazy-init logic for LazyBatchNorm{1,2,3}d and LazyInstanceNorm*.
 
     Defers the allocation of all ``num_features``-sized parameters and
@@ -1574,16 +1574,16 @@ class _LazyBatchNormMixin(_BatchNormBase):
         self.momentum: float | None = momentum
         self.affine: bool = affine
         self.track_running_stats: bool = track_running_stats
-        self._device: DeviceLike = device
-        self._dtype: DTypeLike = dtype
+        self._device = device
+        self._dtype = dtype
         # Placeholder slots — actual buffers / params installed lazily.
         if affine:
             # Placeholders, not ``None``: an optimizer built before the
             # first forward must be handed objects that survive being
             # filled in.  Reached only when ``affine`` is on — a
             # parameter that will never exist stays ``None``.
-            self.register_parameter("weight", UninitializedParameter())
-            self.register_parameter("bias", UninitializedParameter())
+            self.register_parameter("weight", self._placeholder())
+            self.register_parameter("bias", self._placeholder())
         else:
             self.weight = None
             self.bias = None
@@ -1835,7 +1835,7 @@ class LazyBatchNorm3d(_LazyBatchNormMixin):
     _lazy_label: str = "LazyBatchNorm3d"
 
 
-class _LazyInstanceNormMixin(_InstanceNormBase):
+class _LazyInstanceNormMixin(_LazyModule, _InstanceNormBase):
     r"""Lazy ``num_features`` inference for InstanceNorm{1,2,3}d.
 
     Mirrors :class:`_LazyBatchNormMixin` but defers to
@@ -1893,11 +1893,11 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
         self.momentum: float | None = momentum
         self.affine: bool = affine
         self.track_running_stats: bool = track_running_stats
-        self._device: DeviceLike = device
-        self._dtype: DTypeLike = dtype
+        self._device = device
+        self._dtype = dtype
         if affine:
-            self.register_parameter("weight", UninitializedParameter())
-            self.register_parameter("bias", UninitializedParameter())
+            self.register_parameter("weight", self._placeholder())
+            self.register_parameter("bias", self._placeholder())
         else:
             self.weight = None
             self.bias = None

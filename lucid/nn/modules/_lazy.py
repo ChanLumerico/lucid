@@ -1,4 +1,4 @@
-"""Filling a lazy layer's placeholder parameters in place.
+"""What every lazy layer shares: placeholder parameters, and where they will be made.
 
 A lazy layer cannot build its weights until it sees an input.  What it
 *can* do is exist: registering an
@@ -13,14 +13,22 @@ because thirteen lazy classes across three files have to do exactly the
 same thing, and the failure mode of each of them doing it separately is
 that one of them assigns instead of materializing and quietly reverts to
 the old behaviour for that layer alone.
+
+:class:`_LazyModule` owns the other half: the device and dtype the layer
+will materialise on.  ``Module.to`` before the first forward has nothing
+to move but the placeholders, so the layer records the move itself, or
+it would build its weights where it was constructed rather than where it
+was sent.
 """
 
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import override, Self
 
+from lucid._factories.creation import empty
+from lucid._tensor.tensor import Tensor
+from lucid._types import DeviceLike, DTypeLike
+from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter, UninitializedParameter
-
-if TYPE_CHECKING:
-    from lucid.nn.module import Module
 
 
 def fill(module: Module, name: str, value: Parameter) -> None:
@@ -47,6 +55,38 @@ def fill(module: Module, name: str, value: Parameter) -> None:
         current.materialize(value)
     else:
         setattr(module, name, value)
+
+
+class _LazyModule(Module):
+    """The device and dtype a lazy layer will make its parameters on.
+
+    ``_device`` / ``_dtype`` start as the constructor's and follow every
+    conversion — ``to``, ``metal``, ``half``, ``type`` — made while the
+    layer still waits for its first input, as the reference's lazy layers
+    follow theirs.  Afterwards the real tensors carry it.
+    """
+
+    _device: DeviceLike
+    _dtype: DTypeLike
+
+    def _placeholder(self) -> UninitializedParameter:
+        """A parameter slot to fill later, on the device and dtype it will have."""
+        return UninitializedParameter(empty(0, dtype=self._dtype, device=self._device))
+
+    @override
+    def _apply(self, fn: Callable[[Tensor], Tensor]) -> Self:
+        """Convert the tensors, and record the conversion while still pending."""
+        if self.has_uninitialized_parameters(recurse=False):
+            # What ``fn`` makes of an empty tensor on the target is what it
+            # would make of the weights: only what changed is recorded, so
+            # an unset dtype stays unset across a move.
+            before = empty(0, dtype=self._dtype, device=self._device)
+            after = fn(before)
+            if after.device != before.device:
+                self._device = after.device
+            if after.dtype != before.dtype:
+                self._dtype = after.dtype
+        return super()._apply(fn)
 
 
 __all__ = ["fill"]

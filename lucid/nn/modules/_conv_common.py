@@ -9,8 +9,8 @@ from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike, _Size2d, _Size3d
 import lucid.nn.init as init
 from lucid.nn.module import Module
-from lucid.nn.modules._lazy import fill as _fill
-from lucid.nn.parameter import Parameter, UninitializedParameter
+from lucid.nn.modules._lazy import _LazyModule, fill as _fill
+from lucid.nn.parameter import Parameter
 
 
 def _ntuple(v: int | Sequence[int], n: int, name: str) -> tuple[int, ...]:
@@ -84,7 +84,7 @@ def _conv_parameters(
     return weight, b
 
 
-class _LazyConvMixin(Module):
+class _LazyConvMixin(_LazyModule):
     """What the six lazy convolutions share: deferring the weight to the first input.
 
     Each lazy class puts this before its eager counterpart, sets
@@ -98,8 +98,6 @@ class _LazyConvMixin(Module):
     out_channels: int
     groups: int
     _has_bias: bool
-    _device: DeviceLike
-    _dtype: DTypeLike
 
     def _defer(self, bias: bool, device: DeviceLike, dtype: DTypeLike) -> None:
         """Leave ``in_channels`` unknown and the parameters as placeholders."""
@@ -112,8 +110,8 @@ class _LazyConvMixin(Module):
         self._dtype = dtype
         # Placeholders, not ``None``: an optimizer built before the first
         # forward must be handed objects that survive being filled in.
-        self.register_parameter("weight", UninitializedParameter())
-        self.register_parameter("bias", UninitializedParameter() if bias else None)
+        self.register_parameter("weight", self._placeholder())
+        self.register_parameter("bias", self._placeholder() if bias else None)
 
     def _kernel(self) -> tuple[int, ...]:
         """The kernel's extent along each spatial axis."""

@@ -28,8 +28,7 @@ from lucid.nn.utils import spectral_norm
 _C = 3
 
 # Each module that updates buffers in its forward, made on a device, with an
-# input it takes.  Lazy modules are made on the device rather than moved there:
-# moved before their first forward they materialise on the CPU.
+# input it takes.
 _UPDATERS: dict[str, tuple[Callable[[str], nn.Module], tuple[int, ...]]] = {
     "batch_norm_1d": (lambda d: nn.BatchNorm1d(_C, device=d), (6, _C, 4)),
     "batch_norm_2d_cumulative": (
