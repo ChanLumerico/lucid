@@ -1452,17 +1452,20 @@ class EntryPointAxis(Axis):
                             "the spellings order their arguments differently and "
                             "share no parameter name — no alignment to compare",
                         )
+                    # Operands of its own per spelling, or an in-place one
+                    # hands the next spelling what it wrote.
+                    own = call.fresh()
                     args = (
-                        call.args
+                        own.args
                         if label != "method"
-                        else call.args[:at] + call.args[at + 1 :]
+                        else own.args[:at] + own.args[at + 1 :]
                     )
-                    target = call.args[at] if label == "method" else None
+                    target = own.args[at] if label == "method" else None
                     try:
                         out = (
-                            fn(target, *args, **call.kwargs)
+                            fn(target, *args, **own.kwargs)
                             if label == "method"
-                            else fn(*call.args, **call.kwargs)
+                            else fn(*own.args, **own.kwargs)
                         )
                         got = _probe.to_numpy(out)
                         if got is None:
@@ -1595,8 +1598,12 @@ class DeviceAxis(Axis):
 
         def on(device: str, override: np.ndarray | None = None) -> Any:
             nonlocal moved_any
+            # Each device gets operands of its own: ``.to("cpu")`` of a CPU
+            # tensor is that tensor, so an in-place op run on the CPU first
+            # would hand Metal what it wrote.
+            own = call.fresh()
             args = []
-            for i, a in enumerate(call.args):
+            for i, a in enumerate(own.args):
                 if hasattr(a, "to"):
                     moved_any = True
                     if override is not None and i == call.primary:
@@ -1622,7 +1629,7 @@ class DeviceAxis(Axis):
                         args.append(narrowed.to(device))
                 else:
                     args.append(a)
-            return fn(*args, **call.kwargs)
+            return fn(*args, **own.kwargs)
 
         try:
             cpu_out, metal_out = on("cpu"), on("metal")

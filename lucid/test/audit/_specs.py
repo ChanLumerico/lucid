@@ -50,6 +50,14 @@ def _rebuild(original: Any, array: Any, *, keep_integer: bool = False) -> Any:
     return _probe.as_f64(array)
 
 
+def _own(value: Any) -> Any:
+    """``value`` on storage of its own when it is a tensor, else ``value``."""
+    if not isinstance(value, lucid.Tensor):
+        return value
+    copy = value.detach().clone()
+    return copy.requires_grad_() if value.requires_grad else copy
+
+
 class Call:
     """One concrete invocation of an op.
 
@@ -123,6 +131,28 @@ class Call:
         return Call(
             args,
             dict(self.kwargs),
+            self.primary,
+            self.note,
+            self.same_shape,
+            self.domain,
+            self.joint,
+        )
+
+    def fresh(self) -> Call:
+        """A copy whose tensor operands are copies too.
+
+        For an axis that runs one call more than once and compares the
+        answers.  An in-place op writes into its operand, so a second run
+        on the same arguments reads what the first one wrote: the device
+        axis compared ``x.bitwise_xor_(y)`` on the CPU against
+        ``x ^ y ^ y`` on Metal, because ``.to("cpu")`` of a CPU tensor is
+        that tensor (LCD-532), and the entry axis's second in-place spelling
+        was refused for writing into storage the first answer was still
+        read through.
+        """
+        return Call(
+            [_own(arg) for arg in self.args],
+            {name: _own(value) for name, value in self.kwargs.items()},
             self.primary,
             self.note,
             self.same_shape,

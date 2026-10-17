@@ -980,6 +980,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - a removed symbol's cells are REMOVED, not LOST (LCD-532)
 
+- each device and spelling gets its own operands (LCD-532)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
