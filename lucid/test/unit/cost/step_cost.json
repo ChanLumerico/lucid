@@ -153,7 +153,7 @@
     "frees": 646,
     "host_allocations": 0,
     "host_syncs": 1,
-    "peak_bytes": 54036
+    "peak_bytes": 53780
   },
   "lstm_adam/cpu": {
     "allocations": 36,
