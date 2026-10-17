@@ -9,10 +9,10 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._reduce import _require_floating
 from lucid.nn.functional._grid_sampling import (
-    affine_grid_3d,
-    check_options,
-    composite_grid_sample,
-    reflect_grid,
+    affine_grid_3d as _affine_grid_3d,
+    check_options as _check_options,
+    composite_grid_sample as _composite_grid_sample,
+    reflect_grid as _reflect_grid,
 )
 from lucid.nn.functional._interpolate import resample as _resample
 from lucid.nn.functional._spatial_args import (
@@ -228,14 +228,14 @@ def grid_sample(
     >>> y.shape
     (1, 3, 32, 32)
     """
-    check_options(x, mode, padding_mode)
+    _check_options(x, mode, padding_mode)
     ac = align_corners if align_corners is not None else False
     if x.ndim == 5 or mode == "bicubic":
-        return composite_grid_sample(x, grid, mode, padding_mode, ac)
+        return _composite_grid_sample(x, grid, mode, padding_mode, ac)
     if padding_mode == "reflection":
         # The kernel has no reflection: the grid is reflected in pixel
         # space first and then read with border padding.
-        grid = reflect_grid(x, grid, ac, mode == "nearest")
+        grid = _reflect_grid(x, grid, ac, mode == "nearest")
         padding_mode = "border"
     return _wrap(
         _C_engine.nn.grid_sample(
@@ -315,7 +315,7 @@ def affine_grid(
     ac = align_corners if align_corners is not None else False
     sz = [int(s) for s in size]
     if len(sz) == 5:
-        return affine_grid_3d(theta, sz, ac)
+        return _affine_grid_3d(theta, sz, ac)
     if len(sz) != 4:
         raise ValueError(
             "affine_grid: size must be (N, C, H, W) or (N, C, D, H, W), "
