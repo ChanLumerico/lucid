@@ -147,6 +147,23 @@ if [[ -n "${PY}" && -f "${RULES_SCRIPT}" ]]; then
     fi
 fi
 
+# ── 1a'. Annotation table is fresh ──────────────────────────────────────────
+# Hard-fail, under a second.  ``lucid/_annotations.py`` lists every name a
+# module imports under ``TYPE_CHECKING``; a commit that adds one without
+# regenerating the table leaves ``inspect.signature`` raising ``NameError``
+# for that module.  Only a pytest checked it, so it landed stale twice in a
+# day (``_metal_views``, ``serialization._storage_plan``).  Only when a lucid/
+# Python file is staged.  The fix is the generator, never a hand edit.
+ANN_SCRIPT="${REPO_ROOT}/tools/gen_annotation_names.py"
+if [[ -n "${PY}" && -f "${ANN_SCRIPT}" ]]; then
+    if git diff --cached --name-only --diff-filter=ACMRD | grep -qE '^lucid/.*\.py$'; then
+        if ! (cd "${REPO_ROOT}" && "${PY}" -m tools.gen_annotation_names --check >&2); then
+            echo "  ❌  Pre-commit blocked: run python -m tools.gen_annotation_names and stage lucid/_annotations.py." >&2
+            exit 1
+        fi
+    fi
+fi
+
 # ── 1b. Quality ratchet ─────────────────────────────────────────────────────
 # Hard-fail.  ``tools/quality_gate --fast`` measures the files changed since
 # HEAD with the cheap collectors (ruff deslop rules, suppression / cast / LOC
