@@ -25,6 +25,7 @@
 #include "../core/ErrorBuilder.h"
 #include "../core/Generator.h"
 #include "../core/Half.h"
+#include "../core/PhantomMode.h"
 #include "../core/TensorImpl.h"
 #include "AccumulateGrad.h"
 #include "Node.h"
@@ -167,6 +168,13 @@ Storage reduce_grad_to_shape(const Storage& grad,
 //   CpuStorage+SharedStorage   — view the shared source as CPU, then add.
 // Any other combination (CPU+GPU, GPU+CPU, etc.) throws DeviceMismatch.
 void accumulate_into(Storage& dst, const Storage& src) {
+    // The phantom write rule (TensorImpl's absorbs_phantom_write), for a
+    // gradient slot: a phantom slot takes any gradient and stays a phantom,
+    // and a real one has no values to add from a phantom.
+    if (storage_is_phantom(dst))
+        return;
+    if (storage_is_phantom(src))
+        refuse_phantom_read("accumulate_into");
     // 3.3 AMP fix: when a non-leaf intermediate gradient is accumulated from
     // two paths whose effective dtypes differ (e.g. Promote + ForceFP32
     // siblings under autocast(F16)), coerce src to dst's dtype before
@@ -450,6 +458,9 @@ bool storage_has_nan(const Storage& s) {
                 return has_nan.item<bool>();
             },
             [](const SharedStorage& sh) { return cpu_storage_has_nan(sh.cpu_view()); },
+            // Anomaly detection looks for a NaN among the values; a phantom
+            // has none to hold one.
+            [](const PhantomStorage&) { return false; },
         },
         s);
 }
@@ -697,6 +708,9 @@ Storage bernoulli_mask_storage_shape(
     if (keep_prob < 0.0 || keep_prob > 1.0) {
         ErrorBuilder("bernoulli_mask").invalid_argument("keep_prob must be in [0, 1]");
     }
+    // No draw under phantom mode, so the generator does not advance either.
+    if (PhantomMode::is_enabled())
+        return phantom_storage(shape, dt);
     // GPU: draw the whole mask on-device via MLX RNG instead of the per-element
     // CPU Philox loop + host->device upload below (which dominated Dropout's
     // cost — ~19 ms for a single (32,128,768) mask).  We advance the framework
@@ -876,6 +890,8 @@ void require_random_dtype(const char* op, Dtype dt) {
 Storage random_uniform_storage(
     const Shape& shape, double lo, double hi, Dtype dt, Device device, Generator& gen) {
     require_random_dtype("random_uniform", dt);
+    if (PhantomMode::is_enabled())
+        return phantom_storage(shape, dt);
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_uniform(shape, lo, hi, dt,
                                                                       gpu_random_key_seed(gen));
@@ -906,6 +922,8 @@ Storage random_uniform_storage(
 Storage random_normal_storage(
     const Shape& shape, double mean, double std, Dtype dt, Device device, Generator& gen) {
     require_random_dtype("random_normal", dt);
+    if (PhantomMode::is_enabled())
+        return phantom_storage(shape, dt);
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_normal(shape, mean, std, dt,
                                                                      gpu_random_key_seed(gen));
@@ -942,6 +960,8 @@ Storage
 random_bernoulli_storage(const Shape& shape, double p, Dtype dt, Device device, Generator& gen) {
     if (p < 0.0 || p > 1.0)
         ErrorBuilder("random_bernoulli").invalid_argument("p must be in [0, 1]");
+    if (PhantomMode::is_enabled())
+        return phantom_storage(shape, dt);
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_bernoulli(shape, p, dt,
                                                                         gpu_random_key_seed(gen));
@@ -982,6 +1002,8 @@ Storage random_randint_storage(const Shape& shape,
                                Generator& gen) {
     if (high <= low)
         ErrorBuilder("random_randint").invalid_argument("high must be > low");
+    if (PhantomMode::is_enabled())
+        return phantom_storage(shape, dt);
     if (device == Device::GPU) {
         return backend::Dispatcher::for_device(device).random_randint(shape, low, high, dt,
                                                                       gpu_random_key_seed(gen));

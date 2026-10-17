@@ -41,6 +41,7 @@
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
 #include "../core/OpSchema.h"
+#include "../core/PhantomMode.h"
 #include "../core/Profiler.h"
 #include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
@@ -285,7 +286,36 @@ public:
     //     ran without create_graph=True), or if the concrete op did not
     //     override :meth:`grad_formula_impl`.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
+protected:
+    // The result's storage at ``a_ptr``'s shape and ``eff_dt``: the
+    // backend's dispatch, or the Derived CPU / GPU kernel.  A phantom when
+    // phantom mode is on or ``a_ptr`` is a phantom — no kernel runs then.
+    static Storage compute_storage(const TensorImplPtr& a_ptr, Dtype eff_dt);
 };
+
+template <class Derived>
+Storage UnaryKernel<Derived>::compute_storage(const TensorImplPtr& a_ptr, Dtype eff_dt) {
+    if (phantom_dispatch(*a_ptr)) [[unlikely]]
+        return phantom_storage(a_ptr->shape(), eff_dt);
+    if constexpr (detail::HasUnaryDispatch<Derived>) {
+        // Dispatch path: uses the backend abstraction (Accelerate / MLX).
+        return Derived::dispatch(backend::Dispatcher::for_device(a_ptr->device()), a_ptr->storage(),
+                                 a_ptr->shape(), eff_dt);
+    } else {
+        if (a_ptr->device() == Device::GPU) {
+            if constexpr (detail::HasUnaryGpuKernel<Derived>) {
+                return Storage{Derived::gpu_kernel(std::get<GpuStorage>(a_ptr->storage()),
+                                                   a_ptr->shape(), eff_dt)};
+            } else {
+                ErrorBuilder(Derived::schema_v1.name)
+                    .not_implemented("GPU kernel not yet implemented");
+            }
+        }
+        return Storage{
+            Derived::cpu_kernel(std::get<CpuStorage>(a_ptr->storage()), a_ptr->shape(), eff_dt)};
+    }
+}
 
 // Out-of-class definition of :meth:`UnaryKernel::forward`.
 //
@@ -308,22 +338,7 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
 
     OpScopeFull scope{Derived::schema_v1.name, a_ptr->device(), eff_dt, a_ptr->shape()};
 
-    Storage out_storage;
-    if constexpr (detail::HasUnaryDispatch<Derived>) {
-        // Dispatch path: uses the backend abstraction (Accelerate / MLX).
-        out_storage = Derived::dispatch(backend::Dispatcher::for_device(a_ptr->device()),
-                                        a_ptr->storage(), a_ptr->shape(), eff_dt);
-    } else if (a_ptr->device() == Device::GPU) {
-        if constexpr (detail::HasUnaryGpuKernel<Derived>) {
-            out_storage = Storage{Derived::gpu_kernel(std::get<GpuStorage>(a_ptr->storage()),
-                                                      a_ptr->shape(), eff_dt)};
-        } else {
-            ErrorBuilder(Derived::schema_v1.name).not_implemented("GPU kernel not yet implemented");
-        }
-    } else {
-        out_storage = Storage{
-            Derived::cpu_kernel(std::get<CpuStorage>(a_ptr->storage()), a_ptr->shape(), eff_dt)};
-    }
+    Storage out_storage = compute_storage(a_ptr, eff_dt);
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), a_ptr->shape(), eff_dt,
                                             a_ptr->device(), false);

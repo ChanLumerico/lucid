@@ -268,6 +268,15 @@ public:
     //     variants do not currently report sharing through this hook).
     bool storage_is_shared() const noexcept;
 
+    // Predicate: is this a phantom tensor — shape, dtype, device and autograd
+    // state, and a :class:`PhantomStorage` in place of values?
+    //
+    // Made by every factory and op while :class:`PhantomMode` is on.  A
+    // phantom stays one after the mode is off: the kernels take it as an
+    // input and give a phantom back, and a read of its values raises.  It is
+    // never a Metal family member, so its own storage is its storage.
+    bool is_phantom() const noexcept { return storage_is_phantom(storage_); }
+
     // Predicate: does another live tensor read this one's buffer as a view
     // of it — a member of the same :class:`ViewFamily`?
     //

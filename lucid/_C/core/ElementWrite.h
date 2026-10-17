@@ -74,6 +74,14 @@ inline std::shared_ptr<TensorImpl> dense_elements(const TensorImpl& t) {
 // so anything else ``write`` changed has already changed.
 template <class Write>
 void write_elements(std::shared_ptr<TensorImpl>& t, Write&& write) {
+    // A phantom takes any write and keeps no values, the rule every write
+    // into a tensor follows (TensorImpl's copy_from and write_through): the
+    // writer, which reads and writes values, does not run, and the version
+    // moves as for any write.
+    if (t->is_phantom()) {
+        t->bump_version();
+        return;
+    }
     if (buffer_is_elements(*t)) {
         write(t);
         return;

@@ -37,6 +37,7 @@
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
 #include "../core/OpSchema.h"
+#include "../core/PhantomMode.h"
 #include "../core/Profiler.h"
 #include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
@@ -328,7 +329,43 @@ public:
     // std::vector<TensorImplPtr>
     //     Single-element vector containing the input gradient tensor.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+
+protected:
+    // The reduced storage of ``a_ptr`` over ``axes`` at ``eff_dt``: the
+    // backend's dispatch, or the Derived CPU / GPU kernel.  A phantom of
+    // ``out_shape`` when phantom mode is on or ``a_ptr`` is a phantom.
+    static Storage compute_storage(const TensorImplPtr& a_ptr,
+                                   const std::vector<int>& axes,
+                                   bool keepdims,
+                                   const Shape& out_shape,
+                                   Dtype eff_dt);
 };
+
+template <class Derived>
+Storage ReduceKernel<Derived>::compute_storage(const TensorImplPtr& a_ptr,
+                                               const std::vector<int>& axes,
+                                               bool keepdims,
+                                               const Shape& out_shape,
+                                               Dtype eff_dt) {
+    if (phantom_dispatch(*a_ptr)) [[unlikely]]
+        return phantom_storage(out_shape, eff_dt);
+    if constexpr (detail::HasReduceDispatch<Derived>) {
+        return Derived::dispatch(backend::Dispatcher::for_device(a_ptr->device()), a_ptr->storage(),
+                                 a_ptr->shape(), axes, keepdims, eff_dt);
+    } else {
+        if (a_ptr->device() == Device::GPU) {
+            if constexpr (detail::HasReduceGpuKernel<Derived>) {
+                return Storage{Derived::gpu_kernel(std::get<GpuStorage>(a_ptr->storage()),
+                                                   a_ptr->shape(), axes, keepdims, eff_dt)};
+            } else {
+                ErrorBuilder(Derived::schema_v1.name)
+                    .not_implemented("GPU kernel not yet implemented");
+            }
+        }
+        return Storage{Derived::cpu_kernel(std::get<CpuStorage>(a_ptr->storage()), a_ptr->shape(),
+                                           axes, keepdims, eff_dt)};
+    }
+}
 
 // Out-of-line definition of :meth:`ReduceKernel::forward`.
 //
@@ -393,21 +430,7 @@ std::shared_ptr<TensorImpl> ReduceKernel<Derived>::forward(const std::shared_ptr
 
     OpScopeFull scope{Derived::schema_v1.name, a_ptr->device(), eff_dt, out_shape};
 
-    Storage out_storage;
-    if constexpr (detail::HasReduceDispatch<Derived>) {
-        out_storage = Derived::dispatch(backend::Dispatcher::for_device(a_ptr->device()),
-                                        a_ptr->storage(), a_ptr->shape(), axes, keepdims, eff_dt);
-    } else if (a_ptr->device() == Device::GPU) {
-        if constexpr (detail::HasReduceGpuKernel<Derived>) {
-            out_storage = Storage{Derived::gpu_kernel(std::get<GpuStorage>(a_ptr->storage()),
-                                                      a_ptr->shape(), axes, keepdims, eff_dt)};
-        } else {
-            ErrorBuilder(Derived::schema_v1.name).not_implemented("GPU kernel not yet implemented");
-        }
-    } else {
-        out_storage = Storage{Derived::cpu_kernel(std::get<CpuStorage>(a_ptr->storage()),
-                                                  a_ptr->shape(), axes, keepdims, eff_dt)};
-    }
+    Storage out_storage = compute_storage(a_ptr, axes, keepdims, out_shape, eff_dt);
 
     auto out =
         std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt, a->device(), false);

@@ -48,6 +48,7 @@
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
 #include "../core/OpSchema.h"
+#include "../core/PhantomMode.h"
 #include "../core/Profiler.h"
 #include "../core/Result.h"
 #include "../core/SchemaGuard.h"
@@ -334,12 +335,14 @@ inline std::shared_ptr<Node> ensure_grad_fn(const std::shared_ptr<TensorImpl>& t
 // Used by kernel ``forward()`` trampolines to normalise inputs to the
 // effective dtype returned by :class:`SchemaGuard` before compute.
 // The cast routes through ``IBackend::cast`` so CPU and GPU paths
-// share a single typed cast implementation.
+// share a single typed cast implementation.  A phantom input casts to a
+// phantom of ``dt`` even outside phantom mode, as the kernel it feeds does.
 inline TensorImplPtr maybe_cast_for_kernel(const TensorImplPtr& t, Dtype dt) {
     if (!t || t->dtype() == dt)
         return t;
     auto& be = backend::Dispatcher::for_device(t->device());
-    Storage cast_storage = be.cast(t->storage(), t->shape(), t->dtype(), dt);
+    Storage cast_storage = t->is_phantom() ? phantom_storage(t->shape(), dt)
+                                           : be.cast(t->storage(), t->shape(), t->dtype(), dt);
     return std::make_shared<TensorImpl>(std::move(cast_storage), t->shape(), dt, t->device(),
                                         false);
 }
@@ -569,6 +572,26 @@ public:
     }
 
 protected:
+    // The result's storage at ``out_shape`` and ``eff_dt`` for operands
+    // already cast to ``eff_dt``: the backend's dispatch, or the Derived
+    // CPU / GPU kernel.  A phantom when phantom mode is on or an operand is a
+    // phantom — no kernel runs then, and no operand's storage is read.
+    static Storage compute_storage(const TensorImplPtr& a_ptr,
+                                   const TensorImplPtr& b_ptr,
+                                   const Shape& out_shape,
+                                   Dtype eff_dt);
+
+    // ``t``'s CPU storage at ``out_shape``: its own when it has that shape,
+    // else a broadcast copy made into ``buf``.
+    static const CpuStorage&
+    cpu_operand(const TensorImplPtr& t, const Shape& out_shape, Dtype dt, CpuStorage& buf) {
+        const CpuStorage& raw = std::get<CpuStorage>(t->storage());
+        if (t->shape() == out_shape)
+            return raw;
+        buf = detail::broadcast_cpu(raw, t->shape(), out_shape, dt);
+        return buf;
+    }
+
     // Convenience accessor for the backend matching a device.
     static backend::IBackend& backend_for(Device d) { return backend::Dispatcher::for_device(d); }
 
@@ -658,57 +681,7 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
 
     OpScopeFull scope{Derived::schema_v1.name, a_ptr->device(), eff_dt, out_shape};
 
-    Storage out_storage;
-
-    if constexpr (detail::HasBinaryDispatch<Derived>) {
-        if (a_ptr->device() == Device::CPU) {
-            const CpuStorage& a_raw = std::get<CpuStorage>(a_ptr->storage());
-            const CpuStorage& b_raw = std::get<CpuStorage>(b_ptr->storage());
-            CpuStorage a_buf, b_buf;
-            const CpuStorage* a_use = &a_raw;
-            const CpuStorage* b_use = &b_raw;
-            if (a_ptr->shape() != out_shape) {
-                a_buf = detail::broadcast_cpu(a_raw, a_ptr->shape(), out_shape, a_ptr->dtype());
-                a_use = &a_buf;
-            }
-            if (b_ptr->shape() != out_shape) {
-                b_buf = detail::broadcast_cpu(b_raw, b_ptr->shape(), out_shape, a_ptr->dtype());
-                b_use = &b_buf;
-            }
-            out_storage = Derived::dispatch(backend::Dispatcher::for_device(Device::CPU),
-                                            Storage{*a_use}, Storage{*b_use}, out_shape, eff_dt);
-        } else {
-            // MLX binary primitives broadcast their operands natively and
-            // write a freshly allocated row-contiguous output of ``out_shape``,
-            // so passing the unbroadcast GpuStorages avoids materialising an
-            // extra ``contiguous(broadcast_to(...))`` pass over the output.
-            out_storage = Derived::dispatch(backend::Dispatcher::for_device(Device::GPU),
-                                            a_ptr->storage(), b_ptr->storage(), out_shape, eff_dt);
-        }
-    } else if (a_ptr->device() == Device::GPU) {
-        if constexpr (detail::HasGpuKernel<Derived>) {
-            const auto& ga = std::get<GpuStorage>(a_ptr->storage());
-            const auto& gb = std::get<GpuStorage>(b_ptr->storage());
-            out_storage = Storage{Derived::gpu_kernel(ga, gb, out_shape, eff_dt)};
-        } else {
-            ErrorBuilder(Derived::schema_v1.name).not_implemented("GPU kernel not yet implemented");
-        }
-    } else {
-        const CpuStorage& a_raw = std::get<CpuStorage>(a_ptr->storage());
-        const CpuStorage& b_raw = std::get<CpuStorage>(b_ptr->storage());
-        CpuStorage a_buf, b_buf;
-        const CpuStorage* a_use = &a_raw;
-        const CpuStorage* b_use = &b_raw;
-        if (a_ptr->shape() != out_shape) {
-            a_buf = detail::broadcast_cpu(a_raw, a_ptr->shape(), out_shape, eff_dt);
-            a_use = &a_buf;
-        }
-        if (b_ptr->shape() != out_shape) {
-            b_buf = detail::broadcast_cpu(b_raw, b_ptr->shape(), out_shape, eff_dt);
-            b_use = &b_buf;
-        }
-        out_storage = Storage{Derived::cpu_kernel(*a_use, *b_use, out_shape, eff_dt)};
-    }
+    Storage out_storage = compute_storage(a_ptr, b_ptr, out_shape, eff_dt);
 
     auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt,
                                             a_dev->device(), false);
@@ -759,6 +732,45 @@ std::shared_ptr<TensorImpl> BinaryKernel<Derived>::forward(const std::shared_ptr
     out->set_leaf(false);
     out->set_requires_grad(true);
     return out;
+}
+
+template <class Derived>
+Storage BinaryKernel<Derived>::compute_storage(const TensorImplPtr& a_ptr,
+                                               const TensorImplPtr& b_ptr,
+                                               const Shape& out_shape,
+                                               Dtype eff_dt) {
+    if (phantom_dispatch(*a_ptr, *b_ptr)) [[unlikely]]
+        return phantom_storage(out_shape, eff_dt);
+    if constexpr (detail::HasBinaryDispatch<Derived>) {
+        if (a_ptr->device() == Device::GPU) {
+            // MLX binary primitives broadcast their operands natively and
+            // write a freshly allocated row-contiguous output of ``out_shape``,
+            // so passing the unbroadcast GpuStorages avoids materialising an
+            // extra ``contiguous(broadcast_to(...))`` pass over the output.
+            return Derived::dispatch(backend::Dispatcher::for_device(Device::GPU), a_ptr->storage(),
+                                     b_ptr->storage(), out_shape, eff_dt);
+        }
+        CpuStorage a_buf, b_buf;
+        const CpuStorage& a_use = cpu_operand(a_ptr, out_shape, eff_dt, a_buf);
+        const CpuStorage& b_use = cpu_operand(b_ptr, out_shape, eff_dt, b_buf);
+        return Derived::dispatch(backend::Dispatcher::for_device(Device::CPU), Storage{a_use},
+                                 Storage{b_use}, out_shape, eff_dt);
+    } else {
+        if (a_ptr->device() == Device::GPU) {
+            if constexpr (detail::HasGpuKernel<Derived>) {
+                const auto& ga = std::get<GpuStorage>(a_ptr->storage());
+                const auto& gb = std::get<GpuStorage>(b_ptr->storage());
+                return Storage{Derived::gpu_kernel(ga, gb, out_shape, eff_dt)};
+            } else {
+                ErrorBuilder(Derived::schema_v1.name)
+                    .not_implemented("GPU kernel not yet implemented");
+            }
+        }
+        CpuStorage a_buf, b_buf;
+        const CpuStorage& a_use = cpu_operand(a_ptr, out_shape, eff_dt, a_buf);
+        const CpuStorage& b_use = cpu_operand(b_ptr, out_shape, eff_dt, b_buf);
+        return Storage{Derived::cpu_kernel(a_use, b_use, out_shape, eff_dt)};
+    }
 }
 
 // Out-of-class definition of :meth:`BinaryKernel::apply`.

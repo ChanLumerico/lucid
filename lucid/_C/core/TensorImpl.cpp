@@ -39,6 +39,7 @@
 #include "GpuStrided.h"
 #include "GradMode.h"
 #include "MemoryStats.h"
+#include "PhantomMode.h"
 #include "StridedCopy.h"
 
 namespace lucid {
@@ -228,6 +229,13 @@ TensorImpl::TensorImpl(Storage storage, Shape shape, Dtype dtype, Device device,
             storage_ = Storage{desc.cpu_view()};
         shared_ = std::move(desc);
     }
+    // The phantom backend hands out storages without a size — it is told the
+    // shape only as some methods' arguments — and the first tensor to adopt
+    // one gives it its own.  A view adopts a sized one and keeps its size.
+    if (auto* ph = std::get_if<PhantomStorage>(&storage_); ph && ph->nbytes == 0) {
+        ph->nbytes = nbytes();
+        ph->dtype = dtype;
+    }
 }
 
 const SharedStorage* TensorImpl::metal_shared() const {
@@ -303,6 +311,9 @@ bool TensorImpl::write_into_shared(const TensorImpl& src) {
                                   std::memcpy(dst, s.cpu_ptr, sh->nbytes);
                               return true;
                           },
+                          // No values to lay in; the callers refuse a phantom
+                          // source before a real target gets here.
+                          [&](const PhantomStorage&) { return false; },
                       },
                       src.storage());
 }
@@ -333,6 +344,20 @@ void refuse_ambiguous_write(const TensorImpl& t, const char* name) {
     ErrorBuilder(name).fail(
         "an in-place write into a tensor whose elements overlap (an "
         "expanded view, or unfold windows that overlap) is ambiguous — clone() first");
+}
+
+// The one write rule for phantom tensors, at every place a write lands
+// (write_through, take_storage_from, copy_from — and through it assign_from
+// and write_elements).  A phantom target takes any write and keeps no values:
+// true, and the caller moves the version as for any write.  A real target
+// cannot take a phantom's values, which do not exist: refused, rather than
+// leaving the target's old values standing in silence.
+bool absorbs_phantom_write(const TensorImpl& dst, const TensorImpl& src, const char* name) {
+    if (dst.is_phantom())
+        return true;
+    if (src.is_phantom())
+        refuse_phantom_read(name);
+    return false;
 }
 
 // The tensor ``.grad`` reads, and why its pointers are not the slot's.
@@ -515,6 +540,10 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     // views, so it came down to the swap below and took a dense buffer in
     // silence — ``ones(1, 3).expand(2, 3).add_(1)`` raised nothing.
     refuse_ambiguous_write(*this, name);
+    // A phantom keeps its own storage; the caller (inplace::write_result)
+    // moves the version.
+    if (absorbs_phantom_write(*this, out, name))
+        return;
     // The last Metal member left has no one to share the write with: it
     // takes the result as its own storage below, as any Metal tensor does
     // (a dtype-changing op included).
@@ -650,6 +679,8 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
         ErrorBuilder(name).fail("an in-place write cannot change the dtype of a tensor that "
                                 "shares storage with a live view — cast first, or use the "
                                 "out-of-place form");
+    if (absorbs_phantom_write(*this, src, name))
+        return bump_version();
     if (gpu_member()) {
         write_gpu_member(src, name, /*raw=*/false);
         return;
@@ -822,6 +853,11 @@ TensorImpl::from_numpy(py::array arr, Device device, bool requires_grad) {
 
     const std::size_t elem = dtype_size(dtype);
     const std::size_t total = shape_numel(shape) * elem;
+    // A factory like any other: under phantom mode the array's values are
+    // not copied.
+    if (PhantomMode::is_enabled())
+        return std::make_shared<TensorImpl>(phantom_storage(shape, dtype), std::move(shape), dtype,
+                                            device, requires_grad);
 
     // Always land in a fresh aligned CPU buffer first, regardless of the
     // target device.  For GPU tensors the buffer is uploaded below via the
@@ -874,25 +910,26 @@ bool TensorImpl::is_dense() const {
 // GPU tensors are synchronously downloaded via the MLX bridge before wrapping;
 // SharedStorage is exposed through its cpu_view() alias.
 py::object TensorImpl::data_as_python() const {
-    return std::visit(overloaded{
-                          [&](const CpuStorage& s) -> py::object {
-                              return make_numpy_view(s, meta_.shape, meta_.stride, offset_);
-                          },
-                          [&](const GpuStorage& g) -> py::object {
-                              // The download is a fresh, dense buffer, whatever
-                              // geometry a Metal view has over its family's root.
-                              CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
-                              return make_numpy_view(
-                                  cpu, meta_.shape,
-                                  contiguous_stride(meta_.shape, dtype_size(meta_.dtype)), 0);
-                          },
+    return std::visit(
+        overloaded{
+            [&](const CpuStorage& s) -> py::object {
+                return make_numpy_view(s, meta_.shape, meta_.stride, offset_);
+            },
+            [&](const GpuStorage& g) -> py::object {
+                // The download is a fresh, dense buffer, whatever
+                // geometry a Metal view has over its family's root.
+                CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
+                return make_numpy_view(cpu, meta_.shape,
+                                       contiguous_stride(meta_.shape, dtype_size(meta_.dtype)), 0);
+            },
 
-                          [&](const SharedStorage& sh) -> py::object {
-                              CpuStorage v = sh.cpu_view();
-                              return make_numpy_view(v, meta_.shape, meta_.stride, offset_);
-                          },
-                      },
-                      readable());
+            [&](const SharedStorage& sh) -> py::object {
+                CpuStorage v = sh.cpu_view();
+                return make_numpy_view(v, meta_.shape, meta_.stride, offset_);
+            },
+            [&](const PhantomStorage&) -> py::object { refuse_phantom_read("numpy"); },
+        },
+        readable());
 }
 
 // Same variant dispatch as data_as_python() but applied to the optional
@@ -908,21 +945,23 @@ py::object TensorImpl::grad_as_python() const {
         return py::none();
     }
     // A gradient is always its own dense buffer, so it starts at byte 0.
-    return std::visit(overloaded{
-                          [&](const CpuStorage& s) -> py::object {
-                              return make_numpy_view(s, meta_.shape, meta_.stride, 0);
-                          },
-                          [&](const GpuStorage& g) -> py::object {
-                              CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
-                              return make_numpy_view(cpu, meta_.shape, meta_.stride, 0);
-                          },
+    return std::visit(
+        overloaded{
+            [&](const CpuStorage& s) -> py::object {
+                return make_numpy_view(s, meta_.shape, meta_.stride, 0);
+            },
+            [&](const GpuStorage& g) -> py::object {
+                CpuStorage cpu = gpu::download_gpu_to_cpu(g, meta_.shape);
+                return make_numpy_view(cpu, meta_.shape, meta_.stride, 0);
+            },
 
-                          [&](const SharedStorage& sh) -> py::object {
-                              CpuStorage v = sh.cpu_view();
-                              return make_numpy_view(v, meta_.shape, meta_.stride, 0);
-                          },
-                      },
-                      *autograd_->grad);
+            [&](const SharedStorage& sh) -> py::object {
+                CpuStorage v = sh.cpu_view();
+                return make_numpy_view(v, meta_.shape, meta_.stride, 0);
+            },
+            [&](const PhantomStorage&) -> py::object { refuse_phantom_read("grad numpy"); },
+        },
+        *autograd_->grad);
 }
 
 // ---------------------------------------------------------------------------
@@ -1189,7 +1228,8 @@ void render_nested(const std::byte* base,
 
 py::bytes TensorImpl::to_bytes() const {
     const std::size_t total = nbytes();
-    if (total == 0)
+    // A phantom refuses even when empty: it has no values, not zero of them.
+    if (total == 0 && !is_phantom())
         return py::bytes();
 
     return std::visit(
@@ -1207,6 +1247,7 @@ py::bytes TensorImpl::to_bytes() const {
                 auto buf = contig_snapshot_cpu(v, meta_.shape, meta_.stride, offset_);
                 return py::bytes(reinterpret_cast<const char*>(buf.data()), buf.size());
             },
+            [&](const PhantomStorage&) -> py::bytes { refuse_phantom_read("to_bytes"); },
         },
         readable());
 }
@@ -1226,6 +1267,9 @@ std::shared_ptr<TensorImpl> TensorImpl::from_bytes(
             .fail("byte length mismatch (got " + std::to_string(raw_len) + ", expected " +
                   std::to_string(expected) + ")");
     }
+    if (PhantomMode::is_enabled())
+        return std::make_shared<TensorImpl>(phantom_storage(shape, dtype), std::move(shape), dtype,
+                                            device, requires_grad);
 
     CpuStorage cpu;
     cpu.ptr = allocate_aligned_bytes(expected);
@@ -1262,6 +1306,15 @@ std::shared_ptr<TensorImpl> TensorImpl::transfer_to_device(Device target,
         }
         return out;
     };
+    // A phantom moves as a label: a phantom of the same shape and dtype on
+    // ``target``.  So does any tensor while phantom mode is on, where no
+    // copy runs.
+    auto relabel = [&]() {
+        return std::make_shared<TensorImpl>(phantom_storage(meta_.shape, meta_.dtype), meta_.shape,
+                                            meta_.dtype, target, requires_grad);
+    };
+    if (PhantomMode::is_enabled())
+        return relabel();
 
     return std::visit(
         overloaded{
@@ -1300,6 +1353,7 @@ std::shared_ptr<TensorImpl> TensorImpl::transfer_to_device(Device target,
                 return std::make_shared<TensorImpl>(Storage{std::move(cpu)}, meta_.shape,
                                                     meta_.dtype, target, requires_grad);
             },
+            [&](const PhantomStorage&) -> std::shared_ptr<TensorImpl> { return relabel(); },
         },
         readable());
 }
@@ -1610,6 +1664,7 @@ py::object TensorImpl::item() const {
                 const auto* raw = reinterpret_cast<const char*>(v.ptr.get()) + byte_offset;
                 return decode_scalar(raw, meta_.dtype);
             },
+            [&](const PhantomStorage&) -> py::object { refuse_phantom_read("item"); },
         },
         readable());
 }
@@ -1677,6 +1732,7 @@ TensorImpl::to_string(int precision, std::size_t threshold, std::size_t edgeitem
                        CpuStorage v = sh.cpu_view();
                        buf = contig_snapshot_cpu(v, meta_.shape, meta_.stride, offset_);
                    },
+                   [&](const PhantomStorage&) { refuse_phantom_read("to_string"); },
                },
                readable());
 
@@ -1705,49 +1761,15 @@ TensorImpl::to_string(int precision, std::size_t threshold, std::size_t edgeitem
     return os.str();
 }
 
-// Copies element data from other into this tensor.
-// Preconditions: same device, dtype, and shape (enforced via exceptions).
-// Supported storage combinations: CPU←CPU, GPU←GPU, Shared←Shared,
-// Shared←CPU, CPU←Shared.  Any other cross-variant combination throws a
-// DeviceMismatch error.
-void TensorImpl::copy_from(const TensorImpl& other) {
-    copy_from_named(other, "copy_from");
-}
+namespace {
 
-void TensorImpl::copy_from_named(const TensorImpl& other, const char* name) {
-    note_inplace_write(*this, other);
-    if (other.device() != device())
-        throw DeviceMismatch(std::string(device_name(meta_.device)),
-                             std::string(device_name(other.device())), name);
-    if (other.dtype() != dtype())
-        throw DtypeMismatch(std::string(dtype_name(meta_.dtype)),
-                            std::string(dtype_name(other.dtype())), name);
-    if (other.shape() != shape())
-        throw ShapeMismatch(meta_.shape, other.shape(), name);
-    // A Metal family member writes into the root that every member reads.
-    if (gpu_member())
-        return write_gpu_member(other, name, /*raw=*/true);
-    // A CPU view is written through its geometry: the source, packed, laid
-    // into this tensor's own elements at its offset and strides.  The copy
-    // below would land at the buffer's first byte.
-    if (storage_is_cpu(storage_) && storage_is_cpu(other.storage_) && !is_dense()) {
-        refuse_ambiguous_write(*this, name);
-        const auto packed = contig_snapshot_cpu(std::get<CpuStorage>(other.storage_), other.shape(),
-                                                other.stride(), other.storage_offset());
-        settle_before_host_write(shared_, storage_);
-        scatter_contig_to_strided(packed.data(), std::get<CpuStorage>(storage_), meta_.shape,
-                                  meta_.stride, offset_);
-        bump_version();
-        return;
-    }
-    // A shared buffer is written in place so every alias sees the copy; the
-    // GPU branch below would hand this tensor a fresh array instead.
-    if (write_into_shared(other)) {
-        bump_version();
-        return;
-    }
-    // A CPU destination below is written in place, its shared buffer too.
-    settle_before_host_write(shared_, storage_);
+// Lays ``other``'s values, read as ``src_storage``, into ``dst_storage``, a
+// whole buffer on ``dst_device``: copy_from's cases by storage kind, once
+// the callers have handled a view, a Metal family and a phantom.
+void copy_storage_values(Storage& dst_storage,
+                         const Storage& src_storage,
+                         const TensorImpl& other,
+                         Device dst_device) {
     std::visit(overloaded{
                    [&](CpuStorage& dst, const CpuStorage& src) {
                        // A view source is read through its geometry, not from
@@ -1803,12 +1825,62 @@ void TensorImpl::copy_from_named(const TensorImpl& other, const char* name) {
                    // Catch-all for cross-device variants that should never be
                    // reached given the device check above.
                    [&](auto&, auto&) {
-                       throw DeviceMismatch(std::string(device_name(meta_.device)),
+                       throw DeviceMismatch(std::string(device_name(dst_device)),
                                             std::string(device_name(other.device())),
                                             "copy_from (storage variant)");
                    },
                },
-               storage_, other.readable());
+               dst_storage, src_storage);
+}
+
+}  // namespace
+
+// Copies element data from other into this tensor.
+// Preconditions: same device, dtype, and shape (enforced via exceptions).
+// Supported storage combinations: CPU←CPU, GPU←GPU, Shared←Shared,
+// Shared←CPU, CPU←Shared.  Any other cross-variant combination throws a
+// DeviceMismatch error.
+void TensorImpl::copy_from(const TensorImpl& other) {
+    copy_from_named(other, "copy_from");
+}
+
+void TensorImpl::copy_from_named(const TensorImpl& other, const char* name) {
+    note_inplace_write(*this, other);
+    if (other.device() != device())
+        throw DeviceMismatch(std::string(device_name(meta_.device)),
+                             std::string(device_name(other.device())), name);
+    if (other.dtype() != dtype())
+        throw DtypeMismatch(std::string(dtype_name(meta_.dtype)),
+                            std::string(dtype_name(other.dtype())), name);
+    if (other.shape() != shape())
+        throw ShapeMismatch(meta_.shape, other.shape(), name);
+    if (absorbs_phantom_write(*this, other, name))
+        return bump_version();
+    // A Metal family member writes into the root that every member reads.
+    if (gpu_member())
+        return write_gpu_member(other, name, /*raw=*/true);
+    // A CPU view is written through its geometry: the source, packed, laid
+    // into this tensor's own elements at its offset and strides.  The copy
+    // below would land at the buffer's first byte.
+    if (storage_is_cpu(storage_) && storage_is_cpu(other.storage_) && !is_dense()) {
+        refuse_ambiguous_write(*this, name);
+        const auto packed = contig_snapshot_cpu(std::get<CpuStorage>(other.storage_), other.shape(),
+                                                other.stride(), other.storage_offset());
+        settle_before_host_write(shared_, storage_);
+        scatter_contig_to_strided(packed.data(), std::get<CpuStorage>(storage_), meta_.shape,
+                                  meta_.stride, offset_);
+        bump_version();
+        return;
+    }
+    // A shared buffer is written in place so every alias sees the copy; the
+    // GPU branch below would hand this tensor a fresh array instead.
+    if (write_into_shared(other)) {
+        bump_version();
+        return;
+    }
+    // A CPU destination below is written in place, its shared buffer too.
+    settle_before_host_write(shared_, storage_);
+    copy_storage_values(storage_, other.readable(), other, meta_.device);
 
     bump_version();
 }
@@ -1870,8 +1942,8 @@ void TensorImpl::zero_grad() {
 }
 
 void TensorImpl::eval() const {
-    if (meta_.device != Device::GPU)
-        return;  // CPU: no-op
+    if (meta_.device != Device::GPU || is_phantom())
+        return;  // CPU: no-op, and a phantom has no graph to run
     const auto& gpu_st = std::get<GpuStorage>(readable());
     if (gpu_st.arr)
         gpu_st.arr->eval();  // mlx::core::array::eval()
@@ -1897,7 +1969,9 @@ bool TensorImpl::storage_is_shared() const noexcept {
 // The view joins base's view family (see ViewFamily) unless the caller asks
 // it not to.  On Metal the family keeps the buffer's value as its root, and
 // the view reads and writes through it.  A Metal view kept out of the family
-// is a value of its own: base's elements under the view's geometry.
+// is a value of its own: base's elements under the view's geometry.  A view
+// of a phantom joins no family: a family shares values and the version of
+// writes to them, and a phantom has no values for a write to change.
 std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorImpl>& base,
                                                   Shape shape,
                                                   Stride stride,
@@ -1978,10 +2052,17 @@ bool TensorImpl::views_grad_leaf() const {
 std::shared_ptr<TensorImpl> TensorImpl::make_block_view(const std::shared_ptr<TensorImpl>& base,
                                                         Shape shape,
                                                         std::size_t byte_offset) {
-    const auto& src = std::get<CpuStorage>(base->storage_);
     const std::size_t nbytes = shape_numel(shape) * dtype_size(base->meta_.dtype);
-    if (byte_offset + nbytes > src.nbytes)
+    if (byte_offset + nbytes > storage_nbytes(base->storage_))
         ErrorBuilder("make_block_view").fail("the run reaches past the end of the buffer");
+    // A run of a phantom is a phantom of the run's size.  It stays out of
+    // the base's family, as every phantom view does (make_view): a family
+    // shares values and their version, and a phantom has no values.
+    if (base->is_phantom())
+        return std::make_shared<TensorImpl>(phantom_storage(shape, base->meta_.dtype),
+                                            std::move(shape), base->meta_.dtype, base->meta_.device,
+                                            false);
+    const auto& src = std::get<CpuStorage>(base->storage_);
     // The aliasing constructor shares ``src.ptr``'s ownership but points at
     // the run, so the buffer lives as long as any view of it and every
     // holder is counted together.

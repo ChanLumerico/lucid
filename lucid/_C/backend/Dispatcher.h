@@ -29,6 +29,7 @@
 #include <memory>
 
 #include "../core/Device.h"
+#include "../core/PhantomMode.h"
 #include "IBackend.h"
 
 namespace lucid {
@@ -84,10 +85,17 @@ public:
     // before any tensor compute occurs.  ``noexcept``; safe to call
     // concurrently after initialisation.
     //
+    // While :class:`PhantomMode` is on for the calling thread, the answer is
+    // the phantom backend for ``d`` instead, which computes nothing — every
+    // op on that thread then dispatches with the shape it already computed
+    // and gets a phantom storage back.
+    //
     // See Also
     // --------
     // :func:`register_backend` — installer counterpart.
     static IBackend& for_device(Device d) noexcept {
+        if (PhantomMode::is_enabled()) [[unlikely]]
+            return phantom_backend(d);
         auto& self = instance();
         const auto idx = static_cast<std::size_t>(d);
         return *self.backends_[idx];
@@ -118,6 +126,12 @@ public:
     }
 
 private:
+    // The :class:`PhantomBackend` for ``d`` — one per device, a static inside
+    // the function.  Defined in :file:`BackendInit.cpp`, the one translation
+    // unit that builds the backends, so the generated class is compiled once
+    // rather than in every op that dispatches.
+    static IBackend& phantom_backend(Device d) noexcept;
+
     // Returns the Meyers-singleton dispatcher instance.
     //
     // Constructed on first call and destroyed at program exit per the

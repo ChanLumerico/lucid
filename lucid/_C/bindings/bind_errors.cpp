@@ -11,6 +11,8 @@
 #include <pybind11/stl.h>
 
 #include <stdexcept>
+#include <string>
+#include <variant>
 
 #include "../core/Error.h"
 
@@ -42,6 +44,24 @@ py::object make_subclass(py::module_& m,
     py::object cls = builtins.attr("type")(py::str(name), bases, ns);
     m.attr(name) = cls;
     return cls;
+}
+
+// LucidError's type object, for the translator below; set by register_errors.
+PyObject* g_lucid_error_type = nullptr;
+
+// A safety net, not a contract: an op that reads a storage kind the tensor
+// does not have — most often a phantom tensor reaching a kernel outside the
+// kernel bases — raises a LucidError rather than a bare RuntimeError.
+void translate_storage_mismatch(std::exception_ptr p) {
+    try {
+        if (p)
+            std::rethrow_exception(p);
+    } catch (const std::bad_variant_access& e) {
+        const std::string msg = std::string("a tensor's storage is not the kind this op reads (a "
+                                            "phantom tensor has no values to read): ") +
+                                e.what();
+        PyErr_SetString(g_lucid_error_type, msg.c_str());
+    }
 }
 
 }  // namespace
@@ -129,6 +149,11 @@ void register_errors(py::module_& m) {
             PyErr_SetString(invalid_argument_cls.ptr(), e.what());
         }
     });
+
+    // Registered last, so pybind11 asks it first; anything else it rethrows
+    // on to the translator above.
+    g_lucid_error_type = lucid_error_cls.ptr();
+    py::register_exception_translator(&translate_storage_mismatch);
 }
 
 }  // namespace lucid::bindings

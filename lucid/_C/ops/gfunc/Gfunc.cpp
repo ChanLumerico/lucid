@@ -49,6 +49,7 @@
 #include "../../core/ErrorBuilder.h"
 #include "../../core/GradMode.h"
 #include "../../core/Helpers.h"
+#include "../../core/PhantomMode.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -222,6 +223,13 @@ sequence_to_device(CpuStorage cpu, const Shape& shape, Dtype fill, Dtype dt, Dev
     return backend::Dispatcher::for_device(device).from_cpu(std::move(cpu), shape);
 }
 
+// A sequence fills a host buffer before it dispatches, which phantom mode
+// does not reach: under it, the sequence's shape and no buffer at all.
+TensorImplPtr phantom_sequence(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
+    return made_from_nothing(
+        finalize(phantom_storage(shape, dt), shape, dt, device, requires_grad));
+}
+
 }  // namespace
 
 // Create a 1-D tensor with arithmetic progression values.
@@ -260,6 +268,8 @@ arange_op(double start, double stop, double step, Dtype dt, Device device, bool 
     };
 
     const Dtype fill = sequence_fill_dtype(dt, "arange", /*complex_ok=*/false);
+    if (PhantomMode::is_enabled())
+        return phantom_sequence(shape, dt, device, requires_grad);
     auto cpu = allocate_cpu(shape, fill);
     switch (fill) {
     case Dtype::F32:
@@ -318,6 +328,8 @@ TensorImplPtr linspace_op(
     };
 
     const Dtype fill = sequence_fill_dtype(dt, "linspace", /*complex_ok=*/true);
+    if (PhantomMode::is_enabled())
+        return phantom_sequence(shape, dt, device, requires_grad);
     auto cpu = allocate_cpu(shape, fill);
     switch (fill) {
     case Dtype::F32:
@@ -421,6 +433,8 @@ TensorImplPtr logspace_op(double start,
     };
 
     const Dtype fill = sequence_fill_dtype(dt, "logspace", /*complex_ok=*/true);
+    if (PhantomMode::is_enabled())
+        return phantom_sequence(shape, dt, device, requires_grad);
     auto cpu = allocate_cpu(shape, fill);
     switch (fill) {
     case Dtype::F32:

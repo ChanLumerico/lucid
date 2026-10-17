@@ -2,9 +2,10 @@
 //
 // Discriminated-union storage type representing the three memory domains the
 // engine can own: CPU heap (Apple Accelerate), GPU lazy graph (MLX), and
-// Metal shared-mode unified-memory buffers (host + device aliased).
+// Metal shared-mode unified-memory buffers (host + device aliased) — and a
+// fourth that owns no memory at all, the storage of a phantom tensor.
 //
-// All three variants carry a shared :type:`VersionCounter`.  Autograd reads
+// All four variants carry a shared :type:`VersionCounter`.  Autograd reads
 // only :class:`SharedStorage`'s — the one buffer whose aliases are separate
 // tensors.  What it compares for everything else is
 // :func:`TensorImpl::version`: the tensor's own count
@@ -31,6 +32,10 @@
 //     into the process address space so the CPU and GPU can both touch it
 //     without explicit copies.  Used for zero-copy host↔device transfers on
 //     Apple Silicon unified-memory hardware.
+//
+// :class:`PhantomStorage`
+//     A size and a dtype, and no buffer: what every factory and op makes
+//     while :class:`PhantomMode` is on (see :file:`PhantomMode.h`).
 //
 // See Also
 // --------
@@ -344,15 +349,46 @@ struct SharedStorage {
     }
 };
 
-// Discriminated union of the three storage variants, held by
+// The storage of a phantom tensor: the bytes it would take, its dtype, and no
+// buffer.
+//
+// A phantom tensor has a shape, a dtype, a device and autograd state like any
+// other, and no values.  The engine makes one in place of every result while
+// :class:`PhantomMode` is on, so a model can be built — every parameter
+// shaped, every op's output shape inferred by the op itself — without
+// allocating a byte.  Reading its values raises (:func:`refuse_phantom_read`).
+//
+// Attributes
+// ----------
+// nbytes : std::size_t
+//     The bytes the tensor's elements would take.  ``0`` until a tensor
+//     adopts it: the phantom backend does not know the shape of what it
+//     returns, the :class:`TensorImpl` that adopts the storage does.
+// dtype : Dtype
+//     Element type.  Default :attr:`Dtype::F32`.
+// version : std::shared_ptr<VersionCounter>
+//     Shared mutation counter — same semantics as the other variants.
+struct PhantomStorage {
+    std::size_t nbytes = 0;
+    Dtype dtype = Dtype::F32;
+    std::shared_ptr<VersionCounter> version = std::make_shared<VersionCounter>(0);
+
+    // Atomically increments the shared version counter.
+    void bump_version() const noexcept { version->fetch_add(1, std::memory_order_relaxed); }
+
+    // Reads the current version counter value.
+    std::uint64_t get_version() const noexcept { return version->load(std::memory_order_relaxed); }
+};
+
+// Discriminated union of the four storage variants, held by
 // :class:`TensorImpl`.
 //
 // The variant index is part of the on-disk and runtime ABI: ``0`` =
 // :class:`CpuStorage`, ``1`` = :class:`GpuStorage`, ``2`` =
-// :class:`SharedStorage`.  The :func:`storage_is_cpu`, :func:`storage_is_gpu`,
-// and :func:`storage_is_metal_shared` predicates rely on this ordering and
-// must be updated in lockstep if the variant order ever changes.
-using Storage = std::variant<CpuStorage, GpuStorage, SharedStorage>;
+// :class:`SharedStorage`, ``3`` = :class:`PhantomStorage`.  The
+// ``storage_is_*`` predicates rely on this ordering and must be updated in
+// lockstep if the variant order ever changes.
+using Storage = std::variant<CpuStorage, GpuStorage, SharedStorage, PhantomStorage>;
 
 // ---------------------------------------------------------------------------
 // Storage predicates and typed accessors
@@ -406,6 +442,17 @@ inline bool storage_is_metal_shared(const Storage& s) noexcept {
     return s.index() == 2;
 }
 
+// Predicate: is ``s`` a :class:`PhantomStorage`?
+//
+// Returns
+// -------
+// bool
+//     ``true`` iff the variant currently holds the :class:`PhantomStorage`
+//     alternative (index 3).
+inline bool storage_is_phantom(const Storage& s) noexcept {
+    return s.index() == 3;
+}
+
 // Returns the allocated byte size of any :class:`Storage` variant.
 //
 // Parameters
@@ -427,6 +474,8 @@ inline std::size_t storage_nbytes(const Storage& s) noexcept {
         return std::get<1>(s).nbytes;
     case 2:
         return std::get<2>(s).nbytes;
+    case 3:
+        return std::get<3>(s).nbytes;
     default:
         return 0;
     }
@@ -453,6 +502,8 @@ inline Dtype storage_dtype(const Storage& s) noexcept {
         return std::get<1>(s).dtype;
     case 2:
         return std::get<2>(s).dtype;
+    case 3:
+        return std::get<3>(s).dtype;
     default:
         return Dtype::F32;
     }
@@ -473,9 +524,11 @@ inline Dtype storage_dtype(const Storage& s) noexcept {
 // Raises
 // ------
 // std::bad_variant_access
-//     The variant does not currently hold :class:`CpuStorage` (debug
-//     builds; release builds may invoke undefined behaviour).
-inline const CpuStorage& storage_cpu(const Storage& s) noexcept {
+//     The variant does not currently hold :class:`CpuStorage`.  Not
+//     ``noexcept``, nor are its siblings: a phantom tensor's storage reaching
+//     a CPU or GPU kernel has to raise (the binding layer turns this into a
+//     ``LucidError``) rather than terminate the process.
+inline const CpuStorage& storage_cpu(const Storage& s) {
     return std::get<CpuStorage>(s);
 }
 
@@ -490,7 +543,7 @@ inline const CpuStorage& storage_cpu(const Storage& s) noexcept {
 // -------
 // CpuStorage&
 //     Mutable reference into ``s``.
-inline CpuStorage& storage_cpu(Storage& s) noexcept {
+inline CpuStorage& storage_cpu(Storage& s) {
     return std::get<CpuStorage>(s);
 }
 
@@ -510,7 +563,7 @@ inline CpuStorage& storage_cpu(Storage& s) noexcept {
 // ------
 // std::bad_variant_access
 //     The variant does not currently hold :class:`GpuStorage`.
-inline const GpuStorage& storage_gpu(const Storage& s) noexcept {
+inline const GpuStorage& storage_gpu(const Storage& s) {
     return std::get<GpuStorage>(s);
 }
 
@@ -525,7 +578,7 @@ inline const GpuStorage& storage_gpu(const Storage& s) noexcept {
 // -------
 // GpuStorage&
 //     Mutable reference into ``s``.
-inline GpuStorage& storage_gpu(Storage& s) noexcept {
+inline GpuStorage& storage_gpu(Storage& s) {
     return std::get<GpuStorage>(s);
 }
 
@@ -545,7 +598,7 @@ inline GpuStorage& storage_gpu(Storage& s) noexcept {
 // ------
 // std::bad_variant_access
 //     The variant does not currently hold :class:`SharedStorage`.
-inline const SharedStorage& storage_metal_shared(const Storage& s) noexcept {
+inline const SharedStorage& storage_metal_shared(const Storage& s) {
     return std::get<SharedStorage>(s);
 }
 
@@ -560,7 +613,7 @@ inline const SharedStorage& storage_metal_shared(const Storage& s) noexcept {
 // -------
 // SharedStorage&
 //     Mutable reference into ``s``.
-inline SharedStorage& storage_metal_shared(Storage& s) noexcept {
+inline SharedStorage& storage_metal_shared(Storage& s) {
     return std::get<SharedStorage>(s);
 }
 

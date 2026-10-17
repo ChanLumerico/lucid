@@ -32,6 +32,7 @@
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
 #include "../core/MemoryStats.h"
+#include "../core/PhantomMode.h"
 #include "../core/Storage.h"
 #include "../core/TensorImpl.h"
 
@@ -56,15 +57,33 @@ using lucid::compile::traced_factory;
 // out of its family's root and caches it in the tensor, and another Python
 // thread may write the family meanwhile — replacing the root and dropping
 // that cache — so only a handle owned here is safe to wait on unlocked.
-void evaluate_without_gil(const lucid::TensorImpl& t) {
+//
+// ``pending_array`` is that handle: null for a CPU tensor, a Metal tensor
+// without an array, and a phantom, which has no graph to run.
+std::shared_ptr<mlx::core::array> pending_array(const lucid::TensorImpl& t) {
     if (t.device() != lucid::Device::GPU)
-        return;
+        return nullptr;
     const auto* gpu_st = std::get_if<lucid::GpuStorage>(&t.storage());
-    if (gpu_st == nullptr || !gpu_st->arr)
+    return gpu_st != nullptr ? gpu_st->arr : nullptr;
+}
+
+void evaluate_without_gil(const lucid::TensorImpl& t) {
+    const std::shared_ptr<mlx::core::array> arr = pending_array(t);
+    if (!arr)
         return;
-    const std::shared_ptr<mlx::core::array> arr = gpu_st->arr;
     py::gil_scoped_release release;
     arr->eval();
+}
+
+// The arrays of ``tensors`` that have work to run, for one batched eval.
+std::vector<mlx::core::array>
+pending_arrays(const std::vector<std::shared_ptr<lucid::TensorImpl>>& tensors) {
+    std::vector<mlx::core::array> arrays;
+    arrays.reserve(tensors.size());
+    for (const auto& t : tensors)
+        if (const auto arr = t ? pending_array(*t) : nullptr)
+            arrays.push_back(*arr);
+    return arrays;
 }
 }  // namespace
 
@@ -115,6 +134,14 @@ void register_core(py::module_& m) {
     m.def("grad_enabled", &GradMode::is_enabled);
     m.def("set_grad_enabled", &GradMode::set_enabled);
 
+    // Phantom mode, per thread like grad mode: while it is on, every factory
+    // and op on the calling thread returns a phantom tensor — shape, dtype,
+    // device and autograd state, no storage, no kernel run.
+    m.def("phantom_mode", &PhantomMode::is_enabled,
+          "Whether factories and ops on the calling thread make phantom tensors.");
+    m.def("set_phantom_mode", &PhantomMode::set_enabled, py::arg("enabled"),
+          "Turn phantom mode on or off for the calling thread only.");
+
     // MemoryStats fields are read-only; the Python layer cannot mutate them.
     py::class_<MemoryStats>(m, "MemoryStats")
         .def_readonly("current_bytes", &MemoryStats::current_bytes)
@@ -137,6 +164,67 @@ void register_core(py::module_& m) {
     // which MLX's allocator peak does not see) — for compiled-step footprint.
     m.def("metal_device_allocated_bytes", &lucid::gpu::mps::metal_device_allocated_bytes);
 }
+
+namespace {
+
+// The storage's base address plus the view's byte offset, so two tensors at
+// the same place in one buffer compare equal.  A GPU array is evaluated
+// first: its buffer may not exist yet.  A phantom has no buffer, so no
+// address: the storage-sharing plans that compare these would otherwise take
+// every phantom for one buffer.
+std::uintptr_t data_address(const TensorImpl& t) {
+    const std::size_t off = t.storage_offset();
+    const Storage& s = t.raw_storage();
+    if (storage_is_phantom(s))
+        refuse_phantom_read("data_ptr");
+    if (storage_is_cpu(s))
+        return reinterpret_cast<std::uintptr_t>(storage_cpu(s).ptr.get()) + off;
+    if (storage_is_gpu(s)) {
+        const auto& g = storage_gpu(s);
+        if (!g.arr)
+            return 0;
+        g.arr->eval();
+        MemoryTracker::track_host_sync(g.nbytes);
+        return reinterpret_cast<std::uintptr_t>(g.arr->data<std::uint8_t>()) + off;
+    }
+    return reinterpret_cast<std::uintptr_t>(storage_metal_shared(s).cpu_ptr) + off;
+}
+
+// A zero-filled CPU tensor in MTLResourceStorageModeShared memory — under
+// phantom mode, a factory like any other: a phantom, and no Metal buffer.
+std::shared_ptr<TensorImpl>
+make_shared_tensor(const std::vector<std::int64_t>& shape, Dtype dtype, bool requires_grad) {
+    if (PhantomMode::is_enabled())
+        return std::make_shared<TensorImpl>(phantom_storage(Shape(shape), dtype), Shape(shape),
+                                            dtype, Device::CPU, requires_grad);
+    std::size_t n = 1;
+    for (auto d : shape)
+        n *= static_cast<std::size_t>(d);
+    const std::size_t nbytes = n * dtype_size(dtype);
+    if (nbytes == 0) {
+        // Empty tensor: fall back to ordinary CPU zeros.
+        auto& be = backend::Dispatcher::for_device(Device::CPU);
+        Storage s = be.zeros(Shape(shape), dtype);
+        return std::make_shared<TensorImpl>(std::move(s), Shape(shape), dtype, Device::CPU,
+                                            requires_grad);
+    }
+    auto owned = gpu::make_metal_shared(nbytes);
+    if (!owned.buf.cpu_ptr)
+        throw std::runtime_error("make_shared_tensor: MTLBuffer allocation failed — "
+                                 "Metal may not be available on this device");
+    // macOS guarantees MTLResourceStorageModeShared buffers are
+    // zero-initialized; no explicit memset needed.
+    SharedStorage ss;
+    ss.cpu_ptr = owned.buf.cpu_ptr;
+    ss.mtl_handle = owned.buf.mtl_handle;
+    ss.nbytes = nbytes;
+    ss.dtype = dtype;
+    ss.owner = std::move(owned.owner);
+    return std::make_shared<TensorImpl>(Storage{std::move(ss)}, Shape(shape), dtype, Device::CPU,
+                                        requires_grad);
+}
+
+}  // namespace
 
 // Registers TensorImpl as the Python-visible `TensorImpl` type and the
 // standalone to_shared_storage() utility.
@@ -180,6 +268,10 @@ void register_tensor_impl(py::module_& m) {
             "True when the tensor's storage is a MTLResourceStorageModeShared "
             "allocation — simultaneously accessible from CPU and GPU without a "
             "memcpy.  Created by make_shared_tensor() or to_shared_storage().")
+        .def_property_readonly(
+            "is_phantom", [](const TensorImpl& t) { return t.is_phantom(); },
+            "True for a phantom tensor: a shape, dtype, device and autograd state "
+            "with no storage, made while phantom mode is on.  Reading its values raises.")
         .def("numel", &TensorImpl::numel)
         .def("nbytes", &TensorImpl::nbytes)
         .def("is_contiguous", &TensorImpl::is_contiguous)
@@ -187,27 +279,8 @@ void register_tensor_impl(py::module_& m) {
              "Contiguous, at the first byte of its storage, and covering all of it.")
         .def("storage_offset_bytes", &TensorImpl::storage_offset,
              "Byte offset of the first element from the start of the storage.")
-        .def(
-            "data_ptr",
-            [](const TensorImpl& t) -> std::uintptr_t {
-                // The storage's base address plus the view's byte offset, so
-                // two tensors at the same place in one buffer compare equal.
-                // A GPU array is evaluated first: its buffer may not exist yet.
-                const std::size_t off = t.storage_offset();
-                const Storage& s = t.raw_storage();
-                if (storage_is_cpu(s))
-                    return reinterpret_cast<std::uintptr_t>(storage_cpu(s).ptr.get()) + off;
-                if (storage_is_gpu(s)) {
-                    const auto& g = storage_gpu(s);
-                    if (!g.arr)
-                        return 0;
-                    g.arr->eval();
-                    MemoryTracker::track_host_sync(g.nbytes);
-                    return reinterpret_cast<std::uintptr_t>(g.arr->data<std::uint8_t>()) + off;
-                }
-                return reinterpret_cast<std::uintptr_t>(storage_metal_shared(s).cpu_ptr) + off;
-            },
-            "Address of the first element: the storage base plus the byte offset.")
+        .def("data_ptr", &data_address,
+             "Address of the first element: the storage base plus the byte offset.")
         .def_static(
             "_make_view",
             [](const std::shared_ptr<TensorImpl>& base, const std::vector<std::int64_t>& shape,
@@ -505,41 +578,12 @@ void register_tensor_impl(py::module_& m) {
     // zero-filled tensor directly in MTLResourceStorageModeShared memory.
     // The result starts with device=CPU so normal CPU ops work immediately;
     // call transfer_storage(t, Device::GPU) for a zero-copy GPU view.
-    m.def(
-        "make_shared_tensor",
-        [](const std::vector<std::int64_t>& shape, Dtype dtype,
-           bool requires_grad) -> std::shared_ptr<TensorImpl> {
-            std::size_t n = 1;
-            for (auto d : shape)
-                n *= static_cast<std::size_t>(d);
-            const std::size_t nbytes = n * dtype_size(dtype);
-            if (nbytes == 0) {
-                // Empty tensor: fall back to ordinary CPU zeros.
-                auto& be = backend::Dispatcher::for_device(Device::CPU);
-                Storage s = be.zeros(Shape(shape), dtype);
-                return std::make_shared<TensorImpl>(std::move(s), Shape(shape), dtype, Device::CPU,
-                                                    requires_grad);
-            }
-            auto owned = gpu::make_metal_shared(nbytes);
-            if (!owned.buf.cpu_ptr)
-                throw std::runtime_error("make_shared_tensor: MTLBuffer allocation failed — "
-                                         "Metal may not be available on this device");
-            // macOS guarantees MTLResourceStorageModeShared buffers are
-            // zero-initialized; no explicit memset needed.
-            SharedStorage ss;
-            ss.cpu_ptr = owned.buf.cpu_ptr;
-            ss.mtl_handle = owned.buf.mtl_handle;
-            ss.nbytes = nbytes;
-            ss.dtype = dtype;
-            ss.owner = std::move(owned.owner);
-            return std::make_shared<TensorImpl>(Storage{std::move(ss)}, Shape(shape), dtype,
-                                                Device::CPU, requires_grad);
-        },
-        py::arg("shape"), py::arg("dtype") = Dtype::F32, py::arg("requires_grad") = false,
-        "Allocate a zero-filled tensor in MTLResourceStorageModeShared memory.\n\n"
-        "The tensor is immediately readable on CPU (device=CPU) and can be\n"
-        "transferred to GPU via transfer_storage() with no memcpy.\n"
-        "Raises RuntimeError if Metal is not available.");
+    m.def("make_shared_tensor", &make_shared_tensor, py::arg("shape"),
+          py::arg("dtype") = Dtype::F32, py::arg("requires_grad") = false,
+          "Allocate a zero-filled tensor in MTLResourceStorageModeShared memory.\n\n"
+          "The tensor is immediately readable on CPU (device=CPU) and can be\n"
+          "transferred to GPU via transfer_storage() with no memcpy.\n"
+          "Raises RuntimeError if Metal is not available.");
 
     // eval_tensors(list[TensorImpl]) — batch-evaluate multiple GPU tensors in
     // one mlx::core::eval() call.  CPU tensors in the list are silently ignored.
@@ -551,15 +595,7 @@ void register_tensor_impl(py::module_& m) {
             // Collect all GPU arrays, then evaluate in one batched MLX call.
             // mlx::core::eval(vector<array>) schedules them together —
             // significantly faster than calling arr->eval() individually.
-            std::vector<mlx::core::array> arrays;
-            arrays.reserve(tensors.size());
-            for (const auto& t : tensors) {
-                if (!t || t->device() != Device::GPU)
-                    continue;
-                const auto& gpu_st = std::get<GpuStorage>(t->storage());
-                if (gpu_st.arr)
-                    arrays.push_back(*gpu_st.arr);
-            }
+            std::vector<mlx::core::array> arrays = pending_arrays(tensors);
             // The wait is the GPU's, not Python's: release the GIL for it so
             // other Python threads (a server, a data loader) keep running.
             if (!arrays.empty()) {
@@ -601,15 +637,7 @@ void register_tensor_impl(py::module_& m) {
     m.def(
         "eval_tensors_async",
         [](const std::vector<std::shared_ptr<TensorImpl>>& tensors) {
-            std::vector<mlx::core::array> arrays;
-            arrays.reserve(tensors.size());
-            for (const auto& t : tensors) {
-                if (!t || t->device() != Device::GPU)
-                    continue;
-                const auto& gpu_st = std::get<GpuStorage>(t->storage());
-                if (gpu_st.arr)
-                    arrays.push_back(*gpu_st.arr);
-            }
+            std::vector<mlx::core::array> arrays = pending_arrays(tensors);
             if (!arrays.empty())
                 mlx::core::async_eval(arrays);
         },
@@ -626,15 +654,8 @@ void register_tensor_impl(py::module_& m) {
     m.def(
         "eval_gpu",
         [](const std::shared_ptr<TensorImpl>& t) {
-            if (!t || t->device() != Device::GPU)
-                return;
-            // A handle of its own, taken with the GIL held: see
-            // evaluate_without_gil.
-            const std::shared_ptr<mlx::core::array> arr = std::get<GpuStorage>(t->storage()).arr;
-            if (arr) {
-                py::gil_scoped_release release;
-                arr->eval();
-            }
+            if (t)
+                evaluate_without_gil(*t);
         },
         py::arg("tensor"),
         "Force evaluation of a single GPU tensor (no-op for CPU tensors).\n"

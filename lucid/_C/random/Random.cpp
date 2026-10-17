@@ -17,6 +17,7 @@
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/Generator.h"
+#include "../core/PhantomMode.h"
 #include "../core/Profiler.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
@@ -36,9 +37,16 @@ inline TensorImplPtr finalize(Storage&& storage, Shape shape, Dtype dt, Device d
     return std::make_shared<TensorImpl>(std::move(storage), std::move(shape), dt, device, false);
 }
 
+// Draws complex128 on the CPU as twice as many float64 parts, relabelled.
+// Under phantom mode there are no parts to relabel: the draw below returns
+// a phantom of the complex dtype itself.
+bool draws_c128_as_parts(Dtype dt, Device device) {
+    return dt == Dtype::C128 && device == Device::CPU && !PhantomMode::is_enabled();
+}
+
 Storage
 uniform_storage(const Shape& shape, double lo, double hi, Dtype dt, Device device, Generator& gen) {
-    if (dt == Dtype::C128 && device == Device::CPU) {
+    if (draws_c128_as_parts(dt, device)) {
         const auto n = static_cast<std::int64_t>(shape_numel(shape));
         Storage s = random_uniform_storage(Shape{2 * n}, lo, hi, Dtype::F64, device, gen);
         std::get<CpuStorage>(s).dtype = Dtype::C128;
@@ -49,7 +57,7 @@ uniform_storage(const Shape& shape, double lo, double hi, Dtype dt, Device devic
 
 Storage normal_storage(
     const Shape& shape, double mean, double std, Dtype dt, Device device, Generator& gen) {
-    if (dt == Dtype::C128 && device == Device::CPU) {
+    if (draws_c128_as_parts(dt, device)) {
         const std::size_t n = shape_numel(shape);
         Storage s = random_normal_storage(Shape{static_cast<std::int64_t>(2 * n)}, 0.0,
                                           std / std::sqrt(2.0), Dtype::F64, device, gen);

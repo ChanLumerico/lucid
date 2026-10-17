@@ -40,6 +40,7 @@
 #include "../../core/ErrorBuilder.h"
 #include "../../core/MemoryStats.h"
 #include "../../core/MemoryStats.h"
+#include "../../core/PhantomMode.h"
 #include "MlxBridge.h"
 #include "MetalAllocator.h"
 #include "MetalKernelRunner.h"
@@ -170,6 +171,11 @@ struct BoundBuffer {
 // compute kernel.  For SharedStorage the existing MTLBuffer is reused;
 // for GpuStorage and CpuStorage a temporary shared buffer is created by copy.
 BoundBuffer resolve_storage_to_mtl(const Storage& s, id<MTLDevice> dev) {
+    // A phantom input has no bytes to bind.  Under phantom mode the kernel
+    // never gets here (the phantom backend answers); a phantom used after its
+    // block does.
+    if (storage_is_phantom(s))
+        refuse_phantom_read("run_metal_kernel");
     if (storage_is_metal_shared(s)) {
         const auto& sh = storage_metal_shared(s);
 
