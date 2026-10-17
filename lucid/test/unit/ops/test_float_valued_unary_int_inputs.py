@@ -207,6 +207,19 @@ def test_compiled_trace_matches_eager_and_reference(
         _assert_matches(ref, got, want, "metal")
 
 
+@pytest.mark.parametrize("name", _POLYNOMIALS)
+@pytest.mark.parametrize("n", [0, 1])
+@pytest.mark.parametrize("device", _DEVICES)
+def test_low_degree_polynomial_of_an_integer_is_floating(
+    name: str, n: int, device: str, ref: ModuleType
+) -> None:
+    # P_0 and P_1 are not stepped through the recurrence, whose float
+    # coefficients promoted the higher degrees: they kept the integer dtype.
+    x, rx = _inputs(ref, "int64", device)
+    got = _attr(lucid.special, name)(x, n)
+    _assert_matches(ref, got, _attr(ref.special, name)(rx, n), device)
+
+
 @pytest.mark.parametrize("name", ["exp", "sqrt", "exp2", "lgamma", "i0e"])
 @pytest.mark.parametrize("device", _DEVICES)
 def test_floating_input_is_not_cast(name: str, device: str) -> None:

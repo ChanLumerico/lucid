@@ -28,9 +28,10 @@ def _real(x: Tensor) -> Tensor:
     """``x`` as the operand of a function of a real variable.
 
     A bool or integer operand is cast to the default float, as every
-    float-valued op casts one (:func:`lucid._dispatch._float_input`) —
-    float32 here regardless of the default made ``gammaln`` of an int64
+    float-valued op casts one (:func:`lucid._dispatch._float_input`).  It
+    used to cast to float32 whatever the default, so ``i0e`` of an int64 was
     float32 under a float64 default, where the reference answers float64.
+
     It matters where the composition negates before it reaches a
     promoting op.  ``entr`` computes ``-x * log(x)``, and with a bool
     operand the negation runs first — MLX refuses to negate a bool and
