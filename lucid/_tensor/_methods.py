@@ -7,12 +7,16 @@ signature translation (``dim=None|int|list``, ``keepdim``, ``correction``
 ...) lives in ``_adapters.py``.
 
 The in-place forms whose op has no in-place kernel — the index writes
-(``masked_fill_``, ``scatter_`` ...), and ``clamp_`` with a bound that is a
-tensor or widens the computation — compute the out-of-place op and write its
-result into ``self`` through ``lucid._ops.composite.indexing._write_inplace``:
-into ``self``'s storage, refusing a result dtype ``self`` cannot hold,
-bumping its version.  ``clamp_`` called the engine kernel without the
-promotion ``clamp`` does, so ``int64.clamp_(0.5, 1.5)`` wrote ``[0, 1, 1, 1]``.
+(``masked_fill_``, ``scatter_`` ...), ``bitwise_or_``, ``remainder_``,
+``floor_divide_``, ``lerp_``, ``addcmul_`` and the rest — and the augmented
+assignments that spell them (``|=``, ``%=``, ``//=`` ...) compute the
+out-of-place op and write its result into ``self`` through
+``lucid._ops.composite.indexing._write_inplace``: into ``self``'s storage,
+refusing a result dtype ``self`` cannot hold, bumping its version.  Before,
+``|=`` and the others had no in-place dunder, so Python rebound the name to
+a new tensor and every view and alias kept the old values; and ``clamp_``
+called the engine kernel without the promotion ``clamp`` does, so
+``int64.clamp_(0.5, 1.5)`` wrote ``[0, 1, 1, 1]``.
 
 Called once at module import time by ``tensor.py``.
 """
@@ -24,6 +28,7 @@ from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import (
     _REAL_FLOATS,
+    _binary_operands,
     _cannot_cast_inplace,
     _unwrap,
     _wrap,
@@ -35,6 +40,8 @@ from lucid._ops._registry import _REGISTRY, OpEntry, _bind_leading
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
     from lucid._types import TensorOrScalar
+
+_Impl = _C_engine.TensorImpl
 
 
 _OPERANDS: dict[str, tuple[str, ...]] = {}
@@ -277,6 +284,267 @@ def _write(
     return _write_inplace(self, name, result_of, *(a for a in args if _is_tensor(a)))
 
 
+def _binary_inplace(
+    self: Tensor,
+    other: TensorOrScalar,
+    name: str,
+    op: Callable[[_Impl, _Impl], _Impl],
+    *,
+    opmath: bool = False,
+    promotes: bool = True,
+) -> Tensor:
+    """``self`` written with ``op(self, other)``; ``self``.
+
+    The operands meet at their common dtype through :func:`_binary_operands`,
+    as they do for the operator and for ``lucid.<op>``.  When the op answers
+    in that dtype (``promotes``), a dtype ``self`` cannot hold is refused
+    before the kernel runs — ``int64 |= 2.5`` raises what ``int64 += 2.5``
+    raises.  A logical op answers in bool whatever its operands meet at, and
+    bool casts to every dtype, so its result is written as it comes.
+    """
+
+    def result_of(base: Tensor) -> Tensor:
+        a, b = _binary_operands(base, other, opmath=opmath, inplace=promotes)
+        return _wrap(op(a, b))
+
+    return _write(self, name, result_of, other)
+
+
+def _bitwise_and_(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """In-place :meth:`bitwise_and`: ``self`` becomes ``self & other``.
+
+    The operands meet at their common dtype; one ``self`` cannot hold
+    (``int64`` with ``2.5``, ``bool`` with ``1``) raises ``RuntimeError``
+    before anything is written.
+
+    >>> import lucid
+    >>> x = lucid.tensor([12, 10])
+    >>> x.bitwise_and_(6)
+    tensor([4, 2], dtype=lucid.int64)
+    """
+    return _binary_inplace(self, other, "bitwise_and_", _C_engine.bitwise_and)
+
+
+def _bitwise_or_(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """In-place :meth:`bitwise_or`: ``self`` becomes ``self | other``.
+
+    Refused like ``bitwise_and_`` when the operands meet at a dtype
+    ``self`` cannot hold.
+
+    >>> import lucid
+    >>> x = lucid.tensor([12, 10])
+    >>> x.bitwise_or_(1)
+    tensor([13, 11], dtype=lucid.int64)
+    """
+    return _binary_inplace(self, other, "bitwise_or_", _C_engine.bitwise_or)
+
+
+def _bitwise_xor_(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """In-place :meth:`bitwise_xor`: ``self`` becomes ``self ^ other``.
+
+    Refused like ``bitwise_and_`` when the operands meet at a dtype
+    ``self`` cannot hold.
+
+    >>> import lucid
+    >>> x = lucid.tensor([True, False])
+    >>> x.bitwise_xor_(True)
+    tensor([False, True], dtype=lucid.bool)
+    """
+    return _binary_inplace(self, other, "bitwise_xor_", _C_engine.bitwise_xor)
+
+
+def _bitwise_left_shift_(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """In-place :meth:`bitwise_left_shift`: ``self`` becomes ``self << other``.
+
+    A float shift amount makes the result float, which an integer ``self``
+    refuses before anything is written.
+
+    >>> import lucid
+    >>> x = lucid.tensor([1, 3])
+    >>> x.bitwise_left_shift_(2)
+    tensor([4, 12], dtype=lucid.int64)
+    """
+    return _binary_inplace(
+        self, other, "bitwise_left_shift_", _C_engine.bitwise_left_shift
+    )
+
+
+def _bitwise_right_shift_(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """In-place :meth:`bitwise_right_shift`: ``self`` becomes ``self >> other``.
+
+    Refused like ``bitwise_left_shift_`` for a float shift amount.
+
+    >>> import lucid
+    >>> x = lucid.tensor([4, 12])
+    >>> x.bitwise_right_shift_(2)
+    tensor([1, 3], dtype=lucid.int64)
+    """
+    return _binary_inplace(
+        self, other, "bitwise_right_shift_", _C_engine.bitwise_right_shift
+    )
+
+
+def _remainder_(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """In-place :meth:`remainder`: ``self`` becomes ``self % other``.
+
+    The result takes the divisor's sign, as ``%`` does.  An integer ``self``
+    refuses a float divisor before anything is written.
+
+    >>> import lucid
+    >>> x = lucid.tensor([-7.0, 7.0])
+    >>> x.remainder_(3)
+    tensor([2., 1.])
+    """
+    return _binary_inplace(self, other, "remainder_", _C_engine.remainder)
+
+
+def _fmod_(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """In-place :meth:`fmod`: the C remainder, with the sign of the dividend.
+
+    An integer ``self`` refuses a float divisor, as ``remainder_`` does.
+
+    >>> import lucid
+    >>> x = lucid.tensor([-7.0, 7.0])
+    >>> x.fmod_(3)
+    tensor([-1., 1.])
+    """
+    return _binary_inplace(self, other, "fmod_", _C_engine.fmod)
+
+
+def _floor_divide_(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """In-place :meth:`floor_divide`: ``self`` becomes ``self // other``.
+
+    An integer ``self`` refuses a float divisor, as ``remainder_`` does.
+
+    >>> import lucid
+    >>> x = lucid.tensor([7.0, -7.0])
+    >>> x.floor_divide_(2)
+    tensor([3., -4.])
+    """
+    return _binary_inplace(
+        self, other, "floor_divide_", _C_engine.floordiv, opmath=True
+    )
+
+
+def _logical_and_(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """In-place :meth:`logical_and`: ``1`` where both are nonzero, ``0`` elsewhere.
+
+    The answer is written at ``self``'s own dtype, which can hold any bool.
+
+    >>> import lucid
+    >>> x = lucid.tensor([0.0, 2.0, 3.0])
+    >>> x.logical_and_(lucid.tensor([1.0, 1.0, 0.0]))
+    tensor([0., 1., 0.])
+    """
+    return _binary_inplace(
+        self, other, "logical_and_", _C_engine.logical_and, promotes=False
+    )
+
+
+def _logical_or_(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """In-place :meth:`logical_or`: ``1`` where either is nonzero, ``0`` elsewhere.
+
+    >>> import lucid
+    >>> x = lucid.tensor([0, 0, 5])
+    >>> x.logical_or_(lucid.tensor([0, 7, 0]))
+    tensor([0, 1, 1], dtype=lucid.int64)
+    """
+    return _binary_inplace(
+        self, other, "logical_or_", _C_engine.logical_or, promotes=False
+    )
+
+
+def _logical_xor_(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """In-place :meth:`logical_xor`: ``1`` where exactly one is nonzero.
+
+    >>> import lucid
+    >>> x = lucid.tensor([True, True, False])
+    >>> x.logical_xor_(lucid.tensor([True, False, False]))
+    tensor([False, True, False], dtype=lucid.bool)
+    """
+    return _binary_inplace(
+        self, other, "logical_xor_", _C_engine.logical_xor, promotes=False
+    )
+
+
+def _logical_not_(self: Tensor) -> Tensor:
+    """In-place :meth:`logical_not`: ``1`` where ``self`` was zero, else ``0``.
+
+    >>> import lucid
+    >>> x = lucid.tensor([0.0, 2.5])
+    >>> x.logical_not_()
+    tensor([1., 0.])
+    """
+    return _write(self, "logical_not_", lambda base: base.logical_not())
+
+
+def _bitwise_not_(self: Tensor) -> Tensor:
+    """In-place :meth:`bitwise_not`: ``~self``, for integer and bool tensors.
+
+    >>> import lucid
+    >>> x = lucid.tensor([0, 5])
+    >>> x.bitwise_not_()
+    tensor([-1, -6], dtype=lucid.int64)
+    """
+    return _write(self, "bitwise_not_", lambda base: base.bitwise_not())
+
+
+def _lerp_(self: Tensor, end: Tensor, weight: float | Tensor) -> Tensor:
+    """In-place :meth:`lerp`: ``self`` becomes ``self + weight * (end - self)``.
+
+    A non-float ``self`` or ``end`` raises the ``TypeError`` :meth:`lerp`
+    raises, before anything is written.
+
+    >>> import lucid
+    >>> x = lucid.tensor([0.0, 10.0])
+    >>> x.lerp_(lucid.tensor([10.0, 20.0]), 0.5)
+    tensor([5., 15.])
+    """
+    return _write(self, "lerp_", lambda base: base.lerp(end, weight), end, weight)
+
+
+def _addcmul_(
+    self: Tensor, tensor1: Tensor, tensor2: Tensor, *, value: float = 1
+) -> Tensor:
+    """In-place :func:`lucid.addcmul`: ``self`` gains ``value * tensor1 * tensor2``.
+
+    A float product into an integer ``self`` raises ``RuntimeError`` before
+    anything is written.
+
+    >>> import lucid
+    >>> x = lucid.tensor([1.0, 2.0])
+    >>> x.addcmul_(lucid.tensor([2.0, 3.0]), lucid.tensor([0.5, 0.5]), value=2)
+    tensor([3., 5.])
+    """
+    from lucid._ops.composite.blas import addcmul
+
+    def result_of(base: Tensor) -> Tensor:
+        return addcmul(base, tensor1, tensor2, value=value)
+
+    return _write(self, "addcmul_", result_of, tensor1, tensor2)
+
+
+def _addcdiv_(
+    self: Tensor, tensor1: Tensor, tensor2: Tensor, *, value: float = 1
+) -> Tensor:
+    """In-place :func:`lucid.addcdiv`: ``self`` gains ``value * tensor1 / tensor2``.
+
+    The quotient is floating point, so an integer ``self`` is refused, as
+    ``addcmul_`` refuses a float product.
+
+    >>> import lucid
+    >>> x = lucid.tensor([1.0, 2.0])
+    >>> x.addcdiv_(lucid.tensor([4.0, 9.0]), lucid.tensor([2.0, 3.0]), value=0.5)
+    tensor([2., 3.5])
+    """
+    from lucid._ops.composite.blas import addcdiv
+
+    def result_of(base: Tensor) -> Tensor:
+        return addcdiv(base, tensor1, tensor2, value=value)
+
+    return _write(self, "addcdiv_", result_of, tensor1, tensor2)
+
+
 def _clamp_inplace(
     self: Tensor,
     min: TensorOrScalar | None,
@@ -311,6 +579,111 @@ def _clamp_inplace(
     return _write(self, name, result_of, min, max)
 
 
+def _clip_(
+    self: Tensor,
+    min: Tensor | float | None = None,
+    max: Tensor | float | None = None,
+) -> Tensor:
+    """In-place :meth:`clip`, another name for :meth:`Tensor.clamp_`.
+
+    >>> import lucid
+    >>> x = lucid.tensor([-2.0, 0.5, 3.0])
+    >>> x.clip_(-1.0, 2.0)
+    tensor([-1., 0.5, 2.])
+    """
+    return _clamp_inplace(self, min, max, "clip_")
+
+
+# ── augmented assignment, through the methods above ─────────────────────────
+# Each calls its method by attribute, not directly: on Metal the method is
+# wrapped to carry the write back into the tensor a view was taken from
+# (``lucid._tensor._metal_views.install``), and the operator must be too.
+
+
+def __iand__(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """``self &= other`` — bitwise / logical AND, written into ``self`` by ``bitwise_and_``.
+
+    >>> import lucid
+    >>> x = lucid.tensor([True, True])
+    >>> x &= lucid.tensor([True, False])
+    >>> x
+    tensor([True, False], dtype=lucid.bool)
+    """
+    return self.bitwise_and_(other)
+
+
+def __ior__(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """``self |= other`` — bitwise / logical OR, written into ``self`` by ``bitwise_or_``.
+
+    >>> import lucid
+    >>> x = lucid.tensor([True, False])
+    >>> x |= lucid.tensor([False, True])
+    >>> x
+    tensor([True, True], dtype=lucid.bool)
+    """
+    return self.bitwise_or_(other)
+
+
+def __ixor__(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """``self ^= other`` — bitwise / logical XOR, written into ``self`` by ``bitwise_xor_``.
+
+    >>> import lucid
+    >>> x = lucid.tensor([5, 6])
+    >>> x ^= 3
+    >>> x
+    tensor([6, 5], dtype=lucid.int64)
+    """
+    return self.bitwise_xor_(other)
+
+
+def __ilshift__(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """``self <<= other`` — left shift, written into ``self`` by ``bitwise_left_shift_``.
+
+    >>> import lucid
+    >>> x = lucid.tensor([1, 2])
+    >>> x <<= 3
+    >>> x
+    tensor([8, 16], dtype=lucid.int64)
+    """
+    return self.bitwise_left_shift_(other)
+
+
+def __irshift__(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """``self >>= other`` — right shift, written into ``self`` by ``bitwise_right_shift_``.
+
+    >>> import lucid
+    >>> x = lucid.tensor([8, 16])
+    >>> x >>= 3
+    >>> x
+    tensor([1, 2], dtype=lucid.int64)
+    """
+    return self.bitwise_right_shift_(other)
+
+
+def __imod__(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """``self %= other`` — remainder with the divisor's sign, written by ``remainder_``.
+
+    >>> import lucid
+    >>> x = lucid.tensor([-7.0, 7.0])
+    >>> x %= 3
+    >>> x
+    tensor([2., 1.])
+    """
+    return self.remainder_(other)
+
+
+def __ifloordiv__(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """``self //= other`` — floor division, written into ``self`` by ``floor_divide_``.
+
+    >>> import lucid
+    >>> x = lucid.tensor([7.0, 8.0])
+    >>> x //= 2
+    >>> x
+    tensor([3., 4.])
+    """
+    return self.floor_divide_(other)
+
+
 _EXTRA_METHODS = (
     ("masked_fill_", _masked_fill_),
     ("scatter_", _scatter_),
@@ -322,6 +695,30 @@ _EXTRA_METHODS = (
     ("masked_scatter_", _masked_scatter_),
     ("bincount", _bincount),
     ("take_along_dim", _take_along_dim),
+    ("bitwise_and_", _bitwise_and_),
+    ("bitwise_or_", _bitwise_or_),
+    ("bitwise_xor_", _bitwise_xor_),
+    ("bitwise_left_shift_", _bitwise_left_shift_),
+    ("bitwise_right_shift_", _bitwise_right_shift_),
+    ("bitwise_not_", _bitwise_not_),
+    ("remainder_", _remainder_),
+    ("fmod_", _fmod_),
+    ("floor_divide_", _floor_divide_),
+    ("logical_and_", _logical_and_),
+    ("logical_or_", _logical_or_),
+    ("logical_xor_", _logical_xor_),
+    ("logical_not_", _logical_not_),
+    ("lerp_", _lerp_),
+    ("addcmul_", _addcmul_),
+    ("addcdiv_", _addcdiv_),
+    ("clip_", _clip_),
+    ("__iand__", __iand__),
+    ("__ior__", __ior__),
+    ("__ixor__", __ixor__),
+    ("__ilshift__", __ilshift__),
+    ("__irshift__", __irshift__),
+    ("__imod__", __imod__),
+    ("__ifloordiv__", __ifloordiv__),
 )
 
 

@@ -108,6 +108,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - phantom tensors under a thread-local phantom mode
 
+- in-place twins of //= %= |= &= ^= <<= >>= (LCD-519)
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

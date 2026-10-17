@@ -20,6 +20,7 @@ The tables below are the whole family: the augmented assignments the
 reference writes in place, and the ``*_`` methods with an operand.
 """
 
+import operator
 import re
 from collections.abc import Callable
 from types import ModuleType
@@ -27,9 +28,118 @@ from types import ModuleType
 import pytest
 
 import lucid
+from lucid.test._fixtures.devices import metal_available
 
 # The reference's in-place refusal, whichever op raises it.
 _CANNOT_CAST = re.compile(r"result type .+ can't be cast to the desired output type .+")
+
+# ── augmented assignment ─────────────────────────────────────────────────────
+
+#: Each augmented assignment: its symbol, a ``self`` of the kind it computes
+#: on, and an operand.  ``self`` is ``[5, 6, 7, 8]``.
+AUGMENTED: dict[str, tuple[str, str, object]] = {
+    "__iadd__": ("+=", "float32", 2.0),
+    "__isub__": ("-=", "float32", 2.0),
+    "__imul__": ("*=", "float32", 2.0),
+    "__itruediv__": ("/=", "float32", 2.0),
+    "__ifloordiv__": ("//=", "float32", 2.0),
+    "__imod__": ("%=", "float32", 3.0),
+    "__ipow__": ("**=", "float32", 2.0),
+    "__iand__": ("&=", "int64", 3),
+    "__ior__": ("|=", "int64", 3),
+    "__ixor__": ("^=", "int64", 3),
+    "__ilshift__": ("<<=", "int64", 1),
+    "__irshift__": (">>=", "int64", 1),
+}
+
+
+def _base(lib: ModuleType, dtype: str) -> object:
+    return lib.tensor([5, 6, 7, 8], dtype=getattr(lib, dtype))
+
+
+def _augment(target: object, symbol: str, operand: object) -> object:
+    """``target <symbol> operand`` as a statement; the name's value afterwards."""
+    scope = {"target": target, "operand": operand}
+    exec(f"target {symbol} operand", scope)
+    return scope["target"]
+
+
+def test_the_table_is_every_augmented_assignment_the_reference_writes_in_place(
+    ref: ModuleType,
+) -> None:
+    # The Python operators that have an in-place form, as ``operator`` lists
+    # them, which the reference's tensor defines beside the operator itself.
+    in_place = {
+        name
+        for name in dir(ref.Tensor)
+        if name.startswith("__i")
+        and hasattr(operator, name)
+        and hasattr(ref.Tensor, "__" + name[3:])
+    }
+    assert in_place == set(AUGMENTED)
+
+
+@pytest.mark.parametrize("dunder", list(AUGMENTED))
+def test_lucid_defines_the_in_place_operator(dunder: str) -> None:
+    # Without it Python falls back to the out-of-place one and rebinds.
+    assert dunder in vars(lucid.Tensor)
+
+
+@pytest.mark.parametrize("dunder", list(AUGMENTED))
+def test_the_operator_writes_into_self(device: str, dunder: str) -> None:
+    symbol, dtype, operand = AUGMENTED[dunder]
+    a = _base(lucid, dtype).to(device)
+    alias = a
+    # ``_impl.version``: Lucid has no ``Tensor._version`` yet (LCD-488).
+    impl, version = a._impl, a._impl.version
+    expected = getattr(_base(lucid, dtype), "__" + dunder[3:])(operand).tolist()
+
+    out = _augment(a, symbol, operand)
+
+    assert out is alias
+    assert a._impl is impl
+    assert a._impl.version == version + 1
+    assert a.dtype == getattr(lucid, dtype)
+    assert alias.tolist() == expected
+
+
+@pytest.mark.parametrize(
+    "dev",
+    [
+        "cpu",
+        pytest.param(
+            "metal",
+            marks=[
+                pytest.mark.skipif(not metal_available(), reason="metal unavailable"),
+                pytest.mark.xfail(
+                    strict=True,
+                    reason="LCD-18: a Metal view taken before its base is written "
+                    "does not see the write (lucid/_tensor/_metal_views.py)",
+                ),
+            ],
+        ),
+    ],
+)
+@pytest.mark.parametrize("dunder", list(AUGMENTED))
+def test_a_view_of_self_sees_the_write(dev: str, dunder: str) -> None:
+    symbol, dtype, operand = AUGMENTED[dunder]
+    a = _base(lucid, dtype).to(dev)
+    view = a[:2]
+    expected = getattr(_base(lucid, dtype), "__" + dunder[3:])(operand).tolist()
+    _augment(a, symbol, operand)
+    assert view.tolist() == expected[:2]
+
+
+@pytest.mark.parametrize("dunder", list(AUGMENTED))
+def test_the_operator_on_a_view_writes_through_to_its_base(
+    device: str, dunder: str
+) -> None:
+    symbol, dtype, operand = AUGMENTED[dunder]
+    a = _base(lucid, dtype).to(device)
+    view = a[1:3]
+    expected = getattr(_base(lucid, dtype), "__" + dunder[3:])(operand).tolist()
+    _augment(view, symbol, operand)
+    assert a.tolist() == [5, *expected[1:3], 8]
 
 
 def _refusal(fn: Callable[[], object]) -> BaseException:
@@ -37,6 +147,31 @@ def _refusal(fn: Callable[[], object]) -> BaseException:
     with pytest.raises((RuntimeError, TypeError)) as info:
         fn()
     return info.value
+
+
+@pytest.mark.parametrize("operand", [2.5, "tensor"], ids=["number", "tensor"])
+@pytest.mark.parametrize("dunder", list(AUGMENTED))
+def test_an_integer_self_refuses_a_float_result_as_the_reference_does(
+    ref: ModuleType, device: str, dunder: str, operand: object
+) -> None:
+    symbol = AUGMENTED[dunder][0]
+
+    def write(lib: ModuleType, to: str | None) -> Callable[[], object]:
+        a = _base(lib, "int64")
+        other = lib.tensor([1.5, 2.5, 3.5, 4.5]) if operand == "tensor" else operand
+        if to is not None:
+            a = a.to(to)
+            other = other.to(to) if operand == "tensor" else other
+        return lambda: _augment(a, symbol, other)
+
+    theirs = _refusal(write(ref, None))
+    a = _base(lucid, "int64").to(device)
+    other = lucid.tensor([1.5, 2.5, 3.5, 4.5]).to(device) if operand == "tensor" else operand
+    ours = _refusal(lambda: _augment(a, symbol, other))
+    assert isinstance(ours, type(theirs))
+    assert _CANNOT_CAST.search(str(theirs))
+    assert _CANNOT_CAST.search(str(ours))
+    assert a.tolist() == [5, 6, 7, 8]
 
 
 # ── methods ─────────────────────────────────────────────────────────────────
@@ -54,7 +189,42 @@ METHODS: dict[str, tuple[Callable[[ModuleType], object], Callable[[ModuleType], 
     "mul_": (lambda lib: _floats(lib, [1, 2, 3, 4]), lambda lib: (2.5,)),
     "div_": (lambda lib: _floats(lib, [1, 2, 3, 4]), lambda lib: (2.5,)),
     "pow_": (lambda lib: _floats(lib, [1, 2, 3, 4]), lambda lib: (2.0,)),
+    "remainder_": (lambda lib: _floats(lib, [-7, 7, 5.5, -2]), lambda lib: (3.0,)),
+    "fmod_": (lambda lib: _floats(lib, [-7, 7, 5.5, -2]), lambda lib: (3.0,)),
+    "floor_divide_": (lambda lib: _floats(lib, [-7, 7, 5.5, -2]), lambda lib: (2.0,)),
+    "bitwise_and_": (lambda lib: lib.tensor([12, 10, 7, 0]), lambda lib: (6,)),
+    "bitwise_or_": (lambda lib: lib.tensor([12, 10, 7, 0]), lambda lib: (6,)),
+    "bitwise_xor_": (lambda lib: lib.tensor([12, 10, 7, 0]), lambda lib: (6,)),
+    "bitwise_left_shift_": (lambda lib: lib.tensor([1, 2, 3, 4]), lambda lib: (2,)),
+    "bitwise_right_shift_": (lambda lib: lib.tensor([8, 9, 16, 4]), lambda lib: (2,)),
+    "bitwise_not_": (lambda lib: lib.tensor([0, 5, -1, 3]), lambda lib: ()),
+    "logical_and_": (
+        lambda lib: _floats(lib, [0, 1, 2, 0]),
+        lambda lib: (_floats(lib, [1, 0, 3, 0]),),
+    ),
+    "logical_or_": (
+        lambda lib: _floats(lib, [0, 1, 2, 0]),
+        lambda lib: (_floats(lib, [1, 0, 3, 0]),),
+    ),
+    "logical_xor_": (
+        lambda lib: _floats(lib, [0, 1, 2, 0]),
+        lambda lib: (_floats(lib, [1, 0, 3, 0]),),
+    ),
+    "logical_not_": (lambda lib: lib.tensor([0, 1, 2, 0]), lambda lib: ()),
+    "lerp_": (
+        lambda lib: _floats(lib, [0, 1, 2, 3]),
+        lambda lib: (_floats(lib, [4, 4, 4, 4]), 0.25),
+    ),
+    "addcmul_": (
+        lambda lib: _floats(lib, [1, 2, 3, 4]),
+        lambda lib: (_floats(lib, [1, 2, 3, 4]), _floats(lib, [0.5, 0.5, 2, 2])),
+    ),
+    "addcdiv_": (
+        lambda lib: _floats(lib, [1, 2, 3, 4]),
+        lambda lib: (_floats(lib, [1, 2, 3, 4]), _floats(lib, [0.5, 0.5, 2, 2])),
+    ),
     "clamp_": (lambda lib: _floats(lib, [-1, 0.5, 2, 4]), lambda lib: (0.0, 2.5)),
+    "clip_": (lambda lib: _floats(lib, [-1, 0.5, 2, 4]), lambda lib: (0.0, 2.5)),
     "clamp_min_": (lambda lib: _floats(lib, [-1, 0.5, 2, 4]), lambda lib: (0.5,)),
     "clamp_max_": (lambda lib: _floats(lib, [-1, 0.5, 2, 4]), lambda lib: (2.0,)),
 }
@@ -68,7 +238,18 @@ KIND_DOWN: dict[str, Callable[[ModuleType], tuple]] = {
     "mul_": lambda lib: (2.5,),
     "div_": lambda lib: (2,),
     "pow_": lambda lib: (0.5,),
+    "remainder_": lambda lib: (2.5,),
+    "fmod_": lambda lib: (2.5,),
+    "floor_divide_": lambda lib: (2.5,),
+    "bitwise_and_": lambda lib: (2.5,),
+    "bitwise_or_": lambda lib: (2.5,),
+    "bitwise_xor_": lambda lib: (2.5,),
+    "bitwise_left_shift_": lambda lib: (_floats(lib, [1, 1, 1, 1]),),
+    "bitwise_right_shift_": lambda lib: (_floats(lib, [1, 1, 1, 1]),),
+    "addcmul_": lambda lib: (_floats(lib, [1, 2, 3, 4]), _floats(lib, [1, 2, 3, 4])),
+    "addcdiv_": lambda lib: (_floats(lib, [1, 2, 3, 4]), _floats(lib, [1, 2, 3, 4])),
     "clamp_": lambda lib: (0.5, 1.5),
+    "clip_": lambda lib: (0.5, 1.5),
     "clamp_min_": lambda lib: (0.5,),
     "clamp_max_": lambda lib: (1.5,),
     "clamp_ tensor bounds": lambda lib: (_floats(lib, [0, 0, 0, 0]), _floats(lib, [1, 1, 1, 1])),
@@ -139,10 +320,26 @@ def test_an_integer_self_refuses_a_float_result_before_writing(
     assert a.tolist() == [0, 1, 2, 3]
 
 
+def test_lerp_into_an_integer_self_is_refused_as_lerp_refuses_it(device: str) -> None:
+    # lerp does not promote: it refuses a non-float tensor outright, with the
+    # TypeError it documents (the reference raises a RuntimeError there).
+    a = lucid.tensor([0, 1]).to(device)
+    with pytest.raises(TypeError, match="floating-point"):
+        a.lerp_(lucid.tensor([1.0, 2.0]).to(device), 0.5)
+    assert a.tolist() == [0, 1]
+
+
 #: The float methods, whose leaf that requires grad is refused while
 #: autograd records.
 _DIFFERENTIABLE = [
+    "remainder_",
+    "fmod_",
+    "floor_divide_",
+    "lerp_",
+    "addcmul_",
+    "addcdiv_",
     "clamp_",
+    "clip_",
     "clamp_min_",
     "clamp_max_",
 ]
