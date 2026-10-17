@@ -7,6 +7,7 @@
 
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "../../core/AmpPolicy.h"
@@ -51,6 +52,14 @@ namespace lucid {
 // TensorImplPtr
 //     ``a`` unchanged when it is already at the effective dtype,
 //     otherwise a cast copy.
+//
+// Notes
+// -----
+// The :class:`SchemaGuard` here dies when this returns, so the op's body
+// runs with autocast still on — unlike a kernel-template op, whose guard
+// lives as long as its forward.  Harmless while the body calls the backend
+// directly; a body built from other ``*_op`` calls has them apply their
+// own rows (``softplus``).  Holding a guard for the body is LCD-500-E2.
 inline TensorImplPtr promote_for_schema(const OpSchema& schema, const TensorImplPtr& a) {
     if (!a)
         return a;
@@ -70,8 +79,8 @@ inline TensorImplPtr promote_for_schema(const OpSchema& schema, const TensorImpl
 // step is a ``div``.
 //
 // Only float16, bfloat16 and float32 inputs are cast; float64, complex and
-// integer inputs pass through.  Outside an autocast scope nothing is cast
-// and nothing is turned off.
+// integer inputs pass through.  Outside an autocast scope nothing is cast,
+// nothing is turned off and the table is not read.
 //
 // Examples
 // --------
@@ -83,12 +92,12 @@ inline TensorImplPtr promote_for_schema(const OpSchema& schema, const TensorImpl
 //         ...
 class AmpScope {
 public:
-    // Resolves ``name``'s row for ``device`` and, inside an autocast scope,
+    // Inside an autocast scope, resolves ``name``'s row for ``device`` and
     // turns autocast off on ``device`` until the scope is destroyed.
     AmpScope(std::string_view name, Device device)
         : device_(device),
-          policy_(amp::policy_for(name, device)),
-          autocast_dt_(amp::active_dtype(device)) {
+          autocast_dt_(amp::active_dtype(device)),
+          policy_(autocast_dt_ ? amp::policy_for(name, device) : AmpPolicy::KeepInput) {
         if (autocast_dt_)
             autocast_off_.emplace(*autocast_dt_, device, /*enabled=*/false);
     }
@@ -107,7 +116,8 @@ public:
     // The operands of one op, cast together.  Under ``PromoteWidest`` every
     // eligible operand goes to the widest eligible dtype among them —
     // float16 with bfloat16 is float32, as the reference promotes them;
-    // under any other policy each is :meth:`cast` on its own.
+    // under any other policy each is :meth:`cast` on its own.  The one owner
+    // of ``PromoteWidest``: :class:`SchemaGuard` sees one input and keeps it.
     std::vector<TensorImplPtr> cast_widest(std::vector<TensorImplPtr> ts) const {
         if (!autocast_dt_)
             return ts;
@@ -131,16 +141,47 @@ public:
         return ts;
     }
 
-    // The row's policy on this scope's device (``KeepInput`` for an op
-    // with no row), whether or not autocast is active.
-    AmpPolicy policy() const noexcept { return policy_; }
-
 private:
     Device device_;
-    AmpPolicy policy_;
     // The autocast dtype at construction, before the scope turned it off.
     std::optional<Dtype> autocast_dt_;
+    AmpPolicy policy_;
     std::optional<amp::AutocastGuard> autocast_off_;
 };
+
+// The operands of one schema op, promoted together.
+//
+// The one-operand form above sees each operand alone, and under a
+// ``PromoteWidest`` row one operand is its own widest: a float16 image and
+// a float32 grid reached ``grid_sample`` still mismatched and raised
+// ``DtypeMismatch``, where the reference runs both in float32.  This form
+// applies the schema's integer promotion operand by operand, then the row
+// across all of them through :meth:`AmpScope::cast_widest`.  Null operands
+// (an absent bias) pass through.
+//
+// Parameters
+// ----------
+// schema : const OpSchema&
+//     The op's schema; its ``name`` selects the row.
+// operands : std::vector<TensorImplPtr>
+//     The op's floating operands, in any order.
+//
+// Returns
+// -------
+// std::vector<TensorImplPtr>
+//     The operands in the same order, each at its effective dtype.
+inline std::vector<TensorImplPtr> promote_for_schema(const OpSchema& schema,
+                                                     std::vector<TensorImplPtr> operands) {
+    std::optional<Device> device;
+    for (auto& t : operands) {
+        t = promote_for_schema(schema, t);
+        if (t && !device)
+            device = t->device();
+    }
+    if (!device)
+        return operands;
+    const AmpScope amp{schema.name, *device};
+    return amp.cast_widest(std::move(operands));
+}
 
 }  // namespace lucid

@@ -34,7 +34,9 @@
 // While AMP is active the guard also turns it off on ``device`` for its own
 // lifetime, as the reference framework's autocast wrappers do: the op has
 // chosen its dtype at the entry, and the ops its body is built from must
-// not apply their own rows again.
+// not apply their own rows again.  That covers the body only when the guard
+// lives as long as the body does — true of the kernel templates' forwards,
+// not of ``promote_for_schema``, whose guard is gone before the body runs.
 //
 // :func:`check_schema_determinism` exposes the determinism gate as a
 // standalone function for callers (e.g. custom-function wrappers,

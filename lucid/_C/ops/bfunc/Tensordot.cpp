@@ -10,6 +10,7 @@
 #include <numeric>
 #include <set>
 #include <string>
+#include <utility>
 #include <variant>
 
 #include "../../backend/Dispatcher.h"
@@ -24,6 +25,7 @@
 #include "../../core/TensorImpl.h"
 #include "../einops/Einops.h"
 #include "../ufunc/Astype.h"
+#include "../utils/Promote.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -89,12 +91,11 @@ std::string tensordot_einsum_pattern(std::size_t na,
     return a_lhs + "," + b_lhs + "->" + rhs;
 }
 
-}  // namespace
-
-TensorImplPtr tensordot_op(const TensorImplPtr& a,
-                           const TensorImplPtr& b,
-                           std::vector<int> axes_a,
-                           std::vector<int> axes_b) {
+// The contraction, for operands the entry below has already cast.
+TensorImplPtr contract(const TensorImplPtr& a,
+                       const TensorImplPtr& b,
+                       std::vector<int> axes_a,
+                       std::vector<int> axes_b) {
     validate_pair(a, b, "tensordot");
     if (axes_a.size() != axes_b.size())
         ErrorBuilder("tensordot").fail("axes_a and axes_b must have equal length");
@@ -117,7 +118,7 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
     // proposition.
     if (device == Device::CPU && is_half_float(dt))
         return astype_op(
-            tensordot_op(astype_op(a, Dtype::F32), astype_op(b, Dtype::F32), axes_a, axes_b), dt);
+            contract(astype_op(a, Dtype::F32), astype_op(b, Dtype::F32), axes_a, axes_b), dt);
 
     OpScopeFull scope{"tensordot", device, dt, Shape{}};
     {
@@ -252,6 +253,22 @@ TensorImplPtr tensordot_op(const TensorImplPtr& a,
         trc->on_op_io({a, b}, result);
     }
     return result;
+}
+
+}  // namespace
+
+TensorImplPtr tensordot_op(const TensorImplPtr& a,
+                           const TensorImplPtr& b,
+                           std::vector<int> axes_a,
+                           std::vector<int> axes_b) {
+    if (!a || !b)
+        ErrorBuilder("tensordot").fail("null input");
+    // The row: WIDEST under Metal autocast, LOWER under the CPU's.  The
+    // contraction runs as an einsum or a GEMM, and neither applies its own
+    // row inside the scope.
+    const AmpScope amp{"tensordot", a->device()};
+    const auto operands = amp.cast_widest({a, b});
+    return contract(operands[0], operands[1], std::move(axes_a), std::move(axes_b));
 }
 
 }  // namespace lucid

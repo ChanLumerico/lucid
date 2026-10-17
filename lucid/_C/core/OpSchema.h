@@ -227,8 +227,9 @@ struct LUCID_API OpSchema {
 //
 // The hash mixes the schema's ``name``, ``version``, the op's autocast
 // policy on each device (its row in the policy table, Metal then CPU), and
-// the ``deterministic`` flag — what together defines how the op behaves.  ``stable_input_indices``, ``internal``, and arity counts are
-// excluded because they describe shape rather than semantics.
+// the ``deterministic`` flag — what together defines how the op behaves.
+// ``stable_input_indices``, ``internal``, and arity counts are excluded
+// because they describe shape rather than semantics.
 //
 // Used for change-detection: cached graph compilations, profiler entries,
 // and checkpoint metadata embed this hash so a schema bump (or any

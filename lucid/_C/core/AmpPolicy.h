@@ -18,10 +18,13 @@
 //      drives this guard from user code.
 //
 // :class:`SchemaGuard` applies the table at an engine primitive's entry and
-// ``AmpScope`` (``ops/utils/Promote.h``) at an engine composite's.  Both turn
-// autocast off on the op's device while the op runs, so the ops it is built
-// from compute in the dtype the entry chose instead of applying their own
-// rows a second time.
+// ``AmpScope`` (``ops/utils/Promote.h``) at an engine composite's.  Each
+// turns autocast off on the op's device for as long as it lives, so the ops
+// built inside that span compute in the dtype the entry chose instead of
+// applying their own rows a second time.  The kernel templates hold their
+// guard for the whole forward; ``promote_for_schema`` drops its guard on
+// return, so an op that casts through it runs its body with autocast on
+// (LCD-500-E2).
 //
 // References
 // ----------

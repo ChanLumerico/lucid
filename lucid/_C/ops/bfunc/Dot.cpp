@@ -21,6 +21,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../kernel/NaryKernel.h"
 #include "../ufunc/Transpose.h"
+#include "../utils/Promote.h"
 #include "Matmul.h"
 #include "Mul.h"
 #include "_BinaryOp.h"
@@ -127,7 +128,15 @@ const OpSchema Dot2DBackward::schema_v1{"dot_2d", 1, AmpPolicy::KeepInput, true}
 
 }  // namespace
 
-TensorImplPtr dot_op(const TensorImplPtr& a, const TensorImplPtr& b) {
+TensorImplPtr dot_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in) {
+    // The vector dot's row is WIDEST under Metal autocast: a float16 and a
+    // float32 vector meet in float32, as the reference's do, instead of
+    // failing the pair check.  The matrix form has no row.
+    const bool vectors = a_in && b_in && a_in->shape().size() == 1 && b_in->shape().size() == 1;
+    const auto operands = vectors ? promote_for_schema(Dot1DBackward::schema_v1, {a_in, b_in})
+                                  : std::vector<TensorImplPtr>{a_in, b_in};
+    const TensorImplPtr& a = operands[0];
+    const TensorImplPtr& b = operands[1];
     validate_pair(a, b, "dot");
     const Dtype dt = a->dtype();
     const Device device = a->device();

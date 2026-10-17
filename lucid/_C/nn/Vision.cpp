@@ -41,6 +41,7 @@
 #include "../ops/bfunc/_BinaryOp.h"
 #include "../ops/ufunc/Reductions.h"
 #include "../ops/ufunc/Transpose.h"
+#include "../ops/utils/Promote.h"
 #include "../ops/utils/View.h"
 
 namespace lucid {
@@ -126,20 +127,38 @@ BilinearShape flatten_bilinear(const Shape& s1, const Shape& s2, const Shape& sw
     return r;
 }
 
-}  // namespace
-
-TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1,
-                                             const TensorImplPtr& x2,
-                                             const TensorImplPtr& weight,
-                                             const TensorImplPtr& bias) {
-    if (!x1 || !x2 || !weight)
-        ErrorBuilder("bilinear_layer").fail("null input");
-    if (x1->dtype() != x2->dtype() || x1->dtype() != weight->dtype())
-        throw DtypeMismatch(std::string(dtype_name(x1->dtype())),
-                            std::string(dtype_name(x2->dtype())), "bilinear_layer");
+// The kernels read every operand, the bias included, in x1's dtype and on
+// x1's device.
+void require_bilinear_operands(const TensorImplPtr& x1,
+                               const TensorImplPtr& x2,
+                               const TensorImplPtr& weight,
+                               const TensorImplPtr& bias) {
+    for (const auto* t : {&x2, &weight, &bias}) {
+        if (*t && (*t)->dtype() != x1->dtype())
+            throw DtypeMismatch(std::string(dtype_name(x1->dtype())),
+                                std::string(dtype_name((*t)->dtype())), "bilinear_layer");
+    }
     if (x1->device() != x2->device() || x1->device() != weight->device())
         throw DeviceMismatch(std::string(device_name(x1->device())),
                              std::string(device_name(x2->device())), "bilinear_layer");
+}
+
+}  // namespace
+
+TensorImplPtr BilinearLayerBackward::forward(const TensorImplPtr& x1_in,
+                                             const TensorImplPtr& x2_in,
+                                             const TensorImplPtr& weight_in,
+                                             const TensorImplPtr& bias_in) {
+    if (!x1_in || !x2_in || !weight_in)
+        ErrorBuilder("bilinear_layer").fail("null input");
+    // The row is WIDEST under Metal autocast: all four operands meet in one
+    // dtype, as the reference's do, rather than failing the check below.
+    const auto operands = promote_for_schema(schema_v1, {x1_in, x2_in, weight_in, bias_in});
+    const TensorImplPtr& x1 = operands[0];
+    const TensorImplPtr& x2 = operands[1];
+    const TensorImplPtr& weight = operands[2];
+    const TensorImplPtr& bias = operands[3];
+    require_bilinear_operands(x1, x2, weight, bias);
     const auto bs = flatten_bilinear(x1->shape(), x2->shape(), weight->shape());
     Shape out_shape = x1->shape();
     out_shape.back() = static_cast<std::int64_t>(bs.Dout);

@@ -954,6 +954,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - ctc_loss and CPU eval batch_norm survive the autocast table
 
+- one owner applies a WIDEST row across all operands (LCD-500)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

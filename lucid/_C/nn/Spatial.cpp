@@ -178,14 +178,16 @@ TensorImplPtr GridSampleBackward::forward(const TensorImplPtr& input0,
                                           bool align_corners) {
     if (!input0 || !grid0)
         ErrorBuilder("grid_sample").fail("null input");
-    // Both operands, not just the primary.  Resampling interpolates
-    // *between* samples, so the answer is real whatever went in — the
-    // schema says so and this forward is assembled by hand, so it has to
-    // ask.  The grid carries fractional coordinates and is no more
-    // integral than the image; promoting one and not the other would only
-    // move the dtype mismatch below.
-    const TensorImplPtr input = promote_for_schema(schema_v1, input0);
-    const TensorImplPtr grid = promote_for_schema(schema_v1, grid0);
+    // Both operands, not just the primary, and together.  Resampling
+    // interpolates *between* samples, so the answer is real whatever went
+    // in — the schema says so and this forward is assembled by hand, so it
+    // has to ask.  The grid carries fractional coordinates and is no more
+    // integral than the image.  Under Metal autocast the row is WIDEST: a
+    // float16 image with a float32 grid (deformable attention's sampling
+    // locations) runs in float32, as the reference's does.
+    const auto operands = promote_for_schema(schema_v1, {input0, grid0});
+    const TensorImplPtr& input = operands[0];
+    const TensorImplPtr& grid = operands[1];
     validate_grid_sample_inputs(input, grid, mode, padding_mode);
 
     const int N = static_cast<int>(input->shape()[0]);
