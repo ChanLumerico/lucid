@@ -159,8 +159,9 @@ def measure(ref: Any, verbose: bool = False) -> tuple[dict[str, list[str]], list
                 out = fn_ref(*args, **_reference_kwargs(ref, call.kwargs))
                 if out is not None:
                     works.append(name)
-            except Exception:  # noqa: BLE001 - a refusal is the measurement
-                continue
+            except Exception as exc:  # noqa: BLE001 - a refusal is the measurement
+                if _probe.refuses_a_value(exc):
+                    works.append(name)
         if works:
             accepted[symbol.qualname] = works
         if verbose:

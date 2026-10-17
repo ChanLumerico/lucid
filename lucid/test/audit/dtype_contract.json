@@ -1322,7 +1322,20 @@
       "float32",
       "float64"
     ],
+    "Tensor.floor_divide": [
+      "int8",
+      "int16",
+      "int32",
+      "int64",
+      "float16",
+      "float32",
+      "float64"
+    ],
     "Tensor.fmod": [
+      "int8",
+      "int16",
+      "int32",
+      "int64",
       "float16",
       "float32",
       "float64"
@@ -1946,6 +1959,10 @@
       "float64"
     ],
     "Tensor.remainder": [
+      "int8",
+      "int16",
+      "int32",
+      "int64",
       "float16",
       "float32",
       "float64"
@@ -3383,6 +3400,10 @@
       "float64"
     ],
     "lucid.fmod": [
+      "int8",
+      "int16",
+      "int32",
+      "int64",
       "float16",
       "float32",
       "float64"
@@ -4394,6 +4415,10 @@
       "float64"
     ],
     "lucid.remainder": [
+      "int8",
+      "int16",
+      "int32",
+      "int64",
       "float16",
       "float32",
       "float64"

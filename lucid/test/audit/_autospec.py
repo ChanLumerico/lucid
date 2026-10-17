@@ -180,6 +180,13 @@ def _is_tensor_sequence(text: str) -> bool:
     )
 
 
+def _names_only_tuple(text: str) -> bool:
+    """Whether a sequence annotation allows a tuple and no other container."""
+    return bool(re.search(r"\btuple\b", text)) and not re.search(
+        r"\b(list|Sequence|Iterable)\b", text
+    )
+
+
 #: Parameters that want a live module.  ``fuse_conv_bn_eval`` needs a
 #: convolution and a norm layer specifically, so the name picks the class
 #: rather than everything getting a ``Linear``.
@@ -754,6 +761,10 @@ def _value_for(
             _tensor(tuple(t.shape), domain, variant + i + 1)
             for i, t in enumerate(reference)
         ]
+        # In the container ``inputs`` came in: a tuple of inputs takes a
+        # tuple of tangents.
+        if isinstance(reference, tuple):
+            return True, tuple(tangents), True
         return True, tangents, True
     if name == "name" and re.search(r"weight|param", op_name):
         return True, "weight", False
@@ -779,15 +790,19 @@ def _value_for(
         # the operand, and the generic ladder's ``op([x, x])`` form treats
         # it the same way.  Left un-marked, ``_build`` finds no tensor to
         # differentiate and discards a perfectly good invocation.
-        operands = [_tensor(shape, domain, variant), _tensor(shape, domain, variant=1)]
+        pair = (_tensor(shape, domain, variant), _tensor(shape, domain, variant=1))
         if re.search(r"gradcheck|gradgradcheck", op_name):
             # These differentiate what they are given, so what they are
             # given has to be differentiable — "an input has no gradient
             # after backward()" is the check correctly refusing a leaf
             # nobody asked to track.
-            for operand in operands:
+            for operand in pair:
                 operand.requires_grad_(True)
-        return True, operands, True
+        # The container the annotation names.  ``inputs: Tensor |
+        # tuple[Tensor, ...]`` — ``hessian``, ``jacobian``, ``vjp`` —
+        # refuses a list, as the reference does, and the list this built
+        # cost each its smoke cell.
+        return True, (pair if _names_only_tuple(text) else list(pair)), True
     if name == "parameters" or re.search(r"Iterable\[Parameter\]", text):
         return True, list(lucid.nn.Linear(_COUT, _COUT).parameters()), False
     if re.search(r"\bCallable\b", text) and re.search(r"odeint|solve_ivp", op_name):
@@ -842,6 +857,12 @@ def _value_for(
     if re.search(r"TensorImpl", text):
         # An engine-level entry point: it wants the impl, not the wrapper.
         return True, _tensor(shape, domain, variant)._impl, False
+    if name in ("p_cls", "q_cls"):
+        # ``register_kl(p_cls, q_cls)`` refuses a class that is not a
+        # Distribution, as the reference does; the ``type`` rule below
+        # handed it ``nn.Linear``.  Calling it only builds the decorator,
+        # so nothing is registered.
+        return True, lucid.distributions.Normal, False
     if name == "module_cls" or re.search(r"^type$", text):
         return True, lucid.nn.Linear, False
     if re.search(r"PackedSequence", text):
@@ -905,9 +926,17 @@ def _build(fn: Any, op_name: str, domain: str, shape: tuple[int, ...]) -> _Plan 
             continue
         if param.kind is param.VAR_POSITIONAL:
             # ``f(*tensors)`` — two of the primary shape is the reading
-            # that makes ``stack`` and ``cat`` mean something.
-            plan.args.append(_tensor(shape, domain))
-            plan.args.append(_tensor(shape, domain, variant=1))
+            # that makes ``stack`` and ``cat`` mean something.  The draws
+            # continue after any tensor already built: a method such as
+            # ``Tensor.clamp(self, *args)`` has its receiver built first,
+            # and starting again at variant 0 handed it ``x.clamp(x, y)`` —
+            # every element exactly on its lower bound, the one input where
+            # the derivative is a convention, so the gradient axes reported
+            # a corner and a missing double backward (e2420050d let tensor
+            # bounds through, which made this the first call that ran).
+            plan.args.append(_tensor(shape, domain, variant=tensors_built))
+            plan.args.append(_tensor(shape, domain, variant=tensors_built + 1))
+            tensors_built += 2
             if first_tensor is None:
                 first_tensor, reference = len(plan.args) - 2, plan.args[-2]
             continue

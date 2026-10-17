@@ -2224,8 +2224,9 @@ class DtypeAxis(Axis):
                     kwargs = _probe.dtype_kwargs(call, build)
                     if _probe.to_numpy(fn(*args, **kwargs)) is not None:
                         support[device].add(name)
-                except Exception:  # noqa: BLE001
-                    continue
+                except Exception as exc:  # noqa: BLE001 - a refusal is the answer
+                    if _probe.refuses_a_value(exc):
+                        support[device].add(name)
 
         if not any(support.values()):
             complex_support = self._complex_check(fn, call)

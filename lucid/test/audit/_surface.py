@@ -543,6 +543,15 @@ def resolve(symbol: Symbol) -> Any:
     return None
 
 
+#: Names whose ``F.`` spelling is a different operation from the free and
+#: method ones, in the reference as well: ``Tensor.unfold(dim, size, step)``
+#: slides a window along one dimension, ``F.unfold(input, kernel_size)`` is
+#: im2col.  Comparing them asked whether two different ops agree, and the
+#: entry axis failed both the moment ``Tensor.unfold``'s signature became
+#: readable.
+_FUNCTIONAL_IS_ANOTHER_OP: frozenset[str] = frozenset({"unfold"})
+
+
 def counterparts(symbol: Symbol) -> Iterator[tuple[str, Any]]:
     """Every entry point the same operation is reachable through.
 
@@ -550,12 +559,17 @@ def counterparts(symbol: Symbol) -> Iterator[tuple[str, Any]]:
     which is how scalar coercion came to exist on the operator path only.
     """
     name = symbol.short
+    split = name in _FUNCTIONAL_IS_ANOTHER_OP
+    is_functional = symbol.qualname.startswith("F.")
     free = getattr(lucid, name, None)
-    if callable(free) and not isinstance(free, type):
-        yield "free", free
-    method = inspect.getattr_static(_tensor_module.Tensor, name, None)
-    if callable(method):
-        yield "method", method
+    if not (split and is_functional):
+        if callable(free) and not isinstance(free, type):
+            yield "free", free
+        method = inspect.getattr_static(_tensor_module.Tensor, name, None)
+        if callable(method):
+            yield "method", method
+    if split and not is_functional:
+        return
     functional = getattr(F, name, None)
     if (
         callable(functional)

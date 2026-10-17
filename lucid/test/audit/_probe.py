@@ -337,6 +337,21 @@ def numpy_of(name: str) -> Any:
     }[name]
 
 
+def refuses_a_value(exc: BaseException) -> bool:
+    """Whether a refusal is about the values handed in rather than their dtype.
+
+    Integer division by zero is the case: ``floor_divide``, ``fmod`` and
+    ``remainder`` take every integer dtype, the CPU and the reference refuse
+    a zero divisor (LCD-159), and Metal answers one with a defined value.
+    The probe's float companions mostly truncate to 0 at an integer dtype,
+    so counting that refusal as "dtype not supported" reported the CPU as
+    missing four dtypes it has.  The op dispatched on the dtype; the dtype is
+    supported.  Both the dtype axis and the contract generator ask through
+    here, so they keep answering the same question.
+    """
+    return isinstance(exc, ZeroDivisionError) or "ZeroDivisionError" in str(exc)
+
+
 def dtype_args(call: Any, name: str, build: Callable[..., Any]) -> list[Any]:
     """One call's arguments, rebuilt at the dtype ``name``.
 
@@ -427,6 +442,7 @@ __all__ = [
     "numpy_of",
     "preserved_globals",
     "quadratic_shrink",
+    "refuses_a_value",
     "relative",
     "rng",
     "sample",

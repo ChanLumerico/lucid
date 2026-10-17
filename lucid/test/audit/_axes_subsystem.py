@@ -388,6 +388,11 @@ def _moment(dist: Any, name: str) -> Any:
         return None
 
 
+#: How far inside ``(0, 1)`` the ``icdf`` round trip keeps its probabilities,
+#: away from the quantile's poles.  Points beyond it are not compared.
+_ICDF_CLIP = 1e-4
+
+
 class DistributionAxis(Axis):
     """Sample, score, and invert — the three must agree with each other.
 
@@ -706,10 +711,16 @@ class DistributionAxis(Axis):
         invertible = np.zeros(flat.shape, dtype=bool)
         invertible[:-1] |= rises
         invertible[1:] |= rises
-        invertible &= (flat > 1e-6) & (flat < 1 - 1e-6)
+        # Only points whose probability the clip below leaves alone: a
+        # probability moved to the clip bound has another quantile, and
+        # comparing that quantile with the original ``x`` measured the clip.
+        # ``HalfNormal(0.5).cdf(2) = 0.99994`` was clipped to ``0.9999`` and
+        # reported as "icdf(cdf(x)) is off by 5.47e-02" the day the family
+        # gained an ``icdf``.
+        invertible &= (flat > _ICDF_CLIP) & (flat < 1 - _ICDF_CLIP)
         if not invertible.any():
             return problems, checked
-        inside = _probe.as_f64(np.clip(flat, 1e-4, 1 - 1e-4))
+        inside = _probe.as_f64(np.clip(flat, _ICDF_CLIP, 1 - _ICDF_CLIP))
         try:
             back = _probe.to_numpy(icdf(inside))
         except NotImplementedError:

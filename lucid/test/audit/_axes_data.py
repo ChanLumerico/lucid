@@ -956,7 +956,7 @@ class SchedulerAxis(Axis):
         instance, why = _construct(
             obj,
             optimizer=optimizer,
-            schedulers=[s for s in (_constant_scheduler(),) if s is not None],
+            schedulers=[s for s in (_constant_scheduler(optimizer),) if s is not None],
         )
         if instance is None:
             return self._finding(symbol, Status.SKIP, f"construct: {why}")
@@ -999,7 +999,9 @@ class SchedulerAxis(Axis):
         replacement, _ = _construct(
             obj,
             optimizer=fresh_optimizer,
-            schedulers=[s for s in (_constant_scheduler(),) if s is not None],
+            schedulers=[
+                s for s in (_constant_scheduler(fresh_optimizer),) if s is not None
+            ],
         )
         if replacement is None or not hasattr(replacement, "load_state_dict"):
             return self._finding(symbol, Status.PASS, f"{len(rates)} finite rates")
@@ -1037,9 +1039,15 @@ def _toy_optimizer() -> Any:
         return None
 
 
-def _constant_scheduler() -> Any:
-    """A scheduler to nest, for the ones that compose others."""
-    optimizer = _toy_optimizer()
+def _constant_scheduler(optimizer: Any = None) -> Any:
+    """A scheduler to nest, for the ones that compose others.
+
+    Pass the optimizer the composite drives: ``ChainedScheduler`` refuses
+    schedulers of another optimizer, as the reference does, and nesting
+    one built on a fresh optimizer cost the scheduler axis its cell.
+    """
+    if optimizer is None:
+        optimizer = _toy_optimizer()
     if optimizer is None:
         return None
     try:
