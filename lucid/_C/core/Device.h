@@ -60,8 +60,8 @@ enum class Device : std::uint8_t {
 
 // Returns the canonical lower-case name for a device tag.
 //
-// The string form is what surfaces in error messages, ``repr(tensor)``
-// output, and the Python :class:`Device` wrapper's ``__str__``.
+// The string form is what the engine's error messages print, so it is the
+// public device name: ``metal``, as ``tensor.device`` says, not the enum's.
 //
 // Parameters
 // ----------
@@ -71,7 +71,7 @@ enum class Device : std::uint8_t {
 // Returns
 // -------
 // std::string_view
-//     ``"cpu"`` for :attr:`Device::CPU`, ``"gpu"`` for :attr:`Device::GPU`.
+//     ``"cpu"`` for :attr:`Device::CPU`, ``"metal"`` for :attr:`Device::GPU`.
 //     The returned view points into a static string literal — safe to store
 //     beyond the call site.
 //
@@ -85,13 +85,13 @@ enum class Device : std::uint8_t {
 // --------
 // ::
 //
-//     const auto name = device_name(Device::GPU);   // "gpu"
+//     const auto name = device_name(Device::GPU);   // "metal"
 constexpr std::string_view device_name(Device d) {
     switch (d) {
     case Device::CPU:
         return "cpu";
     case Device::GPU:
-        return "gpu";
+        return "metal";
     }
     throw std::logic_error("device_name: unknown Device");
 }
