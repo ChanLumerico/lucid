@@ -191,16 +191,24 @@ def test_an_engine_step_writes_a_partial_view_into_its_part_of_the_base(
     assert _flat(a) != [1.0] * 3
 
 
-def test_a_refused_running_stat_write_leaves_both_stats_as_they_were() -> None:
-    bn = nn.BatchNorm1d(3).to("metal")
-    base = lucid.ones(6, device="metal")
+@pytest.mark.parametrize("device", DEVICES)
+def test_a_running_stat_write_lands_in_its_part_of_the_base(device: str) -> None:
+    # A running statistic that is a view of part of a tensor is updated on a
+    # dense copy and written back through its geometry, on Metal into the
+    # family's root, while the mean beside it is updated in place.  Metal
+    # refused it until LCD-491; every layout and BatchNorm:
+    # nn/test_running_stats_layout.py.
+    bn = nn.BatchNorm1d(3).to(device)
+    dense = nn.BatchNorm1d(3).to(device)
+    base = lucid.ones(6, device=device)
     bn.running_var = _view(base, [3], [1], 3)
-    mean_before = _flat(bn.running_mean)
-    with pytest.raises(NotImplementedError, match="part of a tensor"):
-        bn(lucid.randn(4, 3, device="metal"))
-    assert _flat(bn.running_mean) == mean_before
-    assert _flat(base) == [1.0] * 6
-    assert bn.num_batches_tracked.item() == 0
+    x = lucid.randn(4, 3, device=device)
+    bn(x)
+    dense(x)
+    assert _flat(bn.running_var) == _flat(dense.running_var) != [1.0] * 3
+    assert _flat(bn.running_mean) == _flat(dense.running_mean)
+    assert _flat(base) == [1.0] * 3 + _flat(dense.running_var)
+    assert bn.num_batches_tracked.item() == 1
 
 
 def test_a_refused_compiled_step_target_leaves_every_target_as_it_was() -> None:

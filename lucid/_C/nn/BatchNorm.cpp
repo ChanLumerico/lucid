@@ -15,6 +15,7 @@
 #include "BatchNorm.h"
 
 #include <cstring>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <vector>
@@ -27,6 +28,7 @@
 #include "../backend/IBackend.h"
 #include "../compile/Tracer.h"
 #include "../core/AmpPolicy.h"
+#include "../core/ElementWrite.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
@@ -53,36 +55,66 @@ namespace lucid {
 
 namespace {
 
-// Takes a running statistic's new values.  A buffer with live views takes
-// them into its own storage, so the views see the update, and every
-// member's version moves; one without views has its storage slot replaced,
-// as it always has.  A plain copy rather than write_through: the op's own
-// input storage (``into_stat``) still holds the buffer here, and no node
-// saves the running statistics — they are not inputs of the graph.
-void take_running_stat(const TensorImplPtr& stat, Storage fresh) {
-    if (stat->is_aliased() && stat->is_dense()) {
-        auto* dst = std::get_if<CpuStorage>(&stat->mutable_storage());
-        const auto* src = std::get_if<CpuStorage>(&fresh);
-        if (dst && src && dst->nbytes == src->nbytes) {
-            if (src->nbytes > 0)
-                std::memcpy(dst->ptr.get(), src->ptr.get(), src->nbytes);
-            stat->bump_version();
-            return;
-        }
+// Puts a running statistic's new values into ``stat``, whose buffer is its
+// elements (write_elements).  A buffer other tensors also read — its live
+// views, or a larger buffer it is the start of — takes them into its own
+// bytes, so the others see the update, and every member's version moves;
+// any other has its storage slot replaced, as it always has, and its
+// version stays, as the reference's does.  A plain copy rather than
+// write_through: the op's own input storage (``into_stat``) still holds the
+// buffer here, and no node saves the running statistics — they are not
+// inputs of the graph.
+void put_running_stat(TensorImpl& stat, Storage fresh) {
+    Storage& slot = stat.mutable_storage();
+    auto* dst = std::get_if<CpuStorage>(&slot);
+    const auto* src = std::get_if<CpuStorage>(&fresh);
+    if (dst && src && (stat.is_aliased() || !stat.is_dense())) {
+        if (stat.nbytes() > 0)
+            std::memcpy(dst->ptr.get(), src->ptr.get(), stat.nbytes());
+        stat.bump_version();
+        return;
     }
-    stat->mutable_storage() = std::move(fresh);
+    slot = std::move(fresh);
 }
 
-// Takes both running statistics' new values, or neither: each is checked
-// before either is written, so a refused one leaves the other as it was.
+// Takes a running statistic's new values into its own elements, wherever
+// they sit in its buffer: a column of a larger tensor, a transpose, a Metal
+// view of part of one.  The update took them as the first C of the buffer
+// and wrote there (LCD-491).
+void take_running_stat(TensorImplPtr stat, Storage fresh) {
+    write_elements(stat, [&](TensorImplPtr& elems) { put_running_stat(*elems, std::move(fresh)); });
+}
+
+// Takes both running statistics' new values, or neither.  Only a write-back
+// into a statistic whose buffer is not its elements can refuse (one whose
+// elements overlap), so the mean's values are kept aside, and put back if
+// the variance is refused, only when the variance takes that path.
 void take_running_stats(const TensorImplPtr& mean,
                         const TensorImplPtr& var,
                         Storage new_mean,
                         Storage new_var) {
-    mean->check_wholesale_writable("batch_norm");
-    var->check_wholesale_writable("batch_norm");
+    const TensorImplPtr mean_before = buffer_is_elements(*var) ? nullptr : dense_elements(*mean);
     take_running_stat(mean, std::move(new_mean));
-    take_running_stat(var, std::move(new_var));
+    try {
+        take_running_stat(var, std::move(new_var));
+    } catch (...) {
+        if (mean_before)
+            mean->copy_from(*mean_before);
+        throw;
+    }
+}
+
+// Schedules the new running statistics on Metal, so the next step's update
+// does not carry this one's lazy graph.  Their buffers' arrays: a Metal
+// view's family root, which the write replaced.
+void flush_running_stats(const TensorImplPtr& mean, const TensorImplPtr& var) {
+    std::vector<mlx::core::array> arrs;
+    arrs.reserve(2);
+    for (const auto* stat : {&mean, &var})
+        if (const auto* gs = std::get_if<GpuStorage>(&(*stat)->raw_storage()); gs && gs->arr)
+            arrs.push_back(*gs->arr);
+    if (!arrs.empty())
+        mlx::core::async_eval(arrs);
 }
 
 // Running statistics are a pair of (C,) buffers on x's device sharing one
@@ -357,21 +389,8 @@ TensorImplPtr BatchNormNdBackward<N>::forward(const TensorImplPtr& x,
                                                     x_eff->device(), false);
         } else {
             take_running_stats(running_mean, running_var, std::move(new_rm), std::move(new_rv));
-
-            if (x_eff->device() == Device::GPU) {
-                std::vector<mlx::core::array> arrs;
-                arrs.reserve(2);
-                if (const auto* gs = std::get_if<GpuStorage>(&running_mean->storage())) {
-                    if (gs->arr)
-                        arrs.push_back(*gs->arr);
-                }
-                if (const auto* gs = std::get_if<GpuStorage>(&running_var->storage())) {
-                    if (gs->arr)
-                        arrs.push_back(*gs->arr);
-                }
-                if (!arrs.empty())
-                    mlx::core::async_eval(arrs);
-            }
+            if (x_eff->device() == Device::GPU)
+                flush_running_stats(running_mean, running_var);
         }
     }
 
@@ -583,31 +602,17 @@ void batch_norm_update_running_stats(std::shared_ptr<TensorImpl> running_mean,
     Storage bv_scaled = be.mul_scalar(batch_var, stat_shape, buf_dt, eff * unbiased_factor);
     Storage new_rv = be.add(rv_scaled, bv_scaled, stat_shape, buf_dt);
 
-    // In-place storage replacement.  Matches the Python pattern
-    // ``self._buffers["running_mean"] = new_rm`` — the TensorImpl identity
-    // is preserved; only its underlying storage is swapped — or, for a buffer
-    // with live views, its values are written into it.
+    // Into the buffers' own elements: the TensorImpl identity is preserved
+    // and every view of the buffers sees the update (take_running_stat).
     take_running_stats(running_mean, running_var, std::move(new_rm), std::move(new_rv));
 
     // GPU: break the MLX lazy expression chain so subsequent training steps
     // don't carry an ever-growing parent graph through running_mean's lineage.
-    // ``async_eval`` schedules without blocking the CPU.  num_batches_tracked
-    // is left to the Python caller (its dtype is I64 which not all backends
-    // support via add_scalar; the increment is one cheap op in Python).
-    if (device == Device::GPU) {
-        std::vector<mlx::core::array> arrs;
-        arrs.reserve(2);
-        if (const auto* gs = std::get_if<GpuStorage>(&running_mean->storage())) {
-            if (gs->arr)
-                arrs.push_back(*gs->arr);
-        }
-        if (const auto* gs = std::get_if<GpuStorage>(&running_var->storage())) {
-            if (gs->arr)
-                arrs.push_back(*gs->arr);
-        }
-        if (!arrs.empty())
-            mlx::core::async_eval(arrs);
-    }
+    // num_batches_tracked is left to the Python caller (its dtype is I64
+    // which not all backends support via add_scalar; the increment is one
+    // cheap op in Python).
+    if (device == Device::GPU)
+        flush_running_stats(running_mean, running_var);
 }
 
 }  // namespace lucid
