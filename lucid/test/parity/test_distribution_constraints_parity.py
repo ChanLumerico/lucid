@@ -352,8 +352,6 @@ _EXCEPTIONS: dict[tuple[str, str], str] = {
     ("RelaxedBernoulli", "table"): "temperature is in the table",
     ("RelaxedOneHotCategorical", "param:temperature"): "as RelaxedBernoulli",
     ("RelaxedOneHotCategorical", "table"): "temperature is in the table",
-    ("TransformedDistribution", "support"): "Lucid transforms declare no "
-    "codomain, so there is no support to report",
     # The reference builds these families as transforms of a base and, in
     # ``cdf``, validates the value carried back to the base against the
     # *base's* support rather than its own.  Lucid checks a cdf's value
@@ -499,15 +497,6 @@ def test_constraint_table(name: str, ref: Any) -> None:
 _DEVICES = ["cpu", "metal"]
 _SCORERS = ("log_prob", "cdf")
 
-# Validation cases a known defect keeps from matching, each pinned so the fix
-# shows up as an XPASS.
-_VALIDATION_XFAILS: dict[tuple[str, str], str] = {
-    (
-        "TransformedDistribution",
-        "log_prob",
-    ): "LCD-397: transforms declare no domain/codomain",
-}
-
 
 def _lucid_on(device: str) -> Callable[[Any], lucid.Tensor]:
     # Built on the host and moved: ``lucid.tensor(<0-d array>, device=...)``
@@ -541,28 +530,15 @@ def _agree(ours: tuple[str, Any], theirs: tuple[str, Any]) -> bool:
     )
 
 
-def _scorer_params(xfails: dict[tuple[str, str], str]) -> list[Any]:
-    params = []
-    for name in sorted(CASES):
-        for method in _SCORERS:
-            for device in _DEVICES:
-                reason = xfails.get((name, method))
-                marks = (
-                    [pytest.mark.xfail(strict=True, reason=reason)] if reason else []
-                )
-                params.append(
-                    pytest.param(
-                        name,
-                        method,
-                        device,
-                        marks=marks,
-                        id=f"{name}.{method}-{device}",
-                    )
-                )
-    return params
+_SCORER_PARAMS = [
+    pytest.param(name, method, device, id=f"{name}.{method}-{device}")
+    for name in sorted(CASES)
+    for method in _SCORERS
+    for device in _DEVICES
+]
 
 
-@pytest.mark.parametrize("name,method,device", _scorer_params(_VALIDATION_XFAILS))
+@pytest.mark.parametrize("name,method,device", _SCORER_PARAMS)
 def test_scored_value_validation(name: str, method: str, device: str, ref: Any) -> None:
     case = CASES[name]
     lt, rt = _lucid_on(device), _ref_tensor(ref)
@@ -579,7 +555,7 @@ def test_scored_value_validation(name: str, method: str, device: str, ref: Any) 
     _judge(name, f"validates:{method}", differences)
 
 
-@pytest.mark.parametrize("name,method,device", _scorer_params({}))
+@pytest.mark.parametrize("name,method,device", _SCORER_PARAMS)
 def test_scored_values_without_validation(
     name: str, method: str, device: str, ref: Any
 ) -> None:
