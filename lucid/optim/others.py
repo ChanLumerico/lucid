@@ -195,9 +195,16 @@ class Adagrad(Optimizer):
 
     Examples
     --------
-    >>> optimizer = optim.Adagrad(model.parameters(), lr=1e-2)
+    The sparse-feature case it suits — an embedding whose rows are hit
+    unevenly:
+
+    >>> import lucid
+    >>> import lucid.nn as nn
+    >>> import lucid.optim as optim
+    >>> table = nn.Embedding(10, 3)
+    >>> optimizer = optim.Adagrad(table.parameters(), lr=1e-2)
     >>> optimizer.zero_grad()
-    >>> loss.backward()
+    >>> (table(lucid.tensor([1, 4, 4, 7])) ** 2).sum().backward()
     >>> optimizer.step()
     """
 

@@ -88,10 +88,10 @@ def _fixed_arity_method(e: OpEntry, tensor_cls: type) -> object:
 
 def _masked_fill_(self: Tensor, mask: Tensor, value: float | Tensor) -> Tensor:
     """Fill elements of ``self`` where ``mask`` is ``True`` with ``value``, in place."""
+    from lucid._ops.composite._shared import _is_tensor
     from lucid._ops.composite.indexing import _write_inplace
 
-    if hasattr(value, "_impl"):
-        assert isinstance(value, Tensor)
+    if _is_tensor(value):
         if value.ndim != 0:
             raise RuntimeError(
                 "masked_fill_ only supports a 0-dimensional value tensor"
@@ -121,10 +121,10 @@ def _scatter_(
     reduce: str | None = None,
 ) -> Tensor:
     """Write ``src`` into ``self`` along ``dim`` at ``index``, in place."""
+    from lucid._ops.composite._shared import _is_tensor
     from lucid._ops.composite.indexing import _write_inplace
 
-    if hasattr(src, "_impl"):
-        assert isinstance(src, Tensor)
+    if _is_tensor(src):
         return _write_inplace(
             self,
             "scatter_",
