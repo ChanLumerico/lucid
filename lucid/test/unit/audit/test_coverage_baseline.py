@@ -17,6 +17,7 @@ details that move for reasons unrelated to the framework, and a baseline
 that churns is a baseline nobody re-reads.
 """
 
+import importlib
 import json
 
 import pytest
@@ -169,6 +170,150 @@ def test_regressions_and_progress_are_reported_together(capsys) -> None:
     assert report_coverage_diff(now, recorded, _quiet()) == 1
     out = capsys.readouterr().out
     assert "LOST" in out and "NEW" in out
+
+
+# ── a symbol taken out of the public surface ─────────────────────────────────
+#
+# LCD-532: LCD-473 removed ``lucid.pad`` and ``Tensor.pad`` on purpose and
+# their 24 recorded cells came back as LOST, holding the gate red over a
+# deliberate change.  The probe below is a real public name in a real
+# module, so the diff's proof of removal walks the same surface a sweep does.
+
+_PROBE = "audit_removal_probe"
+
+
+def _probe_fn(x: object) -> object:
+    return x
+
+
+@pytest.fixture
+def public_probe(monkeypatch: pytest.MonkeyPatch):
+    """Publish ``_PROBE`` in a module; the returned callable takes it out again."""
+
+    def publish(module_path: str) -> object:
+        module = importlib.import_module(module_path)
+
+        def probe(x: object) -> object:
+            return x
+
+        probe.__module__ = module_path  # owned by Lucid, so the walk counts it
+        monkeypatch.setattr(module, _PROBE, probe, raising=False)
+        monkeypatch.setattr(module, "__all__", [*module.__all__, _PROBE])
+        return module
+
+    def withdraw(module: object) -> None:
+        monkeypatch.delattr(module, _PROBE)
+        monkeypatch.setattr(
+            module, "__all__", [n for n in module.__all__ if n != _PROBE]
+        )
+
+    return publish, withdraw
+
+
+@pytest.fixture
+def tensor_probe(monkeypatch: pytest.MonkeyPatch):
+    from lucid._tensor.tensor import Tensor
+
+    monkeypatch.setattr(Tensor, _PROBE, _probe_fn, raising=False)
+    return lambda: monkeypatch.delattr(Tensor, _PROBE)
+
+
+def test_a_cell_of_a_still_public_symbol_is_lost(public_probe, capsys) -> None:
+    publish, _ = public_probe
+    publish("lucid.special")
+    recorded = {f"grad::lucid.special.{_PROBE}": "pass"}
+    assert report_coverage_diff(Report(), recorded, _quiet()) == 1
+    out = capsys.readouterr().out
+    assert "LOST" in out and "REMOVED" not in out
+
+
+def test_a_cell_of_a_removed_symbol_is_removed_not_lost(public_probe, capsys) -> None:
+    publish, withdraw = public_probe
+    withdraw(publish("lucid.special"))
+    key = f"grad::lucid.special.{_PROBE}"
+    assert report_coverage_diff(Report(), {key: "pass"}, _quiet()) == 0
+    out = capsys.readouterr().out
+    assert "REMOVED" in out and key in out and "LOST" not in out
+    assert "update-coverage" in out
+    assert "unchanged" not in out
+
+
+def test_a_removed_tensor_method_is_removed_not_lost(tensor_probe, capsys) -> None:
+    key = f"smoke::Tensor.{_PROBE}"
+    tensor_probe()
+    assert report_coverage_diff(Report(), {key: "pass"}, _quiet()) == 0
+    assert "REMOVED" in capsys.readouterr().out
+
+
+def test_a_removal_and_a_regression_are_told_apart(public_probe, capsys) -> None:
+    publish, withdraw = public_probe
+    withdraw(publish("lucid.special"))
+    recorded = {f"grad::lucid.special.{_PROBE}": "pass", "grad::lucid.exp": "pass"}
+    now = _report(("grad", "lucid.exp", Status.SKIP))
+    assert report_coverage_diff(now, recorded, _quiet()) == 1
+    lines = capsys.readouterr().out.splitlines()
+    assert any("LOST" in line and "grad::lucid.exp" in line for line in lines)
+    assert any("REMOVED" in line and _PROBE in line for line in lines)
+
+
+def test_no_removal_is_claimed_while_a_module_fails_to_import(
+    public_probe, monkeypatch, capsys
+) -> None:
+    """A sweep skips an unimportable module silently, so its symbols are
+    missing without having been removed — they stay LOST."""
+    from lucid.test.audit import _surface
+
+    publish, withdraw = public_probe
+    withdraw(publish("lucid.special"))
+    real = _surface._import
+    monkeypatch.setattr(
+        _surface, "_import", lambda path: None if path == "lucid.fft" else real(path)
+    )
+    key = f"grad::lucid.special.{_PROBE}"
+    assert report_coverage_diff(Report(), {key: "pass"}, _quiet()) == 1
+    assert "LOST" in capsys.readouterr().out
+
+
+def test_an_entry_cell_goes_with_the_spelling_it_was_compared_with(
+    public_probe, capsys
+) -> None:
+    """``entry::F.pad`` answered by comparing ``F.pad`` with ``lucid.pad``;
+    with the free spelling gone there is one entry point and no question."""
+    publish, _ = public_probe
+    publish("lucid.nn.functional")
+    recorded = {f"entry::F.{_PROBE}": "pass", f"entry::lucid.{_PROBE}": "pass"}
+    now = _report(("entry", f"F.{_PROBE}", Status.NOT_APPLICABLE))
+    assert report_coverage_diff(now, recorded, _quiet()) == 0
+    out = capsys.readouterr().out
+    assert out.count("REMOVED") == 2 and "LOST" not in out
+    assert f"lucid.{_PROBE}, is gone" in out
+
+
+@pytest.mark.parametrize(
+    "status", [Status.SKIP, Status.UNSUPPORTED], ids=["skip", "unsupported"]
+)
+def test_an_entry_cell_that_still_has_its_question_stays_lost(
+    public_probe, capsys, status: Status
+) -> None:
+    """Only "one entry point left" follows a removed spelling.  A cell
+    that now skips or refuses was asked and could not be answered."""
+    publish, _ = public_probe
+    publish("lucid.nn.functional")
+    recorded = {f"entry::F.{_PROBE}": "pass", f"entry::lucid.{_PROBE}": "pass"}
+    now = _report(("entry", f"F.{_PROBE}", status))
+    assert report_coverage_diff(now, recorded, _quiet()) == 1
+    assert "LOST" in capsys.readouterr().out
+
+
+def test_an_entry_cell_with_no_removed_spelling_stays_lost(
+    public_probe, capsys
+) -> None:
+    publish, _ = public_probe
+    publish("lucid.nn.functional")
+    recorded = {f"entry::F.{_PROBE}": "pass"}
+    now = _report(("entry", f"F.{_PROBE}", Status.NOT_APPLICABLE))
+    assert report_coverage_diff(now, recorded, _quiet()) == 1
+    assert "LOST" in capsys.readouterr().out
 
 
 # ── the checked-in baseline ───────────────────────────────────────────────────

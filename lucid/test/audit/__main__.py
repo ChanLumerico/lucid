@@ -778,7 +778,8 @@ def _scoped_coverage(
 ) -> dict[str, str]:
     """A filtered sweep cannot answer cells outside the requested scope.
 
-    Keep the complete baseline for full runs, including removed symbols.
+    Keep the complete baseline for full runs, including removed symbols,
+    which the diff names as REMOVED rather than dropping without a word.
     A scoped run compares only the selected symbols and axes, including
     selected cells that now skip or refuse their input.
     """
@@ -799,6 +800,44 @@ def _scoped_coverage(
     }
 
 
+def _removed_cells(report: Report, unanswered: set[str]) -> dict[str, str]:
+    """The unanswered cells a removal from the public surface accounts for.
+
+    ``key -> why``.  LOST says the op is still exported and the audit can
+    no longer reach it; a symbol taken out on purpose is neither.  LCD-473
+    removed ``lucid.pad`` and ``Tensor.pad`` and updated the released
+    surface, and their 24 cells, reported as LOST, held the gate red over a
+    deliberate change.  The entry axis answers a symbol by comparing it with
+    its other spellings, so once all but one are gone its question has no
+    answer either — ``entry::F.pad`` went with them.
+    """
+    gone = _surface.removed(key.partition("::")[2] for key in unanswered)
+    if not gone:
+        return {}
+    now = {finding.key: finding.status for finding in report.findings}
+    out: dict[str, str] = {}
+    for key in unanswered:
+        axis, _, symbol = key.partition("::")
+        if symbol in gone:
+            out[key] = f"{symbol} is no longer public"
+            continue
+        spelled = _surface.spellings(symbol.rpartition(".")[2]) & gone
+        if (
+            axis == _axes.EntryPointAxis.name
+            and spelled
+            and now.get(key) is Status.NOT_APPLICABLE
+        ):
+            out[key] = f"the spelling it was compared with, {min(spelled)}, is gone"
+    return out
+
+
+def _capped(console: Console, label: str, colour: str, lines: list[str]) -> None:
+    for line in lines[:20]:
+        console.always("  " + console.paint(label, colour) + f" {line}")
+    if len(lines) > 20:
+        console.always(console.paint(f"       ... and {len(lines) - 20} more", "grey"))
+
+
 def report_coverage_diff(
     report: Report, recorded: dict[str, str], console: Console
 ) -> int:
@@ -806,10 +845,14 @@ def report_coverage_diff(
 
     A cell that answered and no longer does is the interesting direction:
     the op is still there, the audit simply cannot reach it any more,
-    which is what a refactor breaks without breaking a test.
+    which is what a refactor breaks without breaking a test.  A cell whose
+    symbol has left the public surface is reported as REMOVED and is not
+    a regression: the released-surface gate is what judges a removal.
     """
     current = _answered(report)
-    lost = sorted(set(recorded) - set(current))
+    unanswered = set(recorded) - set(current)
+    removed = _removed_cells(report, unanswered)
+    lost = sorted(unanswered - set(removed))
     gained = sorted(set(current) - set(recorded))
     worsened = sorted(
         key
@@ -817,7 +860,7 @@ def report_coverage_diff(
         if recorded[key] == "pass" and current[key] != "pass"
     )
 
-    if not (lost or gained or worsened):
+    if not (lost or gained or worsened or removed):
         console.always("")
         console.always(
             console.paint("  coverage unchanged against the baseline", "green")
@@ -838,19 +881,26 @@ def report_coverage_diff(
                 + console.paint("WORSE", "red", "bold")
                 + f" {key}  (pass -> {current[key]})"
             )
+    if removed:
+        console.always("")
+        console.rule(f"removed from the surface · {len(removed)}", "grey")
+        _capped(
+            console,
+            "REMOVED",
+            "grey",
+            [
+                f"{key}  (was {recorded[key]}; {why})"
+                for key, why in sorted(removed.items())
+            ],
+        )
     if gained:
         console.always("")
         console.rule(f"newly answered · {len(gained)}", "green")
-        for key in gained[:20]:
-            console.always("  " + console.paint("NEW  ", "green") + f" {key}")
-        if len(gained) > 20:
-            console.always(
-                console.paint(f"       ... and {len(gained) - 20} more", "grey")
-            )
+        _capped(console, "NEW  ", "green", gained)
+    if removed or gained:
         console.always(
             console.paint(
-                "  run with --update-coverage to record these as the new floor",
-                "grey",
+                "  run with --update-coverage to record the new floor", "grey"
             )
         )
     return len(lost) + len(worsened)

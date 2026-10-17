@@ -24,7 +24,7 @@ import lucid.nn as nn
 import lucid.nn.functional as F
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
 
 #: Subsystem name -> (module path, kind).  ``kind`` selects how symbols
 #: are probed: ``"op"`` are functions over tensors, ``"module"`` are
@@ -323,6 +323,14 @@ def _walkable_modules() -> list[str]:
     return sorted(set(found), key=lambda m: (m.count("."), m))
 
 
+def _import(path: str) -> types.ModuleType | None:
+    """The module at ``path``, or ``None`` when importing it raises."""
+    try:
+        return importlib.import_module(path)
+    except Exception:  # noqa: BLE001 - an unimportable module is its own finding
+        return None
+
+
 def _declaring_module(obj: Any, found_in: str) -> str:
     """Where ``obj`` was defined, falling back to where it was found.
 
@@ -400,9 +408,8 @@ def enumerate_surface(subsystems: list[str] | None = None) -> list[Symbol]:
             out.append(Symbol(f"Tensor.{name}", "tensor", "method", attr))
 
     for path in _walkable_modules():
-        try:
-            module = importlib.import_module(path)
-        except Exception:  # noqa: BLE001 - an unimportable module is its own finding
+        module = _import(path)
+        if module is None:
             continue
         for name in sorted(_names(module)):
             obj = getattr(module, name, None)
@@ -504,9 +511,8 @@ def independent_walk() -> dict[int, str]:
     """
     found: dict[int, str] = {}
     for path in _walkable_modules():
-        try:
-            module = importlib.import_module(path)
-        except Exception:  # noqa: BLE001
+        module = _import(path)
+        if module is None:
             continue
         for name in sorted(_names(module)):
             obj = getattr(module, name, None)
@@ -579,6 +585,61 @@ def counterparts(symbol: Symbol) -> Iterator[tuple[str, Any]]:
         yield "functional", functional
 
 
+def spellings(short: str) -> frozenset[str]:
+    """The qualnames :func:`counterparts` compares for an op named ``short``."""
+    return frozenset({f"lucid.{short}", f"Tensor.{short}", f"F.{short}"})
+
+
+#: The module a qualname's first component stands for, where that
+#: component is a :data:`_PREFIX` rather than the head of a module path.
+_ROOTS = {"lucid": "lucid", "F": "lucid.nn.functional", "nn": "lucid.nn"}
+
+
+def _names_nothing(qualname: str, modules: dict[str, types.ModuleType]) -> bool:
+    """Whether ``qualname`` resolves to nothing, given every walkable module.
+
+    A sub-module wins over an attribute of the same name: ``lucid.compile``
+    is a function and a package at once, and ``CompiledModule`` lives in the
+    package.  A spelling this cannot read is never called absent.
+    """
+    head, _, rest = qualname.partition(".")
+    if head == "Tensor":
+        return inspect.getattr_static(_tensor_module.Tensor, rest, None) is None
+    root = _ROOTS.get(head, "")
+    obj: object = modules.get(root)
+    if obj is None or not rest:
+        return False
+    path = root
+    for part in rest.split("."):
+        path = f"{path}.{part}"
+        obj = modules.get(path) or getattr(obj, part, None)
+        if obj is None:
+            return True
+    return False
+
+
+def removed(qualnames: Iterable[str]) -> set[str]:
+    """The names in ``qualnames`` that no longer name anything public.
+
+    Missing from :func:`enumerate_surface` is not enough on its own: that
+    walk skips a module that fails to import without a word, so nothing
+    counts as removed while any walkable module fails to import.  Nor is
+    a name removed that still resolves — one the walk now reaches under a
+    shallower spelling, say.
+    """
+    wanted = set(qualnames)
+    if not wanted:
+        return set()
+    modules: dict[str, types.ModuleType] = {}
+    for path in _walkable_modules():
+        module = _import(path)
+        if module is None:
+            return set()
+        modules[path] = module
+    present = {symbol.qualname for symbol in enumerate_surface()}
+    return {name for name in wanted - present if _names_nothing(name, modules)}
+
+
 __all__ = [
     "EXCLUDED",
     "independent_walk",
@@ -591,5 +652,7 @@ __all__ = [
     "Symbol",
     "counterparts",
     "enumerate_surface",
+    "removed",
     "resolve",
+    "spellings",
 ]

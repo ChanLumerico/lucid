@@ -359,6 +359,16 @@ answer and no longer does is the interesting direction: the op is still
 exported, the audit simply cannot reach it any more — which is what a
 refactor breaks without breaking a test.
 
+A symbol that has left the public surface is not that, so its cells are
+reported as `REMOVED` and do not fail the run. Removing a name is judged
+by the released-surface gate (`released_surface.json`), not here: LCD-473
+took out `lucid.pad` and `Tensor.pad` on purpose, and their 24 cells as
+`LOST` held the gate red over a deliberate change (LCD-532). `entry::F.pad`
+went with them, because the entry axis compares a symbol with its other
+spellings and now only one is left. Nothing counts as removed while any
+module fails to import, since the sweep skips an unimportable module
+without a word.
+
 Newly answered cells are reported too, as progress rather than failure.
 When the new state is the intended one:
 
