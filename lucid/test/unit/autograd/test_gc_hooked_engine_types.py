@@ -123,13 +123,16 @@ def test_a_python_subclass_instance_survives_traversal_and_collection(
 
 def test_a_hooked_cycle_is_still_freed_while_subclass_nodes_are_alive() -> None:
     # LCD-392's own case — a module holding its hooked output — collected
-    # while an AccumulateGrad and a _PythonBackwardNode are reachable.
+    # while an AccumulateGrad and a _PythonBackwardNode are reachable.  After
+    # backward, as before it the cycle is not collectible (LCD-459 follow-up,
+    # see test_module_backward_hook_lifetime).
     body = """
     module = nn.Linear(3, 3)
     module.register_full_backward_hook(lambda mod, gi, go: None)
     x = lucid.randn(2, 3, requires_grad=True)
     y = module(x)
     module.last = y
+    y.sum().backward()
     leaf_node = x.grad_fn
     python_node = E._PythonBackwardNode()
     assert type(leaf_node).__name__ == "AccumulateGrad"

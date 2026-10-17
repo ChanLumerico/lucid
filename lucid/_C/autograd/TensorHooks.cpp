@@ -7,7 +7,8 @@
 #include "TensorHooks.h"
 
 #include <string>
-#include <unordered_set>
+#include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -307,47 +308,60 @@ Storage assignable_grad(const TensorImpl& self, const TensorImpl& g) {
 }
 
 // ── Python reference lifetime & cyclic garbage collection ────────────────────
+//
+// What a wrapper may tell the collector, and what it may clear (LCD-459).
+//
+// A C++ object behind a Python wrapper can have other C++ owners the
+// collector cannot see: a tensor saved by a later op, a node on another
+// tensor's edges, a hook state shared by a module call's input and output
+// nodes.  Reporting a Python object such an object holds as the *wrapper's*
+// reference is a lie whenever another owner is alive.  The collector then
+// subtracts a reference that a live path still holds, finds a live object
+// unreachable, and clears it.  LCD-392's first hooks walked the whole graph
+// reachable from every wrapper, and so did all of this:
+//   * ``tp_clear`` on a garbage wrapper cut ``grad_fn`` off a TensorImpl that a
+//     live graph had saved, so a second derivative came back ``[2, 2, 2]``
+//     where the reference gives ``[10, 10, 10]``;
+//   * every wrapper re-walked the graph behind it, so a collection over 4,000
+//     chained tensors took 8 s.
+//
+// A wrapper therefore reports only its *exclusive region*.  The region starts
+// with the object it wraps, if the wrapper's holder is that object's only
+// owner.  An object reached from a member joins once every owner it has
+// (its ``use_count``) is accounted for by an edge from a member.  Only Python
+// references held by members are visited.  This is the reference framework's
+// rule — a tensor wrapper traverses into its ``grad_fn`` only as the sole
+// owner of both — carried along the graph, so a cycle through a module's
+// hooked output a few ops deep is still collected (LCD-392).
+//
+//   * Sound: a member is reachable only through the wrapper, so when the
+//     wrapper is garbage, so is every reference a member holds.
+//   * Visited once: regions of different wrappers are disjoint (a root's only
+//     owner is its wrapper, never a member), so each ``py::object`` is
+//     reported at most once per pass and ``gc_refs`` cannot underflow.
+//   * Linear: an object is explored only from the one region that owns it,
+//     and a shared node stops the walk at the first edge into it.
+//
+// An object that two regions own jointly — a node on both a kept tensor's
+// path and a kept output's — belongs to neither and is not collected through
+// either wrapper.  That is the price of never clearing a live object.
+//
+// ``tp_clear`` mutates the wrapped object only when the wrapper is still its
+// sole owner, and then only drops references: the members die because the
+// wrapper's object was their only way in.
 
 namespace {
 
-// During CPython's ``subtract_refs`` pass of ``gc.collect()``, ``tp_traverse``
-// is invoked with ``arg == self`` on each tracked object in the collected
-// generation.  Multiple live ``TensorImpl`` (or ``Node``) wrappers in the same
-// generation can reach the same shared C++ ``Node`` / ``ModuleBackwardHookState``
-// / ``TensorHookSlot``, whereas each C++ ``py::object`` member only owns a
-// single ``Py_INCREF`` on its underlying ``PyObject*``.  Visiting the same C++
-// ``py::object`` slot more than once during a single ``subtract_refs`` pass
-// would subtract from ``gc_refs`` multiple times and underflow it in Python
-// 3.14 (where ``_gc_prev`` is unsigned), making unreachable cycles appear
-// reachable.
-//
-// We therefore deduplicate by ``const py::object*`` slot address across a
-// single ``subtract_refs`` pass (``arg == self``), and reset the pass state as
-// soon as ``move_unreachable`` (``arg != self``), ``tp_clear``, a new
-// ``subtract_refs`` pass (seeing the same ``self`` again), or any C++ slot
-// release runs.
-struct GcDecrefPassState {
-    std::unordered_set<PyObject*> seen_selves;
-    std::unordered_set<const py::object*> seen_slots;
+// ``grad_as_impl`` hands back a copy, which is one owner more than the
+// tensor's own; the region subtracts it.  If the accessor ever returns a
+// reference, that correction would let a shared gradient join, so pin it.
+static_assert(!std::is_reference_v<decltype(std::declval<const TensorImpl&>().grad_as_impl())>,
+              "grad_as_impl() returns a reference now: drop the copy correction in drain_tensors");
 
-    void reset() noexcept {
-        seen_selves.clear();
-        seen_slots.clear();
-    }
-};
-
-GcDecrefPassState& gc_decref_state() {
-    static GcDecrefPassState state;
-    return state;
-}
-
-void reset_gc_decref_pass() noexcept {
-    gc_decref_state().reset();
-}
-
-// The C++ ``T`` behind a pybind11 instance whose Python type is ``T``'s or
-// derives from it, or null.  Runs inside ``tp_traverse`` / ``tp_clear``, so
-// it must neither raise nor allocate.
+// A pybind11 instance's C++ ``T`` and the ``use_count`` of the holder it
+// carries — every class this file hooks is held by ``std::shared_ptr`` —
+// or ``{nullptr, 0}``.  Runs inside ``tp_traverse`` / ``tp_clear``, so it
+// neither raises nor allocates.
 //
 // pybind11 keeps one value slot per registered C++ type the Python type
 // derives from, keyed by the most-derived one: an ``AccumulateGrad`` or
@@ -357,193 +371,180 @@ void reset_gc_decref_pass() noexcept {
 // value_and_holder whose ``operator bool`` reads through a null pointer —
 // one garbage collection with such a node alive was a SIGSEGV.  So walk the
 // slots and take the one whose type is ``T`` or a subclass of it.  The
-// subclass pointer is a ``T*`` only when no registered type in the hierarchy
-// uses multiple inheritance (``simple_type``) — the condition pybind11 itself
+// subclass pointer is a ``T*``, and its ``shared_ptr`` holder reads as a
+// ``shared_ptr<T>``, only when no registered type in the hierarchy uses
+// multiple inheritance (``simple_type``) — the condition pybind11 itself
 // casts under — and anything else is declined rather than guessed.
 template <typename T>
-T* try_get_cpp_ptr(PyObject* self) noexcept {
+struct Wrapped {
+    T* ptr = nullptr;
+    long owners = 0;
+};
+
+template <typename T>
+Wrapped<T> wrapped(PyObject* self) noexcept {
     if (self == nullptr)
-        return nullptr;
+        return {};
     const auto* tinfo = py::detail::get_type_info(typeid(T));
     if (tinfo == nullptr)
-        return nullptr;
+        return {};
     PyTypeObject* type = Py_TYPE(self);
     if (type != tinfo->type && !PyType_IsSubtype(type, tinfo->type))
-        return nullptr;
+        return {};
     auto* inst = reinterpret_cast<py::detail::instance*>(self);
     for (const auto& vh : py::detail::values_and_holders(inst)) {
         const bool exact = vh.type == tinfo;
         if (!exact && !(tinfo->simple_type && PyType_IsSubtype(vh.type->type, tinfo->type)))
             continue;
-        if (!vh.holder_constructed())
-            return nullptr;
-        return static_cast<T*>(vh.value_ptr());
+        if (!vh.holder_constructed() || vh.value_ptr() == nullptr)
+            return {};
+        return {static_cast<T*>(vh.value_ptr()), vh.holder<std::shared_ptr<T>>().use_count()};
     }
-    return nullptr;
+    return {};
 }
 
-struct AutogradGcVisitor {
-    visitproc visit;
-    void* arg;
-    bool is_decref_pass;
-    std::unordered_set<const TensorImpl*> visited_tensors;
-    std::unordered_set<const Node*> visited_nodes;
-    std::unordered_set<const ModuleBackwardHookState*> visited_states;
-    std::unordered_set<const TensorHookSlot*> visited_slots;
-    std::unordered_set<const FunctionCtx*> visited_ctxs;
-    std::vector<const TensorImpl*> tensor_stack;
-    std::vector<const Node*> node_stack;
+// The wrapped object, when the wrapper is its only owner.
+template <typename T>
+T* solely_owned(PyObject* self) noexcept {
+    const Wrapped<T> w = wrapped<T>(self);
+    return w.owners == 1 ? w.ptr : nullptr;
+}
 
-    AutogradGcVisitor(PyObject* self, visitproc v, void* a)
-        : visit(v), arg(a), is_decref_pass(a != nullptr && a == static_cast<void*>(self)) {
-        auto& state = gc_decref_state();
-        if (is_decref_pass) {
-            if (!state.seen_selves.insert(self).second) {
-                state.reset();
-                state.seen_selves.insert(self);
-            }
-        } else {
-            state.reset();
-        }
-    }
+// One wrapper's exclusive region, and the visits it owes the collector.
+class ExclusiveRegion {
+public:
+    ExclusiveRegion(visitproc visit, void* arg) : visit_(visit), arg_(arg) {}
 
-    int visit_slot(const py::object& obj) {
+    void add_root(const TensorImpl* t) { tensors_.push_back(t); }
+    void add_root(const Node* n) { nodes_.push_back(n); }
+    void add_root(const ModuleBackwardHookState* s) { states_.push_back(s); }
+
+    // Report one Python reference a member (or a FunctionCtx root) holds.
+    int report(const py::object& obj) const {
         PyObject* ptr = obj.ptr();
-        if (ptr == nullptr)
-            return 0;
-        if (is_decref_pass) {
-            auto& state = gc_decref_state();
-            if (!state.seen_slots.insert(&obj).second)
-                return 0;
-        }
-        Py_VISIT(ptr);
-        return 0;
+        return ptr != nullptr ? visit_(ptr, arg_) : 0;
     }
 
-    void push_tensor(const TensorImpl* t) {
-        if (t != nullptr && visited_tensors.insert(t).second)
-            tensor_stack.push_back(t);
+    void offer(const TensorImplPtr& t, long copies = 0) {
+        if (t && joins(t.get(), t.use_count() - copies))
+            tensors_.push_back(t.get());
     }
 
-    void push_node(const Node* n) {
-        if (n != nullptr && visited_nodes.insert(n).second)
-            node_stack.push_back(n);
-    }
-
-    int traverse_hook_slot(const TensorHookSlot* slot) {
-        if (slot == nullptr || !visited_slots.insert(slot).second)
-            return 0;
-        return visit_slot(slot->runner);
-    }
-
-    int traverse_module_state(const ModuleBackwardHookState* state) {
-        if (state == nullptr || !visited_states.insert(state).second)
-            return 0;
-        if (int r = visit_slot(state->pre_runner))
-            return r;
-        if (int r = visit_slot(state->full_runner))
-            return r;
-        for (const auto& g : state->grad_inputs)
-            push_tensor(g.get());
-        for (const auto& g : state->grad_outputs)
-            push_tensor(g.get());
-        return 0;
-    }
-
-    int traverse_function_ctx(const FunctionCtx* ctx) {
-        if (ctx == nullptr || !visited_ctxs.insert(ctx).second)
-            return 0;
-        for (const auto& t : ctx->saved_tensors())
-            push_tensor(t.get());
-        for (const auto& kv : ctx->extras()) {
-            if (int r = visit_slot(kv.second))
-                return r;
-        }
-        return 0;
-    }
-
-    int step_tensor(const TensorImpl* t) {
-        if (const auto& slot = t->leaf_hooks()) {
-            if (int r = traverse_hook_slot(slot.get()))
-                return r;
-        }
-        if (const auto& gi = t->grad_as_impl())
-            push_tensor(gi.get());
-        if (const auto& fn = t->grad_fn())
-            push_node(fn.get());
-        return 0;
-    }
-
-    int step_node_hooks(const NodeHooks* hooks) {
-        if (hooks == nullptr)
-            return 0;
-        for (const auto& slot : hooks->slots()) {
-            if (int r = traverse_hook_slot(slot.get()))
-                return r;
-        }
-        return 0;
-    }
-
-    int step_python_node(const PythonBackwardNode* py_node) {
-        if (int r = visit_slot(py_node->py_ctx))
-            return r;
-        if (int r = visit_slot(py_node->py_backward_fn))
-            return r;
-        if (const auto* ctx = try_get_cpp_ptr<FunctionCtx>(py_node->py_ctx.ptr()))
-            return traverse_function_ctx(ctx);
-        return 0;
-    }
-
-    int step_node_kind(const Node* n) {
-        if (const auto* out_hook = dynamic_cast<const ModuleOutputHookNode*>(n))
-            return traverse_module_state(out_hook->state().get());
-        if (const auto* in_hook = dynamic_cast<const ModuleInputHookNode*>(n))
-            return traverse_module_state(in_hook->state().get());
-        if (const auto* py_node = dynamic_cast<const PythonBackwardNode*>(n))
-            return step_python_node(py_node);
-        if (const auto* acc = dynamic_cast<const AccumulateGrad*>(n)) {
-            if (const TensorImplPtr leaf = acc->leaf().lock())
-                push_tensor(leaf.get());
-        }
-        return 0;
-    }
-
-    int step_node(const Node* n) {
-        if (int r = step_node_hooks(n->tensor_hooks()))
-            return r;
-        if (int r = step_node_kind(n))
-            return r;
-        for (const auto& edge : n->next_edges()) {
-            if (edge.node)
-                push_node(edge.node.get());
-        }
-        return 0;
-    }
-
+    // Visit what every member holds, admitting objects as they qualify.
     int drain() {
-        while (!tensor_stack.empty() || !node_stack.empty()) {
-            while (!tensor_stack.empty()) {
-                const TensorImpl* t = tensor_stack.back();
-                tensor_stack.pop_back();
-                if (int r = step_tensor(t))
-                    return r;
-            }
-            while (!node_stack.empty()) {
-                const Node* n = node_stack.back();
-                node_stack.pop_back();
-                if (int r = step_node(n))
-                    return r;
-            }
+        while (!tensors_.empty() || !nodes_.empty() || !states_.empty() || !slots_.empty()) {
+            if (int r = drain_tensors())
+                return r;
+            if (int r = drain_nodes())
+                return r;
+            if (int r = drain_states())
+                return r;
+            if (int r = drain_slots())
+                return r;
         }
         return 0;
     }
+
+private:
+    // Count one owning edge from a member; true the moment the last owner is
+    // seen, so each object is admitted once.
+    bool joins(const void* p, long owners) {
+        const auto it = seen_.try_emplace(p, 0L).first;
+        return ++it->second == owners;
+    }
+
+    void offer(const std::shared_ptr<Node>& n) {
+        if (n && joins(n.get(), n.use_count()))
+            nodes_.push_back(n.get());
+    }
+
+    void offer(const std::shared_ptr<ModuleBackwardHookState>& s) {
+        if (s && joins(s.get(), s.use_count()))
+            states_.push_back(s.get());
+    }
+
+    void offer(const std::shared_ptr<TensorHookSlot>& s) {
+        if (s && joins(s.get(), s.use_count()))
+            slots_.push_back(s.get());
+    }
+
+    int drain_tensors() {
+        while (!tensors_.empty()) {
+            const TensorImpl* t = tensors_.back();
+            tensors_.pop_back();
+            offer(t->leaf_hooks());
+            offer(t->grad_as_impl(), /*copies=*/1);
+            offer(t->grad_fn());
+        }
+        return 0;
+    }
+
+    int drain_nodes() {
+        while (!nodes_.empty()) {
+            const Node* n = nodes_.back();
+            nodes_.pop_back();
+            if (const NodeHooks* hooks = n->tensor_hooks()) {
+                for (const auto& slot : hooks->slots())
+                    offer(slot);
+            }
+            if (const auto* out_hook = dynamic_cast<const ModuleOutputHookNode*>(n)) {
+                offer(out_hook->state());
+            } else if (const auto* in_hook = dynamic_cast<const ModuleInputHookNode*>(n)) {
+                offer(in_hook->state());
+            } else if (const auto* py_node = dynamic_cast<const PythonBackwardNode*>(n)) {
+                // The ctx is a Python object: one reference, and its own
+                // wrapper reports what it holds.
+                if (int r = report(py_node->py_ctx))
+                    return r;
+                if (int r = report(py_node->py_backward_fn))
+                    return r;
+            }
+            for (const auto& edge : n->next_edges())
+                offer(edge.node);
+        }
+        return 0;
+    }
+
+    int drain_states() {
+        while (!states_.empty()) {
+            const ModuleBackwardHookState* s = states_.back();
+            states_.pop_back();
+            if (int r = report(s->pre_runner))
+                return r;
+            if (int r = report(s->full_runner))
+                return r;
+            for (const auto& g : s->grad_inputs)
+                offer(g);
+            for (const auto& g : s->grad_outputs)
+                offer(g);
+        }
+        return 0;
+    }
+
+    int drain_slots() {
+        while (!slots_.empty()) {
+            const TensorHookSlot* s = slots_.back();
+            slots_.pop_back();
+            if (int r = report(s->runner))
+                return r;
+        }
+        return 0;
+    }
+
+    visitproc visit_;
+    void* arg_;
+    std::unordered_map<const void*, long> seen_;
+    std::vector<const TensorImpl*> tensors_;
+    std::vector<const Node*> nodes_;
+    std::vector<const ModuleBackwardHookState*> states_;
+    std::vector<const TensorHookSlot*> slots_;
 };
 
 extern "C" int tensor_tp_traverse(PyObject* self, visitproc visit, void* arg) {
-    AutogradGcVisitor visitor(self, visit, arg);
-    if (const auto* t = try_get_cpp_ptr<TensorImpl>(self)) {
-        visitor.push_tensor(t);
-        if (int r = visitor.drain())
+    if (const auto* t = solely_owned<TensorImpl>(self)) {
+        ExclusiveRegion region(visit, arg);
+        region.add_root(t);
+        if (int r = region.drain())
             return r;
     }
     Py_VISIT(Py_TYPE(self));
@@ -551,25 +552,24 @@ extern "C" int tensor_tp_traverse(PyObject* self, visitproc visit, void* arg) {
 }
 
 extern "C" int tensor_tp_clear(PyObject* self) {
-    reset_gc_decref_pass();
-    if (auto* t = try_get_cpp_ptr<TensorImpl>(self)) {
-        std::shared_ptr<Node> fn = t->grad_fn();
-        std::shared_ptr<TensorImpl> gi = t->grad_as_impl();
-        std::shared_ptr<TensorHookSlot> lh = t->leaf_hooks();
-        t->clear_grad_fn();
-        t->set_grad_impl(nullptr);
-        t->mutable_leaf_hooks().reset();
-        if (lh)
-            lh->clear();
+    if (auto* t = solely_owned<TensorImpl>(self)) {
+        // Taken out first, released after: a destructor may run Python.
+        const std::shared_ptr<Node> fn = t->grad_fn();
+        const std::shared_ptr<TensorImpl> gi = t->grad_as_impl();
+        const std::shared_ptr<TensorHookSlot> lh = std::move(t->mutable_leaf_hooks());
+        if (fn)
+            t->clear_grad_fn();
+        if (gi)
+            t->set_grad_impl(nullptr);
     }
     return 0;
 }
 
 extern "C" int node_tp_traverse(PyObject* self, visitproc visit, void* arg) {
-    AutogradGcVisitor visitor(self, visit, arg);
-    if (const auto* n = try_get_cpp_ptr<Node>(self)) {
-        visitor.push_node(n);
-        if (int r = visitor.drain())
+    if (const auto* n = solely_owned<Node>(self)) {
+        ExclusiveRegion region(visit, arg);
+        region.add_root(n);
+        if (int r = region.drain())
             return r;
     }
     Py_VISIT(Py_TYPE(self));
@@ -577,8 +577,7 @@ extern "C" int node_tp_traverse(PyObject* self, visitproc visit, void* arg) {
 }
 
 extern "C" int node_tp_clear(PyObject* self) {
-    reset_gc_decref_pass();
-    if (auto* n = try_get_cpp_ptr<Node>(self)) {
+    if (auto* n = solely_owned<Node>(self)) {
         n->release_tensor_hooks();
         n->release_saved();
     }
@@ -586,11 +585,15 @@ extern "C" int node_tp_clear(PyObject* self) {
 }
 
 extern "C" int function_ctx_tp_traverse(PyObject* self, visitproc visit, void* arg) {
-    AutogradGcVisitor visitor(self, visit, arg);
-    if (const auto* ctx = try_get_cpp_ptr<FunctionCtx>(self)) {
-        if (int r = visitor.traverse_function_ctx(ctx))
-            return r;
-        if (int r = visitor.drain())
+    if (const auto* ctx = solely_owned<FunctionCtx>(self)) {
+        ExclusiveRegion region(visit, arg);
+        for (const auto& kv : ctx->extras()) {
+            if (int r = region.report(kv.second))
+                return r;
+        }
+        for (const auto& t : ctx->saved_tensors())
+            region.offer(t);
+        if (int r = region.drain())
             return r;
     }
     Py_VISIT(Py_TYPE(self));
@@ -598,18 +601,16 @@ extern "C" int function_ctx_tp_traverse(PyObject* self, visitproc visit, void* a
 }
 
 extern "C" int function_ctx_tp_clear(PyObject* self) {
-    reset_gc_decref_pass();
-    if (auto* ctx = try_get_cpp_ptr<FunctionCtx>(self))
+    if (auto* ctx = solely_owned<FunctionCtx>(self))
         ctx->clear();
     return 0;
 }
 
 extern "C" int module_hook_state_tp_traverse(PyObject* self, visitproc visit, void* arg) {
-    AutogradGcVisitor visitor(self, visit, arg);
-    if (const auto* state = try_get_cpp_ptr<ModuleBackwardHookState>(self)) {
-        if (int r = visitor.traverse_module_state(state))
-            return r;
-        if (int r = visitor.drain())
+    if (const auto* state = solely_owned<ModuleBackwardHookState>(self)) {
+        ExclusiveRegion region(visit, arg);
+        region.add_root(state);
+        if (int r = region.drain())
             return r;
     }
     Py_VISIT(Py_TYPE(self));
@@ -617,8 +618,7 @@ extern "C" int module_hook_state_tp_traverse(PyObject* self, visitproc visit, vo
 }
 
 extern "C" int module_hook_state_tp_clear(PyObject* self) {
-    reset_gc_decref_pass();
-    if (auto* state = try_get_cpp_ptr<ModuleBackwardHookState>(self))
+    if (auto* state = solely_owned<ModuleBackwardHookState>(self))
         state->clear();
     return 0;
 }
@@ -640,7 +640,6 @@ void release_py_object(py::object& obj) noexcept {
     if (!Py_IsInitialized() || Py_IsFinalizing())
         return;
     const PyGILState_STATE state = PyGILState_Ensure();
-    reset_gc_decref_pass();
     Py_DECREF(ptr);
     PyGILState_Release(state);
 }

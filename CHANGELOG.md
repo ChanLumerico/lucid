@@ -796,6 +796,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - resolve GC hook holders for registered node subclasses
 
+- report and clear only what a GC wrapper owns alone
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
