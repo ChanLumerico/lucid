@@ -197,21 +197,13 @@ def _labelled_loop(name: str) -> Callable[[int], Callable[[], M.GenerationOutput
     return make
 
 
-_EMBEDDING_READ = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "LCD-228: nn.Embedding reads its indices on the host on Metal, and "
-        "the class embedding runs once per denoising step"
-    ),
-)
-
+# dit and mean_flow embed their class labels once per denoising step;
+# nn.Embedding's index check no longer reads the indices back (LCD-283).
 _LOOPS = [
     pytest.param(_mixin_loop, id="diffusion_mixin"),
     pytest.param(_sd_loop, id="stable_diffusion"),
-    pytest.param(_labelled_loop("dit_small_2_gen"), id="dit", marks=_EMBEDDING_READ),
-    pytest.param(
-        _labelled_loop("mean_flow_base_2_gen"), id="mean_flow", marks=_EMBEDDING_READ
-    ),
+    pytest.param(_labelled_loop("dit_small_2_gen"), id="dit"),
+    pytest.param(_labelled_loop("mean_flow_base_2_gen"), id="mean_flow"),
 ]
 
 
