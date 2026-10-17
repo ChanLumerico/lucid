@@ -4,6 +4,7 @@
 //   - AmpPolicy enum (Promote, KeepInput, ForceFP32, PromoteWidest)
 //   - amp_policy_name() string helper
 //   - amp_policy_for() / amp_policy_table() — the per-device policy table
+//   - amp_cast_inputs() — a Python composite's row, applied to its inputs
 //   - AutocastGuard context manager (wraps amp::AutocastGuard)
 //   - amp_active_dtype() / amp_is_active() query functions
 //
@@ -14,9 +15,12 @@
 
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "../core/AmpPolicy.h"
+#include "../core/TensorImpl.h"
+#include "../ops/utils/Promote.h"
 
 namespace py = pybind11;
 
@@ -49,6 +53,20 @@ void register_amp(py::module_& m) {
             rows.emplace_back(std::string(row.name), row.metal, row.cpu);
         return rows;
     });
+    // A Python composite's autocast entry: its row applied to its floating
+    // inputs by the engine's one owner of the cast rule (AmpScope), so the
+    // rule is not written out again in Python.  The caller turns autocast
+    // off for the composite's body.  Outside autocast the inputs come back
+    // as they went in.
+    m.def(
+        "amp_cast_inputs",
+        [](const std::string& name, std::vector<TensorImplPtr> inputs) {
+            if (inputs.empty() || !inputs.front())
+                return inputs;
+            const AmpScope amp{name, inputs.front()->device()};
+            return amp.cast_widest(std::move(inputs));
+        },
+        py::arg("name"), py::arg("inputs"));
 
     // AutocastGuard is a RAII scope that pushes a target Dtype onto the AMP
     // stack on construction and pops it on destruction.  The context-manager

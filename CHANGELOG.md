@@ -956,6 +956,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - one owner applies a WIDEST row across all operands (LCD-500)
 
+- cosine_similarity promotes mixed inputs and applies its row (LCD-500)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

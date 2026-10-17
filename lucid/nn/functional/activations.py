@@ -14,6 +14,7 @@ from lucid._tensor._metal_views import (
     write_back as _metal_write_back,
 )
 from lucid._types import GeluApproximate
+from lucid.nn.functional._autocast import _autocast_entry
 from lucid.nn.functional._inplace import _in_place
 from lucid.nn.functional.normalization import normalize
 
@@ -1110,8 +1111,6 @@ def cosine_similarity(
         \text{cosine\_sim}(x_1, x_2) =
         \frac{x_1 \cdot x_2}{\max(\|x_1\|_2 \, \|x_2\|_2,\, \epsilon)}
 
-    Internally each input is :math:`L_2`-normalised along ``dim`` via
-    :func:`normalize`, after which the dot product is exactly the cosine.
     For pairwise similarity matrices, use ``unsqueeze`` to broadcast the
     inputs into rank-3 tensors before calling this function.
 
@@ -1126,9 +1125,10 @@ def cosine_similarity(
     """
     for operand in (x1, x2):
         _require_floating(_unwrap(operand), "cosine_similarity")
-    x1n = normalize(x1, p=2.0, dim=dim, eps=eps)
-    x2n = normalize(x2, p=2.0, dim=dim, eps=eps)
-    return _wrap(_C_engine.sum(_C_engine.mul(_unwrap(x1n), _unwrap(x2n)), [dim]))
+    common = _l.result_type(x1, x2)
+    with _autocast_entry("cosine_similarity", *(_unwrap(t.to(common)) for t in (x1, x2))) as io:
+        x1n, x2n = (_unwrap(normalize(_wrap(t), p=2.0, dim=dim, eps=eps)) for t in io)
+        return _wrap(_C_engine.sum(_C_engine.mul(x1n, x2n), [dim]))
 
 
 def pairwise_distance(
