@@ -78,8 +78,6 @@ _.IMAGENET1K_512  # DiT_XL_2_Weights member in lucid/models/generative/dit/_weig
 _.detach_  # Tensor.detach_ in lucid/_tensor/tensor.py
 _.clamp_min_  # Tensor.clamp_min_ in lucid/_tensor/tensor.py
 _.clamp_max_  # Tensor.clamp_max_ in lucid/_tensor/tensor.py
-_.new_empty  # Tensor.new_empty in lucid/_tensor/tensor.py
-_.new_tensor  # Tensor.new_tensor in lucid/_tensor/tensor.py
 _.share_memory_  # Tensor.share_memory_ in lucid/_tensor/tensor.py
 _.type_as  # Tensor.type_as in lucid/_tensor/tensor.py
 

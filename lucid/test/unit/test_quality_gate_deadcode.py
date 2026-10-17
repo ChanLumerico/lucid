@@ -70,10 +70,6 @@ def test_registry_decorators_are_not_flagged_while_unused_function_is(
             "class Tensor:\n"
             "    def type_as(self) -> int:\n"
             "        return 0\n"
-            "    def new_empty(self) -> int:\n"
-            "        return 0\n"
-            "    def new_tensor(self) -> int:\n"
-            "        return 0\n"
             "    def detach_(self) -> int:\n"
             "        return 0\n"
             "Tensor()\n",
