@@ -19,7 +19,7 @@ import pytest
 import lucid
 from lucid._dtype import dtype as DType
 from lucid._tensor.tensor import Tensor
-from lucid.nn._shadow import PhantomImpl, shadow_alloc
+from lucid.nn._shadow import is_shadow, shadow_alloc
 
 # ── Binary operators, free functions, and Tensor methods (tensor × tensor) ────
 
@@ -106,7 +106,7 @@ def test_binary_tensor_pair_shape_and_dtype_parity(
         ph_b = lucid.ones(shape_b, dtype=dt_b)
         ph_out = op(ph_a, ph_b)
 
-    assert isinstance(ph_out._impl, PhantomImpl)
+    assert is_shadow(ph_out)
     assert ph_out.shape == eager_out.shape
     assert ph_out.dtype == eager_out.dtype
 
@@ -178,7 +178,7 @@ def test_binary_scalar_shape_and_dtype_parity(
         ph_a = lucid.ones(shape, dtype=dt)
         ph_out = op(ph_a, scalar)
 
-    assert isinstance(ph_out._impl, PhantomImpl)
+    assert is_shadow(ph_out)
     assert ph_out.shape == eager_out.shape
     assert ph_out.dtype == eager_out.dtype
 
@@ -238,7 +238,7 @@ def test_matmul_shape_and_dtype_parity(
         ph_b = lucid.zeros(shape_b, dtype=dt_b)
         ph_out = caller(ph_a, ph_b)
 
-    assert isinstance(ph_out._impl, PhantomImpl)
+    assert is_shadow(ph_out)
     assert ph_out.shape == eager_out.shape
     assert ph_out.dtype == eager_out.dtype
 

@@ -34,15 +34,29 @@ Constraints
   will fault — phantom impls don't support actual compute.
 - Random initialization is silently skipped — fine for the structural
   summary, but never use a shadow-constructed model for training.
+- The block belongs to the thread that opens it.  The patches are
+  process-wide while any block is open, but each one checks the
+  calling thread's state, so every other thread — one started inside
+  the block included — keeps computing real values.
 """
 
 import contextlib
+import contextvars
 import math
-from typing import Any, Iterator, cast, final
+import sys
+import threading
+import types
+from collections.abc import Callable, Iterator
+from typing import Any, cast, final
 
 from lucid._C import engine as _C_engine
+from lucid._tensor.tensor import Tensor
 
-_SHADOW_ENABLED: bool = False
+# Set for the duration of a block, in the context (thread) that opened it.
+# A thread starts with a fresh context, so it never inherits a block.
+_ACTIVE: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "lucid_shadow_alloc_active", default=False
+)
 
 
 # ---------------------------------------------------------------------------
@@ -1002,6 +1016,8 @@ _SPECIFIC_WRAPPERS: dict[str, Any] = {
     "meshgrid": _meshgrid_factory,
 }
 
+# Engine name -> original callable, filled while the stand-ins are installed.
+# The factories above fall back to it for an argument that is not a phantom.
 _ORIGINAL: dict[str, Any] = {}
 
 
@@ -1017,80 +1033,173 @@ def _make_engine_wrapper(name: str, attr: Any) -> Any:
     return builder(attr)
 
 
-def _patch_closure_cells(
-    fn: Any, orig_by_id: dict[Any, str], cell_originals: list[tuple[Any, Any]]
-) -> None:
-    """Rebind any closure cell on ``fn`` that holds an original engine callable."""
-    closure = getattr(fn, "__closure__", None)
-    if not closure:
-        return
-    for cell in closure:
+# ---------------------------------------------------------------------------
+# Installing and removing the stand-ins
+# ---------------------------------------------------------------------------
+#
+# The stand-ins replace module attributes, so they are process-wide; the
+# first block to open anywhere installs them and the last to close removes
+# them.  A process with no open block runs the untouched engine.
+
+_INSTALL_LOCK = threading.Lock()
+_open_blocks = 0
+# id(stand-in) -> (stand-in, original).  Holding the stand-in keeps its id
+# from being reused, so the identity scan on removal cannot misfire.
+_INSTALLED: dict[int, tuple[object, Any]] = {}
+
+
+def _gated[**P, R](orig: Callable[P, R], shadow: Callable[P, R]) -> Callable[P, R]:
+    """Return a stand-in for ``orig`` that runs ``shadow`` only inside a block.
+
+    Every stand-in this module installs is made here, so a thread that is
+    not inside a block always reaches ``orig``.
+    """
+    active = _ACTIVE.get
+
+    def stand_in(*args: P.args, **kwargs: P.kwargs) -> R:
+        if active():
+            return shadow(*args, **kwargs)
+        return orig(*args, **kwargs)
+
+    _INSTALLED[id(stand_in)] = (stand_in, orig)
+    return stand_in
+
+
+def _module_namespaces() -> list[dict[str, Any]]:
+    """Return the namespace of every loaded module."""
+    # ``object.__getattribute__`` reads ``__dict__`` without running a lazy
+    # module's attribute hook, which would import it.
+    return [
+        object.__getattribute__(mod, "__dict__")
+        for mod in list(sys.modules.values())
+        if isinstance(mod, types.ModuleType)
+    ]
+
+
+def _swap_closure_cells(fn: object, replacement: dict[int, Any]) -> None:
+    """Rebind each closure cell of ``fn`` whose value has a replacement."""
+    for cell in getattr(fn, "__closure__", None) or ():
         try:
-            val = cell.cell_contents
-        except ValueError:
+            value = cell.cell_contents
+        except ValueError:  # an empty cell: its variable is not bound yet
             continue
-        cell_attr = orig_by_id.get(val)
-        if cell_attr is not None:
-            new_fn = getattr(_C_engine, cell_attr, None)
-            if new_fn is not None and new_fn is not val:
-                cell_originals.append((cell, val))
-                cell.cell_contents = new_fn
+        new = replacement.get(id(value))
+        if new is not None:
+            cell.cell_contents = new
 
 
-def _patch_op_registry(orig_by_id: dict[Any, str]) -> None:
-    """Rebind ``OpEntry.engine_fn`` and adapter closure cells for shadow mode."""
+def _swap_op_registry(replacement: dict[int, Any]) -> None:
+    """Rebind ``OpEntry.engine_fn`` and the adapter closure cells by identity."""
     from lucid._ops import _adapters as _adapters_mod
     from lucid._ops._registry import _REGISTRY as _OP_REGISTRY
 
-    op_originals: list[tuple[Any, Any]] = []
-    cell_originals: list[tuple[Any, Any]] = []
     for entry in _OP_REGISTRY:
-        fn = entry.engine_fn
-        attr_name = orig_by_id.get(fn)
-        if attr_name is not None:
-            new_fn = getattr(_C_engine, attr_name, None)
-            if new_fn is not None and new_fn is not fn:
-                op_originals.append((entry, fn))
-                entry.engine_fn = new_fn
+        new = replacement.get(id(entry.engine_fn))
+        if new is not None:
+            entry.engine_fn = new
             continue
-        _patch_closure_cells(fn, orig_by_id, cell_originals)
-
-    _patch_closure_cells(_adapters_mod._complex_parts, orig_by_id, cell_originals)
-    _ORIGINAL["__op_registry__"] = op_originals
-    _ORIGINAL["__op_cells__"] = cell_originals
+        _swap_closure_cells(entry.engine_fn, replacement)
+    _swap_closure_cells(_adapters_mod._complex_parts, replacement)
 
 
-def _rebind_sys_module_attr(attr_name: str, orig_fn: Any, new_fn: Any) -> list[Any]:
-    """Replace ``attr_name`` across loaded modules where it is ``orig_fn``."""
-    import sys
-
-    rebound: list[Any] = []
-    for mod in list(sys.modules.values()):
-        if getattr(mod, attr_name, None) is orig_fn:
-            setattr(mod, attr_name, new_fn)
-            rebound.append(mod)
-    return rebound
+def _phantom_operand(x: object) -> PhantomImpl | None:
+    """Return the phantom ``x`` is or wraps, else ``None``."""
+    impl = getattr(x, "_impl", None)
+    if isinstance(impl, PhantomImpl):
+        return impl
+    if isinstance(x, PhantomImpl):
+        return x
+    return None
 
 
-def _restore_shadow_patches() -> None:
-    """Restore all module, registry, closure, and engine attributes after ``shadow_alloc``."""
-    sites = _ORIGINAL.pop("__unwrap_sites__", None)
-    if sites is not None:
-        orig_uw, mods = sites
-        for mod in mods:
-            mod._unwrap = orig_uw
-    sites = _ORIGINAL.pop("__uos_sites__", None)
-    if sites is not None:
-        orig_uos, mods = sites
-        for mod in mods:
-            mod._unwrap_or_scalar = orig_uos
-    for entry, orig_fn in _ORIGINAL.pop("__op_registry__", []):
-        entry.engine_fn = orig_fn
-    for cell, orig_val in _ORIGINAL.pop("__op_cells__", []):
-        cell.cell_contents = orig_val
-    for name, orig in _ORIGINAL.items():
-        setattr(_C_engine, name, orig)
+def _install_unwrap_stand_ins() -> None:
+    """Pass phantoms through every module's ``_unwrap`` / ``_unwrap_or_scalar``."""
+    from lucid import _dispatch as _disp
+
+    orig_unwrap = _disp._unwrap
+    orig_uos = _disp._unwrap_or_scalar
+
+    def unwrap(t: Any) -> Any:
+        phantom = _phantom_operand(t)
+        return orig_unwrap(t) if phantom is None else phantom
+
+    def unwrap_or_scalar(x: Any, ref_impl: Any = None) -> Any:
+        phantom = _phantom_operand(x)
+        return orig_uos(x, ref_impl) if phantom is None else phantom
+
+    stand_ins = {
+        "_unwrap": (orig_unwrap, _gated(orig_unwrap, unwrap)),
+        "_unwrap_or_scalar": (orig_uos, _gated(orig_uos, unwrap_or_scalar)),
+    }
+    for ns in _module_namespaces():
+        for name, (orig, stand_in) in stand_ins.items():
+            if ns.get(name) is orig:
+                ns[name] = stand_in
+
+
+def _install() -> None:
+    """Install a gated stand-in for every public engine callable and its users."""
+    _install_unwrap_stand_ins()
+    stand_in_of: dict[int, Any] = {}
+    for name in dir(_C_engine):
+        if name.startswith("_"):
+            continue
+        attr = getattr(_C_engine, name)
+        if not callable(attr) or isinstance(attr, type):
+            continue
+        _ORIGINAL[name] = attr
+        stand_in = _gated(attr, _make_engine_wrapper(name, attr))
+        stand_in_of[id(attr)] = stand_in
+        setattr(_C_engine, name, stand_in)
+    _swap_op_registry(stand_in_of)
+
+
+def _uninstall() -> None:
+    """Put the original back wherever a stand-in is bound.
+
+    The search is by identity over every loaded module, so a module first
+    imported inside a block — which bound a stand-in — is restored too.
+    """
+    from lucid import _dispatch as _disp
+
+    original_of = {key: orig for key, (_stand_in, orig) in _INSTALLED.items()}
+    ids = original_of.keys()
+    # The two source modules go first: an import racing this then binds an
+    # original.
+    for ns in (vars(_C_engine), vars(_disp), *_module_namespaces()):
+        if ids.isdisjoint(map(id, list(ns.values()))):
+            continue
+        for name, value in list(ns.items()):
+            orig = original_of.get(id(value))
+            if orig is not None:
+                ns[name] = orig
+    _swap_op_registry(original_of)
+    _INSTALLED.clear()
     _ORIGINAL.clear()
+
+
+def _open_block() -> None:
+    """Count a block opening, installing the stand-ins for the first one."""
+    global _open_blocks
+    with _INSTALL_LOCK:
+        if _open_blocks == 0:
+            installed = False
+            try:
+                _install()
+                installed = True
+            finally:
+                if not installed:
+                    _uninstall()
+        _open_blocks += 1
+
+
+def _close_block() -> None:
+    """Count a block closing, removing the stand-ins after the last one."""
+    global _open_blocks
+    with _INSTALL_LOCK:
+        _open_blocks -= 1
+        if _open_blocks == 0:
+            _uninstall()
 
 
 # ---------------------------------------------------------------------------
@@ -1099,7 +1208,7 @@ def _restore_shadow_patches() -> None:
 
 
 def is_active() -> bool:
-    """Return whether a :func:`shadow_alloc` block is currently in scope.
+    """Return whether the calling thread is inside a :func:`shadow_alloc` block.
 
     Used by Lucid's introspection paths (param-count helpers, layer
     summary generators, the docs build's ``shadow_alloc=True`` factory
@@ -1109,10 +1218,28 @@ def is_active() -> bool:
     Returns
     -------
     bool
-        ``True`` inside a :func:`shadow_alloc` block, ``False``
-        otherwise.
+        ``True`` inside a :func:`shadow_alloc` block opened by the calling
+        thread, ``False`` otherwise — even while another thread has one
+        open.
     """
-    return _SHADOW_ENABLED
+    return _ACTIVE.get()
+
+
+def is_shadow(t: Tensor) -> bool:
+    """Return whether ``t`` is a shadow tensor, carrying metadata but no storage.
+
+    Parameters
+    ----------
+    t : Tensor
+        The tensor to inspect.
+
+    Returns
+    -------
+    bool
+        ``True`` when ``t`` was made inside a :func:`shadow_alloc` block,
+        ``False`` for a tensor with real storage.
+    """
+    return isinstance(t._impl, PhantomImpl)
 
 
 @contextlib.contextmanager
@@ -1125,6 +1252,12 @@ def shadow_alloc() -> Iterator[None]:
     entry points return phantom impls; no real memory is reserved
     even for hundreds-of-billions-parameter models.
 
+    The block applies to the calling thread only.  Other threads,
+    including ones started inside it, keep allocating and computing
+    real values, and blocks open in two threads at once each last
+    until their own exit.  A block nested inside another in the same
+    thread does nothing of its own.
+
     Examples
     --------
     >>> from lucid.nn._shadow import shadow_alloc
@@ -1136,57 +1269,15 @@ def shadow_alloc() -> Iterator[None]:
     >>> sum(math.prod(p.shape) for p in model.parameters())  # counted from shapes
     58143808
     """
-    global _SHADOW_ENABLED
-    if _SHADOW_ENABLED:
+    if _ACTIVE.get():
         yield
         return
-
-    from lucid import _dispatch as _disp
-
-    _orig_unwrap = _disp._unwrap
-    _orig_uos = _disp._unwrap_or_scalar
-
-    def _shadow_unwrap(t: Any) -> Any:
-        impl = getattr(t, "_impl", None)
-        if isinstance(impl, PhantomImpl):
-            return impl
-        if isinstance(t, PhantomImpl):
-            return t
-        return _orig_unwrap(t)
-
-    def _shadow_uos(x: Any, ref_impl: Any = None) -> Any:
-        impl = getattr(x, "_impl", None)
-        if isinstance(impl, PhantomImpl):
-            return impl
-        if isinstance(x, PhantomImpl):
-            return x
-        return _orig_uos(x, ref_impl)
-
-    _ORIGINAL["__unwrap_sites__"] = (
-        _orig_unwrap,
-        _rebind_sys_module_attr("_unwrap", _orig_unwrap, _shadow_unwrap),
-    )
-    _ORIGINAL["__uos_sites__"] = (
-        _orig_uos,
-        _rebind_sys_module_attr("_unwrap_or_scalar", _orig_uos, _shadow_uos),
-    )
-
-    _orig_by_id: dict[Any, str] = {}
-    for name in dir(_C_engine):
-        if name.startswith("_"):
-            continue
-        attr = getattr(_C_engine, name)
-        if not callable(attr) or isinstance(attr, type):
-            continue
-        _ORIGINAL[name] = attr
-        _orig_by_id[attr] = name
-        setattr(_C_engine, name, _make_engine_wrapper(name, attr))
-
-    _patch_op_registry(_orig_by_id)
-
-    _SHADOW_ENABLED = True
+    _open_block()
     try:
-        yield
+        token = _ACTIVE.set(True)
+        try:
+            yield
+        finally:
+            _ACTIVE.reset(token)
     finally:
-        _SHADOW_ENABLED = False
-        _restore_shadow_patches()
+        _close_block()

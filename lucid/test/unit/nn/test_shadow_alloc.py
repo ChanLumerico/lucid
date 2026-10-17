@@ -16,7 +16,7 @@ import pytest
 
 import lucid
 import lucid.nn as nn
-from lucid.nn._shadow import PhantomImpl, is_active, shadow_alloc
+from lucid.nn._shadow import is_active, is_shadow, shadow_alloc
 
 # ── the context ───────────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ def test_a_phantom_carries_dtype_and_device():
 def test_the_impl_really_is_a_phantom():
     with shadow_alloc():
         layer = nn.Linear(4, 4)
-    assert isinstance(layer.weight._impl, PhantomImpl)
+    assert is_shadow(layer.weight)
 
 
 # ── and it does not leak into ordinary use ────────────────────────────────────
@@ -125,7 +125,7 @@ def test_the_impl_really_is_a_phantom():
 
 def test_a_module_built_outside_is_ordinary():
     layer = nn.Linear(4, 4)
-    assert not isinstance(layer.weight._impl, PhantomImpl)
+    assert not is_shadow(layer.weight)
     out = layer(lucid.tensor(np.ones((2, 4), dtype=np.float32)))
     assert np.isfinite(np.asarray(out.numpy())).all()
 
@@ -134,7 +134,7 @@ def test_a_module_built_after_a_shadow_block_is_ordinary():
     with shadow_alloc():
         nn.Linear(64, 64)
     layer = nn.Linear(4, 4)
-    assert not isinstance(layer.weight._impl, PhantomImpl)
+    assert not is_shadow(layer.weight)
     layer(lucid.tensor(np.ones((2, 4), dtype=np.float32))).sum().backward()
     assert layer.weight.grad is not None
 
