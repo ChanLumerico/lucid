@@ -211,11 +211,8 @@ def test_a_numpy_alias_sees_writes_and_orders_after_synchronize() -> None:
     assert _flat(g) == [0.0] * 4
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-380: a Metal clone of a shared buffer aliases it",
-)
 def test_a_clone_does_not_follow_later_writes() -> None:
+    # A Metal clone of a shared buffer once aliased it (LCD-380).
     g = _buffer().to("metal")
     c = g.clone()
     c.tolist()
