@@ -23,12 +23,13 @@ sys.path.insert(0, str(ROOT))
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
-def _amp_policy_comment(name: str, policy_map: dict[str, str]) -> str:
-    p = policy_map.get(name, "")
-    if not p:
+def _amp_policy_comment(name: str, policy_map: dict[str, tuple[str, str]]) -> str:
+    """The op's autocast row, Metal column then CPU column."""
+    columns = policy_map.get(name)
+    if columns is None:
         return ""
-    p = p.split(".")[-1]
-    return f"  # AmpPolicy.{p}"
+    metal, cpu = (p.split(".")[-1] for p in columns)
+    return f"  # AmpPolicy metal={metal} cpu={cpu}"
 
 
 def _write(path: Path, content: str) -> None:
@@ -493,10 +494,14 @@ def _render_subnamespace(prefix: str, ns_class_name: str, mod: types.ModuleType)
 def gen_engine_pyi() -> tuple[str, int]:
     from lucid._C import engine as e
 
-    policy_map: dict[str, str] = {}
+    # Every registered schema, then every table row: an engine composite has
+    # a row but no schema.
+    policy_map: dict[str, tuple[str, str]] = {}
     try:
         for schema in e.op_registry_all():
-            policy_map[schema.name] = str(schema.amp_policy)
+            policy_map[schema.name] = (str(schema.amp_policy), str(schema.amp_policy_cpu))
+        for name, metal, cpu in e.amp_policy_table():
+            policy_map[name] = (str(metal), str(cpu))
     except Exception:
         pass
 

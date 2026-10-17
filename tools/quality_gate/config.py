@@ -86,6 +86,8 @@ VULTURE_WHITELIST = Path(__file__).with_name("vulture_whitelist.py")
 ENGINE_STUB = "lucid/_C/engine.pyi"
 ENGINE_TEST_ONLY_BINDINGS = {
     "_has_tensor_hooks": "tensor-hook table probe, lucid/test/unit/autograd",
+    "amp_policy_for": "autocast table checks, lucid/test/unit/amp (until LCD-500-A1)",
+    "amp_policy_table": "tools/gen_pyi.py",
     "host_sync_count": "host-sync budgets, lucid/test/unit/{cost,nn}",
     "metal_active_memory": "memory probes, lucid/test/unit/{interop,optim}",
     "metal_peak_memory": "peak-memory asserts, lucid/test/unit/{interop,nn/functional}",
