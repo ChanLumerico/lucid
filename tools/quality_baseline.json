@@ -62,6 +62,11 @@
    "date": "2026-10-17",
    "reason": "LCD-464: user-callback isolation in _call_always_forward_hooks (except Exception, as the reference) \u2014 orchestrator-approved",
    "by": "chanlee"
+  },
+  {
+   "date": "2026-10-18",
+   "reason": "LCD-497: batch_norm_update_running_stats lost its last Python caller when the dead rebind path was deleted; the binding's removal is tracked in LCD-480 (dead engine entry points)",
+   "by": "chanlee"
   }
  ],
  "counts": {
@@ -432,7 +437,7 @@
   },
   "engine": {
    "unbound": {
-    "lucid/_C/engine.pyi": 36
+    "lucid/_C/engine.pyi": 37
    }
   },
   "jscpd": {
@@ -1281,7 +1286,7 @@
     "lucid/_tensor/_indexing.py": 130,
     "lucid/_tensor/_to.py": 313,
     "lucid/_tensor/tensor.py": 32,
-    "lucid/autograd/_backward.py": 95,
+    "lucid/autograd/_backward.py": 89,
     "lucid/autograd/checkpoint.py": 39,
     "lucid/autograd/gradcheck.py": 35,
     "lucid/benchmarks/bench_ops.py": 2,
