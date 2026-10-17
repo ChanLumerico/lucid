@@ -1228,9 +1228,12 @@ class Module:
             missing or unexpected keys.
         assign : bool
             If ``True`` replace each parameter/buffer object with the
-            loaded tensor directly (allows shape/dtype changes).  If
-            ``False`` (default) copy data into the existing parameter
-            preserving its dtype and device.
+            loaded tensor, taking its dtype and device; each module's
+            ``_load_from_state_dict`` sees it as
+            ``local_metadata["assign_to_params_buffers"]``.  If ``False``
+            (default) copy data into the existing parameter preserving its
+            dtype and device.  Either way a shape that differs from the
+            module's is an error.
         """
         from lucid.nn._state_dict import _load_state_dict as _driver
 

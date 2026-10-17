@@ -129,16 +129,17 @@ class TestStateDictV2:
         with pytest.raises(RuntimeError, match="size mismatch"):
             m.load_state_dict(bad_sd, strict=True, assign=False)
 
-    def test_assign_true_allows_shape_change(self) -> None:
+    def test_assign_true_shape_mismatch_raises(self) -> None:
+        # assign=True swaps the tensors but, as in the reference, not their
+        # shapes (LCD-499).
         import lucid.nn as nn
         import lucid
 
         m = nn.Linear(3, 2)
-        new_w = lucid.randn(4, 3)
-        new_b = lucid.zeros(4)
-        m.load_state_dict({"weight": new_w, "bias": new_b}, strict=True, assign=True)
-        assert m.weight.shape == (4, 3)
-        assert m.bias.shape == (4,)
+        bad_sd = {"weight": lucid.randn(4, 3), "bias": lucid.zeros(4)}
+        with pytest.raises(RuntimeError, match="size mismatch"):
+            m.load_state_dict(bad_sd, strict=True, assign=True)
+        assert m.weight.shape == (2, 3)
 
     def test_assign_true_copies_values(self) -> None:
         import lucid.nn as nn

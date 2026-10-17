@@ -96,6 +96,59 @@ def _save_to_state_dict(
 # ── state_dict (load side) ────────────────────────────────────────────────────
 
 
+def _checked_source(
+    src: object, key: str, attr: Tensor, assign: bool, error_msgs: list[str]
+) -> Tensor | None:
+    """``src`` if it can be loaded into ``attr``, else ``None`` with the reason
+    appended to ``error_msgs``.
+
+    The shapes must agree, on an ``assign`` load too — only a parameter not
+    yet shaped (a lazy layer's) is replaced whatever the checkpoint's shape,
+    as in the reference.
+    """
+    from lucid.nn.parameter import UninitializedParameter
+
+    if not isinstance(src, Tensor):
+        error_msgs.append(
+            f"While copying parameter '{key}', expected Tensor, "
+            f"got {type(src).__name__}"
+        )
+        return None
+    unshaped = assign and isinstance(attr, UninitializedParameter)
+    if not unshaped and tuple(src.shape) != tuple(attr.shape):
+        error_msgs.append(
+            f"size mismatch for {key}: copying a param with shape "
+            f"{tuple(src.shape)} from checkpoint, the shape in current model "
+            f"is {tuple(attr.shape)}."
+        )
+        return None
+    return src
+
+
+def _put(module: Module, name: str, attr: Tensor, src: Tensor, assign: bool) -> None:
+    """Load ``src`` into the module's ``name``, which holds ``attr`` now."""
+    from lucid.nn.parameter import Parameter
+
+    if not assign:
+        # Copy into the tensor the module already holds, with its own
+        # dtype and device, as the reference does.  Rebinding it to a new
+        # impl left everything that held the old one — a view of the
+        # weight, an alias, a hook — reading the old values.
+        converted: Tensor = src.to(device=attr.device, dtype=attr.dtype)
+        attr._impl.copy_from(_C_engine.contiguous(converted._impl))
+        return
+    # Replace the parameter/buffer object, taking the checkpoint's dtype and
+    # device.  A Parameter keeps the module's requires_grad; a buffer is the
+    # loaded tensor, flag included, as in the reference (LCD-486).
+    is_param = name in module._parameters
+    needs_grad = attr.requires_grad if is_param else src.requires_grad
+    new_impl = _impl_with_grad(_C_engine.contiguous(src._impl), needs_grad)
+    if is_param:
+        module._parameters[name] = Parameter(_wrap(new_impl), requires_grad=needs_grad)
+    else:
+        module._buffers[name] = _wrap(new_impl)
+
+
 def _default_load_from_state_dict(
     module: Module,
     state_dict: StateDict,
@@ -105,23 +158,18 @@ def _default_load_from_state_dict(
     missing_keys: list[str],
     unexpected_keys: list[str],
     error_msgs: list[str],
-    assign: bool = False,
 ) -> None:
     """Default ``_load_from_state_dict`` impl — params + persistent buffers.
 
     Subclasses should call this from their override (after any pre-processing)
     to share the standard copy / dtype-convert / shape-check logic.
 
-    Parameters
-    ----------
-    assign : bool
-        When ``True`` the loaded tensor is directly assigned as the new
-        parameter / buffer object (no shape check, no dtype coercion).
-        When ``False`` (default) data is copied into the existing tensor
-        preserving its dtype and device.
+    ``local_metadata["assign_to_params_buffers"]``, which an ``assign=True``
+    load sets as the reference sets it, puts the loaded tensor in place of
+    the parameter / buffer with the checkpoint's dtype and device; otherwise
+    the data is copied into the existing tensor, which keeps its own.
     """
-    from lucid.nn.parameter import Parameter
-
+    assign = bool(local_metadata.get("assign_to_params_buffers", False))
     persistent_buffers: dict[str, Tensor] = {
         name: b
         for name, b in module._buffers.items()
@@ -137,40 +185,9 @@ def _default_load_from_state_dict(
         if key not in state_dict:
             missing_keys.append(key)
             continue
-        src: Tensor = state_dict[key]
-        if not isinstance(src, Tensor):
-            error_msgs.append(
-                f"While copying parameter '{key}', expected Tensor, "
-                f"got {type(src).__name__}"
-            )
-            continue
-
-        if assign:
-            # assign=True: replace the parameter/buffer object directly,
-            # allowing shape and dtype changes (matches reference framework).
-            # A Parameter keeps the module's requires_grad; a buffer is the
-            # loaded tensor, flag included, as in the reference (LCD-486).
-            is_param = name in module._parameters
-            needs_grad = attr.requires_grad if is_param else src.requires_grad
-            new_impl = _impl_with_grad(_C_engine.contiguous(src._impl), needs_grad)
-            if is_param:
-                new_param = Parameter(_wrap(new_impl), requires_grad=needs_grad)
-                module._parameters[name] = new_param
-            else:
-                module._buffers[name] = _wrap(new_impl)
-        else:
-            if tuple(src.shape) != tuple(attr.shape):
-                error_msgs.append(
-                    f"size mismatch for {key}: "
-                    f"expected {tuple(attr.shape)}, got {tuple(src.shape)}"
-                )
-                continue
-            # Copy into the tensor the module already holds, with its own
-            # dtype and device, as the reference does.  Rebinding it to a new
-            # impl left everything that held the old one — a view of the
-            # weight, an alias, a hook — reading the old values.
-            converted: Tensor = src.to(device=attr.device, dtype=attr.dtype)
-            attr._impl.copy_from(_C_engine.contiguous(converted._impl))
+        src = _checked_source(state_dict[key], key, attr, assign, error_msgs)
+        if src is not None:
+            _put(module, name, attr, src, assign)
 
     # extra_state (rare hook for opaque per-module state).
     extra_key: str = f"{prefix}_extra_state"
@@ -217,6 +234,12 @@ def _walk_load(
     local_meta: dict[str, object] = (
         metadata.get(prefix.rstrip("."), {}) if metadata else {}
     )
+    if assign:
+        # Told to every loader the way the reference tells it, so a module's
+        # own _load_from_state_dict (lazy sizing, key and version migration)
+        # runs on an assign load too.  A copy: the checkpoint's metadata is
+        # the caller's.
+        local_meta = {**local_meta, "assign_to_params_buffers": True}
 
     # Pre-hooks (global → instance).
     for hook in _GLOBAL_LOAD_STATE_DICT_PRE_HOOKS.values():
@@ -242,35 +265,19 @@ def _walk_load(
             error_msgs,
         )
 
+    module._load_from_state_dict(
+        state_dict,
+        prefix,
+        local_meta,
+        strict,
+        missing_keys,
+        unexpected_keys,
+        error_msgs,
+    )
     if assign:
-        # assign=True: use the internal default loader directly with assign
-        # semantics (replaces parameter objects rather than copying data).
-        # Custom _load_from_state_dict overrides are bypassed intentionally —
-        # the assign path is inherently low-level.
-        _default_load_from_state_dict(
-            module,
-            state_dict,
-            prefix,
-            local_meta,
-            strict,
-            missing_keys,
-            unexpected_keys,
-            error_msgs,
-            assign=True,
-        )
-        # New tensor objects now stand where the old ones did; a copy (the
-        # branch below) writes into the old ones, which every holder sees.
+        # New tensor objects now stand where the old ones did; a copy writes
+        # into the old ones, which every holder sees.
         _tensors_replaced(module)
-    else:
-        module._load_from_state_dict(
-            state_dict,
-            prefix,
-            local_meta,
-            strict,
-            missing_keys,
-            unexpected_keys,
-            error_msgs,
-        )
 
     if module._load_state_dict_post_hooks:
         post_hook_modules.append(module)
