@@ -21,9 +21,9 @@ from typing import (
 from lucid._C import engine as _C_engine
 import lucid as _lucid
 from lucid import _promotion
-from lucid._dtype import _ENGINE_TO_DTYPE
+from lucid._dtype import _ENGINE_TO_DTYPE, dtype as _dtype_cls
 from lucid._tensor.tensor import Tensor
-from lucid._tensor._to import _to_engine_target
+from lucid._tensor._to import _to_engine_target, _type_target
 from lucid._dispatch import _unwrap, _wrap
 from lucid.nn.parameter import Parameter, UninitializedParameter
 from lucid.nn.hooks import (
@@ -968,14 +968,50 @@ class Module:
 
         return self.to(bfloat16)
 
-    def type(self, dst_type: object) -> Self:
-        """Cast all parameters and buffers to *dst_type*.
+    def type(self, dst_type: _dtype_cls | _C_engine.Dtype | str) -> Self:
+        """Cast every parameter and buffer with :meth:`lucid.Tensor.type`.
 
-        *dst_type* may be a :class:`lucid.dtype`, a Python type (``float``,
-        ``int``), or a string (``"float32"``, ``"float16"``, etc.).
-        Delegates to :meth:`to`, which handles the conversion.
+        Unlike :meth:`to`, this casts the integer and bool buffers too —
+        ``BatchNorm.num_batches_tracked`` included — as the reference does.
+
+        Parameters
+        ----------
+        dst_type : lucid.dtype or str
+            A dtype, or a legacy type name such as ``"lucid.DoubleTensor"``.
+
+        Returns
+        -------
+        Module
+            ``self``, its Parameter objects kept.
+
+        Raises
+        ------
+        ValueError
+            If ``dst_type`` names no legacy type (``"float64"``, ``float``).
+        TypeError
+            If ``dst_type`` is neither a dtype, a string nor a type.
+        RuntimeError
+            If ``dst_type`` is an integer or bool dtype and a parameter
+            requires grad, which only a floating or complex tensor can.
+            Nothing is cast then.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> nn.Linear(2, 2).type("lucid.HalfTensor").weight.dtype
+        lucid.float16
         """
-        return self.to(dst_type)
+        target = _type_target(dst_type)
+        if _promotion.is_integral(target):
+            trainable = [n for n, p in self.named_parameters() if p.requires_grad]
+            if trainable:
+                raise RuntimeError(
+                    f"Module.type: parameter {trainable[0]!r} requires grad, which "
+                    "only a floating point or complex tensor can, so it cannot "
+                    f"become {_ENGINE_TO_DTYPE[target]}"
+                )
+        return self._apply(lambda t: t.type(target))
 
     def apply(self, fn: Callable[[Module], None]) -> Self:
         """Apply fn recursively to every submodule (including self)."""

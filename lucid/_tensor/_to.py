@@ -129,6 +129,57 @@ def _to_target(
     return None, device, rest.pop(0), {"device", "dtype"}
 
 
+# The reference's legacy type names, one per dtype Lucid holds.  Lucid has
+# no uint8, so ``ByteTensor`` (unsigned in the reference) names no dtype
+# here and ``int8`` is ``CharTensor``, as it is there.
+_LEGACY_TYPE_NAME: dict[_C_engine.Dtype, str] = {
+    _C_engine.Dtype.F32: "lucid.FloatTensor",
+    _C_engine.Dtype.F64: "lucid.DoubleTensor",
+    _C_engine.Dtype.F16: "lucid.HalfTensor",
+    _C_engine.Dtype.BF16: "lucid.BFloat16Tensor",
+    _C_engine.Dtype.I8: "lucid.CharTensor",
+    _C_engine.Dtype.I16: "lucid.ShortTensor",
+    _C_engine.Dtype.I32: "lucid.IntTensor",
+    _C_engine.Dtype.I64: "lucid.LongTensor",
+    _C_engine.Dtype.Bool: "lucid.BoolTensor",
+    _C_engine.Dtype.C64: "lucid.ComplexFloatTensor",
+    _C_engine.Dtype.C128: "lucid.ComplexDoubleTensor",
+}
+_LEGACY_TYPE: dict[str, _C_engine.Dtype] = {v: k for k, v in _LEGACY_TYPE_NAME.items()}
+
+
+def _type_target(dst_type: object) -> _C_engine.Dtype:
+    """The engine dtype ``Tensor.type(dst_type)`` casts to.
+
+    Takes what the reference's ``type`` takes: a dtype, or a legacy type
+    name such as ``"lucid.DoubleTensor"``.  A dtype's own name
+    (``"float64"``) or a Python type (``float``) is refused, as there.
+
+    Raises
+    ------
+    ValueError
+        If ``dst_type`` is a string or a type that names no legacy type.
+    TypeError
+        If ``dst_type`` is neither a dtype, a string nor a type.
+    """
+    if isinstance(dst_type, _DTYPE_LIKE):
+        return to_engine_dtype(dst_type)
+    if isinstance(dst_type, str):
+        found = _LEGACY_TYPE.get(dst_type)
+        if found is not None:
+            return found
+        name = dst_type
+    elif isinstance(dst_type, type):
+        name = dst_type.__name__
+    else:
+        raise TypeError(
+            f"type() takes a dtype or a legacy type name, got {type(dst_type).__name__}"
+        )
+    raise ValueError(
+        f"invalid type: {name!r}; type() takes a dtype or one of {sorted(_LEGACY_TYPE)}"
+    )
+
+
 def _inject_to(cls: type) -> None:
     """Attach .to(), .metal(), .cpu(), and dtype-cast methods to Tensor."""
     # These methods are annotated ``self: Tensor`` and ``-> Tensor`` while

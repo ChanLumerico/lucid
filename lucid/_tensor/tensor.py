@@ -35,11 +35,6 @@ from lucid._C import engine as _C_engine
 from lucid._dtype import (
     dtype as _dtype_cls,
     _ENGINE_TO_DTYPE,
-    bool_,
-    int8,
-    int16,
-    int32,
-    int64,
     float16,
     float32,
     float64,
@@ -2743,34 +2738,41 @@ class Tensor:
             return _conj(self).mT  # type: ignore[return-value]
         return self.mT  # type: ignore[return-value]
 
-    def type(self, dtype: str | None = None) -> str | Tensor:
-        """Return or cast the tensor type using legacy type strings.
+    def type(
+        self,
+        dtype: _dtype_cls | _C_engine.Dtype | str | None = None,
+        non_blocking: bool = False,
+    ) -> str | Tensor:
+        """Return the legacy type name, or cast to a dtype or legacy type.
 
-        * ``t.type()`` — return a string like ``'lucid.FloatTensor'``.
-        * ``t.type('lucid.DoubleTensor')`` — cast and return the new tensor.
-
-        Supported type strings: ``FloatTensor``, ``DoubleTensor``,
-        ``HalfTensor``, ``IntTensor``, ``LongTensor``, ``BoolTensor``,
-        ``ShortTensor``, ``ByteTensor``.
+        * ``t.type()`` — the name, such as ``'lucid.FloatTensor'``.
+        * ``t.type(lucid.float64)`` / ``t.type('lucid.DoubleTensor')`` — the
+          tensor cast, as :meth:`to` casts it; ``self`` if it already is.
 
         Parameters
         ----------
-        dtype : str, optional
-            Lucid legacy type string. If ``None``, returns the type string
-            of ``self``; otherwise casts to the corresponding dtype.
+        dtype : lucid.dtype or str, optional
+            The dtype, or its legacy name: ``FloatTensor``, ``DoubleTensor``,
+            ``HalfTensor``, ``BFloat16Tensor``, ``CharTensor`` (int8),
+            ``ShortTensor``, ``IntTensor``, ``LongTensor``, ``BoolTensor``,
+            ``ComplexFloatTensor`` or ``ComplexDoubleTensor``, prefixed with
+            ``lucid.``.  ``None`` returns the name of ``self``'s type.
+        non_blocking : bool, optional
+            Read and ignored: a transfer is synchronous.
 
         Returns
         -------
-        str
-            When ``dtype is None`` — the legacy type label.
-        Tensor
-            When a type string is provided — a new tensor cast to that
-            dtype (current device retained).
+        str or Tensor
+            The name when ``dtype is None``, otherwise the cast tensor on the
+            same device.
 
         Raises
         ------
+        ValueError
+            If ``dtype`` is a string or a Python type that names no legacy
+            type — ``"float64"`` and ``float`` included, as in the reference.
         TypeError
-            If ``dtype`` is not one of the supported legacy strings.
+            If ``dtype`` is neither a dtype, a string nor a type.
 
         Examples
         --------
@@ -2779,32 +2781,13 @@ class Tensor:
         'lucid.FloatTensor'
         >>> lucid.zeros(3).type('lucid.LongTensor').dtype
         lucid.int64
-
-        Notes
-        -----
-        Provided purely for API compatibility with code that uses legacy
-        type strings. New code should use :attr:`dtype` for inspection and
-        :meth:`to` for casting — both avoid stringly-typed dispatch.
+        >>> lucid.zeros(3).type(lucid.float16).type()
+        'lucid.HalfTensor'
         """
-        _DTYPE_STR: dict[str, object] = {
-            "lucid.FloatTensor": float32,
-            "lucid.DoubleTensor": float64,
-            "lucid.HalfTensor": float16,
-            "lucid.IntTensor": int32,
-            "lucid.LongTensor": int64,
-            "lucid.BoolTensor": bool_,
-            "lucid.ShortTensor": int16,
-            "lucid.ByteTensor": int8,
-        }
-        _DTYPE_TO_STR: dict[object, str] = {v: k for k, v in _DTYPE_STR.items()}
+        del non_blocking  # the reference's parameter; transfers are synchronous
         if dtype is None:
-            return _DTYPE_TO_STR.get(self.dtype, f"lucid.{self.dtype}")
-        if dtype not in _DTYPE_STR:
-            raise TypeError(
-                f"Tensor.type(): unrecognised type string '{dtype}'. "
-                f"Valid values: {list(_DTYPE_STR)}"
-            )
-        return self.to(_DTYPE_STR[dtype])  # type: ignore[arg-type]
+            return _LEGACY_TYPE_NAME[self._impl.dtype]
+        return self.to(_type_target(dtype))
 
     def get_device(self) -> int:
         r"""Return the device index.
@@ -4274,7 +4257,7 @@ from lucid._tensor._repr import tensor_repr as _tensor_repr  # noqa: E402
 from lucid._tensor._indexing import _select_slice as _ss  # noqa: E402
 from lucid._tensor._dunders import _inject_dunders  # noqa: E402
 from lucid._tensor._methods import _inject_methods  # noqa: E402
-from lucid._tensor._to import _inject_to  # noqa: E402
+from lucid._tensor._to import _inject_to, _LEGACY_TYPE_NAME, _type_target  # noqa: E402
 
 # ``register_hook`` is annotated ``-> _RemovableHandle``, imported under
 # TYPE_CHECKING to keep the module's import graph acyclic.  PEP 649 then
