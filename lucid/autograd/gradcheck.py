@@ -28,7 +28,9 @@ def _differentiated(inputs: Sequence[Tensor]) -> list[int]:
     ValueError
         If no input requires grad.
     """
-    diff = [i for i, t in enumerate(inputs) if isinstance(t, Tensor) and t.requires_grad]
+    diff = [
+        i for i, t in enumerate(inputs) if isinstance(t, Tensor) and t.requires_grad
+    ]
     if not diff:
         raise ValueError(
             "gradcheck expects at least one input tensor to require gradient, "
@@ -104,8 +106,12 @@ def _numerical(
         k_idx = _C_engine.full([1], float(k), _C_engine.I32, dev)
         zeros = _C_engine.zeros([numel], _C_engine.F64, dev)
         e_k = _C_engine.scatter_add(zeros, k_idx, eps_v, 0)
-        plus = _first(func(*_shifted_inputs(inputs, i, _C_engine.add(flat, e_k), shape)))
-        minus = _first(func(*_shifted_inputs(inputs, i, _C_engine.sub(flat, e_k), shape)))
+        plus = _first(
+            func(*_shifted_inputs(inputs, i, _C_engine.add(flat, e_k), shape))
+        )
+        minus = _first(
+            func(*_shifted_inputs(inputs, i, _C_engine.sub(flat, e_k), shape))
+        )
         values.append((float(plus.item()) - float(minus.item())) / (2.0 * eps))
     # A Python list crosses into the engine here (interop boundary).
     num = _unwrap(_tensor_fn(values, dtype=lucid.float64))
@@ -131,8 +137,12 @@ def _mismatch(
     diff_flat = _C_engine.reshape(diff, [diff.numel()])
     worst_k = int(_wrap(_C_engine.argmax(diff_flat, 0, False)).item())
     k_idx = _C_engine.full([1], float(worst_k), _C_engine.I32, diff.device)
-    an_val = float(_wrap(_C_engine.gather(_C_engine.reshape(an, [an.numel()]), k_idx, 0)).item())
-    nu_val = float(_wrap(_C_engine.gather(_C_engine.reshape(nu, [nu.numel()]), k_idx, 0)).item())
+    an_val = float(
+        _wrap(_C_engine.gather(_C_engine.reshape(an, [an.numel()]), k_idx, 0)).item()
+    )
+    nu_val = float(
+        _wrap(_C_engine.gather(_C_engine.reshape(nu, [nu.numel()]), k_idx, 0)).item()
+    )
     return (
         f"Gradient check failed for input {i} "
         f"(atol={atol}, rtol={rtol}):\n"

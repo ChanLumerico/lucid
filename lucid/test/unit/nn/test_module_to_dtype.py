@@ -73,9 +73,10 @@ def test_the_buffer_dtypes_match_the_reference(ref, spelling):
     mine = _to(nn.BatchNorm1d(3), spelling(lucid))
     theirs = _to(ref.nn.BatchNorm1d(3), spelling(ref))
     for name in ("weight", "running_mean", "num_batches_tracked"):
-        assert str(getattr(mine, name).dtype).split(".")[-1] == str(
-            getattr(theirs, name).dtype
-        ).split(".")[-1]
+        assert (
+            str(getattr(mine, name).dtype).split(".")[-1]
+            == str(getattr(theirs, name).dtype).split(".")[-1]
+        )
 
 
 def test_a_device_move_takes_the_integer_buffers_along(device):

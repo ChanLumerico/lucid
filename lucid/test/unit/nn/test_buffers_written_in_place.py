@@ -50,20 +50,28 @@ _UPDATERS: dict[str, tuple[Callable[[str], nn.Module], tuple[int, ...]]] = {
         (_C, 3, 4),
     ),
     "instance_norm_3d": (
-        lambda d: nn.InstanceNorm3d(_C, affine=True, track_running_stats=True, device=d),
+        lambda d: nn.InstanceNorm3d(
+            _C, affine=True, track_running_stats=True, device=d
+        ),
         (2, _C, 2, 2, 3),
     ),
     "lazy_instance_norm_2d": (
         lambda d: nn.LazyInstanceNorm2d(track_running_stats=True, device=d),
         (4, _C, 2, 3),
     ),
-    "spectral_norm_linear": (lambda d: spectral_norm(nn.Linear(4, _C, device=d)), (2, 4)),
+    "spectral_norm_linear": (
+        lambda d: spectral_norm(nn.Linear(4, _C, device=d)),
+        (2, 4),
+    ),
     "spectral_norm_conv2d": (
         lambda d: spectral_norm(nn.Conv2d(2, _C, 3, device=d), n_power_iterations=3),
         (1, 2, 5, 5),
     ),
     "min_max_observer": (lambda d: Q.MinMaxObserver().to(d), (4, _C)),
-    "moving_average_observer": (lambda d: Q.MovingAverageMinMaxObserver().to(d), (4, _C)),
+    "moving_average_observer": (
+        lambda d: Q.MovingAverageMinMaxObserver().to(d),
+        (4, _C),
+    ),
     "per_channel_observer": (lambda d: Q.PerChannelMinMaxObserver().to(d), (_C, 4)),
     "histogram_observer": (lambda d: Q.HistogramObserver().to(d), (4, _C)),
     "fake_quantize": (lambda d: Q.FakeQuantize().to(d), (4, _C)),
@@ -82,7 +90,9 @@ def _host(t: lucid.Tensor) -> np.ndarray:
 
 
 @pytest.mark.parametrize("name", list(_UPDATERS))
-def test_a_buffer_a_module_updates_is_the_same_tensor_after(name: str, device: str) -> None:
+def test_a_buffer_a_module_updates_is_the_same_tensor_after(
+    name: str, device: str
+) -> None:
     make, shape = _UPDATERS[name]
     m = make(device)
     m.train()
