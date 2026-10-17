@@ -56,13 +56,18 @@ def test_a_value_at_an_offset_is_read_from_its_first_element(stateful) -> None: 
     # The handle took the element-0 buffer a CPU view hands its readers and
     # advanced it by the view's offset into its own allocation as well: the
     # write read two elements past the view and past the end of its copy
-    # (LCD-517).  The public write_state packs a dense copy first, so the
-    # handle is called directly with the view.
+    # (LCD-517).  The public write_state hands it a copy today, so the handle
+    # is called directly with the view; once ``contiguous()`` returns a
+    # contiguous view itself, the public path hands it the view as well.
     (name,) = stateful.state_names
     view = lucid.arange(4 + 2.0, dtype=lucid.float16).as_strided((1, 4), (4, 1), 2)
     assert view.is_contiguous() and view.storage_offset() != 0
     stateful._handle.write_state(name, view._impl)
     assert stateful.read_state(name).tolist() == view.tolist() == [[2.0, 3.0, 4.0, 5.0]]
+
+    stateful.write_state(name, lucid.zeros(1, 4, dtype=lucid.float16))
+    stateful.write_state(name, view)
+    assert stateful.read_state(name).tolist() == [[2.0, 3.0, 4.0, 5.0]]
 
 
 def test_a_wrong_name_or_shape_is_refused(stateful) -> None:  # type: ignore[no-untyped-def]
