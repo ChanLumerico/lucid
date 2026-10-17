@@ -403,9 +403,11 @@ void write_state(CoreMLModel* model, const std::string& name, const TensorImplPt
     require_state(model, name);
     if (!value || value->device() != Device::CPU || !value->is_contiguous())
         throw std::invalid_argument("lucid.coreml: a state value must be a contiguous CPU tensor");
+    // storage() starts at the value's first element: a contiguous view at an
+    // offset answers with a packed copy.  storage_offset() is measured in the
+    // raw handle, so adding it read past the elements (LCD-517).
     const auto& src_storage = std::get<CpuStorage>(value->storage());
-    const auto* src =
-        static_cast<const std::byte*>(src_storage.ptr.get()) + value->storage_offset();
+    const auto* src = static_cast<const std::byte*>(src_storage.ptr.get());
     __block std::string failure;
     @autoreleasepool {
         std::lock_guard<std::mutex> queued(model->state_lock);
