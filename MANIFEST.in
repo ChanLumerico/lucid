@@ -2,7 +2,7 @@ include .extensions/cpp_extensions.json
 include README.md LICENSE CHANGELOG.md THIRD_PARTY_NOTICES.md
 
 # C++ engine sources need to be in the sdist so source installs can build.
-recursive-include lucid/_C *.h *.hpp *.cpp *.mm *.metal CMakeLists.txt
+recursive-include lucid/_C *.h *.hpp *.cpp *.mm *.metal *.def CMakeLists.txt
 recursive-include lucid/_C/cmake *
 recursive-include lucid *.pyi
 
