@@ -23,8 +23,6 @@ Usage
     python tools/gen_mil_schema.py --check    # exit 1 if it would change
 """
 
-from __future__ import annotations  # tooling only — outside lucid/ (H1 OK)
-
 import argparse
 import sys
 from pathlib import Path

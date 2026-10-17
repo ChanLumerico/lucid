@@ -28,8 +28,6 @@ Exit codes
 1 — at least one symbol is below threshold; details printed to stderr.
 """
 
-from __future__ import annotations  # noqa: F401  — typing-only file, no runtime impl
-
 import argparse
 import ast
 import re

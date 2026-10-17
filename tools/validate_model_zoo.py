@@ -25,8 +25,6 @@ Exit code is 0 on success and 1 on any violation (errors only; warnings
 do not affect exit code unless ``--strict`` is passed).
 """
 
-from __future__ import annotations  # tooling only — not Lucid runtime (H1 OK)
-
 import argparse
 import ast
 import difflib

@@ -126,10 +126,11 @@ fi
 
 # ── 1a. Source rules (H1, H5, H6, H7) ───────────────────────────────────────
 # Hard-fail, milliseconds.  ``tools/check_source_rules.py --staged`` reads
-# the staged blob of every lucid/ file in the commit and refuses
-# ``from __future__ import annotations``, an import or a mention of the
-# reference framework outside ``lucid/test/_fixtures/ref_framework.py``, the
-# other vendor's GPU name, and string annotations.  The unit test
+# the staged blob of every lucid/ and tools/ file in the commit and refuses
+# ``from __future__ import annotations`` in both, and in lucid/ an import or
+# a mention of the reference framework outside
+# ``lucid/test/_fixtures/ref_framework.py``, the other vendor's GPU name, and
+# string annotations.  The unit test
 # ``test_source_rules.py`` checks the whole tree, but nothing ran it before a
 # commit, and tests importing the reference framework directly landed past
 # it.  Only the staged files: a commit that touches a file must leave it
@@ -138,7 +139,7 @@ fi
 RULES_SCRIPT="${REPO_ROOT}/tools/check_source_rules.py"
 [[ -f "${RULES_SCRIPT}" ]] || RULES_SCRIPT="${MAIN_ROOT}/tools/check_source_rules.py"
 if [[ -n "${PY}" && -f "${RULES_SCRIPT}" ]]; then
-    if git diff --cached --name-only --diff-filter=ACMR | grep -qE '^lucid/'; then
+    if git diff --cached --name-only --diff-filter=ACMR | grep -qE '^(lucid|tools)/'; then
         if ! (cd "${REPO_ROOT}" && "${PY}" "${RULES_SCRIPT}" --staged); then
             echo "  ❌  Pre-commit blocked: a Hard Rule is broken in a staged file (see above)." >&2
             exit 1

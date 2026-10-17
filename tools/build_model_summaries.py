@@ -24,8 +24,6 @@ Usage
     python -m tools.build_model_summaries --skip-large 5e9    # raise runtime-fallback limit
 """
 
-from __future__ import annotations  # tooling — H1 OK
-
 import argparse
 import gc
 import hashlib

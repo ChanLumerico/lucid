@@ -13,8 +13,6 @@ agent to update vault notes in the same task.
 Maintenance: when adding new public-API areas, append to ``MAPPING`` below.
 """
 
-from __future__ import annotations  # local script — not part of lucid package
-
 import fnmatch
 import json
 import sys

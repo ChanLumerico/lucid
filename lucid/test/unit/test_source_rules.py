@@ -10,7 +10,7 @@ check before a commit.  The rules now live in ``tools/check_source_rules.py``,
 which ``.githooks/pre-commit`` runs on the staged files and this runs on the
 whole tree.
 
-* **H1** — no ``from __future__ import annotations``.
+* **H1** — no ``from __future__ import annotations``, in ``tools/`` too.
 * **H5** — the reference framework is imported and named only in
   :mod:`lucid.test._fixtures.ref_framework`; every other test takes the
   ``ref`` fixture.  The tool reads the name from that module.
@@ -108,5 +108,15 @@ def test_the_fixture_may_name_and_import_the_reference_framework() -> None:
     assert rules.check([(rules.REF_FILE, source)], _NAME) == []
 
 
-def test_files_outside_lucid_are_not_checked() -> None:
-    assert rules.check([("tools/x.py", f"import {_NAME}\n")], _NAME) == []
+def test_tools_are_held_to_h1_only() -> None:
+    # tools/ converts the reference framework's checkpoints, so it may name it.
+    future = rules.check(
+        [("tools/x.py", "from __future__ import annotations\n")], _NAME
+    )
+    assert {v.rule for v in future} == {"future-annotations"}
+    assert rules.check([("tools/x.py", f"import {_NAME}  # {_NAME}\n")], _NAME) == []
+
+
+def test_files_outside_lucid_and_tools_are_not_checked() -> None:
+    source = f"from __future__ import annotations\nimport {_NAME}\n"
+    assert rules.check([("scripts/x.py", source)], _NAME) == []

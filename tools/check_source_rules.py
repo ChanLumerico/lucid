@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""tools/check_source_rules.py — Hard Rules H1, H5, H6 and H7 over ``lucid/``.
+"""tools/check_source_rules.py — Hard Rules H1, H5, H6 and H7 over the source.
 
 Each rule is a property of one source file, so each is checked per file:
 
 * **H1** (``future-annotations``) — no ``from __future__ import
-  annotations``.  Python 3.14 evaluates annotations lazily (PEP 649); the
-  import turns every annotation back into a string.
+  annotations``, in ``lucid/`` and ``tools/``.  Python 3.14 evaluates
+  annotations lazily (PEP 649); the import turns every annotation back
+  into a string.  The rules below hold in ``lucid/`` only: ``tools/``
+  converts the reference framework's checkpoints and names it.
 * **H5** (``ref-import``, ``ref-name``) — the reference framework is
   imported, and named, only in ``lucid/test/_fixtures/ref_framework.py``.
   Every other test takes the ``ref`` fixture.  The name is read from that
@@ -18,7 +20,7 @@ Each rule is a property of one source file, so each is checked per file:
 
 Usage::
 
-    python3 tools/check_source_rules.py            # the whole lucid/ tree
+    python3 tools/check_source_rules.py            # the whole lucid/ and tools/
     python3 tools/check_source_rules.py --staged   # the staged blobs (pre-commit)
     python3 tools/check_source_rules.py PATH ...   # these files
 
@@ -39,6 +41,7 @@ from typing import NamedTuple, override
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LUCID = "lucid"
+TOOLS = "tools"
 REF_FILE = "lucid/test/_fixtures/ref_framework.py"
 TEXT_SUFFIXES = frozenset({".py", ".pyi", ".h", ".hpp", ".cpp", ".mm", ".md"})
 PYTHON_SUFFIXES = frozenset({".py", ".pyi"})
@@ -93,8 +96,8 @@ class _Rules:
             if _GPU_WORD.search(line):
                 yield Violation(path, number, "gpu-name", line.strip()[:100])
 
-    def python(self, path: str, source: str) -> Iterator[Violation]:
-        """H1, H5 ``ref-import`` and H7, from the syntax tree."""
+    def python(self, path: str, source: str, full: bool) -> Iterator[Violation]:
+        """H1, and with ``full`` H5 ``ref-import`` and H7, from the syntax tree."""
         try:
             tree = ast.parse(source, filename=path)
         except SyntaxError as e:
@@ -107,11 +110,14 @@ class _Rules:
                         path, node.lineno, "future-annotations", ast.unparse(node)
                     )
             if (
-                path != REF_FILE
+                full
+                and path != REF_FILE
                 and isinstance(node, (ast.Import, ast.ImportFrom, ast.Call))
                 and self._imports_ref(node)
             ):
                 yield Violation(path, node.lineno, "ref-import", ast.unparse(node))
+        if not full:
+            return
         for annotation in _annotations(tree):
             for found in _string_types(annotation):
                 yield Violation(
@@ -123,21 +129,17 @@ class _Rules:
             return any(self._is_ref_module(alias.name) for alias in node.names)
         if isinstance(node, ast.ImportFrom):
             return node.level == 0 and self._is_ref_module(node.module or "")
-        if isinstance(node, ast.Call) and node.args:
-            func = node.func
-            name = (
-                func.attr
-                if isinstance(func, ast.Attribute)
-                else getattr(func, "id", "")
-            )
-            first = node.args[0]
-            return (
-                name in _IMPORTERS
-                and isinstance(first, ast.Constant)
-                and isinstance(first.value, str)
-                and self._is_ref_module(first.value)
-            )
-        return False
+        if not node.args:
+            return False
+        func = node.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        first = node.args[0]
+        return (
+            name in _IMPORTERS
+            and isinstance(first, ast.Constant)
+            and isinstance(first.value, str)
+            and self._is_ref_module(first.value)
+        )
 
 
 def _string_types(annotation: ast.expr) -> Iterator[ast.Constant]:
@@ -180,25 +182,37 @@ def _annotations(tree: ast.AST) -> Iterator[ast.expr]:
             yield node.annotation
 
 
+def _scope(path: str) -> str | None:
+    """``lucid`` or ``tools`` for a repo-relative path the rules read, else None."""
+    top, _, _ = path.partition("/")
+    suffix = Path(path).suffix
+    if top == LUCID and suffix in TEXT_SUFFIXES:
+        return LUCID
+    if top == TOOLS and suffix in PYTHON_SUFFIXES:
+        return TOOLS
+    return None
+
+
 def check(sources: Iterable[tuple[str, str]], ref: str) -> list[Violation]:
-    """Every violation in ``(repo-relative path, source text)`` pairs under ``lucid/``."""
+    """Every violation in ``(repo-relative path, source text)`` pairs."""
     rules = _Rules(ref)
     found: list[Violation] = []
     for path, source in sources:
-        suffix = Path(path).suffix
-        if not path.startswith(LUCID + "/") or suffix not in TEXT_SUFFIXES:
-            continue
-        found.extend(rules.text(path, source))
-        if suffix in PYTHON_SUFFIXES:
-            found.extend(rules.python(path, source))
+        scope = _scope(path)
+        if scope == LUCID:
+            found.extend(rules.text(path, source))
+        if scope is not None and Path(path).suffix in PYTHON_SUFFIXES:
+            found.extend(rules.python(path, source, full=scope == LUCID))
     return found
 
 
 def tree_sources(root: Path = REPO_ROOT) -> Iterator[tuple[str, str]]:
-    """Every checked file under ``root/lucid``, as it is on disk."""
-    for file in sorted((root / LUCID).rglob("*")):
-        if file.suffix in TEXT_SUFFIXES and "__pycache__" not in file.parts:
-            yield file.relative_to(root).as_posix(), file.read_text(errors="ignore")
+    """Every checked file under ``root/lucid`` and ``root/tools``, as on disk."""
+    for top in (LUCID, TOOLS):
+        for file in sorted((root / top).rglob("*")):
+            path = file.relative_to(root).as_posix()
+            if _scope(path) is not None and "__pycache__" not in file.parts:
+                yield path, file.read_text(errors="ignore")
 
 
 def _git(root: Path, *args: str) -> str:
@@ -216,7 +230,7 @@ def staged_sources(root: Path) -> Iterator[tuple[str, str]]:
     """
     names = _git(root, "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z")
     for path in filter(None, names.split("\0")):
-        if path.startswith(LUCID + "/") and Path(path).suffix in TEXT_SUFFIXES:
+        if _scope(path) is not None:
             yield path, _git(root, "show", f":{path}")
 
 
@@ -232,7 +246,7 @@ def path_sources(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Check Hard Rules H1, H5, H6, H7.")
-    parser.add_argument("paths", nargs="*", help="files to check (default: lucid/)")
+    parser.add_argument("paths", nargs="*", help="files (default: lucid/, tools/)")
     parser.add_argument("--staged", action="store_true", help="check the staged blobs")
     args = parser.parse_args(argv)
     if args.staged:
