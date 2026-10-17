@@ -1067,11 +1067,14 @@ def _gated[**P, R](orig: Callable[P, R], shadow: Callable[P, R]) -> Callable[P, 
 
 def _module_namespaces() -> list[dict[str, Any]]:
     """Return the namespace of every loaded module."""
+    # Typed ``object``: anything can be put in ``sys.modules``, not only a
+    # module.
+    loaded: list[object] = list(sys.modules.values())
     # ``object.__getattribute__`` reads ``__dict__`` without running a lazy
     # module's attribute hook, which would import it.
     return [
         object.__getattribute__(mod, "__dict__")
-        for mod in list(sys.modules.values())
+        for mod in loaded
         if isinstance(mod, types.ModuleType)
     ]
 
