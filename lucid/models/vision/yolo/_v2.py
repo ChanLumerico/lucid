@@ -76,6 +76,7 @@ from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import batched_nms, box_iou
 from lucid.models._utils._detection_results import (
+    check_per_image,
     detection_result,
     empty_detection_result,
 )
@@ -761,6 +762,7 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
             - ``pred_boxes``: (B, fH*fW*A, 4) decoded xyxy pixel boxes
             - ``loss``:       scalar tensor when targets are provided, else None
         """
+        check_per_image(type(self).__name__, int(x.shape[0]), targets=targets)
         actual = (int(x.shape[2]), int(x.shape[3]))
         if image_size is not None and tuple(image_size) != actual:
             raise ValueError(

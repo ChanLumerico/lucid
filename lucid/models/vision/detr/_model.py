@@ -68,6 +68,7 @@ from lucid.models._utils._detection import (
     solve_assignment,
 )
 from lucid.models._utils._detection_results import (
+    check_per_image,
     detection_result,
     empty_detection_result,
 )
@@ -699,6 +700,7 @@ class DETRForObjectDetection(ObjectDetectionModel):
         B = int(x.shape[0])
         iH = int(x.shape[2])
         iW = int(x.shape[3])
+        check_per_image(type(self).__name__, B, targets=targets)
 
         # 1. Backbone + projection → (B, d, H', W')
         feat: Tensor = self.backbone(x)

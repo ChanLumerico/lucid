@@ -5,6 +5,7 @@ from typing import ClassVar
 
 from lucid.models._base import ModelConfig
 from lucid.models._meta import model_family_meta
+from lucid.models._utils._common import check_stage_lengths
 
 
 @model_family_meta(
@@ -169,3 +170,6 @@ class SwinConfig(ModelConfig):
     def __post_init__(self) -> None:
         object.__setattr__(self, "depths", tuple(self.depths))
         object.__setattr__(self, "num_heads", tuple(self.num_heads))
+        check_stage_lengths(
+            type(self).__name__, depths=self.depths, num_heads=self.num_heads
+        )

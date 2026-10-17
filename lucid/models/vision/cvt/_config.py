@@ -5,6 +5,7 @@ from typing import ClassVar
 
 from lucid.models._base import ModelConfig
 from lucid.models._meta import model_family_meta
+from lucid.models._utils._common import check_stage_lengths
 
 
 @model_family_meta(
@@ -149,3 +150,10 @@ class CvTConfig(ModelConfig):
         object.__setattr__(self, "num_heads", tuple(self.num_heads))
         object.__setattr__(self, "embed_strides", tuple(self.embed_strides))
         object.__setattr__(self, "cls_token", tuple(self.cls_token))
+        check_stage_lengths(
+            type(self).__name__,
+            dims=self.dims,
+            depths=self.depths,
+            num_heads=self.num_heads,
+            embed_strides=self.embed_strides,
+        )

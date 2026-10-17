@@ -340,7 +340,10 @@ class DIAMONDConfig(GenerativeModelConfig):
                 f"got upsampling_factor={self.upsampling_factor}"
             )
 
-        for name in ("unet", "reward", "actor"):
+        stacks: tuple[str, ...] = ("unet", "reward", "actor")
+        if self.upsampler_channels is not None:
+            stacks += ("upsampler",)
+        for name in stacks:
             channels = getattr(self, f"{name}_channels")
             layers = getattr(self, f"{name}_layers")
             if len(channels) != len(layers):
@@ -350,6 +353,18 @@ class DIAMONDConfig(GenerativeModelConfig):
                 )
             if not channels:
                 raise ValueError(f"{name}_channels must name at least one stage")
+        # The U-Net reads one flag per stage; a short tuple failed with an
+        # IndexError mid-build and a long one was silently cut.
+        if (
+            self.upsampler_channels is not None
+            and self.upsampler_attn_depths is not None
+            and len(self.upsampler_attn_depths) != len(self.upsampler_channels)
+        ):
+            raise ValueError(
+                f"upsampler_attn_depths names one flag per upsampler resolution, "
+                f"got {len(self.upsampler_attn_depths)} for "
+                f"{len(self.upsampler_channels)} stages"
+            )
 
         if self.conditioning_frames < 1:
             raise ValueError(

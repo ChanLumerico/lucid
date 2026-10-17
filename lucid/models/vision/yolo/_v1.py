@@ -46,6 +46,7 @@ from lucid.models._output import ObjectDetectionOutput
 from lucid.models._registry import register_model
 from lucid.models._utils._detection import batched_nms, box_iou
 from lucid.models._utils._detection_results import (
+    check_per_image,
     detection_result,
     empty_detection_result,
 )
@@ -646,6 +647,7 @@ class YOLOForObjectDetection(ObjectDetectionModel):
             - ``pred_boxes``: (B, S·S·num_boxes, 4) xyxy pixel boxes
             - ``loss``:       scalar tensor when targets are provided, else None
         """
+        check_per_image(type(self).__name__, int(x.shape[0]), targets=targets)
         raw = self._forward_features(x)
         logits, pred_boxes, objectness = self._decode_predictions(raw, image_size)
 

@@ -5,6 +5,7 @@ from typing import ClassVar
 
 from lucid.models._base import ModelConfig
 from lucid.models._meta import model_family_meta
+from lucid.models._utils._common import check_stage_lengths
 
 
 @model_family_meta(
@@ -175,3 +176,9 @@ class EfficientFormerConfig(ModelConfig):
         object.__setattr__(self, "depths", tuple(self.depths))
         object.__setattr__(self, "embed_dims", tuple(self.embed_dims))
         object.__setattr__(self, "mlp_ratios", tuple(self.mlp_ratios))
+        check_stage_lengths(
+            type(self).__name__,
+            depths=self.depths,
+            embed_dims=self.embed_dims,
+            mlp_ratios=self.mlp_ratios,
+        )

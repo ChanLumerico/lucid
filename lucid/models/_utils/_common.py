@@ -5,7 +5,7 @@ regardless of its output task (classification, detection, segmentation …).
 """
 
 import random
-from collections.abc import Mapping
+from collections.abc import Mapping, Sized
 from dataclasses import replace
 from typing import TYPE_CHECKING, cast
 
@@ -55,6 +55,44 @@ def apply_overrides[C: DataclassInstance](cfg: C, overrides: Mapping[str, object
     Cfg(width=16)
     """
     return replace(cfg, **overrides) if overrides else cfg
+
+
+def check_stage_lengths(owner: str, **per_stage: Sized) -> None:
+    """Refuse per-stage config tuples that disagree on the stage count.
+
+    A builder walks these fields together, one entry per stage.  Checked in
+    the config, a short or long tuple is named where it was written rather
+    than surfacing as a ``zip`` length error, or a head built for a stage
+    that never ran, inside the model.
+
+    Parameters
+    ----------
+    owner : str
+        The config class, named in the message.
+    **per_stage : Sized
+        Each per-stage field by its config name.
+
+    Raises
+    ------
+    ValueError
+        When the fields do not all have the same length.
+
+    Examples
+    --------
+    >>> from lucid.models._utils._common import check_stage_lengths
+    >>> check_stage_lengths("Cfg", depths=(1, 1), dims=(8, 16))
+    >>> check_stage_lengths("Cfg", depths=(1, 1), dims=(8, 16, 32))
+    Traceback (most recent call last):
+        ...
+    ValueError: Cfg: depths, dims hold one entry per stage and must be the same length; got depths=2, dims=3
+    """
+    lengths = {name: len(value) for name, value in per_stage.items()}
+    if len(set(lengths.values())) > 1:
+        got = ", ".join(f"{name}={n}" for name, n in lengths.items())
+        raise ValueError(
+            f"{owner}: {', '.join(lengths)} hold one entry per stage and must be "
+            f"the same length; got {got}"
+        )
 
 
 def make_divisible(

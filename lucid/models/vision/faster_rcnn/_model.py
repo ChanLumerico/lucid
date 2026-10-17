@@ -67,6 +67,7 @@ from lucid.models._utils._detection import (
     select_training_samples,
 )
 from lucid.models._utils._detection_results import (
+    check_per_image,
     detection_result,
     empty_detection_result,
 )
@@ -518,9 +519,9 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
             ValueError: If ``targets`` is given but the RPN did not run,
                 since the RPN half of the loss would then be undefined.
         """
-        iH = int(x.shape[2])
-        iW = int(x.shape[3])
+        B, _, iH, iW = (int(d) for d in x.shape)
         dev = x.device.type
+        check_per_image(type(self).__name__, B, proposals=proposals, targets=targets)
 
         # 1. Backbone + FPN → [P2, P3, P4, P5, pool]
         features = self.backbone(x)

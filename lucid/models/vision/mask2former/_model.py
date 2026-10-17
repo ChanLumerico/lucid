@@ -42,6 +42,7 @@ from lucid.models._utils._detection import (
     multi_scale_deformable_attention,
     solve_assignment,
 )
+from lucid.models._utils._detection_results import check_per_image
 from lucid.models._utils._segmentation import (
     dice_loss,
     pairwise_dice,
@@ -1508,8 +1509,8 @@ class Mask2FormerForSemanticSegmentation(SemanticSegmentationModel):
             ``(B, K, H, W)`` (no-object slot dropped — matching the reference
             semantic post-processing), upsampled to the input resolution.
         """
-        iH = int(x.shape[2])
-        iW = int(x.shape[3])
+        b, _, iH, iW = (int(d) for d in x.shape)
+        check_per_image(type(self).__name__, b, targets=targets)
 
         # 1. Pixel-level module → (mask features, 3 multi-scale memory levels)
         mask_features, multi_scale_features = self.pixel_level_module(x)
@@ -1540,7 +1541,6 @@ class Mask2FormerForSemanticSegmentation(SemanticSegmentationModel):
         #    at any other size the reference interpolates twice and this
         #    interpolates once, which is the more faithful result for the
         #    resolution the caller actually passed.
-        b = int(class_logits.shape[0])
         n = int(class_logits.shape[1])
         K_plus_1 = self._cfg.num_classes + 1
 

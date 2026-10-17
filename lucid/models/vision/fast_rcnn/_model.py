@@ -46,7 +46,10 @@ from lucid.models._utils._detection import (
     encode_boxes,
     roi_pool,
 )
-from lucid.models._utils._detection_results import merge_class_detections
+from lucid.models._utils._detection_results import (
+    check_per_image,
+    merge_class_detections,
+)
 from lucid.models.vision.fast_rcnn._config import FastRCNNConfig
 from lucid.models._utils._common import host_floats, host_ints, host_rows
 
@@ -523,6 +526,7 @@ class FastRCNNForObjectDetection(ObjectDetectionModel):
 
         if proposals is None:
             proposals = [lucid.zeros((0, 4), device=x.device.type) for _ in range(B)]
+        check_per_image(type(self).__name__, B, proposals=proposals, targets=targets)
 
         # 1. Shared feature extraction (one forward pass for the whole batch)
         feat_map = self.backbone(x)  # (B, 512, H/16, W/16)

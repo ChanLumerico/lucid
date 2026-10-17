@@ -5,6 +5,7 @@ from typing import ClassVar
 
 from lucid.models._base import ModelConfig
 from lucid.models._meta import model_family_meta
+from lucid.models._utils._common import check_stage_lengths
 
 
 @model_family_meta(
@@ -152,3 +153,11 @@ class PVTConfig(ModelConfig):
         object.__setattr__(self, "num_heads", tuple(self.num_heads))
         object.__setattr__(self, "sr_ratios", tuple(self.sr_ratios))
         object.__setattr__(self, "mlp_ratios", tuple(self.mlp_ratios))
+        check_stage_lengths(
+            type(self).__name__,
+            embed_dims=self.embed_dims,
+            depths=self.depths,
+            num_heads=self.num_heads,
+            sr_ratios=self.sr_ratios,
+            mlp_ratios=self.mlp_ratios,
+        )

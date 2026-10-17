@@ -69,7 +69,10 @@ from lucid.models._utils._detection import (
     decode_boxes,
     encode_boxes,
 )
-from lucid.models._utils._detection_results import merge_class_detections
+from lucid.models._utils._detection_results import (
+    check_per_image,
+    merge_class_detections,
+)
 from lucid.models.vision.efficientdet._config import EfficientDetConfig
 
 # ---------------------------------------------------------------------------
@@ -701,6 +704,7 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
         B = int(x.shape[0])
         iH = int(x.shape[2])
         iW = int(x.shape[3])
+        check_per_image(type(self).__name__, B, targets=targets)
 
         # 1. Backbone → (P3, P4, P5)
         p3, p4, p5 = self.backbone(x)

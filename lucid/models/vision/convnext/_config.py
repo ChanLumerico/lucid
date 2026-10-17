@@ -5,6 +5,7 @@ from typing import ClassVar
 
 from lucid.models._base import ModelConfig
 from lucid.models._meta import model_family_meta
+from lucid.models._utils._common import check_stage_lengths
 
 
 @model_family_meta(
@@ -142,3 +143,4 @@ class ConvNeXtConfig(ModelConfig):
     def __post_init__(self) -> None:
         object.__setattr__(self, "depths", tuple(self.depths))
         object.__setattr__(self, "dims", tuple(self.dims))
+        check_stage_lengths(type(self).__name__, depths=self.depths, dims=self.dims)

@@ -6,6 +6,9 @@ from typing import ClassVar
 from lucid.models._base import ModelConfig
 from lucid.models._meta import model_family_meta
 
+# P2-P5 from the FPN plus its max-pooled P6.
+_FPN_LEVELS = 5
+
 
 @model_family_meta(
     canonical_name="Mask R-CNN",
@@ -185,6 +188,14 @@ class MaskRCNNConfig(ModelConfig):
         object.__setattr__(self, "rpn_anchor_sizes", tuple(self.rpn_anchor_sizes))
         object.__setattr__(self, "rpn_anchor_ratios", tuple(self.rpn_anchor_ratios))
         object.__setattr__(self, "bbox_reg_weights", tuple(self.bbox_reg_weights))
+        # The anchor generator pairs these with the FPN outputs level by
+        # level; any other count fails mid-forward as a zip length error.
+        if len(self.rpn_anchor_sizes) != _FPN_LEVELS:
+            raise ValueError(
+                f"{type(self).__name__}: rpn_anchor_sizes holds one anchor size "
+                f"per FPN level and the backbone emits {_FPN_LEVELS} (P2-P6); "
+                f"got {len(self.rpn_anchor_sizes)}: {self.rpn_anchor_sizes}"
+            )
 
         for name in ("rpn", "roi"):
             fg = getattr(self, f"{name}_fg_iou_thresh")

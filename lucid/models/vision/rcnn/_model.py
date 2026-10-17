@@ -45,7 +45,10 @@ from lucid.models._utils._detection import (
     clip_boxes_to_image,
     decode_boxes,
 )
-from lucid.models._utils._detection_results import merge_class_detections
+from lucid.models._utils._detection_results import (
+    check_per_image,
+    merge_class_detections,
+)
 from lucid.models.vision.rcnn._config import RCNNConfig
 from lucid.models._utils._common import host_rows
 
@@ -495,6 +498,7 @@ class RCNNForObjectDetection(ObjectDetectionModel):
                     "empty set."
                 )
             proposals = [lucid.zeros((0, 4), device=dev) for _ in range(B)]
+        check_per_image(type(self).__name__, B, proposals=proposals, targets=targets)
 
         all_logits: list[Tensor] = []
         all_boxes: list[Tensor] = []
