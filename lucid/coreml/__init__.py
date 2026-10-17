@@ -298,8 +298,7 @@ def export(
     --------
     The whole of it, for a classifier that should run on the accelerator:
 
-    >>> import shutil, tempfile
-    >>> import lucid, lucid.nn as nn, lucid.models as M, lucid.coreml as cml
+    >>> import shutil, tempfile, lucid, lucid.nn as nn, lucid.models as M, lucid.coreml as cml
     >>> lucid.manual_seed(1)       # the error bounds below are of these weights
     >>> model = M.create_model(
     ...     "resnet_18_cls", num_classes=10,
