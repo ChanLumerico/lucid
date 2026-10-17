@@ -15,6 +15,10 @@ Options:
   --save-input  save forward inputs  for backward  (unary/binary)
   --save-output save forward output  for backward  (unary only)
   --amp         keep | promote | fp32        (default: promote)
+                the schema's declared policy, which only decides whether an
+                integer input promotes to float32 (fp32).  Autocast reads
+                lucid/_C/core/AmpPolicyTable.def: add a row there when the
+                reference framework's autocast lists the op.
   --export      also add to lucid.__all__   (default: _OPS_NAMES only)
   --dry-run     print generated code without modifying any files
 
@@ -167,6 +171,8 @@ def _unary_cpp(name: str, camel: str, amp: str, si: bool, so: bool) -> str:
 
         namespace lucid {{
 
+        // The declared policy drives integer-input promotion only; the op's
+        // autocast behaviour is its row in core/AmpPolicyTable.def.
         const OpSchema {camel}Backward::schema_v1{{"{name}", 1,
                                                     AmpPolicy::{amp_e}, true}};
 
@@ -269,6 +275,8 @@ def _binary_cpp(name: str, camel: str, amp: str) -> str:
 
         namespace lucid {{
 
+        // The declared policy drives integer-input promotion only; the op's
+        // autocast behaviour is its row in core/AmpPolicyTable.def.
         const OpSchema {camel}Backward::schema_v1{{"{name}", 1, AmpPolicy::{amp_e}, true}};
 
         // TODO: implement gradient.
@@ -608,10 +616,13 @@ Next steps:
        lucid/_C/backend/cpu/CpuBackend.h  (replace NotImplementedError stub)
   3. Add GPU kernel:
        lucid/_C/backend/gpu/GpuBackend.h  (replace throw stub with MLX op)
-  4. Build:
+  4. Autocast: if the reference framework's MPS or CPU autocast list has
+     the op, add its row to lucid/_C/core/AmpPolicyTable.def (--amp does
+     not decide autocast).
+  5. Build:
        cmake --build build/temp.macosx-*/lucid__C_engine/ -j$(sysctl -n hw.ncpu)
        cp build/lib.*/lucid/_C/engine.cpython-*.so lucid/_C/
-  5. Write tests + parity test.
+  6. Write tests + parity test.
 {'─'*60}
 """
         )
@@ -646,7 +657,8 @@ def main() -> None:
         "--amp",
         choices=["keep", "promote", "fp32"],
         default="promote",
-        help="AMP dtype policy (default: promote)",
+        help="declared AMP policy — integer-input promotion only; autocast "
+        "reads lucid/_C/core/AmpPolicyTable.def (default: promote)",
     )
     p.add_argument(
         "--export",
