@@ -152,12 +152,14 @@ def bilinear(
     >>> bilinear(x1, x2, w).shape
     (2, 5)
     """
-    result = _wrap(
-        _C_engine.nn.bilinear_layer(_unwrap(x1), _unwrap(x2), _unwrap(weight))
+    # The bias goes to the engine with the other operands, so the op's
+    # autocast row (WIDEST on Metal) covers it too.
+    bias_impl = _unwrap(bias) if bias is not None else None
+    return _wrap(
+        _C_engine.nn.bilinear_layer(
+            _unwrap(x1), _unwrap(x2), _unwrap(weight), bias_impl
+        )
     )
-    if bias is not None:
-        result = _wrap(_C_engine.add(result._impl, _unwrap(bias)))
-    return result
 
 
 # ── Phase 19: Fused forward kernels ──────────────────────────────────────────

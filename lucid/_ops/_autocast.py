@@ -1,12 +1,16 @@
-"""The autocast entry of a functional composite (LCD-500).
+"""The autocast entry of a Python composite (LCD-500).
 
 An engine op applies its row of the autocast policy table
 (``lucid/_C/core/AmpPolicyTable.def``) once, at its entry, and runs its
-body with autocast off.  A composite written here in Python had neither,
-so every engine op inside it applied its own row: under a Metal autocast
+body with autocast off.  A composite written in Python had neither, so
+every engine op inside it applied its own row: under a Metal autocast
 ``local_response_norm`` met its float32 ``sum`` with a float16 ``div``
 operand, and ``cosine_similarity`` of two float16 inputs normalised them
 in float16 and only reduced in float32.
+
+The one Python owner of that entry.  It lives here, below ``nn``,
+``linalg`` and the composites, so any of them can import it; the cast rule
+itself stays in the engine (``amp_cast_inputs``).
 """
 
 from collections.abc import Iterator

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._autocast import _autocast_entry
 from lucid._ops._dims import _to_axes
 from lucid._ops._reduce import _require_normable
 from lucid._types import DimLike
@@ -663,7 +664,16 @@ def local_response_norm(
         _C_engine.Dtype.I64,
     ):
         xi = _C_engine.astype(xi, _C_engine.Dtype.F32)
+    # The row applies once, here: its parts (a FP32 ``sum`` and a KEEP
+    # ``div``) would otherwise meet in two dtypes under Metal autocast.
+    with _autocast_entry("local_response_norm", xi) as (xi,):
+        return _wrap(_lrn_body(xi, size, alpha, beta, k))
 
+
+def _lrn_body(
+    xi: _C_engine.TensorImpl, size: int, alpha: float, beta: float, k: float
+) -> _C_engine.TensorImpl:
+    """:func:`local_response_norm` on a floating input of rank 2 or more."""
     ndim = len(xi.shape)
     C = int(xi.shape[1])
     # Pad totals to ``size - 1`` so the post-pad unfold yields exactly C
@@ -702,7 +712,7 @@ def local_response_norm(
     scale = _C_engine.pow_scalar(
         _C_engine.add(_C_engine.mul(window_mean, alpha_t), k_t), beta
     )
-    return _wrap(_C_engine.div(xi, scale))
+    return _C_engine.div(xi, scale)
 
 
 def normalize(

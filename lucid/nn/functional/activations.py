@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import lucid as _l
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._autocast import _autocast_entry
 from lucid._ops._dims import _dim_size, _wrap_dim
 from lucid._ops._reduce import _require_floating
 from lucid._tensor._metal_views import (
@@ -14,7 +15,6 @@ from lucid._tensor._metal_views import (
     write_back as _metal_write_back,
 )
 from lucid._types import GeluApproximate
-from lucid.nn.functional._autocast import _autocast_entry
 from lucid.nn.functional._inplace import _in_place
 from lucid.nn.functional.normalization import normalize
 
@@ -1125,8 +1125,8 @@ def cosine_similarity(
     """
     for operand in (x1, x2):
         _require_floating(_unwrap(operand), "cosine_similarity")
-    common = _l.result_type(x1, x2)
-    with _autocast_entry("cosine_similarity", *(_unwrap(t.to(common)) for t in (x1, x2))) as io:
+    io = [_unwrap(t.to(_l.result_type(x1, x2))) for t in (x1, x2)]
+    with _autocast_entry("cosine_similarity", *io) as io:
         x1n, x2n = (_unwrap(normalize(_wrap(t), p=2.0, dim=dim, eps=eps)) for t in io)
         return _wrap(_C_engine.sum(_C_engine.mul(x1n, x2n), [dim]))
 

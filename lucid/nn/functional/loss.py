@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._autocast import _autocast_entry
 from lucid._dtype import bfloat16 as _bfloat16
 from lucid._dtype import dtype as _dtype
 from lucid._dtype import finfo as _finfo
@@ -1118,29 +1119,26 @@ def kl_div(
     _check_target(x, target, "kl_div")
     # `x` is log_q (log of predicted probability) per the standard contract.
     # When log_target=False, target is the raw probability p; when True it
-    # is log(p).  Loss elementwise = target * (log(target) - log_q).
-    xi: _C_engine.TensorImpl = _unwrap(x)
-    ti: _C_engine.TensorImpl = _unwrap(target)
-    if log_target:
-        # log_target=True → target itself is log(p); use exp(t) as the weight.
-        diff: _C_engine.TensorImpl = _C_engine.sub(ti, xi)
-        kl: _C_engine.TensorImpl = _C_engine.mul(_C_engine.exp(ti), diff)
-    else:
-        # ``target * (log(target) - x)`` is ``0 * -inf = nan`` wherever the
-        # target is 0 — every off-class entry of a one-hot or sparse
-        # distillation target.  ``xlogy`` takes ``0 log 0`` as 0, the limit
-        # the divergence is defined with.
-        kl = _C_engine.sub(_unwrap(_lucid.xlogy(target, target)), _C_engine.mul(ti, xi))
-    if reduction != "batchmean":
-        return _reduce(_wrap(kl), reduction)
-    # The sum over the leading (batch) dimension's size.  A 0-d input has
-    # no batch dimension, and its batchmean is the sum, as in the
-    # reference; reading ``x.shape[0]`` there raised IndexError.
-    total: Tensor = _reduce(_wrap(kl), "sum")
-    if x.ndim == 0:
-        return total
-    with _float32_scope():  # the sum's float32 under autocast, kept
-        return total / int(x.shape[0])
+    # is log(p).  Loss elementwise = target * (log(target) - log_q).  The
+    # row (FP32) applies once, at the entry, with autocast off for the body.
+    with _autocast_entry("kl_div", _unwrap(x), _unwrap(target)) as (xi, ti):
+        if log_target:
+            # log_target=True → target itself is log(p); use exp(t) as the weight.
+            kl = _C_engine.mul(_C_engine.exp(ti), _C_engine.sub(ti, xi))
+        else:
+            # ``target * (log(target) - x)`` is ``0 * -inf = nan`` wherever the
+            # target is 0 — every off-class entry of a one-hot or sparse
+            # distillation target.  ``xlogy`` takes ``0 log 0`` as 0, the limit
+            # the divergence is defined with.
+            xlogy = _unwrap(_lucid.xlogy(_wrap(ti), _wrap(ti)))
+            kl = _C_engine.sub(xlogy, _C_engine.mul(ti, xi))
+        if reduction != "batchmean":
+            return _reduce(_wrap(kl), reduction)
+        # The sum over the leading (batch) dimension's size.  A 0-d input has
+        # no batch dimension, and its batchmean is the sum, as in the
+        # reference; reading ``x.shape[0]`` there raised IndexError.
+        total: Tensor = _reduce(_wrap(kl), "sum")
+        return total / int(xi.shape[0]) if xi.shape else total
 
 
 def triplet_margin_loss(

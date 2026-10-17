@@ -21,6 +21,7 @@ from lucid.nn.modules._recurrent_layout import (
     _inter_layer_dropout,
     _cell_batch,
     _cell_unbatch,
+    _lstm_cell_step,
     _packed_segments,
     _restore_layout,
     _sequence_major,
@@ -1041,16 +1042,8 @@ class LSTMCell(Module):
         unbatched, x, (h0, c0) = _cell_batch(
             "LSTMCell", x, (("hx", h_in), ("cx", c_in)), self.hidden_size
         )
-        gates = linear(x, self.weight_ih, self.bias_ih) + linear(
-            h0, self.weight_hh, self.bias_hh
-        )
-        hs = self.hidden_size
-        i_gate = sigmoid(gates[:, :hs])
-        f_gate = sigmoid(gates[:, hs : 2 * hs])
-        g_gate = tanh(gates[:, 2 * hs : 3 * hs])
-        o_gate = sigmoid(gates[:, 3 * hs :])
-        c1 = f_gate * c0 + i_gate * g_gate
-        h1 = o_gate * tanh(c1)
+        w = (self.weight_ih, self.weight_hh, self.bias_ih, self.bias_hh)
+        h1, c1 = _lstm_cell_step(x, (h0, c0), w)
         return _cell_unbatch(unbatched, h1), _cell_unbatch(unbatched, c1)
 
     @override

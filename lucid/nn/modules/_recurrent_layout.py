@@ -20,9 +20,13 @@ from typing import NamedTuple
 
 import lucid as _lucid
 from lucid import stack
+from lucid._dispatch import _unwrap, _wrap
 from lucid._factories.creation import zeros
+from lucid._ops._autocast import _autocast_entry
 from lucid._tensor.tensor import Tensor
+from lucid.nn.functional.activations import sigmoid, tanh
 from lucid.nn.functional.dropout import dropout as _dropout
+from lucid.nn.functional.linear import linear
 from lucid.nn.utils.rnn import PackedSequence, _int_tensor_to_list
 
 # The engine's ``lstm`` entry refuses an empty sequence in the same words.
@@ -293,6 +297,33 @@ def _cell_unbatch(unbatched: bool, state: Tensor) -> Tensor:
     """A cell's ``(B, H)`` result in the input's layout — :func:`_cell_batch`
     reversed."""
     return state.squeeze(0) if unbatched else state
+
+
+def _lstm_cell_step(
+    x: Tensor,
+    state: tuple[Tensor, Tensor],
+    weights: tuple[Tensor, Tensor, Tensor | None, Tensor | None],
+) -> tuple[Tensor, Tensor]:
+    """One ``LSTMCell`` step on ``(B, I)`` and ``(B, H)`` states: ``(h1, c1)``.
+
+    The ``lstm_cell`` row (LOWER on Metal) applies at the entry to every
+    operand at once — the float32 weights and zero state with the input — so
+    the gates compute in one dtype, as the reference's ``lstm_cell`` does;
+    applied gate by gate, the float32 state widened the result again.
+    """
+    biases = [b for b in weights[2:] if b is not None]
+    operands = (x, *state, weights[0], weights[1], *biases)
+    with _autocast_entry("lstm_cell", *(_unwrap(t) for t in operands)) as cast:
+        x, h0, c0, w_ih, w_hh, *b = (_wrap(t) for t in cast)
+        b_ih, b_hh = b or (None, None)
+        gates = linear(x, w_ih, b_ih) + linear(h0, w_hh, b_hh)
+        hs = int(w_hh.shape[1])
+        i_gate = sigmoid(gates[:, :hs])
+        f_gate = sigmoid(gates[:, hs : 2 * hs])
+        g_gate = tanh(gates[:, 2 * hs : 3 * hs])
+        o_gate = sigmoid(gates[:, 3 * hs :])
+        c1 = f_gate * c0 + i_gate * g_gate
+        return o_gate * tanh(c1), c1
 
 
 def _check_dropout(dropout: object, num_layers: int) -> float:
