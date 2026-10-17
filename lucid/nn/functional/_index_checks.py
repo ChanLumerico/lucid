@@ -65,6 +65,7 @@ from typing import TYPE_CHECKING, NamedTuple, cast, overload
 
 import lucid as _lucid
 from lucid._dtype import dtype as _dtype
+from lucid.nn.functional._spatial_args import _spatial_extent
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -355,6 +356,7 @@ def _check_unpool(
     ``spatial_numel`` so ``scatter_add`` drops it alongside entries
     ``>= spatial_numel`` without a host sync.
     """
+    _spatial_extent(x, len(output_spatial), op)
     if x.shape != indices.shape:
         raise ValueError(
             f"{op}: expected input and indices shapes to match, got "

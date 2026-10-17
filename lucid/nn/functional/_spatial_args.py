@@ -90,10 +90,13 @@ def _drop_batch_axis(out: Tensor, unbatched: bool) -> Tensor:
 
 
 def _spatial_extent(x: Tensor, n: int, op: str) -> tuple[int, ...]:
-    """The sizes of ``x``'s last ``n`` axes, refusing an input with fewer."""
-    if x.ndim < n:
+    """The last ``n`` sizes of an ``(N, C, *spatial)`` or ``(C, *spatial)`` input.
+
+    Any other rank is refused, as the reference refuses it.
+    """
+    if x.ndim not in (n + 1, n + 2):
         raise ValueError(
-            f"{op}: expected an input with at least {n} dimension(s), "
+            f"{op}: expected a {n + 1}-D or {n + 2}-D input, "
             f"got shape {tuple(int(d) for d in x.shape)}"
         )
     return tuple(int(v) for v in x.shape[-n:])

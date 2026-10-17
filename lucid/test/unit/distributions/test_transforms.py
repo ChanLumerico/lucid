@@ -342,6 +342,31 @@ def test_stack_applies_a_different_transform_to_each_index():
     assert np.allclose(_v(transform.inv(_t(y))), x, atol=1e-9)
 
 
+@pytest.mark.parametrize("direction", ["forward", "inverse", "log_det"])
+def test_stack_refuses_a_slice_count_other_than_its_transforms(direction):
+    """Every direction counts the slices, not only the forward.
+
+    The inverse and the log-det paired slices with transforms by ``zip``,
+    which raised its own error once it turned strict and before that
+    dropped the extra slices.
+    """
+    transform = T.StackTransform([T.ExpTransform(), T.TanhTransform()], dim=-1)
+    v = _t(np.array([0.5, 0.2, 0.1]))
+    calls = {
+        "forward": lambda: transform(v),
+        "inverse": lambda: transform.inv(v),
+        "log_det": lambda: transform.log_abs_det_jacobian(v, v),
+    }
+    with pytest.raises(ValueError, match="got 3 slices but 2 transforms"):
+        calls[direction]()
+
+
+@pytest.mark.parametrize("lengths", [[1, 1, 1], [2]])
+def test_cat_refuses_lengths_that_are_not_one_per_transform(lengths):
+    with pytest.raises(ValueError, match=f"got {len(lengths)} lengths but 2"):
+        T.CatTransform([T.ExpTransform(), T.TanhTransform()], lengths=lengths)
+
+
 def test_compose_is_the_transforms_in_order():
     composed = T.ComposeTransform([T.ExpTransform(), T.AffineTransform(1.0, 2.0)])
     assert np.allclose(_v(composed(_t(X))), 1.0 + 2.0 * np.exp(X))

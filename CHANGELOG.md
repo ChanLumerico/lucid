@@ -854,6 +854,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - judge the strict-zip flips outside the zoo (LCD-470)
 
+- refuse unpaired slices, lengths, corners and ranks (LCD-470)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

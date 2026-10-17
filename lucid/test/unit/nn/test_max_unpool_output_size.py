@@ -105,21 +105,26 @@ def test_every_rank_shares_the_guard(fn, shape, size) -> None:
         fn(x, indices, kernel_size=2, output_size=tuple(-1 for _ in size))
 
 
+@pytest.mark.parametrize("explicit", [False, True], ids=["default-size", "given-size"])
 @pytest.mark.parametrize(
-    "fn,shape",
+    "fn,n,shape",
     [
-        (F.max_unpool1d, ()),
-        (F.max_unpool2d, (2,)),
-        (F.max_unpool3d, (2, 2)),
+        (F.max_unpool1d, 1, ()),
+        (F.max_unpool2d, 2, (2,)),
+        (F.max_unpool2d, 2, (2, 2)),
+        (F.max_unpool3d, 3, (2, 2)),
+        (F.max_unpool3d, 3, (1, 1, 1, 1, 2, 2)),
     ],
 )
-def test_the_default_size_needs_a_spatial_axis_per_kernel_axis(fn, shape) -> None:
-    """Too few axes to read the default ``output_size`` off says so.
+def test_an_input_of_the_wrong_rank_is_refused(fn, n, shape, explicit) -> None:
+    """Only ``(N, C, *spatial)`` and ``(C, *spatial)`` inputs are taken.
 
-    The extents were zipped against the kernel, which named neither the
-    function nor the shape once ``zip`` turned strict.
+    With the default size, too few axes reached a ``zip`` against the
+    kernel, which named neither the function nor the shape once it turned
+    strict; with a given size, a 1-D input came back as a 2-D image.
     """
     x = lucid.zeros(*shape)
     indices = lucid.zeros(*shape, dtype=lucid.int64)
-    with pytest.raises(ValueError, match=r"max_unpool\dd: expected an input"):
-        fn(x, indices, kernel_size=2)
+    size = {"output_size": (4,) * n} if explicit else {}
+    with pytest.raises(ValueError, match=rf"max_unpool{n}d: expected a {n + 1}-D"):
+        fn(x, indices, kernel_size=2, **size)

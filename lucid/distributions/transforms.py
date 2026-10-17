@@ -1599,6 +1599,15 @@ class StackTransform(Transform):
         """Stacked codomain constraint across all slice transforms."""
         return constraints.stack([t.codomain for t in self.transforms], self.dim)
 
+    def _slices(self, x: Tensor) -> list[Tensor]:
+        """Unbind ``x`` along ``dim``: one slice per transform, or ``ValueError``."""
+        if len(slices := x.unbind(self.dim)) != len(self.transforms):
+            raise ValueError(
+                f"StackTransform: got {len(slices)} slices but "
+                f"{len(self.transforms)} transforms."
+            )
+        return slices
+
     @override
     def _call(self, x: Tensor) -> Tensor:
         """Unbind ``x`` along ``dim`` and apply each transform to the matching slice.
@@ -1608,12 +1617,7 @@ class StackTransform(Transform):
         ValueError
             If the number of slices differs from the number of stored transforms.
         """
-        slices = x.unbind(self.dim)
-        if len(slices) != len(self.transforms):
-            raise ValueError(
-                f"StackTransform: got {len(slices)} slices but "
-                f"{len(self.transforms)} transforms."
-            )
+        slices = self._slices(x)
         return lucid.stack(
             [t(s) for t, s in zip(self.transforms, slices, strict=True)], dim=self.dim
         )
@@ -1621,7 +1625,7 @@ class StackTransform(Transform):
     @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Unbind ``y`` along ``dim`` and apply each transform's inverse per slice."""
-        slices = y.unbind(self.dim)
+        slices = self._slices(y)
         return lucid.stack(
             [t._inverse(s) for t, s in zip(self.transforms, slices, strict=True)],
             dim=self.dim,
@@ -1630,8 +1634,7 @@ class StackTransform(Transform):
     @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         """Per-slice Jacobians stacked back along ``dim``."""
-        xs = x.unbind(self.dim)
-        ys = y.unbind(self.dim)
+        xs, ys = self._slices(x), self._slices(y)
         ladjs = [
             t.log_abs_det_jacobian(xi, yi)
             for t, xi, yi in zip(self.transforms, xs, ys, strict=True)
@@ -1706,11 +1709,15 @@ class CatTransform(Transform):
         Raises
         ------
         ValueError
-            If ``transforms`` is empty.
+            If ``transforms`` is empty, or ``lengths`` is not one per transform.
         """
         super().__init__()
         if not transforms:
             raise ValueError("CatTransform: transforms cannot be empty.")
+        if lengths is not None and len(lengths) != len(transforms):
+            raise ValueError(
+                f"CatTransform: got {len(lengths)} lengths but {len(transforms)} transforms."
+            )
         self.transforms = list(transforms)
         self.dim = dim
         self.lengths = lengths
@@ -1776,8 +1783,7 @@ class CatTransform(Transform):
     @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         """Per-partition Jacobians concatenated back along ``dim``."""
-        xs = self._split(x)
-        ys = self._split(y)
+        xs, ys = self._split(x), self._split(y)
         ladjs = [
             t.log_abs_det_jacobian(xi, yi)
             for t, xi, yi in zip(self.transforms, xs, ys, strict=True)

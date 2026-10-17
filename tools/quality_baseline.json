@@ -42,6 +42,11 @@
    "date": "2026-10-17",
    "reason": "User-directed editor formatting (black, 88 columns) committed on the user's instruction (2026-10-17: '\ud3ec\ub9f7\ud305\uc740 \uadf8\ub0e5 \uac19\uc774 \uc5ee\uc5b4\uc11c \ucee4\ubc0b\ud574\uc918 \uc55e\uc73c\ub85c\ub3c4'). Format-only and AST-identical; the only rises are line-based (file-loc-over-cap) and jscpd clone tokenization caused by the re-wrapping. Every other count is lowered to HEAD (the baseline was left stale by the Gemini-landed range).",
    "by": "chanlee"
+  },
+  {
+   "date": "2026-10-17",
+   "reason": "LCD-470: Stack/Cat boundary validation in transforms.py (+6 lines; file already at its cap) \u2014 orchestrator-approved",
+   "by": "chanlee"
   }
  ],
  "counts": {
@@ -198,7 +203,7 @@
     "lucid/compile/_optim/compiler.py": 774,
     "lucid/coreml/_build.py": 1743,
     "lucid/coreml/_emit.py": 1184,
-    "lucid/distributions/transforms.py": 285,
+    "lucid/distributions/transforms.py": 291,
     "lucid/fft/__init__.py": 379,
     "lucid/linalg/__init__.py": 2323,
     "lucid/models/_utils/_detection.py": 1340,
@@ -1105,7 +1110,6 @@
    "redundant-expr": {
     "lucid/_ops/composite/indexing.py": 1,
     "lucid/_ops/composite/statistics.py": 1,
-    "lucid/autograd/checkpoint.py": 1,
     "lucid/autograd/function.py": 4,
     "lucid/autograd/gradcheck.py": 1,
     "lucid/compile/_entry/function.py": 1,
