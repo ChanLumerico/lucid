@@ -242,60 +242,6 @@ def _layout(t: Tensor) -> _Layout:
     return link.layout
 
 
-# ── A reshape the CPU copies, that the engine made a view ───────────────────
-#
-# The engine reads a traced Metal view as the packed array it is, so it
-# reshapes one in place — into a member of that array's view family — where
-# the CPU, which reads it through the view's strides, copies.  An in-place
-# write through either then reached the other.  The reshape keeps sharing
-# the buffer, so the merge-heads ``attn.permute(...).reshape(b, n, e)`` stays
-# free, until the first write into the buffer through any tensor that reads
-# it, or the first view taken of the reshape: then it takes a buffer of its
-# own, as the CPU's copy was from the start.
-
-#: The flag a reshape that still shares its input's buffer carries.
-_SHARES = "_metal_shares"
-#: Each tensor that carries the flag, by ``id``.
-_SHARING: dict[int, weakref.ref[Tensor]] = {}
-
-
-def _share(out: Tensor) -> None:
-    key = id(out)
-    out.__dict__[_SHARES] = True
-    _SHARING[key] = weakref.ref(out, lambda _: _SHARING.pop(key, None))
-
-
-def _own_buffer(t: Tensor) -> None:
-    """Give ``t``, which shares a buffer, the copy the CPU gave it."""
-    import lucid
-
-    del t.__dict__[_SHARES]
-    _SHARING.pop(id(t), None)
-    impl = t._impl
-    # The copy stands in for ``t`` in the graph; under ``no_grad`` too, as
-    # ``t`` was made outside it.
-    with lucid.enable_grad():
-        own = _C_engine.contiguous(impl)
-    if impl.retains_grad:
-        own.retain_grad_()
-    t._impl = own
-
-
-def _before_write(t: Tensor) -> None:
-    """Before an in-place write into ``t``: no reshape may see it through a share."""
-    if t._impl.device.value == _GPU and t._impl.is_aliased():
-        for ref in list(_SHARING.values()):
-            shared = ref()
-            if shared is not None and _SHARES in shared.__dict__:
-                _own_buffer(shared)
-
-
-def _before_view(base: Tensor) -> None:
-    """Before a view is taken of ``base``: a view of a shared buffer is the copy's."""
-    if _SHARING and _SHARES in base.__dict__:
-        _own_buffer(base)
-
-
 def _link(view: object, base: Tensor, kind: int, **kwargs: object) -> None:
     if not isinstance(view, _TENSOR) or view is base or view._impl is base._impl:
         return
@@ -453,8 +399,6 @@ _FILLS = frozenset({"fill_", "zero_"})
 
 def _check(view: Tensor, *, allow_overlap: bool = False) -> None:
     """Refuse, before anything is written, what the write-back could not honour."""
-    if _SHARING:
-        _before_write(view)
     # As the reference refuses: a write into the written tensor's own
     # elements that share a place, unless it leaves one value in all of them.
     # A view of such a tensor that shares none may be written.
@@ -558,8 +502,6 @@ def _writer(original: Callable[..., object]) -> Callable[..., object]:
     @functools.wraps(original)
     def method(self: Tensor, *args: object, **kwargs: object) -> object:
         if _ATTR not in self.__dict__:
-            if _SHARING:
-                _before_write(self)
             return original(self, *args, **kwargs)
         _check(self, allow_overlap=allow_overlap)
         out = original(self, *args, **kwargs)
@@ -596,10 +538,7 @@ def _link_reshape(out: Tensor, base: Tensor, name: str) -> None:
     new_stride = _view_strides(tuple(base.shape), source.stride, shape, squeeze)
     if new_stride is not None:
         _link(out, base, _RESHAPE, layout=_Layout(new_stride, source.offset))
-    elif name not in ("view", "view_as"):
-        if out._impl.is_aliased():
-            _share(out)
-    else:
+    elif name in ("view", "view_as"):
         raise _C_engine.LucidError(
             "view: view size is not compatible with input tensor's "
             "size and stride (at least one dimension spans across "
@@ -620,11 +559,9 @@ def _viewer(
 
     @functools.wraps(original)
     def view(*args: object, **kwargs: object) -> object:
-        base = args[0] if args else None
-        if _SHARING and isinstance(base, _TENSOR):
-            _before_view(base)
         out = original(*args, **kwargs)
         # _metal_input, inlined: this runs on every view op on every device.
+        base = args[0] if args else None
         if isinstance(base, _TENSOR) and base._impl.device.value == _GPU:
             if kind == _TRACED:
                 _link(
@@ -648,10 +585,8 @@ def _pieces(original: Callable[..., object], name: str) -> Callable[..., object]
 
     @functools.wraps(original)
     def view(*args: object, **kwargs: object) -> object:
-        base = args[0] if args else None
-        if _SHARING and isinstance(base, _TENSOR):
-            _before_view(base)
         out = original(*args, **kwargs)
+        base = args[0] if args else None
         if (
             isinstance(base, _TENSOR)
             and base._impl.device.value == _GPU
@@ -672,46 +607,37 @@ def _pieces(original: Callable[..., object], name: str) -> Callable[..., object]
 # ── as_strided: a window onto the storage ────────────────────────────────────
 
 
-#: ``as_strided``'s parameters after its input, in order.
-_WINDOW_PARAMS = ("size", "stride", "storage_offset")
-
-
 def _window(
-    args: tuple[object, ...], kwargs: dict[str, object]
+    size: object, stride: object, storage_offset: object = None
 ) -> tuple[_Dims, _Dims, int | None]:
     """``as_strided``'s window, from the arguments after its input, in elements.
 
-    Bound as the signature binds them and checked as the reference checks
-    them — integers only, so ``size=(2.0,)`` is refused — on every device,
-    before anything is read.  A negative ``storage_offset`` stands for the
-    input's own, as the engine reads it.
+    Python binds the arguments, so a missing, extra or unknown one is its own
+    ``TypeError``; each is then checked as the reference checks it —
+    integers only, so ``size=(2.0,)`` and ``size=(True,)`` are refused — on
+    every device, before anything is read.  A negative ``storage_offset``
+    stands for the input's own, as the engine reads it.
     """
-    if len(args) > len(_WINDOW_PARAMS):
-        raise TypeError(
-            "as_strided() takes size, stride and an optional storage_offset, "
-            f"but {len(args)} arguments followed the input"
-        )
-    given = dict(zip(_WINDOW_PARAMS, args, strict=False))
-    for name, value in kwargs.items():
-        if name not in _WINDOW_PARAMS:
-            raise TypeError(f"as_strided() got an unexpected keyword argument {name!r}")
-        if name in given:
-            raise TypeError(f"as_strided() got multiple values for argument {name!r}")
-        given[name] = value
-    if "size" not in given or "stride" not in given:
-        raise TypeError("as_strided() missing a required argument: 'size' and 'stride'")
-    offset = given.get("storage_offset")
-    if offset is not None and not _is_integer(offset):
+    if storage_offset is not None and not _is_count(storage_offset):
         raise TypeError(
             "as_strided(): argument 'storage_offset' must be int or None, not "
-            f"{type(offset).__name__}"
+            f"{type(storage_offset).__name__}"
         )
-    at = None if offset is None else operator.index(offset)
+    at = None if storage_offset is None else operator.index(storage_offset)
     return (
-        _integers("size", given["size"]),
-        _integers("stride", given["stride"]),
+        _integers("size", size),
+        _integers("stride", stride),
         None if at is None or at < 0 else at,
     )
+
+
+# Python names the op in the errors it raises binding the arguments.
+_window.__name__ = _window.__qualname__ = "as_strided"
+
+
+def _is_count(value: object) -> TypeIs[SupportsIndex]:
+    # A bool is no count here, as the reference has it.
+    return _is_integer(value) and not isinstance(value, bool)
 
 
 def _integers(name: str, value: object) -> _Dims:
@@ -721,7 +647,7 @@ def _integers(name: str, value: object) -> _Dims:
             f"{type(value).__name__}"
         )
     for at, item in enumerate(value):
-        if not _is_integer(item):
+        if not _is_count(item):
             raise TypeError(
                 f"as_strided(): argument {name!r} must be a sequence of ints, but "
                 f"found an element of type {type(item).__name__} at position {at}"
@@ -950,10 +876,9 @@ def _as_strided(original: Callable[..., object]) -> Callable[..., object]:
         base = args[0] if args else None
         if not isinstance(base, _TENSOR):
             return original(*args, **kwargs)
-        window = _window(args[1:], kwargs)
+        window = _window(*args[1:], **kwargs)
         if base._impl.device.value != _GPU:
             return original(*args, **kwargs)
-        _before_view(base)
         if _ATTR in base.__dict__:
             return _strided_window(original, base, window)
         out = original(*args, **kwargs)
@@ -983,11 +908,8 @@ def _constructor(original: Callable[..., object]) -> Callable[..., object]:
 
     @functools.wraps(original)
     def __init__(self: Tensor, *args: object, **kwargs: object) -> None:
-        data = args[0] if args else kwargs.get("data")
-        if _SHARING and isinstance(data, _TENSOR):
-            _before_view(data)
         original(self, *args, **kwargs)
-        base = _metal_input((data,))
+        base = _metal_input(args if args else (kwargs.get("data"),))
         if base is not None:
             impl, source = self._impl, base._impl
             if (
@@ -1102,8 +1024,6 @@ def _getitem(original: Callable[..., object]) -> Callable[..., object]:
     def method(self: Tensor, key: object) -> object:
         if self._impl.device.value != _GPU:
             return original(self, key)
-        if _SHARING:
-            _before_view(self)
         if type(key) is int or type(key) is slice and not _backwards(key):
             out = original(self, key)  # the common keys, read in place
             _link(out, self, _KEY, key=key)
@@ -1190,8 +1110,6 @@ def _property(prop: property, kind: int) -> property:
     assert getter is not None
 
     def fget(self: Tensor) -> object:
-        if _SHARING:
-            _before_view(self)
         out = getter(self)
         if out is not None and _on_metal(self):
             name = getter.__name__

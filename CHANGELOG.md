@@ -988,6 +988,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Metal view writes reach what the CPU's do (LCD-512/513)
 
+- drop the Metal reshape copy-on-write; pin LCD-535
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

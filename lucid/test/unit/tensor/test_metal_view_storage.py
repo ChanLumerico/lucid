@@ -20,10 +20,11 @@ for the storage a Metal tensor does not share with its views:
   is read from there.
 
 * **What writes reach.**  A write through a window read past its view left
-  the view stale, to write its old values back later — refused while the
-  view lives.  A reshape the CPU copies shared its input's buffer on Metal,
-  so writes crossed between them.  A write into a view of an overlapping
-  view was refused on Metal only.
+  the view stale, to write its old values back later; it is refused while
+  the view lives, where the CPU and the reference write it (LCD-535).  A
+  reshape the CPU copies shares its input's buffer on Metal, so writes cross
+  between them (LCD-535, which needs the engine to detach a family member).
+  A write into a view of an overlapping view was refused on Metal only.
 
 The reference is the contract for the layout.  Where the CPU disagrees with
 it — a leading slice restarts the CPU's storage (LCD-517) — the CPU cell is
@@ -31,7 +32,7 @@ a strict xfail.
 """
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, NamedTuple
 
 import pytest
 
@@ -45,6 +46,15 @@ type _View = Callable[[Any], Any]
 
 _LCD_517 = pytest.mark.xfail(
     strict=True, reason="LCD-517: a leading slice restarts the CPU's storage"
+)
+_LCD_535_WINDOW = pytest.mark.xfail(
+    strict=True,
+    reason="LCD-535: window write past a live view needs engine write propagation",
+)
+_LCD_535_RESHAPE = pytest.mark.xfail(
+    strict=True,
+    reason="LCD-535: Metal copying reshape aliases its view; needs an engine "
+    "family-detach op",
 )
 
 
@@ -210,35 +220,46 @@ def test_a_view_reports_the_references_layout(name: str, device: str, ref: Any) 
     assert ours.is_contiguous() == theirs.is_contiguous()
 
 
+class _Window(NamedTuple):
+    view: _View
+    args: tuple[object, ...]
+    restarts: bool  # the CPU's storage restarts at the view (LCD-517)
+    outside: bool  # the window reads an element the view does not hold
+
+
 #: Windows onto views of ``_grid``: the view, then ``as_strided``'s arguments.
-WINDOWS: dict[str, tuple[_View, tuple[object, ...], bool]] = {
-    "transpose": (lambda t: t.t(), ((2,), (1,)), False),
-    "transpose-offset": (lambda t: t.t(), ((3, 2), (2, 7), 1), False),
-    "column": (lambda t: t[:, 1], ((2,), (1,)), False),
-    "column-whole": (lambda t: t[:, 1], ((4,), (6,)), False),
-    "row-from-the-start": (lambda t: t[1], ((2,), (1,), 0), True),
-    "row-reaches-all": (lambda t: t[0], ((24,), (1,)), True),
-    "row-own": (lambda t: t[2], ((3,), (2,)), False),
-    "diagonal": (lambda t: t.diagonal(), ((4,), (7,)), False),
-    "diagonal-past-it": (lambda t: t.diagonal(1), ((3,), (5,)), False),
-    "unfold": (lambda t: t.unfold(1, 2, 2), ((3,), (2,)), False),
-    "expand": (lambda t: t[:1].expand(3, 6), ((2, 2), (6, 1)), True),
-    "permute": (lambda t: t.reshape(2, 3, 4).permute(2, 0, 1), ((2, 3), (4, 1)), False),
-    "detach": (lambda t: t.t().detach(), ((2,), (1,)), False),
-    "window-of-a-window": (
-        lambda t: t.t().as_strided((3, 4), (6, 1), 1),
-        ((2,), (2,)),
-        False,
+WINDOWS: dict[str, _Window] = {
+    "transpose": _Window(lambda t: t.t(), ((2,), (1,)), False, False),
+    "transpose-offset": _Window(lambda t: t.t(), ((3, 2), (2, 7), 1), False, False),
+    "column": _Window(lambda t: t[:, 1], ((2,), (1,)), False, True),
+    "column-whole": _Window(lambda t: t[:, 1], ((4,), (6,)), False, False),
+    "row-from-the-start": _Window(lambda t: t[1], ((2,), (1,), 0), True, True),
+    "row-reaches-all": _Window(lambda t: t[0], ((24,), (1,)), True, True),
+    "row-own": _Window(lambda t: t[2], ((3,), (2,)), False, False),
+    "diagonal": _Window(lambda t: t.diagonal(), ((4,), (7,)), False, False),
+    "diagonal-past-it": _Window(lambda t: t.diagonal(1), ((3,), (5,)), False, True),
+    "unfold": _Window(lambda t: t.unfold(1, 2, 2), ((3,), (2,)), False, False),
+    "expand": _Window(lambda t: t[:1].expand(3, 6), ((2, 2), (6, 1)), True, True),
+    "permute": _Window(
+        lambda t: t.reshape(2, 3, 4).permute(2, 0, 1), ((2, 3), (4, 1)), False, False
     ),
-    "stepped": (lambda t: t[:, ::2], ((2, 3), (6, 2)), False),
+    "detach": _Window(lambda t: t.t().detach(), ((2,), (1,)), False, False),
+    "window-of-a-window": _Window(
+        lambda t: t.t().as_strided((3, 4), (6, 1), 1), ((2,), (2,)), False, False
+    ),
+    "stepped": _Window(lambda t: t[:, ::2], ((2, 3), (6, 2)), False, False),
 }
 
 
 def _window_cases() -> list[Any]:
     cases = []
-    for name, (_, _, restarts) in WINDOWS.items():
+    for name, window in WINDOWS.items():
         for device in ("cpu", "metal"):
-            marks = [_LCD_517] if device == "cpu" and restarts else []
+            marks = []
+            if device == "cpu" and window.restarts:
+                marks.append(_LCD_517)
+            if device == "metal" and window.outside:
+                marks.append(_LCD_535_WINDOW)
             cases.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
     return cases
 
@@ -252,26 +273,41 @@ def _reads_outside(make: _View, args: tuple[object, ...], ref: Any) -> bool:
 
 
 @pytest.mark.parity
+@pytest.mark.parametrize("name", list(WINDOWS), ids=list(WINDOWS))
+def test_the_table_says_which_windows_read_outside_their_view(
+    name: str, ref: Any
+) -> None:
+    window = WINDOWS[name]
+    assert _reads_outside(window.view, window.args, ref) == window.outside
+
+
+@pytest.mark.parity
 @pytest.mark.parametrize(("name", "device"), _window_cases())
 def test_a_window_reads_and_writes_the_references_elements(
     name: str, device: str, ref: Any
 ) -> None:
-    make, args, _ = WINDOWS[name]
+    window = WINDOWS[name]
     ours, theirs = _grid(lucid, device), _grid(ref, "cpu")
-    view, their_view = make(ours), make(theirs)
-    mine, want = view.as_strided(*args), their_view.as_strided(*args)
+    view, their_view = window.view(ours), window.view(theirs)
+    mine, want = view.as_strided(*window.args), their_view.as_strided(*window.args)
     assert mine.tolist() == want.tolist()
-    if device == "metal" and _reads_outside(make, args, ref):
-        # The write would land past ``view``, which would keep its old values
-        # and write them back later: refused while ``view`` is alive.
-        with pytest.raises(RuntimeError, match="outside the view"):
-            mine.add_(100.0)
-        assert ours.tolist() == _grid(ref, "cpu").tolist()
-        return
     mine.add_(100.0)
     want.add_(100.0)
     assert view.tolist() == their_view.tolist()
     assert ours.tolist() == theirs.tolist()
+
+
+@pytest.mark.parametrize("name", [n for n, w in WINDOWS.items() if w.outside])
+def test_a_write_into_a_window_past_a_live_view_is_refused(name: str) -> None:
+    # The write would land past ``view``, which would keep its old values and
+    # write them back later, over the window's: refused while it is alive,
+    # with nothing written (LCD-535).
+    window = WINDOWS[name]
+    y = _grid(lucid, "metal")
+    view = window.view(y)
+    with pytest.raises(RuntimeError, match="outside the view it was taken from"):
+        view.as_strided(*window.args).add_(100.0)
+    assert y.tolist() == _grid(lucid, "cpu").tolist()
 
 
 def test_a_window_past_a_view_nothing_holds_writes_its_base() -> None:
@@ -444,6 +480,7 @@ THEN: dict[str, Callable[[Any, Any], object]] = {
 }
 
 
+@_LCD_535_RESHAPE
 @pytest.mark.parametrize("then", list(THEN), ids=list(THEN))
 @pytest.mark.parametrize("op", list(COPYING), ids=list(COPYING))
 def test_a_copying_reshape_of_a_view_is_a_tensor_of_its_own(op: str, then: str) -> None:
@@ -458,16 +495,85 @@ def test_a_copying_reshape_of_a_view_is_a_tensor_of_its_own(op: str, then: str) 
     assert run("metal") == run("cpu")
 
 
-def test_a_copying_reshape_shares_until_written() -> None:
-    # The merge-heads reshape of every attention layer: no copy is made until
-    # a write could tell the copy from the view.
+def test_a_copying_reshape_runs_one_op_and_view_refuses_it() -> None:
+    # The merge-heads reshape of every attention layer copies nothing.
     u = lucid.arange(6.0, device="metal").reshape(2, 3).t()
     with lucid.profiler.profile() as prof:
-        f = u.reshape(-1)
+        u.reshape(-1)
     assert [event.name for event in prof.events()] == ["reshape"]
-    assert f._impl.is_aliased()
     with pytest.raises(RuntimeError, match="use .reshape"):
         u.view(-1)
+
+
+# What autograd knows of a copying reshape of a Metal view is the CPU's: a
+# leaf of its own, its gradient, a retained gradient, whatever is read or
+# written around it.
+
+
+def _base(device: str, requires_grad: bool = False) -> lucid.Tensor:
+    x = lucid.arange(6.0, device=device).reshape(2, 3)
+    return x.requires_grad_() if requires_grad else x
+
+
+def _leaf_after(
+    around: Callable[[lucid.Tensor, str], object],
+) -> Callable[[str], object]:
+    def run(device: str) -> object:
+        r = _base(device).t().reshape(-1).requires_grad_()
+        loss = (r * 3.0).sum()
+        around(r, device)
+        loss.backward()
+        assert r.grad is not None
+        return r.is_leaf, r.requires_grad, r.grad.tolist()
+
+    return run
+
+
+def _retained(device: str) -> object:
+    x = _base(device, requires_grad=True)
+    r = x.t().reshape(-1)
+    r.retain_grad()
+    loss = (r * r).sum()
+    _ = r[0]
+    lucid.zeros(4, 4, device=device).view(-1).add_(1.0)
+    loss.backward()
+    assert r.grad is not None and x.grad is not None
+    return r.grad.tolist(), x.grad.tolist()
+
+
+def _stepped(device: str) -> object:
+    r = _base(device).t().reshape(-1).requires_grad_()
+    optimizer = lucid.optim.SGD([r], lr=1.0)
+    (r * 2.0).sum().backward()
+    optimizer.step()
+    assert r.grad is not None
+    return r.is_leaf, r.tolist(), r.grad.tolist()
+
+
+def _parameter(device: str) -> object:
+    p = lucid.nn.Parameter(_base(device).t().reshape(-1))
+    (p * 2.0).sum().backward()
+    assert p.grad is not None
+    return p.is_leaf, p.requires_grad, p.grad.tolist()
+
+
+AUTOGRAD: dict[str, Callable[[str], object]] = {
+    "leaf": _leaf_after(lambda r, d: None),
+    "leaf after a view of it": _leaf_after(lambda r, d: r[1:]),
+    "leaf after its .data": _leaf_after(lambda r, d: r.data),
+    "leaf after its .grad is read": _leaf_after(lambda r, d: r.grad),
+    "leaf after a write elsewhere": _leaf_after(
+        lambda r, d: lucid.zeros(4, 4, device=d)[0].add_(1.0)
+    ),
+    "retained gradient": _retained,
+    "optimizer step": _stepped,
+    "Parameter of it": _parameter,
+}
+
+
+@pytest.mark.parametrize("case", list(AUTOGRAD), ids=list(AUTOGRAD))
+def test_a_copying_reshape_keeps_its_place_in_autograd(case: str) -> None:
+    assert AUTOGRAD[case]("metal") == AUTOGRAD[case]("cpu")
 
 
 # ── A write into a view of a view whose elements overlap ─────────────────────
@@ -519,6 +625,10 @@ BAD_WINDOWS: dict[str, tuple[tuple[object, ...], dict[str, object]]] = {
     "float size": (((2.0,), (1,)), {}),
     "float stride": (((2,), (1.0,)), {}),
     "float offset": (((2,), (1,), 1.0), {}),
+    "bool size": (((True,), (1,)), {}),
+    "bool stride": (((2,), (True,)), {}),
+    "bool offset": (((2,), (1,), True), {}),
+    "no stride": (((2,),), {}),
     "fourth argument": (((2,), (1,), 0, 1), {}),
     "unknown keyword": (((2,), (1,)), {"offset": 1}),
     "size twice": (((2,), (1,)), {"size": (2,)}),
