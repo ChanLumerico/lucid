@@ -10,35 +10,94 @@ steps::
 
     lucid.einops.rearrange(x, "b c h w -> b (h w) c")   # (2,3,4,5) → (2,20,3)
 
-A mismatch fails with a message naming the axis that did not fit, instead of
-producing a silently wrong shape that only surfaces layers later.
+The grammar is the reference einops grammar: names, parenthesised groups
+one level deep, ``...`` for the axes the pattern does not name, ``1`` or
+``()`` for a unit axis and, in ``reduce`` and ``repeat``, a number for an
+unnamed axis of that length.  A keyword length is also a check: an axis
+the input already fixes must have the length given for it, and a keyword
+naming no axis of the pattern is refused.  A mismatch fails with a message
+naming the axis that did not fit, instead of producing a silently wrong
+shape that only surfaces layers later.
 
 Reachable only as ``lucid.einops.*``: there is no top-level ``lucid.einsum``
 and no ``Tensor.rearrange`` method, so each op has exactly one path.
 """
 
-from lucid._tensor.tensor import Tensor
+from collections.abc import Mapping
+from typing import SupportsIndex
 
-"""
-lucid.einops: einops-style tensor operations.
-
-Wraps the C++ engine's einops module. Supports patterns like
-'b h w -> b (h w)' for rearrange, 'b h w -> b w' for reduce, etc.
-"""
-
+import lucid
 from lucid._C import engine as _C_engine
 from lucid._C.engine import einops as _C_einops
-from lucid._dispatch import _unwrap, _wrap
-from lucid._dispatch import _promote_impls
-from lucid.einops import _einsum
+from lucid._dispatch import _REAL_FLOATS, _promote_impls, _unwrap, _wrap
+from lucid._dtype import _ENGINE_TO_DTYPE
+from lucid._tensor.tensor import Tensor
+from lucid.einops import _einsum, _recipe
 
 
 def _wrap_own(out: _C_engine.TensorImpl, *inputs: _C_engine.TensorImpl) -> Tensor:
+    """``out`` as a new tensor that never shares its input's impl.
+
+    An identity pattern runs no step and would hand the input's own impl
+    back under a second Python object, so ``requires_grad_`` on the result
+    would flip the input's flag too (LCD-75).
+    """
     for inp in inputs:
         if out is inp:
             out = _C_engine.reshape(inp, list(inp.shape))
             break
     return _wrap(out)
+
+
+_ENGINE_REDUCERS = {
+    "sum": _C_engine.sum,
+    "mean": _C_engine.mean,
+    "max": _C_engine.max,
+    "min": _C_engine.min,
+    "prod": _C_engine.prod,
+}
+
+
+def _reduce_axes(
+    impl: _C_engine.TensorImpl, reduction: str, axes: tuple[int, ...]
+) -> _C_engine.TensorImpl:
+    # Real floating dtypes only: the reference einops refuses a mean over
+    # integer, boolean and complex tensors alike.
+    if reduction == "mean" and impl.dtype not in _REAL_FLOATS:
+        raise _C_engine.NotImplementedError(
+            "einops.reduce: 'mean' needs a floating-point tensor, got "
+            f"{_ENGINE_TO_DTYPE[impl.dtype]}"
+        )
+    if reduction == "any":
+        return _unwrap(lucid.any(_wrap(impl), dim=list(axes)))
+    if reduction == "all":
+        return _unwrap(lucid.all(_wrap(impl), dim=list(axes)))
+    return _ENGINE_REDUCERS[reduction](impl, list(axes), False)
+
+
+def _transform(
+    tensor: Tensor,
+    pattern: str,
+    operation: str,
+    axes_lengths: Mapping[str, SupportsIndex],
+) -> Tensor:
+    """Run the at most six engine steps a pattern lowers to."""
+    inp = _unwrap(tensor)
+    plan = _recipe.plan(pattern, operation, tuple(inp.shape), axes_lengths)
+    out = inp
+    if plan.split is not None:
+        out = _C_engine.reshape(out, list(plan.split))
+    if plan.reduced:
+        out = _reduce_axes(out, operation, plan.reduced)
+    if plan.permutation is not None:
+        out = _C_engine.permute(out, list(plan.permutation))
+    for position in plan.inserted:
+        out = _C_engine.unsqueeze(out, position)
+    if plan.broadcast is not None:
+        out = _C_engine.broadcast_to(out, list(plan.broadcast))
+    if plan.merge is not None:
+        out = _C_engine.reshape(out, list(plan.merge))
+    return _wrap_own(out, inp)
 
 
 def rearrange(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
@@ -56,14 +115,26 @@ def rearrange(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
         Input tensor to rearrange.
     pattern : str
         Einops pattern of the form ``"<lhs> -> <rhs>"``. Parentheses
-        group axes for composition or decomposition.
+        group axes for composition or decomposition, ``...`` stands for
+        the axes the pattern does not name, and ``1`` or ``()`` is a unit
+        axis.  Every named axis must appear on both sides.
     **axes_lengths : int
-        Named axis sizes used to disambiguate decomposed groups.
+        Axis lengths, needed to split a dimension into a group and checked
+        against the input wherever the input already fixes the axis.
 
     Returns
     -------
     Tensor
         The rearranged tensor.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        The pattern is malformed, an axis appears on one side only, or a
+        keyword names no axis of the pattern.
+    lucid._C.engine.ShapeMismatch
+        The input's rank or a dimension does not fit the pattern or the
+        keyword lengths.
 
     Notes
     -----
@@ -78,9 +149,12 @@ def rearrange(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
     >>> x = lucid.randn(2, 3, 4)
     >>> lucid.einops.rearrange(x, "b h w -> b (h w)").shape
     (2, 12)
+    >>> lucid.einops.rearrange(x, "b ... -> b (...)").shape
+    (2, 12)
+    >>> lucid.einops.rearrange(x, "b (h1 h2) w -> b h1 h2 w 1", h2=3).shape
+    (2, 1, 3, 4, 1)
     """
-    inp = _unwrap(tensor)
-    return _wrap_own(_C_einops.rearrange(inp, pattern, axes_lengths), inp)
+    return _transform(tensor, pattern, "rearrange", dict(axes_lengths))
 
 
 def reduce(
@@ -101,17 +175,30 @@ def reduce(
     tensor : Tensor
         Input tensor to reduce.
     pattern : str
-        Einops pattern such as ``"b h w -> b w"``.
+        Einops pattern such as ``"b h w -> b w"``.  A number on the left
+        is an unnamed axis of that length, so ``"(h 2) (w 2) -> h w"``
+        pools 2x2 windows.
     reduction : str
         Reduction operation; one of ``"sum"``, ``"mean"``, ``"max"``,
-        ``"min"``, ``"prod"``.
+        ``"min"``, ``"prod"``, ``"any"``, ``"all"``.
     **axes_lengths : int
-        Named axis sizes used to disambiguate decomposed groups.
+        Axis lengths, needed to split a dimension into a group and checked
+        against the input wherever the input already fixes the axis.
 
     Returns
     -------
     Tensor
         The reduced tensor.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        The pattern is malformed, the reduction is unknown, an axis
+        appears only on the right, or a keyword names no axis.
+    lucid._C.engine.ShapeMismatch
+        The input's shape does not fit the pattern or the keyword lengths.
+    lucid._C.engine.NotImplementedError
+        ``reduction="mean"`` over a tensor that is not floating point.
 
     Notes
     -----
@@ -129,9 +216,10 @@ def reduce(
     >>> x = lucid.randn(2, 3, 4)
     >>> lucid.einops.reduce(x, "b h w -> b w", "mean").shape
     (2, 4)
+    >>> lucid.einops.reduce(lucid.randn(2, 4, 6), "b (h 2) (w 3) -> b h w", "max").shape
+    (2, 2, 2)
     """
-    inp = _unwrap(tensor)
-    return _wrap_own(_C_einops.reduce(inp, pattern, reduction, axes_lengths), inp)
+    return _transform(tensor, pattern, reduction, dict(axes_lengths))
 
 
 def repeat(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
@@ -141,21 +229,31 @@ def repeat(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
     broadcasting into entirely new axes. The pattern's right-hand side
     enumerates the desired output axes; any axis appearing on the right
     but not on the left is introduced and must be given an explicit
-    length through ``**axes_lengths``.
+    length through ``**axes_lengths``, or written as a number.
 
     Parameters
     ----------
     tensor : Tensor
         Input tensor to repeat.
     pattern : str
-        Einops pattern such as ``"b h w -> b h w c"`` (new axis ``c``).
+        Einops pattern such as ``"b h w -> b h w c"`` (new axis ``c``) or
+        ``"h w -> (h 2) w"`` (each row twice).
     **axes_lengths : int
-        Sizes for every new axis introduced by the pattern.
+        Lengths for every new named axis, and checks for axes the input
+        already fixes.
 
     Returns
     -------
     Tensor
         The repeated tensor.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        The pattern is malformed, drops an axis, or introduces a named
+        axis without a length.
+    lucid._C.engine.ShapeMismatch
+        The input's shape does not fit the pattern or the keyword lengths.
 
     Notes
     -----
@@ -174,9 +272,10 @@ def repeat(tensor: Tensor, pattern: str, **axes_lengths: int) -> Tensor:
     >>> x = lucid.randn(2, 3, 4)
     >>> lucid.einops.repeat(x, "b h w -> b h w c", c=5).shape
     (2, 3, 4, 5)
+    >>> lucid.einops.repeat(lucid.tensor([[1.0, 2.0]]), "h w -> (h 2) w")
+    tensor([[1., 2.], [1., 2.]])
     """
-    inp = _unwrap(tensor)
-    return _wrap_own(_C_einops.repeat(inp, pattern, axes_lengths), inp)
+    return _transform(tensor, pattern, "repeat", dict(axes_lengths))
 
 
 def einsum(equation: str, *operands: Tensor) -> Tensor:
