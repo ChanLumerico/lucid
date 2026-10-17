@@ -385,20 +385,11 @@ def test_an_overlapping_metal_view_refuses_a_write() -> None:
 # ── strict view (D10c) ──────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize(
-    "device",
-    [
-        "cpu",
-        pytest.param(
-            "metal",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="LCD-18: a Metal transpose is still a dense copy (ARC-01 MV-ENG-2)",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("device", ["cpu", "metal"])
 def test_view_of_a_transpose_is_refused(device: str) -> None:
+    # A Metal transpose is still a dense copy (LCD-18), but the view links
+    # track its logical strides (LCD-116), so view() refuses it as the CPU
+    # and the reference do.
     x = lucid.zeros(3, 4, device=device)
     with pytest.raises(RuntimeError, match="use .reshape"):
         x.t().view(-1)
