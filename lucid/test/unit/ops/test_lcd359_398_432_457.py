@@ -9,6 +9,10 @@ import pytest
 import lucid
 from lucid._C import engine as _C_engine
 import lucid.nn.functional as F
+from lucid.test.unit.stability.test_grid_sample_far_coordinates import (
+    _kinds,
+    _stand_in,
+)
 
 NAN = float("nan")
 INF = float("inf")
@@ -19,15 +23,23 @@ INF = float("inf")
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "shape,perm",
-    [
-        ((2, 0, 3), (2, 1, 0)),
-        ((2, 0, 3), (0, 2, 1)),
-        ((4, 3, 0, 2), (3, 1, 2, 0)),
-        ((0, 5), (1, 0)),
-    ],
-)
+_EMPTY_PERMUTES = [
+    ((2, 0, 3), (2, 1, 0)),
+    ((2, 0, 3), (0, 2, 1)),
+    ((4, 3, 0, 2), (3, 1, 2, 0)),
+    ((0, 5), (1, 0)),
+]
+
+# Why a permuted empty view's strides differ from the reference's after a
+# write, per device.
+_REPACKED = {
+    "cpu": "LCD-467: an in-place write into a view whose base is gone re-packs "
+    "the view's strides",
+    "metal": "LCD-18: a Metal view reports packed strides (ARC-01 MV-ENG-2)",
+}
+
+
+@pytest.mark.parametrize("shape,perm", _EMPTY_PERMUTES)
 def test_empty_permuted_view_inplace_ops_succeed(
     ref: ModuleType,
     device: str,
@@ -41,8 +53,23 @@ def test_empty_permuted_view_inplace_ops_succeed(
     rx.mul_(2.0)
     rx.add_(1.0)
     assert x.shape == tuple(rx.shape)
-    assert x.stride() == rx.stride()
     assert x.numel() == 0
+
+
+@pytest.mark.parametrize("shape,perm", _EMPTY_PERMUTES)
+def test_empty_permuted_view_keeps_its_strides_through_a_write(
+    ref: ModuleType,
+    device: str,
+    shape: tuple[int, ...],
+    perm: tuple[int, ...],
+    request: pytest.FixtureRequest,
+) -> None:
+    request.applymarker(pytest.mark.xfail(strict=True, reason=_REPACKED[device]))
+    x = lucid.zeros(*shape, device=device).permute(*perm)
+    rx = ref.zeros(*shape).permute(*perm)
+    x.mul_(2.0)
+    rx.mul_(2.0)
+    assert x.stride() == rx.stride()
 
 
 @pytest.mark.parametrize(
@@ -79,9 +106,17 @@ def test_frexp_matches_reference_across_full_range(
     ref: ModuleType,
     device: str,
     dtype_name: str,
+    request: pytest.FixtureRequest,
 ) -> None:
     if device == "metal" and dtype_name == "float64":
         pytest.skip("Metal does not support float64")
+    if device == "metal" and dtype_name == "float32":
+        request.applymarker(
+            pytest.mark.xfail(
+                strict=True,
+                reason="LCD-468: Metal frexp of a float32 subnormal returns (x, 0)",
+            )
+        )
     l_dt = getattr(lucid, dtype_name)
     r_dt = getattr(ref, dtype_name)
     if dtype_name in ("float16", "bfloat16"):
@@ -153,7 +188,16 @@ def test_ldexp_extreme_exponents_and_gradients(
     device: str,
     m_vals: list[float],
     e_vals: list[int],
+    request: pytest.FixtureRequest,
 ) -> None:
+    exact = [abs(math.ldexp(m, e)) for m, e in zip(m_vals, e_vals, strict=True)]
+    if device == "metal" and any(0.0 < v < 2.0**-126 for v in exact):
+        request.applymarker(
+            pytest.mark.xfail(
+                strict=True,
+                reason="LCD-468: Metal ldexp flushes a float32 subnormal to zero",
+            )
+        )
     lm = lucid.tensor(m_vals, dtype=lucid.float32, device=device)
     le = lucid.tensor(e_vals, dtype=lucid.int32, device=device)
     rm = ref.tensor(m_vals, dtype=ref.float32)
@@ -228,21 +272,6 @@ def test_grid_sample_near_float_max_and_mixed_infinite_coords(
     if len(shape) == 5 and mode == "bicubic":
         pytest.skip("5-D grid_sample supports bilinear and nearest only")
     coords = point if len(shape) == 4 else [point[0], point[1], 0.25]
-    # Known 5-D PyTorch forward/backward NaN-clamp divergence on non-finite border/reflection.
-    if (
-        len(shape) == 5
-        and any(not math.isfinite(c) for c in coords)
-        and padding_mode
-        in (
-            "border",
-            "reflection",
-        )
-    ):
-        return
-    if len(shape) == 5 and padding_mode == "zeros" and mode == "bilinear":
-        if any(abs(c) >= 2.0**60 for c in coords):
-            return
-
     n_elem = math.prod(shape)
     img_vals = [float(i + 1) for i in range(n_elem)]
     grid_shape = (1, 1, 1, 2) if len(shape) == 4 else (1, 1, 1, 1, 3)
@@ -256,22 +285,35 @@ def test_grid_sample_near_float_max_and_mixed_infinite_coords(
     )
     ly.sum().backward()
 
-    rx = ref.tensor(img_vals, dtype=ref.float32).reshape(*shape).requires_grad_(True)
-    rg = ref.tensor(coords, dtype=ref.float32).reshape(*grid_shape).requires_grad_(True)
-    ry = ref.nn.functional.grid_sample(
-        rx, rg, mode=mode, padding_mode=padding_mode, align_corners=align_corners
-    )
-    ry.sum().backward()
+    def reference(at: list[float]) -> tuple[np.ndarray, ...]:
+        rx = ref.tensor(img_vals, dtype=ref.float32).reshape(*shape)
+        rg = ref.tensor(at, dtype=ref.float32).reshape(*grid_shape)
+        rx.requires_grad_(True)
+        rg.requires_grad_(True)
+        ry = ref.nn.functional.grid_sample(
+            rx, rg, mode=mode, padding_mode=padding_mode, align_corners=align_corners
+        )
+        ry.sum().backward()
+        return ry.detach().numpy(), rx.grad.numpy(), rg.grad.numpy()
 
-    np.testing.assert_allclose(
-        ly.numpy(), ry.detach().numpy(), atol=1e-5, equal_nan=True
-    )
-    np.testing.assert_allclose(
-        lx.grad.numpy(), rx.grad.numpy(), atol=1e-5, equal_nan=True
-    )
-    np.testing.assert_allclose(
-        lg.grad.numpy(), rg.grad.numpy(), atol=1e-5, equal_nan=True
-    )
+    def check(got: tuple[np.ndarray, ...], want: tuple[np.ndarray, ...]) -> None:
+        for g, w in zip(got, want, strict=True):
+            np.testing.assert_allclose(g, w, atol=1e-5, equal_nan=True)
+
+    got = (ly.numpy(), lx.grad.numpy(), lg.grad.numpy())
+    # The 5-D cells where Lucid departs from the reference on purpose are the
+    # far-coordinate matrix's named departures: the reference's 3-D kernel
+    # reads a reflected non-finite position at different places forward and
+    # backward ("nan-split"), and overflows a far zeros-padded position
+    # ("overflow-wrap").  Lucid is held to the reference at that matrix's
+    # stand-in coordinate, and keeps the reference's forward under nan-split.
+    kinds = {k for k in _kinds(shape, mode, padding_mode, align_corners, coords) if k}
+    if not kinds:
+        check(got, reference(coords))
+        return
+    if kinds == {"nan-split"}:
+        check(got[:1], reference(coords)[:1])
+    check(got, reference(_stand_in(shape, mode, padding_mode, align_corners, coords)))
 
 
 @pytest.mark.parametrize("bad_mode,bad_pad", [(2, 0), (-1, 0), (0, 2), (0, -1)])
