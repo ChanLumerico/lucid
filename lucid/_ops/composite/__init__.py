@@ -20,6 +20,7 @@ Categories (one file each):
 * ``constants`` — ``pi`` / ``e`` / ``inf`` / ``nan`` / ``newaxis``.
 * ``statistics`` — ``quantile`` / ``nanquantile`` / ``cov`` / ``corrcoef`` / ``cdist`` / ``bincount`` / ``multinomial``.
 * ``indexing`` — ``index_fill`` / ``index_add`` / ``index_copy`` / ``scatter_reduce`` / ``masked_scatter``.
+* ``spectral`` — ``stft`` / ``istft`` and the ``*_window`` factories, which forward to ``lucid.signal.windows``.
 
 The single source of truth for "which composite names get re-exported
 to the top level" is ``COMPOSITE_NAMES`` below.  The top-level
@@ -37,6 +38,7 @@ from lucid._ops.composite import (
     statistics,
     indexing,
     complex as complex_mod,
+    spectral,
 )
 
 # Re-export everything in each submodule's ``__all__`` so callers can do
@@ -54,6 +56,7 @@ _SUBMODULES = (
     statistics,
     indexing,
     complex_mod,
+    spectral,
 )
 
 _seen: set[str] = set()

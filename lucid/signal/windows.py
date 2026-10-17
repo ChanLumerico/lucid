@@ -24,6 +24,9 @@ import math
 from typing import TYPE_CHECKING
 
 import lucid
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _REAL_FLOATS
+from lucid._dtype import to_engine_dtype
 from lucid._types import DeviceLike, DTypeLike
 
 if TYPE_CHECKING:
@@ -46,14 +49,19 @@ def _length_for_sym(M: int, sym: bool) -> int:
     """When ``sym=False`` we compute the symmetric form for ``M+1`` samples
     and return the first ``M``.  Returning the working length here keeps
     every window's body uniform."""
-    if M < 0:
-        raise ValueError(f"window length must be >= 0, got {M}")
     return M if sym else M + 1
 
 
 def _degenerate(M: int, dtype: DTypeLike, device: DeviceLike) -> Tensor | None:
-    """Return the window for ``M <= 1``, or ``None`` when there is shape to
-    compute.
+    """Check the request; return the window for ``M <= 1``, or ``None`` when
+    there is shape to compute.
+
+    Every window calls this first, so it is where a request is refused: a
+    negative length, or a dtype a window cannot be computed in.  An integer
+    window was a float ramp truncated on the way out, and a complex one
+    failed inside ``arange``.  The classes are both the builtin and the
+    ``RuntimeError`` the reference raises, so ``lucid.signal.windows`` and
+    the top-level ``lucid.hann_window`` family refuse alike.
 
     One sample carries no taper and zero samples carry nothing, so both the
     reference framework and the usual convention answer ``ones(M)``.  The
@@ -65,7 +73,12 @@ def _degenerate(M: int, dtype: DTypeLike, device: DeviceLike) -> Tensor | None:
     and ``0.08`` for a Hamming, which is worse for being plausible.
     """
     if M < 0:
-        raise ValueError(f"window length must be >= 0, got {M}")
+        raise _C_engine.InvalidArgument(f"window length must be >= 0, got {M}")
+    resolved = lucid.get_default_dtype() if dtype is None else dtype
+    if to_engine_dtype(resolved) not in _REAL_FLOATS:
+        raise _C_engine.DtypeMismatch(
+            f"a window is computed in a floating-point dtype, got {resolved}"
+        )
     if M <= 1:
         return lucid.ones(M, dtype=dtype, device=device)
     return None

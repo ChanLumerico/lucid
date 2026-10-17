@@ -185,6 +185,10 @@ __all__ = [
     "contiguous", "detach", "clone",
     # ── stats / search ────────────────────────────────────────────────────
     "searchsorted", "bucketize", "histc", "cartesian_prod",
+    # ── spectral (window math lives in lucid.signal.windows) ──────────────
+    "stft", "istft",
+    "hann_window", "hamming_window", "blackman_window", "bartlett_window",
+    "kaiser_window",
     # ── Tensor-method ops surfaced as free functions ──────────────────────
     "lerp", "diff",
     # ── extras: constants ─────────────────────────────────────────────────
