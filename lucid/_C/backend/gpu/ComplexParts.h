@@ -14,13 +14,15 @@ namespace backend {
 
 // A complex64 array of ``re``'s shape from float32 parts of that shape.
 // Assembling it as ``re + im * 1j`` turns an infinite part into NaN — the
-// product computes ``inf * 0`` for the other lane, so a scatter-add of
-// (1 + inf j) answered (nan + inf j) — so the parts are interleaved and the
-// pairs reinterpreted.
+// product computes ``inf * 0`` for the other lane, so ``complex(inf, inf)``
+// answered (nan + inf j) and a scatter-add of (1 + inf j) did too.  A
+// complex64 is two adjacent float32s, so the parts are interleaved and the
+// pairs reinterpreted: no arithmetic touches either one.
 inline ::mlx::core::array complex_from_parts(const ::mlx::core::array& re,
                                              const ::mlx::core::array& im) {
     namespace mx = ::mlx::core;
-    return mx::reshape(mx::view(mx::stack({re, im}, -1), mx::complex64), re.shape());
+    auto pairs = mx::contiguous(mx::stack({re, im}, -1));
+    return mx::reshape(mx::view(pairs, mx::complex64), re.shape());
 }
 
 // ``op(base, updates)`` for complex64 operands, run on the real parts and on

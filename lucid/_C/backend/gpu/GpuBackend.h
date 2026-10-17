@@ -93,6 +93,7 @@
 #include "../Dispatcher.h"
 #include "../IBackend.h"
 #include "AxisIndex.h"
+#include "ComplexParts.h"
 #include "Conversion.h"
 #include "DivMod.h"
 #include "HalfAccumulation.h"
@@ -555,26 +556,13 @@ public:
     Storage complex_combine(const Storage& re, const Storage& im, const Shape&) override {
         const auto& re_g = std::get<GpuStorage>(re);
         const auto& im_g = std::get<GpuStorage>(im);
-        // Laid out, not computed.
-        //
-        // This used to build the number from the identity ``re + 1j·im``,
-        // which is exact in real arithmetic and not in IEEE: the real part
-        // of ``(im + 0i)·(0 + 1i)`` is ``im·0``, and that is NaN whenever
-        // ``im`` is infinite.  ``complex(inf, inf)`` came back
-        // ``nan + infj`` — the imaginary part survived and the real one was
-        // destroyed by a multiplication whose only purpose was to move it.
-        // ``polar`` inherited it: an infinite radius gave a NaN real part
-        // on Metal where the CPU and the reference both give infinity.
-        //
-        // A complex64 *is* two adjacent float32s, so stacking the parts and
-        // reinterpreting the bytes moves them without arithmetic touching
-        // either one.
+        // Laid out, not computed (``complex_from_parts``): built as
+        // ``re + 1j·im``, ``complex(inf, inf)`` and ``polar`` of an infinite
+        // radius gave a NaN real part on Metal.
         auto re_f = ::mlx::core::astype(*re_g.arr, ::mlx::core::float32);
         auto im_f = ::mlx::core::astype(*im_g.arr, ::mlx::core::float32);
-        auto pairs = ::mlx::core::stack({re_f, im_f}, -1);
-        auto out = ::mlx::core::squeeze(
-            ::mlx::core::view(::mlx::core::contiguous(pairs), ::mlx::core::complex64), -1);
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), Dtype::C64)};
+        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(complex_from_parts(re_f, im_f)),
+                                           Dtype::C64)};
     }
 
     Storage complex_conj(const Storage& a, const Shape&, Dtype dt) override {

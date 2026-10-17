@@ -915,6 +915,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - declarative state_slots and atomic load_state_buffers (LCD-239)
 - type param_groups and engines in Optimizer (LCD-354)
 - one owner for _sum_rightmost (LCD-471)
+- complex_combine assembles via complex_from_parts
 
 ---
 
