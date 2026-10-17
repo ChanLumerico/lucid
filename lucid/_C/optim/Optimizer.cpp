@@ -93,6 +93,33 @@ double read_scalar(const std::byte* src) {
     return static_cast<double>(v);
 }
 
+// Whether ``update_one`` can step ``p`` in its own buffer.
+//
+// Every update kernel takes a parameter's buffer as its elements: the CPU
+// loops walk ``numel`` of them from the buffer's first byte in row-major
+// order, and the Metal path replaces the whole array.  That holds for a
+// contiguous CPU tensor at offset 0 (a run at the start of a larger buffer
+// included) and for a Metal tensor that reads all of its family's root.  A
+// column view stepped the row at the buffer's start instead, and a
+// transpose paired each gradient with another element (LCD-476).
+bool steps_in_place(const TensorImpl& p) {
+    if (p.storage_offset() != 0 || !p.is_contiguous())
+        return false;
+    return p.device() == Device::CPU || p.is_dense();
+}
+
+// A dense copy of ``p``'s elements for ``update_one`` to step in its place.
+std::shared_ptr<TensorImpl> dense_copy(const TensorImpl& p) {
+    const Storage& elems = p.storage();
+    // An MLX array is a value: the step replaces the copy's array and
+    // leaves the one it was read from as it was.
+    if (const auto* g = std::get_if<GpuStorage>(&elems))
+        return std::make_shared<TensorImpl>(Storage{*g}, p.shape(), p.dtype(), p.device(), false);
+    // The CPU loops write the buffer they are handed, so it must be its own:
+    // ``storage()`` hands out the view's cached packing.
+    return clone_state_storage(elems, p.shape(), p.dtype(), p.device());
+}
+
 }  // namespace
 
 std::shared_ptr<TensorImpl> make_state_scalar(double value, Dtype dtype) {
@@ -394,14 +421,14 @@ void Optimizer::set_step_count(std::int64_t count) {
 // convention where parameters without gradients are treated as
 // non-trainable for the current step, and a skipped slot's step counter
 // does not advance.
+//
+// This loop is where every optimizer is handed its parameter, so it owns
+// the parameter's layout: one the kernels cannot take as its buffer
+// (``steps_in_place``) is stepped on a dense copy, which is then written
+// back into the parameter's own elements.  The gradient and the state
+// buffers are dense in the parameter's shape already.
 void Optimizer::step() {
     sync_slot_vectors();
-    // Every parameter this step will write is checked before any is: a
-    // refusal part-way through left the earlier parameters stepped and the
-    // refused one's state initialised and counted.
-    for (const auto& p : params_)
-        if (p && p->grad_storage().has_value())
-            p->check_wholesale_writable("Optimizer.step");
     // GPU param arrays updated this step, flushed in one batched eval below.
     std::vector<::mlx::core::array> to_flush;
     for (std::size_t i = 0; i < params_.size(); ++i) {
@@ -416,15 +443,26 @@ void Optimizer::step() {
             state_initialized_[i] = true;
         }
         ++steps_[i];
-        update_one(i, p, *grad);
+        if (steps_in_place(*p)) {
+            update_one(i, p, *grad);
+            // Bump the version so that any autograd nodes that captured this
+            // parameter before the update detect an in-place modification.
+            p->bump_version();
+        } else {
+            auto dense = dense_copy(*p);
+            update_one(i, dense, *grad);
+            // The raw write through the parameter's offset and strides, or
+            // into its part of a Metal family's root; it bumps the version.
+            // A parameter whose elements overlap (an expanded view) is
+            // refused here, after this slot's state has moved and the
+            // parameters ahead of it were stepped: the refusal is not atomic.
+            p->copy_from(*dense);
+        }
 
-        // Bump the version so that any autograd nodes that captured this
-        // parameter before the update detect an in-place modification.
-        p->bump_version();
-
-        // Collect the (lazy) updated GPU param array for the batched eval.  The
+        // Collect the (lazy) updated GPU param array for the batched eval:
+        // the family's root for a Metal view, which the write replaced.  The
         // CPU path mutates in place (no MLX graph) and is skipped.
-        const Storage& st = p->storage();
+        const Storage& st = p->raw_storage();
         if (std::holds_alternative<GpuStorage>(st)) {
             const auto& gs = std::get<GpuStorage>(st);
             if (gs.arr)

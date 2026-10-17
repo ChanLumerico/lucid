@@ -856,6 +856,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - refuse unpaired slices, lengths, corners and ranks (LCD-470)
 
+- step a strided parameter through its own elements
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
