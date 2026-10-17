@@ -1,4 +1,4 @@
-"""A Metal view's strides are worked out from its op, not replayed on the CPU.
+"""A Metal view's layout is worked out from its op, not replayed on the CPU.
 
 ``view`` and ``reshape`` of a traced Metal view — a transpose, a permute, a
 slice — need the strides the same view would have on the CPU, to know
@@ -6,15 +6,21 @@ whether the new shape can read it in place.  They were read back by
 replaying the view on a CPU tensor: a host allocation and a CPU op for every
 merge-heads ``attn.permute(0, 2, 1, 3).reshape(b, n, e)``, in every attention
 layer, every step (LCD-462).  :mod:`lucid._tensor._metal_views` now works
-them out from the op's arguments; these tests hold each rule to the CPU and
-to zero host work.
+them out from the op's arguments, with where the view starts in its base's
+storage, which ``as_strided``, ``stride()`` and ``storage_offset()`` read
+(LCD-513); these tests hold each rule to the CPU and to zero host work.
 
 Strides are compared on the axes that move an element.  An axis of length
 one moves none, and the CPU's choice of stride for it depends on how the
 view was composed (a slice squeezes its window axis, which re-strides every
-length-one axis), so it says nothing about the layout.
+length-one axis), so it says nothing about the layout.  Offsets are compared
+with where the CPU view's first element sits in its base's buffer, read from
+its address: the CPU's own ``storage_offset()`` restarts at a leading slice
+(LCD-517).
 """
 
+import itertools
+import math
 import random
 from collections.abc import Callable
 
@@ -23,7 +29,7 @@ import pytest
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
-from lucid._tensor import _metal_views
+from lucid._tensor import _metal_views, _view_layout
 from lucid.test._fixtures.devices import metal_available
 
 pytestmark = pytest.mark.skipif(not metal_available(), reason="metal unavailable")
@@ -33,14 +39,32 @@ _CPU = _C_engine.Device.CPU
 type _View = Callable[[lucid.Tensor], lucid.Tensor]
 
 
-def _moving(
-    shape: tuple[int, ...], stride: tuple[int, ...] | None
-) -> tuple[int, ...] | None:
+def _moving(shape: tuple[int, ...], stride: tuple[int, ...]) -> tuple[int, ...]:
     """The strides of the axes that move an element; ``()`` when none can."""
-    assert stride is not None, f"no strides for a view of shape {shape}"
     if 0 in shape:
         return ()
     return tuple(st for n, st in zip(shape, stride, strict=True) if n != 1)
+
+
+def _contiguous(shape: tuple[int, ...], stride: tuple[int, ...]) -> bool:
+    """The reference's contiguity: row-major steps on every axis that moves.
+
+    The CPU's ``is_contiguous()`` also asks it of length-one axes.
+    """
+    if 0 in shape:
+        return True
+    expected = 1
+    for n, st in reversed(list(zip(shape, stride, strict=True))):
+        if n != 1:
+            if st != expected:
+                return False
+            expected *= n
+    return True
+
+
+def _cpu_offset(view: lucid.Tensor, root: lucid.Tensor) -> int:
+    """Where a CPU view's first element sits in ``root``'s buffer, in elements."""
+    return (view.data_ptr() - root.data_ptr()) // view.element_size()
 
 
 def _base(device: str) -> lucid.Tensor:
@@ -78,6 +102,8 @@ VIEWS: dict[str, _View] = {
     "broadcast_to": lambda t: t[:1].broadcast_to((3, 5, 3, 2, 4)),
     "expand_as": lambda t: t[:, :, :1].expand_as(t),
     "as_strided": lambda t: t.as_strided((2, 3), (4, 1)),
+    "as_strided-offset": lambda t: t[1:].as_strided((2, 3), (4, 1), 7),
+    "lucid.as_strided": lambda t: lucid.as_strided(t.t(), (3,), (5,)),
     "split": lambda t: t.split(2, dim=0)[1],
     "lucid.split": lambda t: lucid.split(t, [1, 3], dim=3)[1],
     "chunk": lambda t: t.chunk(2, dim=3)[1],
@@ -92,7 +118,7 @@ VIEWS: dict[str, _View] = {
 }
 
 
-def test_every_replayed_view_op_has_a_stride_rule() -> None:
+def test_every_replayed_view_op_has_a_layout_rule() -> None:
     replayed = {
         *_metal_views._REARRANGEMENTS,
         *_metal_views._OVERLAPPING,
@@ -101,21 +127,27 @@ def test_every_replayed_view_op_has_a_stride_rule() -> None:
         "T",
         "mT",
     }
-    assert set(_metal_views._STRIDE_RULES) == replayed
+    assert set(_view_layout._LAYOUT_RULES) == replayed
 
 
 @pytest.mark.parametrize("make", list(VIEWS.values()), ids=list(VIEWS))
-def test_a_metal_view_stride_dispatches_nothing_and_is_the_cpus(make: _View) -> None:
+def test_a_metal_view_layout_dispatches_nothing_and_is_the_cpus(make: _View) -> None:
     view = make(_base("metal"))
     host = _C_engine.memory_stats(_CPU).alloc_count
     with lucid.profiler.profile() as prof:
-        stride = _metal_views._stride(view)
+        layout = _metal_views._layout(view)
+        reported = (view.stride(), view.storage_offset(), view.is_contiguous())
     assert [event.name for event in prof.events()] == []
     assert _C_engine.memory_stats(_CPU).alloc_count == host
+    assert reported == (*layout, _metal_views._is_contiguous_of(view))
 
-    cpu = make(_base("cpu"))
+    base = _base("cpu")
+    cpu = make(base)
     assert view.shape == cpu.shape
-    assert _moving(view.shape, stride) == _moving(cpu.shape, cpu.stride())
+    assert _moving(view.shape, layout.stride) == _moving(cpu.shape, cpu.stride())
+    assert view.is_contiguous() == _contiguous(cpu.shape, cpu.stride())
+    if cpu.numel():
+        assert layout.offset == _cpu_offset(cpu, base)
 
 
 def test_merging_heads_on_metal_runs_no_cpu_op() -> None:
@@ -130,13 +162,14 @@ def test_merging_heads_on_metal_runs_no_cpu_op() -> None:
     assert merged.tolist() == x.tolist()
 
 
-def test_a_reversed_slice_is_still_no_view_to_reshape_through() -> None:
-    # The CPU gathers ``x[::-1]`` into a copy, so its Metal stand-in has no
-    # strides a later ``view`` could step through — as before the rules.  An
-    # empty one is a zero-length cut of ``x`` on the CPU, which any shape views.
+def test_a_reversed_slice_is_a_tensor_of_its_own() -> None:
+    # The CPU gathers ``x[::-1]`` into a copy (LCD-512), so on Metal it is no
+    # view of ``x`` either: ``view`` steps through the copy's own layout.
     x = lucid.arange(6.0, device="metal")
-    assert _metal_views._stride(x[::-1]) is None
-    assert _metal_views._stride(x[1:4:-1]) is not None
+    reversed_ = x[::-1]
+    assert _metal_views._ATTR not in reversed_.__dict__
+    assert reversed_.view(2, 3).tolist() == [[5.0, 4.0, 3.0], [2.0, 1.0, 0.0]]
+    assert _metal_views._ATTR not in x[1:4:-1].__dict__
 
 
 # ── Random chains, held to the CPU ───────────────────────────────────────────
@@ -161,12 +194,15 @@ def _shape_of(rng: random.Random, numel: int) -> tuple[int, ...]:
 def _key(rng: random.Random, shape: tuple[int, ...]) -> tuple[object, ...]:
     parts: list[object] = []
     for n in shape[: rng.randrange(len(shape) + 1)]:
-        pick = rng.randrange(4)
+        pick = rng.randrange(5)
         if pick == 0 and n:
             parts.append(rng.randrange(-n, n))
         elif pick == 1:
             start = rng.randrange(n + 1)
             parts.append(slice(start, rng.randrange(start, n + 1), rng.randrange(1, 4)))
+        elif pick == 2:
+            # A copy on the CPU (LCD-512): what follows is a view of the copy.
+            parts.append(slice(rng.choice([None, n - 1]), None, rng.choice([-1, -2])))
         else:
             parts.append(slice(None))
         if rng.randrange(5) == 0:
@@ -174,6 +210,21 @@ def _key(rng: random.Random, shape: tuple[int, ...]) -> tuple[object, ...]:
     if rng.randrange(3) == 0:
         parts.append(Ellipsis)
     return tuple(parts)
+
+
+def _windows(rng: random.Random, shape: tuple[int, ...]) -> list[_View]:
+    """``as_strided`` built from the view's own ``stride()``, as callers build it."""
+    i = rng.randrange(len(shape))
+    width = rng.randrange(1, shape[i] + 1) if shape[i] else 0
+    part = tuple(rng.randrange(n + 1) for n in shape)
+    return [
+        lambda t: t.as_strided(t.shape, t.stride()),
+        lambda t: t.as_strided(part, t.stride()),
+        # Sliding windows along axis ``i``, from the view's first element.
+        lambda t: t.as_strided(
+            (shape[i] - width + 1, width), (t.stride(i), t.stride(i))
+        ),
+    ]
 
 
 def _ranked_views(rng: random.Random, shape: tuple[int, ...]) -> list[_View]:
@@ -184,6 +235,7 @@ def _ranked_views(rng: random.Random, shape: tuple[int, ...]) -> list[_View]:
     start = rng.randrange(shape[i] - size + 1) if shape[i] else 0
     step = rng.randrange(1, 4)
     piece = rng.randrange(max(shape[i], 1))
+    chunks = rng.randrange(1, 4)
     stretch = tuple(rng.choice([2, 3]) if s == 1 else -1 for s in shape)
     views: list[_View] = [
         lambda t: t.permute(*perm),
@@ -192,10 +244,15 @@ def _ranked_views(rng: random.Random, shape: tuple[int, ...]) -> list[_View]:
         lambda t: t.narrow(i, start, size),
         lambda t: t.unbind(i)[piece] if shape[i] else t,
         lambda t: t.split(max(size, 1), dim=i)[0],
+        lambda t: t.chunk(chunks, dim=i)[-1] if shape[i] else t,
         lambda t: t.expand(*stretch),
         lambda t: t.expand(2, *shape),
         lambda t: t.T,
     ]
+    if 0 not in shape:
+        # An empty slice starts at its first index in the reference and at 0 on
+        # the CPU; a window from there says nothing either of them reads.
+        views += _windows(rng, shape)
     if shape[i]:
         views.append(lambda t: t.unfold(i, size, step))
     if n >= 2 and i != j:
@@ -223,10 +280,62 @@ def _views(rng: random.Random, shape: tuple[int, ...]) -> list[_View]:
     return views
 
 
-def _same_view(cpu: lucid.Tensor, metal: lucid.Tensor, where: str) -> None:
+class _Chain:
+    """One random chain, on both devices, with the buffer the CPU view reads."""
+
+    def __init__(self, shape: tuple[int, ...]) -> None:
+        self.cpu = lucid.arange(float(math.prod(shape))).reshape(shape)
+        self.metal = self.cpu.to("metal")
+        # The tensors that own each device's storage, held so a Metal window
+        # may read any of it, as a CPU one may; ``None`` once the view reads
+        # a copy only the CPU can see the start of.
+        self.cpu_root: lucid.Tensor | None = self.cpu
+        self.metal_root: lucid.Tensor | None = self.metal
+        self.steps = [f"{shape}"]
+
+    def where(self) -> str:
+        return " ".join(self.steps)
+
+    def step(self, cpu: lucid.Tensor, metal: lucid.Tensor) -> None:
+        root = self.cpu_root
+        if root is not None and cpu.numel():
+            span = root.numel() * root.element_size()
+            if not 0 <= cpu.data_ptr() - root.data_ptr() < span:
+                # The CPU copied (a slice stepping backwards): the copy is a
+                # storage of its own on both devices.  A key that goes on
+                # past the slice views the copy from somewhere inside it.
+                frames, _ = _metal_views._frames(metal)
+                assert all(f is not self.metal_root for f in frames), self.where()
+                copied = _metal_views._ATTR not in metal.__dict__
+                self.cpu_root, self.metal_root = (
+                    (cpu, metal) if copied else (None, None)
+                )
+        self.cpu, self.metal = cpu, metal
+        self.steps.append(f"-> {tuple(cpu.shape)}")
+        _same_view(self.cpu, self.metal, self.cpu_root, self.where())
+
+
+def _same_view(
+    cpu: lucid.Tensor, metal: lucid.Tensor, root: lucid.Tensor | None, where: str
+) -> None:
     assert metal.shape == cpu.shape, where
-    got = _moving(metal.shape, _metal_views._stride(metal))
-    assert got == _moving(cpu.shape, cpu.stride()), where
+    layout = _metal_views._layout(metal)
+    assert _moving(metal.shape, layout.stride) == _moving(
+        cpu.shape, cpu.stride()
+    ), where
+    assert _moving(metal.shape, metal.stride()) == _moving(
+        cpu.shape, cpu.stride()
+    ), where
+    if cpu.numel():
+        # A tensor that is no view reports what the engine does on either device.
+        contiguous = (
+            _contiguous(cpu.shape, cpu.stride())
+            if _metal_views._ATTR in metal.__dict__
+            else cpu.is_contiguous()
+        )
+        assert metal.is_contiguous() == contiguous, where
+        if root is not None:
+            assert metal.storage_offset() == _cpu_offset(cpu, root), where
     assert metal.tolist() == cpu.tolist(), where
 
 
@@ -237,41 +346,63 @@ def _attempt(view: _View, t: lucid.Tensor) -> lucid.Tensor | None:
         return None
 
 
+def _a_window_reads_the_storage(
+    rng: random.Random, chain: _Chain, root: lucid.Tensor
+) -> None:
+    """A window anywhere in the storage reads what the storage holds there.
+
+    Compared with the CPU's buffer itself: the CPU's ``as_strided`` restarts
+    the storage at a leading slice (LCD-517).
+    """
+    flat = root.reshape(-1).tolist()
+    size = tuple(rng.randrange(1, 4) for _ in range(rng.randrange(1, 3)))
+    stride = tuple(rng.randrange(4) for _ in size)
+    reach = sum((n - 1) * s for n, s in zip(size, stride, strict=True))
+    if reach >= len(flat):
+        return
+    offset = rng.randrange(len(flat) - reach)
+    want = lucid.tensor(
+        [
+            flat[offset + sum(i * s for i, s in zip(at, stride, strict=True))]
+            for at in itertools.product(*(range(n) for n in size))
+        ]
+    ).reshape(size)
+    got = chain.metal.as_strided(size, stride, offset)
+    assert got.tolist() == want.tolist(), (chain.where(), size, stride, offset)
+
+
 @pytest.mark.parametrize("seed", range(24))
-def test_random_view_chains_have_the_cpus_strides(seed: int) -> None:
+def test_random_view_chains_have_the_cpus_layout(seed: int) -> None:
     rng = random.Random(seed)
     for _ in range(12):
-        numel = rng.choice([1, 6, 8, 12, 24, 36, 48])
-        shape = _shape_of(rng, numel)
-        cpu = lucid.arange(float(numel)).reshape(shape)
-        metal = cpu.to("metal")
-        steps = [f"{shape}"]
+        chain = _Chain(_shape_of(rng, rng.choice([1, 6, 8, 12, 24, 36, 48])))
         for _ in range(rng.randrange(1, 5)):
-            view = rng.choice(_views(rng, tuple(cpu.shape)))
+            view = rng.choice(_views(rng, tuple(chain.cpu.shape)))
             # Draw once and replay the same op on both devices.
             state = rng.getstate()
-            next_cpu = _attempt(view, cpu)
+            next_cpu = _attempt(view, chain.cpu)
             rng.setstate(state)
-            next_metal = _attempt(view, metal)
-            assert (next_cpu is None) == (next_metal is None), steps
-            if next_cpu is None or next_metal is None:
-                continue
-            cpu, metal = next_cpu, next_metal
-            steps.append(f"-> {tuple(cpu.shape)}")
-            _same_view(cpu, metal, " ".join(steps))
+            next_metal = _attempt(view, chain.metal)
+            assert (next_cpu is None) == (next_metal is None), chain.where()
+            if next_cpu is not None and next_metal is not None:
+                chain.step(next_cpu, next_metal)
+        # An empty view's address says nothing of its storage.
+        if chain.cpu_root is not None and chain.cpu.numel():
+            _a_window_reads_the_storage(rng, chain, chain.cpu_root)
         # ``view`` refuses on Metal exactly where it refuses on the CPU.
+        cpu, metal = chain.cpu, chain.metal
         target = _shape_of(rng, cpu.numel()) if cpu.numel() else (0,)
         cpu_view = _attempt(lambda t: t.view(*target), cpu)
         metal_view = _attempt(lambda t: t.view(*target), metal)
-        assert (cpu_view is None) == (metal_view is None), (steps, target)
+        assert (cpu_view is None) == (metal_view is None), (chain.where(), target)
         if cpu_view is not None and metal_view is not None:
-            _same_view(cpu_view, metal_view, f"{steps} view {target}")
+            chain.step(cpu_view, metal_view)
 
 
 # ── The Python chunk rule is the engine's ────────────────────────────────────
 
 
-def _layout(rng: random.Random) -> lucid.Tensor:
+def _random_layout(rng: random.Random) -> lucid.Tensor:
     """A CPU view of random shape and strides over a buffer large enough for it."""
     shape = [rng.choice([1, 1, 2, 3, 4]) for _ in range(rng.randrange(5))]
     if shape and rng.randrange(8) == 0:
@@ -286,24 +417,24 @@ def _layout(rng: random.Random) -> lucid.Tensor:
 def test_the_python_view_rule_is_the_engines(seed: int) -> None:
     rng = random.Random(1000 + seed)
     for _ in range(40):
-        a = _layout(rng)
+        a = _random_layout(rng)
         shape, stride = tuple(a.shape), tuple(a.stride())
         target = _shape_of(rng, a.numel()) if a.numel() else (0, *shape)
         try:
             engine: tuple[int, ...] | None = tuple(a.view(*target).stride())
         except RuntimeError:
             engine = None
-        python = _metal_views._view_strides(shape, stride, target, False)
+        python = _view_layout._view_strides(shape, stride, target, False)
         assert (python is None) == (engine is None), (shape, stride, target)
         if python is not None:
             assert _moving(target, python) == _moving(target, engine)
         # Dropping and inserting length-one axes is always a view, and the
         # engine strides every length-one axis the same way.
         squeezed = a.squeeze()
-        assert _metal_views._view_strides(
+        assert _view_layout._view_strides(
             shape, stride, tuple(squeezed.shape), True
         ) == tuple(squeezed.stride())
         unsqueezed = a.unsqueeze(rng.randrange(len(shape) + 1))
-        assert _metal_views._view_strides(
+        assert _view_layout._view_strides(
             shape, stride, tuple(unsqueezed.shape), True
         ) == tuple(unsqueezed.stride())

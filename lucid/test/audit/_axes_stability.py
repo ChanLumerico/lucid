@@ -492,14 +492,15 @@ class ContiguityAxis(Axis):
                 "(including imaginary components and exact integer values)",
             )
 
-        # They agreed — but could they have disagreed?  Only if the operand
-        # was strided.  On metal the slice comes back packed, with the
-        # strides of a fresh tensor, and the comparison is between an op and
-        # itself: the sentinel check above is then the half that earned the
-        # verdict, and the detail says so.
-        if (
-            bool(view.is_contiguous())
-            and view.stride() == big[..., : base.shape[-1]].stride()
+        # They agreed — but could they have disagreed?  Only if the op read a
+        # strided buffer.  A Metal slice is a packed array of its own, which
+        # ops read as they read a fresh tensor, so the comparison is between
+        # an op and itself: the sentinel check above is then the half that
+        # earned the verdict, and the detail says so.  The engine's layout
+        # says which buffer the op read; ``stride()`` reports where the view
+        # sits in its base, as the reference has it, on either device.
+        if bool(view._impl.is_contiguous()) and list(view._impl.stride) == list(
+            big[..., : base.shape[-1]]._impl.stride
         ):
             return self._finding(
                 symbol,

@@ -103,9 +103,10 @@ def test_a_strided_input_answers_as_a_dense_one(name: str, device: str) -> None:
             x = M.make_input(case.kind, dtype, case.shape, 1).to(device)
             want = case.fn(x)
             for tag, view in _layouts(x):
-                if tag in STRICT_VIEWS.get(name, ()) and not view._impl.is_dense():
+                if tag in STRICT_VIEWS.get(name, ()):
                     # ``view`` reads its input in place or refuses, as the
-                    # reference does; ``reshape`` is the copying spelling.
+                    # reference does, on Metal too (LCD-513); ``reshape`` is
+                    # the copying spelling.
                     with pytest.raises(RuntimeError, match="use .reshape"):
                         case.fn(view)
                     continue

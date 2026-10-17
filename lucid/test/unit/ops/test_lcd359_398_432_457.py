@@ -31,11 +31,10 @@ _EMPTY_PERMUTES = [
 ]
 
 # Why a permuted empty view's strides differ from the reference's after a
-# write, per device.
+# write, per device.  A Metal view reports the reference's layout (LCD-513).
 _REPACKED = {
     "cpu": "LCD-467: an in-place write into a view whose base is gone re-packs "
     "the view's strides",
-    "metal": "LCD-18: a Metal view reports packed strides (ARC-01 MV-ENG-2)",
 }
 
 
@@ -64,7 +63,8 @@ def test_empty_permuted_view_keeps_its_strides_through_a_write(
     perm: tuple[int, ...],
     request: pytest.FixtureRequest,
 ) -> None:
-    request.applymarker(pytest.mark.xfail(strict=True, reason=_REPACKED[device]))
+    if device in _REPACKED:
+        request.applymarker(pytest.mark.xfail(strict=True, reason=_REPACKED[device]))
     x = lucid.zeros(*shape, device=device).permute(*perm)
     rx = ref.zeros(*shape).permute(*perm)
     x.mul_(2.0)

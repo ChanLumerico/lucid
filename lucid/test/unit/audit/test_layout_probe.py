@@ -8,6 +8,7 @@ from lucid.test.audit import _specs, _surface
 from lucid.test.audit._axes import Context
 from lucid.test.audit._axes_stability import ContiguityAxis
 from lucid.test.audit._result import Status
+from lucid.test._fixtures.devices import metal_available
 
 
 @pytest.mark.parametrize(
@@ -56,3 +57,20 @@ def test_layout_probe_detects_an_imaginary_only_error(
     symbol = _surface.Symbol("lucid.corrupt", "lucid", "op", corrupt_imaginary)
     finding = axis.run(symbol, Context())
     assert finding.status == Status.FAIL, finding.detail
+
+
+@pytest.mark.skipif(not metal_available(), reason="metal unavailable")
+def test_a_metal_layout_probe_says_its_layout_half_is_vacuous(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A Metal slice is a packed array of its own, whatever layout it reports
+    # for the reference's sake (LCD-513): an op reads it as a fresh tensor, so
+    # agreeing with the packed probe proves nothing about strided reads.
+    original = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], device="metal")
+    call = _specs.Call([original])
+    axis = ContiguityAxis()
+    monkeypatch.setattr(axis, "_working_call", lambda *args: (call, "moderate", None))
+    symbol = _surface.Symbol("lucid.copy", "lucid", "op", lambda x: x.clone())
+    finding = axis.run(symbol, Context())
+    assert finding.status == Status.PASS, finding.detail
+    assert "vacuous" in finding.detail

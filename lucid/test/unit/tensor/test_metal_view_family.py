@@ -412,22 +412,10 @@ def test_view_of_a_transpose_is_refused(device: str) -> None:
         x.t().view(-1)
 
 
-@pytest.mark.parametrize(
-    "device",
-    [
-        "cpu",
-        pytest.param(
-            "metal",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    "LCD-116: the Python view links write a copying reshape back (ARC-01 MV-API-1)"
-                ),
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("device", ["cpu", "metal"])
 def test_view_refuses_a_strided_view_and_reshape_copies(device: str) -> None:
+    # On Metal the view links read the strided member's own geometry from
+    # the engine (LCD-513), so the reshape is a copy there too (LCD-116).
     x = lucid.zeros(12, device=device)
     t = _view(x, [3, 4], [1, 3], 0)
     with pytest.raises(RuntimeError, match="use .reshape"):

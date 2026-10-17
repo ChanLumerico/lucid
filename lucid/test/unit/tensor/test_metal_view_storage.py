@@ -1,0 +1,394 @@
+"""A Metal view reads, writes and reports its base's storage as the CPU does.
+
+Two defects of one owner, :mod:`lucid._tensor._metal_views`, which stands in
+for the storage a Metal tensor does not share with its views:
+
+* **Which keys are views (LCD-512).**  Every basic key was linked back to its
+  base, a negative step included, so ``x[::-1].add_(10)`` wrote ``x`` on
+  Metal while the CPU, which gathers a reversed slice into a copy, left it
+  alone; and ``x[::-1].view(-1)`` was refused.  A NumPy-style integer
+  (anything with ``__index__``) was not linked at all, though the CPU reads
+  it in place.  A key is now linked exactly when the CPU reads it in place,
+  and one that goes on past a reversed slice views the copy, as on the CPU.
+
+* **Where a view sits in the storage (LCD-513).**  ``as_strided`` read the
+  view's own packed elements, so ``y.t().as_strided((2,), (1,))`` gave
+  ``[0, 3]`` on Metal and ``[0, 1]`` on the CPU and in the reference — a
+  silent wrong answer — and ``stride()``, ``storage_offset()`` and
+  ``is_contiguous()`` described the packed copy.  They now describe the
+  view's place in its base's storage, as the reference does, and the window
+  is read from there.
+
+The reference is the contract for the layout.  Where the CPU disagrees with
+it — a leading slice restarts the CPU's storage (LCD-517) — the CPU cell is
+a strict xfail.
+"""
+
+from collections.abc import Callable
+from typing import Any
+
+import pytest
+
+import lucid
+from lucid._tensor import _metal_views
+from lucid.test._fixtures.devices import metal_available
+
+pytestmark = pytest.mark.skipif(not metal_available(), reason="metal unavailable")
+
+type _View = Callable[[Any], Any]
+
+_LCD_517 = pytest.mark.xfail(
+    strict=True, reason="LCD-517: a leading slice restarts the CPU's storage"
+)
+
+
+def _grid(module: Any, device: str) -> Any:
+    return module.arange(24.0, device=device).reshape(4, 6)
+
+
+# ── Which keys are views (LCD-512) ───────────────────────────────────────────
+
+
+class _Index:
+    """An integer of another type, as a NumPy integer is."""
+
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    def __index__(self) -> int:
+        return self.value
+
+
+KEYS: dict[str, object] = {
+    "reversed": slice(None, None, -1),
+    "reversed-stepped": slice(None, None, -2),
+    "reversed-range": slice(3, 0, -1),
+    "reversed-empty": slice(1, 3, -1),
+    "inner-reversed": (slice(None), slice(None, None, -1)),
+    "reversed-then-int": (slice(None, None, -1), 2),
+    "reversed-then-slice": (slice(None, None, -1), slice(1, 4)),
+    "int-then-reversed": (1, slice(None, None, -1)),
+    "ellipsis-reversed": (Ellipsis, slice(None, None, -1)),
+    "reversed-ellipsis-int": (slice(None, None, -1), Ellipsis, 0),
+    "none-reversed": (None, slice(None, None, -1)),
+    "reversed-then-none": (slice(None, None, -1), None, 1),
+    "two-reversed": (slice(None, None, -1), slice(4, None, -2)),
+    "index-scalar": _Index(1),
+    "index-scalar-bounds": (slice(None), slice(_Index(1), _Index(5))),
+    "index-scalar-step": (slice(None), slice(None, None, _Index(2))),
+    "index-scalar-reversed": (slice(None), slice(None, None, _Index(-1))),
+    "int": 1,
+    "stepped": (slice(None), slice(1, None, 2)),
+    "none": (None, 1),
+    "bool": True,
+    "list": [2, 0],
+}
+
+
+def _written(device: str, key: object, follow: _View) -> list[object]:
+    x = _grid(lucid, device)
+    view = follow(x[key])
+    if view.numel():
+        view.add_(100.0)
+    return x.tolist()
+
+
+FOLLOWS: dict[str, _View] = {
+    "itself": lambda v: v,
+    "an element of it": lambda v: v[(0,) * v.ndim] if v.numel() else v,
+    "a reshape of it": lambda v: v.reshape(-1),
+    "its transpose": lambda v: v.mT if v.ndim >= 2 else v,
+    "a slice of it": lambda v: v[1:] if v.ndim else v,
+}
+
+
+@pytest.mark.parametrize("follow", list(FOLLOWS), ids=list(FOLLOWS))
+@pytest.mark.parametrize("key", list(KEYS), ids=list(KEYS))
+def test_a_write_through_a_key_reaches_the_base_as_on_the_cpu(
+    key: str, follow: str
+) -> None:
+    want = _written("cpu", KEYS[key], FOLLOWS[follow])
+    assert _written("metal", KEYS[key], FOLLOWS[follow]) == want
+
+
+def _viewed(device: str, key: object) -> object:
+    try:
+        return _grid(lucid, device)[key].view(-1).tolist()
+    except RuntimeError:
+        return "refused"
+
+
+@pytest.mark.parametrize("key", list(KEYS), ids=list(KEYS))
+def test_view_of_a_key_is_refused_only_where_the_cpu_refuses_it(key: str) -> None:
+    assert _viewed("metal", KEYS[key]) == _viewed("cpu", KEYS[key])
+
+
+@pytest.mark.parametrize(
+    "key", ["reversed-then-int", "reversed-then-slice", "reversed-then-none"]
+)
+def test_a_key_past_a_reversed_slice_views_the_copy_as_on_the_cpu(key: str) -> None:
+    # The CPU gathers what the key has read so far and views that copy with
+    # the rest of the key: the view's layout, and a window of it, are the
+    # copy's — and the copy stays alive with the view.
+    def seen(device: str) -> tuple[object, ...]:
+        v = _grid(lucid, device)[KEYS[key]]
+        window = v.as_strided((3,), (1,), 0).tolist()
+        return v.stride(), v.storage_offset(), v.is_contiguous(), window
+
+    assert seen("metal") == seen("cpu")
+
+
+def test_a_reversed_slice_takes_writes_and_assignments_alone() -> None:
+    x = lucid.arange(4.0, device="metal")
+    reversed_ = x[::-1]
+    reversed_.mul_(0.0)
+    reversed_[0] = 7.0
+    assert x.tolist() == [0.0, 1.0, 2.0, 3.0]
+    assert reversed_.tolist() == [7.0, 0.0, 0.0, 0.0]
+
+
+# ── Where a view sits in the storage (LCD-513) ───────────────────────────────
+
+#: Views of ``_grid`` — shape (4, 6) — and whether the CPU's storage restarts.
+LAYOUTS: dict[str, tuple[_View, bool]] = {
+    "row": (lambda t: t[1], True),
+    "rows": (lambda t: t[1:], True),
+    "stepped-rows": (lambda t: t[1::2], True),
+    "row-tail": (lambda t: t[1, 2:], True),
+    "row-of-rows": (lambda t: t[1:][1], True),
+    "column": (lambda t: t[:, 1], False),
+    "columns": (lambda t: t[:, 2:5], False),
+    "stepped-columns": (lambda t: t[:, 1::2], False),
+    "narrow-rows": (lambda t: t.narrow(0, 1, 2), True),
+    "narrow-columns": (lambda t: t.narrow(1, 2, 3), False),
+    "unbind-rows": (lambda t: t.unbind(0)[2], True),
+    "unbind-columns": (lambda t: t.unbind(1)[3], False),
+    "split-rows": (lambda t: t.split(3)[1], True),
+    "split-sections": (lambda t: t.split([1, 3, 2], 1)[2], False),
+    "chunk-rows": (lambda t: t.chunk(3)[1], True),
+    "chunk-columns": (lambda t: t.chunk(4, 1)[2], False),
+    "transpose": (lambda t: t.t(), False),
+    "transpose-row": (lambda t: t.t()[1], False),
+    "transposed-columns": (lambda t: t.t()[2:], False),
+    "diagonal-above": (lambda t: t.diagonal(2), False),
+    "diagonal-below": (lambda t: t.diagonal(-1), False),
+    "unfold": (lambda t: t.unfold(1, 3, 2), False),
+    "expand": (lambda t: t[:, :1].expand(4, 3), False),
+    "new-axis": (lambda t: t[None, :, 2], False),
+    "permute": (lambda t: t.reshape(2, 2, 6).permute(2, 0, 1)[1:], False),
+    "detach": (lambda t: t.t().detach()[1], False),
+}
+
+
+def _layout_cases() -> list[Any]:
+    cases = []
+    for name, (_, restarts) in LAYOUTS.items():
+        for device in ("cpu", "metal"):
+            marks = [_LCD_517] if device == "cpu" and restarts else []
+            cases.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
+    return cases
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize(("name", "device"), _layout_cases())
+def test_a_view_reports_the_references_layout(name: str, device: str, ref: Any) -> None:
+    make = LAYOUTS[name][0]
+    ours, theirs = make(_grid(lucid, device)), make(_grid(ref, "cpu"))
+
+    def moving(t: Any) -> tuple[int, ...]:
+        return tuple(s for n, s in zip(t.shape, t.stride(), strict=True) if n != 1)
+
+    assert ours.tolist() == theirs.tolist()
+    assert moving(ours) == moving(theirs)
+    assert ours.storage_offset() == theirs.storage_offset()
+    assert ours.is_contiguous() == theirs.is_contiguous()
+
+
+#: Windows onto views of ``_grid``: the view, then ``as_strided``'s arguments.
+WINDOWS: dict[str, tuple[_View, tuple[object, ...], bool]] = {
+    "transpose": (lambda t: t.t(), ((2,), (1,)), False),
+    "transpose-offset": (lambda t: t.t(), ((3, 2), (2, 7), 1), False),
+    "column": (lambda t: t[:, 1], ((2,), (1,)), False),
+    "column-whole": (lambda t: t[:, 1], ((4,), (6,)), False),
+    "row-from-the-start": (lambda t: t[1], ((2,), (1,), 0), True),
+    "row-reaches-all": (lambda t: t[0], ((24,), (1,)), True),
+    "row-own": (lambda t: t[2], ((3,), (2,)), False),
+    "diagonal": (lambda t: t.diagonal(), ((4,), (7,)), False),
+    "diagonal-past-it": (lambda t: t.diagonal(1), ((3,), (5,)), False),
+    "unfold": (lambda t: t.unfold(1, 2, 2), ((3,), (2,)), False),
+    "expand": (lambda t: t[:1].expand(3, 6), ((2, 2), (6, 1)), True),
+    "permute": (lambda t: t.reshape(2, 3, 4).permute(2, 0, 1), ((2, 3), (4, 1)), False),
+    "detach": (lambda t: t.t().detach(), ((2,), (1,)), False),
+    "window-of-a-window": (
+        lambda t: t.t().as_strided((3, 4), (6, 1), 1),
+        ((2,), (2,)),
+        False,
+    ),
+    "stepped": (lambda t: t[:, ::2], ((2, 3), (6, 2)), False),
+}
+
+
+def _window_cases() -> list[Any]:
+    cases = []
+    for name, (_, _, restarts) in WINDOWS.items():
+        for device in ("cpu", "metal"):
+            marks = [_LCD_517] if device == "cpu" and restarts else []
+            cases.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
+    return cases
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize(("name", "device"), _window_cases())
+def test_a_window_reads_and_writes_the_references_elements(
+    name: str, device: str, ref: Any
+) -> None:
+    make, args, _ = WINDOWS[name]
+    ours, theirs = _grid(lucid, device), _grid(ref, "cpu")
+    mine, want = make(ours).as_strided(*args), make(theirs).as_strided(*args)
+    assert mine.tolist() == want.tolist()
+    mine.fill_(-1.0)
+    want.fill_(-1.0)
+    assert ours.tolist() == theirs.tolist()
+
+
+def test_the_free_function_reads_the_window_the_method_does() -> None:
+    y = _grid(lucid, "metal")
+    assert lucid.as_strided(y.t(), (2,), (1,)).tolist() == [0.0, 1.0]
+    assert lucid.as_strided(
+        y.t(), size=(2,), stride=(6,), storage_offset=1
+    ).tolist() == [
+        1.0,
+        7.0,
+    ]
+
+
+def test_a_write_through_a_window_reaches_the_view_it_was_taken_from() -> None:
+    y = _grid(lucid, "metal")
+    column = y[:, 1]
+    column.as_strided((2,), (6,)).add_(100.0)
+    assert column.tolist() == [101.0, 107.0, 13.0, 19.0]
+    assert y[:, 1].tolist() == [101.0, 107.0, 13.0, 19.0]
+
+
+# ── The idioms built from a view's own strides ───────────────────────────────
+
+SOURCES: dict[str, _View] = {
+    "transposed": lambda t: t.t(),
+    "permuted": lambda t: t.reshape(2, 3, 4).permute(1, 2, 0),
+    "sliced": lambda t: t[1:, ::2],
+    "narrowed": lambda t: t.narrow(1, 1, 4),
+    "row": lambda t: t[2],
+    "diagonal": lambda t: t.diagonal(),
+    "expanded": lambda t: t[:1].expand(2, 6),
+}
+
+
+@pytest.mark.parametrize("source", list(SOURCES), ids=list(SOURCES))
+def test_a_window_of_its_own_strides_is_the_view(source: str) -> None:
+    for device in ("cpu", "metal"):
+        v = SOURCES[source](_grid(lucid, device))
+        assert v.as_strided(v.shape, v.stride()).tolist() == v.tolist(), device
+
+
+def _sliding(v: Any, width: int) -> Any:
+    flat = v.reshape(-1) if v.ndim != 1 else v
+    n = flat.shape[0]
+    return flat.as_strided((n - width + 1, width), (flat.stride(0), flat.stride(0)))
+
+
+ONE_D: dict[str, _View] = {
+    "column": lambda t: t[:, 2],
+    "transposed-row": lambda t: t.t()[3],
+    "stepped": lambda t: t[1, ::2],
+    "narrowed": lambda t: t.narrow(1, 1, 4)[2],
+    "diagonal": lambda t: t.diagonal(1),
+    "permuted": lambda t: t.reshape(2, 3, 4).permute(2, 1, 0)[1, 2],
+}
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("source", list(ONE_D), ids=list(ONE_D))
+def test_sliding_windows_from_a_views_stride_match_the_reference(
+    source: str, ref: Any
+) -> None:
+    want = _sliding(ONE_D[source](_grid(ref, "cpu")), 2).tolist()
+    for device in ("cpu", "metal"):
+        assert _sliding(ONE_D[source](_grid(lucid, device)), 2).tolist() == want, device
+
+
+@pytest.mark.parity
+def test_a_sliding_window_over_rows_of_a_transposed_view(ref: Any) -> None:
+    def windows(t: Any) -> Any:
+        v = t.t()  # (6, 4), strides (1, 6)
+        return v.as_strided((5, 2, 4), (v.stride(0), v.stride(0), v.stride(1)))
+
+    want = windows(_grid(ref, "cpu")).tolist()
+    for device in ("cpu", "metal"):
+        assert windows(_grid(lucid, device)).tolist() == want, device
+
+
+# ── Gradients, and storage that is gone ──────────────────────────────────────
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize(
+    "make",
+    [lambda t: t.t(), lambda t: t[:, ::2], lambda t: t[1:3]],
+    ids=["transposed", "stepped", "rows"],
+)
+def test_a_gradient_through_a_window_of_a_view_is_the_references(
+    make: _View, ref: Any
+) -> None:
+    def grad(module: Any, device: str) -> list[object]:
+        w = module.arange(24.0, device=device).reshape(4, 6).requires_grad_()
+        v = make(w)
+        size = (2, 2)
+        stride = (v.stride(0), v.stride(1))
+        (
+            v.as_strided(size, stride) * module.tensor([1.0, 2.0], device=device)
+        ).sum().backward()
+        assert w.grad is not None
+        return w.grad.tolist()
+
+    assert grad(lucid, "metal") == grad(ref, "cpu")
+
+
+def test_a_gradient_through_elements_outside_the_view_is_refused() -> None:
+    w = lucid.arange(24.0, device="metal").reshape(4, 6).requires_grad_()
+    with pytest.raises(NotImplementedError, match="every element of the window"):
+        w[:, 1].as_strided((2,), (1,))
+    with lucid.no_grad():
+        assert w[:, 1].as_strided((2,), (1,)).tolist() == [1.0, 2.0]
+
+
+def test_a_window_of_a_view_whose_base_is_gone() -> None:
+    # Nothing holds the ``arange``: what is left of its storage is the slice.
+    tail = lucid.arange(10.0, device="metal")[2:]
+    assert tail.storage_offset() == 2
+    assert tail.as_strided((3,), (2,)).tolist() == [2.0, 4.0, 6.0]
+    every_other = lucid.arange(10.0, device="metal")[::2]
+    assert _sliding(every_other, 2).tolist() == [
+        [0.0, 2.0],
+        [2.0, 4.0],
+        [4.0, 6.0],
+        [6.0, 8.0],
+    ]
+    with pytest.raises(RuntimeError, match="freed"):
+        tail.as_strided((3,), (1,), 0)
+
+
+def test_a_window_past_the_storage_is_refused_as_the_engine_refuses_it() -> None:
+    y = _grid(lucid, "metal")
+    with pytest.raises(RuntimeError, match="past the end of the storage"):
+        y.t().as_strided((5,), (6,))
+    with pytest.raises(ValueError, match="non-negative"):
+        y.t().as_strided((2,), (-1,))
+    with pytest.raises(RuntimeError, match="same length"):
+        y.t().as_strided((2,), (1, 1))
+
+
+def test_a_view_of_a_reshape_of_a_temporary_holds_the_whole_storage() -> None:
+    # The card's case: ``y`` holds every element of the freed ``arange``.
+    y = lucid.arange(6.0, device="metal").reshape(2, 3)
+    assert y.t().as_strided((2,), (1,)).tolist() == [0.0, 1.0]
+    assert _metal_views._ATTR in y.__dict__
