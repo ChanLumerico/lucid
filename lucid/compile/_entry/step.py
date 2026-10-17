@@ -611,7 +611,6 @@ def _graph_dump(entries: Iterable[tuple[object, _StepEntry]]) -> str:
     import json as _json
 
     items = [
-        {"sig_hash": hash(k), "graph": _json.loads(e.graph_json)}
-        for k, e in entries
+        {"sig_hash": hash(k), "graph": _json.loads(e.graph_json)} for k, e in entries
     ]
     return _json.dumps(items, indent=2)

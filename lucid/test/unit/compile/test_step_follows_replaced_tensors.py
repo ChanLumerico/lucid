@@ -129,9 +129,7 @@ def test_make_step_trains_the_tensors_the_model_holds_now(change: str) -> None:
 # Parameter objects in the tree, which that optimizer does not hold — so the
 # fused step is held to the eager loop with the same optimizer, as it was
 # built, across a load of one submodule.
-_FUSED_CHANGES = {
-    k: v for k, v in _CHANGES.items() if k != "assign_load"
-}
+_FUSED_CHANGES = {k: v for k, v in _CHANGES.items() if k != "assign_load"}
 
 
 @pytest.mark.parametrize("change", list(_FUSED_CHANGES))

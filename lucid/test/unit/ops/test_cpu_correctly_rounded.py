@@ -75,7 +75,11 @@ _EDGES = {np.float64: _F64_EDGES, np.float32: _F32_EDGES}
 Op = Callable[[lucid.Tensor], lucid.Tensor]
 Ref = Callable[[np.ndarray], np.ndarray]
 
-_LUCID = {np.float64: lucid.float64, np.float32: lucid.float32, np.float16: lucid.float16}
+_LUCID = {
+    np.float64: lucid.float64,
+    np.float32: lucid.float32,
+    np.float16: lucid.float16,
+}
 
 
 def _assert_bits(got: np.ndarray, ref: np.ndarray) -> None:
@@ -128,7 +132,9 @@ def test_division_edge_cases(dtype: type) -> None:
 
 
 @pytest.mark.parametrize("dtype", [np.float64, np.float32])
-@pytest.mark.parametrize("s", [0.001, 0.3, 3.0, -7.0, 1e-300, 5e-324, -0.0, math.inf, math.nan])
+@pytest.mark.parametrize(
+    "s", [0.001, 0.3, 3.0, -7.0, 1e-300, 5e-324, -0.0, math.inf, math.nan]
+)
 def test_division_by_and_of_a_python_scalar(dtype: type, s: float) -> None:
     # A Python float is weak: it takes the tensor's dtype, so the oracle
     # rounds it to that dtype first.
@@ -143,11 +149,15 @@ def test_float64_quotients_match_python() -> None:
     got = (_t(a) / _t(b)).numpy().tolist()
     ref = [x / y for x, y in zip(a.tolist(), b.tolist(), strict=True)]
     assert got == ref
-    one, milli, tiny = (lucid.tensor(v, dtype=lucid.float64) for v in (1.0, 0.001, 5e-324))
+    one, milli, tiny = (
+        lucid.tensor(v, dtype=lucid.float64) for v in (1.0, 0.001, 5e-324)
+    )
     assert (one / milli).item() == 1000.0
     assert (1.0 / milli).item() == 1000.0
     assert (one / 0.001).item() == 1000.0
-    assert math.copysign(1.0, (lucid.zeros((), dtype=lucid.float64) / tiny).item()) == 1.0
+    assert (
+        math.copysign(1.0, (lucid.zeros((), dtype=lucid.float64) / tiny).item()) == 1.0
+    )
     assert (lucid.zeros((), dtype=lucid.float64) / tiny).item() == 0.0
     assert (one / tiny).item() == math.inf
     assert (-one / tiny).item() == -math.inf

@@ -51,9 +51,7 @@ def walks(monkeypatch: pytest.MonkeyPatch) -> list[object]:
         "cpu",
         pytest.param(
             "metal",
-            marks=pytest.mark.skipif(
-                not metal_available(), reason="metal unavailable"
-            ),
+            marks=pytest.mark.skipif(not metal_available(), reason="metal unavailable"),
         ),
     ],
 )
