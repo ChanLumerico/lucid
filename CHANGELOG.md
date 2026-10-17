@@ -920,6 +920,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - split family keeps the reference's preconditions (LCD-495)
 
+- work out Metal view strides without a CPU replay (LCD-462)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

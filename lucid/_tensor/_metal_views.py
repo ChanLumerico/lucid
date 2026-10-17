@@ -43,9 +43,10 @@ CPU tensors are untouched: their views alias the buffer already.
 
 import functools
 import inspect
+import operator
 import weakref
-from collections.abc import Callable
-from typing import TYPE_CHECKING
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, NamedTuple, SupportsIndex
 
 from lucid._C import engine as _C_engine
 
@@ -55,6 +56,9 @@ if TYPE_CHECKING:
     from lucid._types import _IndexType
 
 _ATTR = "_metal_view"
+
+#: A shape or a stride, in elements.
+type _Dims = tuple[int, ...]
 
 _DETACHED = 0  # .data / detach(): copy into the base, outside autograd
 _KEY = 1  # basic indexing: base[key] = view
@@ -269,35 +273,222 @@ def _view_strides(
     return _chunk_strides(in_shape, in_stride, out_shape)
 
 
-def _probe_stride(link: _Link, in_stride: tuple[int, ...]) -> tuple[int, ...] | None:
-    from lucid._dispatch import _wrap
-    from lucid.compile import _host_check
+# ── The strides a traced view would have on the CPU ──────────────────────────
+#
+# A later ``view`` of a traced view needs its strides: the merge-heads
+# ``attn.permute(0, 2, 1, 3).reshape(b, n, e)`` asks of every attention layer,
+# every step.  Each rule below works them out from the op's own arguments, as
+# the CPU's view op lays them out — replaying the op on a CPU tensor to read
+# them back cost a host allocation and a CPU op per step.  The rules agree
+# with the CPU on every axis that moves an element; an axis of length one
+# moves none, and the CPU's choice of stride for it varies with how the view
+# was composed.  A rule takes the view's geometry, then the parameters of the
+# method it replays, which the op has already checked.
 
-    with _host_check():
-        span = (
-            sum(
-                (s - 1) * max(st, 0)
-                for s, st in zip(link.shape, in_stride, strict=True)
-                if s > 0
-            )
-            + 1
-        )
-        seed = _C_engine.empty([span], _C_engine.I8, _C_engine.CPU)
-        probe = _wrap(
-            _C_engine.TensorImpl._make_view(seed, list(link.shape), list(in_stride), 0)
-        )
-        if link.kind == _KEY:
-            traced = probe[link.key]
+
+class _Geometry(NamedTuple):
+    shape: _Dims  # the input's
+    stride: _Dims  # the input's
+    out: _Dims  # the view's shape
+
+
+def _dim(d: SupportsIndex, ndim: int) -> int:
+    i = operator.index(d)
+    return i + ndim if i < 0 else i
+
+
+def _axes(value: SupportsIndex | Sequence[SupportsIndex]) -> list[int]:
+    if isinstance(value, Sequence):
+        return [operator.index(v) for v in value]
+    return [operator.index(value)]
+
+
+def _swapped(stride: _Dims, a: SupportsIndex, b: SupportsIndex) -> _Dims:
+    if not stride:
+        return ()
+    out = list(stride)
+    i, j = _dim(a, len(out)), _dim(b, len(out))
+    out[i], out[j] = out[j], out[i]
+    return tuple(out)
+
+
+def _reversed(g: _Geometry, /) -> _Dims:
+    # ``t()``, ``T`` and an axis-less ``transpose()`` reverse every axis.
+    return g.stride[::-1]
+
+
+def _last_two_swapped(g: _Geometry, /) -> _Dims:
+    return _swapped(g.stride, -2, -1)
+
+
+def _transpose_rule(
+    g: _Geometry,
+    /,
+    dim0: SupportsIndex | None = None,
+    dim1: SupportsIndex | None = None,
+) -> _Dims:
+    if dim0 is None or dim1 is None:
+        return _reversed(g)
+    return _swapped(g.stride, dim0, dim1)
+
+
+def _swapaxes_rule(
+    g: _Geometry, /, axis0: SupportsIndex, axis1: SupportsIndex
+) -> _Dims:
+    return _swapped(g.stride, axis0, axis1)
+
+
+def _permute_rule(
+    g: _Geometry,
+    /,
+    *dims: SupportsIndex | Sequence[SupportsIndex],
+    **named: SupportsIndex | Sequence[SupportsIndex],
+) -> _Dims:
+    # ``permute(2, 0, 1)``, ``permute((2, 0, 1))`` and ``permute(dims=...)``.
+    given = (named["dims"],) if "dims" in named else dims
+    return tuple(
+        g.stride[_dim(d, len(g.stride))] for part in given for d in _axes(part)
+    )
+
+
+def _movedim_rule(
+    g: _Geometry,
+    /,
+    source: SupportsIndex | Sequence[SupportsIndex],
+    destination: SupportsIndex | Sequence[SupportsIndex],
+) -> _Dims:
+    n = len(g.stride)
+    if not n:
+        return ()
+    moved = [_dim(s, n) for s in _axes(source)]
+    order = [-1] * n
+    for s, d in zip(moved, _axes(destination), strict=True):
+        order[_dim(d, n)] = s
+    rest = iter(d for d in range(n) if d not in moved)
+    return tuple(g.stride[next(rest) if o == -1 else o] for o in order)
+
+
+def _kept(g: _Geometry, /, *args: object, **kwargs: object) -> _Dims:
+    # ``narrow``, ``split`` and ``chunk`` cut a run out of an axis.
+    del args, kwargs  # the cut changes the shape, not the steps
+    return g.stride
+
+
+def _unbind_rule(g: _Geometry, /, dim: SupportsIndex = 0) -> _Dims:
+    d = _dim(dim, len(g.stride))
+    return g.stride[:d] + g.stride[d + 1 :]
+
+
+def _diagonal_rule(
+    g: _Geometry,
+    /,
+    offset: SupportsIndex = 0,
+    dim1: SupportsIndex = -2,
+    dim2: SupportsIndex = -1,
+) -> _Dims:
+    del offset  # it moves the diagonal's first element, not its step
+    i, j = _dim(dim1, len(g.stride)), _dim(dim2, len(g.stride))
+    rest = tuple(s for d, s in enumerate(g.stride) if d not in (i, j))
+    return (*rest, g.stride[i] + g.stride[j])
+
+
+def _unfold_rule(
+    g: _Geometry, /, dimension: SupportsIndex, size: SupportsIndex, step: SupportsIndex
+) -> _Dims:
+    del size  # the window's length is the view's last axis
+    if not g.stride:
+        return (1,)  # a 0-d input is one window of its one element
+    d = _dim(dimension, len(g.stride))
+    st = g.stride
+    return (*st[:d], st[d] * operator.index(step), *st[d + 1 :], st[d])
+
+
+def _as_strided_rule(
+    g: _Geometry,
+    /,
+    size: Sequence[SupportsIndex],
+    stride: Sequence[SupportsIndex],
+    storage_offset: SupportsIndex | None = None,
+) -> _Dims:
+    del g, size, storage_offset  # the strides are given, in the root's elements
+    return tuple(operator.index(s) for s in stride)
+
+
+def _expanded(g: _Geometry, /, *args: object, **kwargs: object) -> _Dims:
+    # ``expand``, ``expand_as`` and ``broadcast_to``: a new leading axis, or
+    # one stretched from length one, repeats an element.
+    del args, kwargs  # the view's shape already says where it repeats
+    lead = len(g.out) - len(g.shape)
+    kept = (
+        st if n == m else 0
+        for n, st, m in zip(g.shape, g.stride, g.out[lead:], strict=True)
+    )
+    return (*(0,) * lead, *kept)
+
+
+def _index_rule(g: _Geometry, /, key: object) -> _Dims | None:
+    """Basic indexing: an int drops its axis, a slice steps along it, ``None`` adds one."""
+    parts = key if isinstance(key, tuple) else (key,)
+    taken = sum(1 for part in parts if part is not None and part is not Ellipsis)
+    found: list[int | None] = []
+    d = 0
+    for part in parts:
+        if part is None:
+            found.append(None)
+        elif part is Ellipsis:
+            span = len(g.stride) - taken
+            found.extend(g.stride[d : d + span])
+            d += span
+        elif isinstance(part, slice):
+            step = 1 if part.step is None else operator.index(part.step)
+            if step < 0 and 0 not in g.out:
+                return None  # the CPU gathers a reversed slice: it is no view
+            found.append(g.stride[d] * step)
+            d += 1
         else:
-            assert link.replay is not None
-            name, args, kwargs, piece = link.replay
-            attr = getattr(probe, name)
-            traced = attr(*args, **kwargs) if callable(attr) else attr
-            if piece is not None:
-                traced = traced[piece]
-        if 0 in link.shape or traced._impl.is_aliased():
-            return traced.stride()
-        return None
+            d += 1
+    found.extend(g.stride[d:])
+    # An inserted axis moves no element; like the engine's unsqueeze it takes
+    # the extent of the axis inside it.
+    result = [0] * len(found)
+    inner = 1
+    for i in range(len(found) - 1, -1, -1):
+        got = found[i]
+        result[i] = inner if got is None else got
+        inner = result[i] * g.out[i]
+    return tuple(result)
+
+
+#: Every op a traced view replays, by the name it replays under.
+_STRIDE_RULES: dict[str, Callable[..., _Dims | None]] = {
+    "transpose": _transpose_rule,
+    "swapaxes": _swapaxes_rule,
+    "permute": _permute_rule,
+    "movedim": _movedim_rule,
+    "t": _reversed,
+    "T": _reversed,
+    "mT": _last_two_swapped,
+    "narrow": _kept,
+    "split": _kept,
+    "chunk": _kept,
+    "unbind": _unbind_rule,
+    "diagonal": _diagonal_rule,
+    "unfold": _unfold_rule,
+    "as_strided": _as_strided_rule,
+    "expand": _expanded,
+    "expand_as": _expanded,
+    "broadcast_to": _expanded,
+    "__getitem__": _index_rule,
+}
+
+
+def _traced_stride(link: _Link, in_stride: _Dims, out: _Dims) -> _Dims | None:
+    geometry = _Geometry(link.shape, in_stride, out)
+    if link.kind == _KEY:
+        return _index_rule(geometry, link.key)
+    assert link.replay is not None
+    name, args, kwargs, _ = link.replay
+    return _STRIDE_RULES[name](geometry, *args, **kwargs)
 
 
 def _stride(t: Tensor) -> tuple[int, ...] | None:
@@ -319,7 +510,7 @@ def _stride(t: Tensor) -> tuple[int, ...] | None:
     elif link.kind == _RESHAPE:
         out_stride = _view_strides(link.shape, in_stride, t.shape, False)
     else:
-        out_stride = _probe_stride(link, in_stride)
+        out_stride = _traced_stride(link, in_stride, tuple(t.shape))
     link.stride = out_stride
     link.stride_known = True
     return out_stride
