@@ -72,6 +72,35 @@ def _to_operands(
     return other, device, dtype, _builtin_bool(copy)
 
 
+def _to_engine_target(
+    args: tuple[object, ...], kwargs: dict[str, object], tensor_cls: type
+) -> tuple[_C_engine.Device | None, _C_engine.Dtype | None, bool]:
+    """``(device, dtype, copy)`` of a ``.to(...)`` call as engine values.
+
+    For a caller that applies one ``.to`` to many tensors (``Module.to``):
+    the call is read once, as :func:`_to_operands` reads it, and the other
+    tensor's device and dtype stand in for it.  ``None`` keeps a tensor's own.
+
+    Raises
+    ------
+    TypeError
+        If the call has no ``.to`` shape, or a keyword names no device / dtype.
+    """
+    other, device, dtype, copy = _to_operands(args, kwargs, tensor_cls)
+    impl = getattr(other, "_impl", None)
+    if isinstance(impl, _C_engine.TensorImpl):
+        return impl.device, impl.dtype, copy
+    if not (device is None or isinstance(device, (str, _C_engine.Device, _device_cls))):
+        raise TypeError(f"to() takes a device as device=, got {device!r}")
+    if not (dtype is None or isinstance(dtype, (str, _dtype_cls, _C_engine.Dtype))):
+        raise TypeError(f"to() takes a dtype as dtype=, got {dtype!r}")
+    return (
+        None if device is None else _parse_device(device),
+        None if dtype is None else to_engine_dtype(dtype),
+        copy,
+    )
+
+
 def _to_target(
     rest: list[object], tensor_cls: type
 ) -> tuple[object, object, object, set[str]]:
@@ -232,15 +261,15 @@ def _inject_to(cls: type) -> None:
         #   lucid.metal.to_shared() / lucid.metal.shared_tensor() for custom Metal
         #   kernel dispatch where the CPU needs to read/write the same buffer.
         #
-        # The result keeps the source's flag — except on bool or an integer.
-        # ``astype`` deliberately ends the graph at such a result (the
-        # derivative of rounding is zero almost everywhere), and restoring
-        # the flag re-attached it: ``x.long()``, and across a device
-        # ``x.to("metal", lucid.int64)``, came back requiring grad with a
-        # backward that fell over inside the backend.
-        rg = self._impl.requires_grad and not _promotion.is_integral(target_dtype)
+        # The result keeps the source's flag — except under ``no_grad``, where
+        # it is a new tensor outside any graph (LCD-486), and on bool or an
+        # integer, where ``astype`` ends the graph (rounding's derivative is
+        # zero): restoring the flag there made ``x.long()`` require grad with
+        # a backward that fell over inside the backend.
+        rg = self._impl.requires_grad and _C_engine.grad_enabled()
+        rg = rg and not _promotion.is_integral(target_dtype)
         if target_device != impl.device:
-            if rg and impl.requires_grad and _C_engine.grad_enabled():
+            if rg and impl.requires_grad:
                 # Inside a graph the move is differentiable: the gradient
                 # goes back to the source device.  Returning a fresh leaf
                 # here stopped backward at the move, and a leaf that

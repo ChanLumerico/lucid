@@ -307,7 +307,7 @@ def _recorded_family_write(x: lucid.Tensor) -> lucid.Tensor:
 
 def test_gradcheck_of_a_recorded_write_with_a_live_view_cpu() -> None:
     x = lucid.tensor([0.3, -1.2, 0.7, 2.0], dtype=lucid.float64).reshape(2, 2)
-    assert lucid.autograd.gradcheck(_recorded_family_write, [x])
+    assert lucid.autograd.gradcheck(_recorded_family_write, [x.requires_grad_()])
 
 
 def test_a_recorded_write_with_a_live_view_matches_finite_differences_on_metal() -> (

@@ -829,7 +829,8 @@ class FunctionalTransformAxis(Axis):
                 fn(lambda t: (t * t).sum(), probe).backward()
                 got = probe.grad
             else:  # gradcheck / gradgradcheck
-                verdict = fn(lambda t: (t * t).sum(), [x])
+                # They differentiate only the inputs that require grad.
+                verdict = fn(lambda t: (t * t).sum(), [x.detach().requires_grad_(True)])
                 if verdict is not True:
                     return self._finding(
                         symbol, Status.FAIL, f"reported {verdict!r} for x -> sum(x*x)"

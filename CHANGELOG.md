@@ -878,6 +878,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - let .data be assigned, keeping the tensor (LCD-478)
 
+- carry requires_grad and dtype as the reference does (LCD-486)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

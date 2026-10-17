@@ -20,7 +20,10 @@ from typing import (
 
 from lucid._C import engine as _C_engine
 import lucid as _lucid
+from lucid import _promotion
+from lucid._dtype import _ENGINE_TO_DTYPE
 from lucid._tensor.tensor import Tensor
+from lucid._tensor._to import _to_engine_target
 from lucid._dispatch import _unwrap, _wrap
 from lucid.nn.parameter import Parameter, UninitializedParameter
 from lucid.nn.hooks import (
@@ -917,50 +920,29 @@ class Module:
     def to(self, *args: object, **kwargs: object) -> Self:
         """Move/cast all parameters and buffers, preserving Parameter object identity.
 
-        Floating-point dtype casts (``.float()``, ``.double()``,
-        ``.half()``, ``.bfloat16()``) skip integer buffers — e.g.
-        ``BatchNorm.num_batches_tracked`` stays int64 — matching the
-        reference framework so checkpoint round-trips don't quietly
-        widen / narrow the counter type.  Device moves still apply to
-        every tensor.
-        """
-        from lucid._dtype import (
-            float16,
-            bfloat16,
-            float32,
-            float64,
-            complex64,
-            complex128,
-            dtype as _DT,
-        )
+        Takes what :meth:`lucid.Tensor.to` takes: a device, a dtype, both, or
+        a tensor whose device and dtype to match.  A device moves every
+        tensor.  A dtype must be floating point or complex, and it casts the
+        floating and complex tensors only — an integer or bool buffer such as
+        ``BatchNorm.num_batches_tracked`` keeps its dtype, as in the reference
+        framework, so a checkpoint round-trip does not change its type.
 
-        # Detect "this call is a pure-float dtype change".  Mixed args
-        # like ``.to(device, dtype)`` still apply normally.
-        target_dtype: object | None = kwargs.get("dtype")
-        for a in args:
-            if isinstance(a, _DT):
-                target_dtype = a
-                break
-        skip_int_buffers: bool = (
-            target_dtype is not None
-            and target_dtype
-            in (float16, bfloat16, float32, float64, complex64, complex128)
-            and "device" not in kwargs
-            and not any(isinstance(a, str) for a in args)
-        )
+        Raises
+        ------
+        TypeError
+            If the dtype is bool or an integer, or the arguments are not one
+            of the ``.to`` forms.
+        """
+        device, dtype, copy = _to_engine_target(args, kwargs, Tensor)
+        if dtype is not None and _promotion.is_integral(dtype):
+            raise TypeError(
+                "nn.Module.to only accepts floating point or complex dtypes, "
+                f"but got desired dtype={_ENGINE_TO_DTYPE[dtype]}"
+            )
 
         def _convert(t: Tensor) -> Tensor:
-            if skip_int_buffers and t.dtype not in (
-                float16,
-                bfloat16,
-                float32,
-                float64,
-                complex64,
-                complex128,
-            ):
-                # Integer / bool buffer — leave dtype alone.
-                return t
-            return t.to(*args, **kwargs)  # type: ignore[arg-type]
+            keeps_dtype = _promotion.is_integral(t._impl.dtype)
+            return t.to(device, None if keeps_dtype else dtype, copy=copy)
 
         return self._apply(_convert)
 

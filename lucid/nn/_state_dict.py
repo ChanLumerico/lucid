@@ -148,10 +148,12 @@ def _default_load_from_state_dict(
         if assign:
             # assign=True: replace the parameter/buffer object directly,
             # allowing shape and dtype changes (matches reference framework).
-            needs_grad: bool = getattr(attr, "requires_grad", False)
+            # A Parameter keeps the module's requires_grad; a buffer is the
+            # loaded tensor, flag included, as in the reference (LCD-486).
+            is_param = name in module._parameters
+            needs_grad = attr.requires_grad if is_param else src.requires_grad
             new_impl = _impl_with_grad(_C_engine.contiguous(src._impl), needs_grad)
-            if name in module._parameters:
-                # Preserve Parameter wrapping.
+            if is_param:
                 new_param = Parameter(_wrap(new_impl), requires_grad=needs_grad)
                 module._parameters[name] = new_param
             else:

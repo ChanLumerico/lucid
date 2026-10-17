@@ -169,10 +169,13 @@ def _gradcheck_case(
     B = lucid.tensor(np.random.default_rng(3).standard_normal(b_shape))
     out_shape = _oracle(A.numpy(), B.numpy(), _is_vector(op, a_batch, b_shape)).shape
     W = lucid.tensor(np.random.default_rng(4).standard_normal(out_shape))
+    # gradcheck differentiates the inputs that require grad, and only those.
+    B.requires_grad_()
     if op == "lu_solve":
         LU, piv = LA.lu_factor(A)
-        return (lambda lu, b: (LA.lu_solve(lu, piv, b) * W).sum()), [LU.detach(), B]
-    return (lambda a, b: (_call(op, a, b) * W).sum()), [A, B]
+        LU = LU.detach().requires_grad_()
+        return (lambda lu, b: (LA.lu_solve(lu, piv, b) * W).sum()), [LU, B]
+    return (lambda a, b: (_call(op, a, b) * W).sum()), [A.requires_grad_(), B]
 
 
 @pytest.mark.parametrize(("op", "case"), _GOOD_PAIRS)
@@ -302,7 +305,7 @@ def test_det_gradient_on_a_batch_with_one_singular_matrix() -> None:
     M = np.stack([np.array(_SINGULAR["rank 2 of 3"]), _well_conditioned((), 7)])
     assert lucid.autograd.gradcheck(
         lambda a: (LA.det(a) * lucid.tensor([1.0, -2.0], dtype=lucid.float64)).sum(),
-        [lucid.tensor(M)],
+        [lucid.tensor(M, requires_grad=True)],
     )
 
 
@@ -310,13 +313,13 @@ def test_det_gradient_on_a_batch_with_one_singular_matrix() -> None:
 def test_det_differentiates_twice_at_a_singular_matrix(case: str) -> None:
     """The cofactor is a polynomial in A, so its own gradient exists there too."""
     assert lucid.autograd.gradgradcheck(
-        LA.det, [lucid.tensor(np.array(_SINGULAR[case]))]
+        LA.det, [lucid.tensor(np.array(_SINGULAR[case]), requires_grad=True)]
     )
 
 
 def test_det_still_differentiates_twice_at_an_invertible_matrix() -> None:
     assert lucid.autograd.gradgradcheck(
-        LA.det, [lucid.tensor(_well_conditioned((2,), 8))]
+        LA.det, [lucid.tensor(_well_conditioned((2,), 8), requires_grad=True)]
     )
 
 
