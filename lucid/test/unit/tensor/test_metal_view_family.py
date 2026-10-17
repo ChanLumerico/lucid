@@ -268,10 +268,18 @@ def test_a_dtype_change_through_a_live_view_is_refused(device: str) -> None:
 
 
 @pytest.mark.parametrize("device", DEVICES)
-def test_a_lone_member_takes_a_new_dtype(device: str) -> None:
+def test_a_lone_member_keeps_its_dtype_as_any_tensor_does(device: str) -> None:
+    # No in-place op changes its target's dtype (LCD-474).  The float result
+    # of exp_ cannot be cast to int64, so the write is refused before the
+    # family takes part, as the reference refuses it.
     x = lucid.arange(4, device=device).view(2, 2)
-    x.exp_()
-    assert x.dtype != lucid.int64
+    with pytest.raises(RuntimeError, match="can't be cast"):
+        x.exp_()
+    assert x.dtype == lucid.int64
+    assert _flat(x) == [0.0, 1.0, 2.0, 3.0]
+    y = lucid.arange(4.0, device=device).view(2, 2)
+    y.exp_()
+    assert y.dtype == lucid.float32
 
 
 @pytest.mark.parametrize("device", DEVICES)
