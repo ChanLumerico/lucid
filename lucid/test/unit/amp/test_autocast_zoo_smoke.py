@@ -34,7 +34,6 @@ def test_deformable_attention_with_half_values_and_float32_locations() -> None:
     assert float((out - want).abs().max().item()) < 1e-2
 
 
-@pytest.mark.xfail(strict=True, reason="LCD-500 A1: local_response_norm via _autocast_entry")
 def test_zfnet_forward_under_metal_autocast() -> None:
     lucid.manual_seed(0)
     model = models.create_model("zfnet_cls", num_classes=10).to("metal").eval()

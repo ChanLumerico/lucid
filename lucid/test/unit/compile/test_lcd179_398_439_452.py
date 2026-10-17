@@ -47,7 +47,9 @@ class TestFusedStepAutocastScalerAndBatchChange:
     reference's does, when the float32 gradient reaches the float16 linear
     layers.  From 2**19 this seed's steps skip, skip and go through."""
 
-    def test_grad_scaler_overflowing_init_scale_autocast_f16_and_batch_change(self) -> None:
+    def test_grad_scaler_overflowing_init_scale_autocast_f16_and_batch_change(
+        self,
+    ) -> None:
         lucid.manual_seed(42)
         eager_model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)).to(
             COMPILE_DEVICE
@@ -87,7 +89,9 @@ class TestFusedStepAutocastScalerAndBatchChange:
             assert loss_c.dtype == loss_e.dtype == lucid.float32
             assert np.isfinite(float(loss_c.item()))
             assert abs(float(loss_c.item()) - float(loss_e.item())) < 1e-3
-            assert scaler_comp.get_scale() == scaler_eager.get_scale() == scales[step_idx]
+            assert (
+                scaler_comp.get_scale() == scaler_eager.get_scale() == scales[step_idx]
+            )
             if step_idx == 0:
                 for p_old, p_now in zip(
                     params_before, comp_model.parameters(), strict=True

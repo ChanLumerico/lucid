@@ -101,6 +101,7 @@ _COMPOSITES = {
     "log10": "lucid.log10",
     "log1p": "lucid.log1p",
     "logsumexp": "lucid.logsumexp",
+    "lstm_cell": "lucid.nn.LSTMCell",
     "lstsq": "lucid.linalg.lstsq",
     "margin_ranking_loss": "lucid.nn.functional.margin_ranking_loss",
     "matrix_norm": "lucid.linalg.matrix_norm",
@@ -182,7 +183,9 @@ def test_every_row_names_an_op_lucid_has() -> None:
         elif name in _ENGINE_ENTRIES:
             assert callable(_engine_attr(_ENGINE_ENTRIES[name])), name
         else:
-            assert name in _COMPOSITES, f"{name}: no schema and no composite of that name"
+            assert (
+                name in _COMPOSITES
+            ), f"{name}: no schema and no composite of that name"
             assert callable(_resolve(_COMPOSITES[name])), name
 
 
@@ -230,7 +233,9 @@ class _Make:
         return (self.lib.rand(*shape, device=self.device) * 0.8 + 0.1).to(self.dtype)
 
     def signs(self, n: int) -> Any:
-        return self.lib.tensor([1.0, -1.0] * (n // 2), device=self.device).to(self.dtype)
+        return self.lib.tensor([1.0, -1.0] * (n // 2), device=self.device).to(
+            self.dtype
+        )
 
     def ints(self, values: list[Any]) -> Any:
         return self.lib.tensor(values, device=self.device)
@@ -283,9 +288,17 @@ _CASES: dict[str, _Case] = {
         lambda lib, F, m: lib.einsum("ij,jk->ik", m(3, 4), m(4, 2)),
     ),
     "linear": _Case(lambda lib, F, m: F.linear(m(2, 4), m(3, 4), m(3))),
+    # LOWER on Metal: the float32 weights and zero state cast with the input.
+    # The CPU column keeps, and there a half input meets float32 weights.
+    "lstm_cell": _Case(
+        lambda lib, F, m: lib.nn.LSTMCell(4, 5).to(m.device)(m(2, 4))[0],
+        devices=("metal",),
+    ),
     "matmul": _Case(lambda lib, F, m: m(3, 4) @ m(4, 2)),
     "mm": _Case(lambda lib, F, m: lib.mm(m(3, 4), m(4, 2))),
-    "multi_dot": _Case(lambda lib, F, m: lib.linalg.multi_dot([m(3, 4), m(4, 2), m(2, 2)])),
+    "multi_dot": _Case(
+        lambda lib, F, m: lib.linalg.multi_dot([m(3, 4), m(4, 2), m(2, 2)])
+    ),
     # ── FP32 on both ──
     "bce_with_logits": _Case(
         lambda lib, F, m: F.binary_cross_entropy_with_logits(m(4), m.unit(4))
@@ -293,22 +306,32 @@ _CASES: dict[str, _Case] = {
     "cosine_embedding_loss": _Case(
         lambda lib, F, m: F.cosine_embedding_loss(m(2, 4), m(2, 4), m.signs(2))
     ),
-    "cross_entropy_loss": _Case(lambda lib, F, m: F.cross_entropy(m(3, 5), m.ints([0, 2, 4]))),
+    "cross_entropy_loss": _Case(
+        lambda lib, F, m: F.cross_entropy(m(3, 5), m.ints([0, 2, 4]))
+    ),
     "ctc_loss": _Case(
         lambda lib, F, m: F.ctc_loss(
-            m(6, 1, 4).log_softmax(-1), m.ints([[1, 2]]), lib.tensor([6]), lib.tensor([2])
+            m(6, 1, 4).log_softmax(-1),
+            m.ints([[1, 2]]),
+            lib.tensor([6]),
+            lib.tensor([2]),
         )
     ),
     "hinge_embedding_loss": _Case(
         lambda lib, F, m: F.hinge_embedding_loss(m(4), m.signs(4))
     ),
     "huber_loss": _Case(lambda lib, F, m: F.huber_loss(m(4), m(4))),
+    "kl_div": _Case(
+        lambda lib, F, m: F.kl_div(m(2, 4), m(2, 4, pos=True), reduction="batchmean")
+    ),
     "l1_loss": _Case(lambda lib, F, m: F.l1_loss(m(4), m(4))),
     "margin_ranking_loss": _Case(
         lambda lib, F, m: F.margin_ranking_loss(m(4), m(4), m.signs(4))
     ),
     "mse_loss": _Case(lambda lib, F, m: F.mse_loss(m(4), m(4))),
-    "multi_margin_loss": _Case(lambda lib, F, m: F.multi_margin_loss(m(3, 5), m.ints([0, 2, 4]))),
+    "multi_margin_loss": _Case(
+        lambda lib, F, m: F.multi_margin_loss(m(3, 5), m.ints([0, 2, 4]))
+    ),
     "multilabel_margin_loss": _Case(
         lambda lib, F, m: F.multilabel_margin_loss(
             m(2, 4), m.ints([[3, 0, -1, 1], [0, 1, 2, -1]])
@@ -334,6 +357,9 @@ _CASES: dict[str, _Case] = {
     "expm1": _Case(lambda lib, F, m: lib.expm1(m(4))),
     "group_norm": _Case(lambda lib, F, m: F.group_norm(m(2, 4, 3), 2)),
     "layer_norm": _Case(lambda lib, F, m: F.layer_norm(m(2, 4), (4,))),
+    "local_response_norm": _Case(
+        lambda lib, F, m: F.local_response_norm(m(1, 4, 3), 2)
+    ),
     "log": _Case(lambda lib, F, m: lib.log(m(4, pos=True))),
     "log10": _Case(lambda lib, F, m: lib.log10(m(4, pos=True))),
     "log1p": _Case(lambda lib, F, m: lib.log1p(m(4, pos=True))),
@@ -352,7 +378,9 @@ _CASES: dict[str, _Case] = {
     "tan": _Case(lambda lib, F, m: lib.tan(m(4))),
     # ── KEEP on Metal, FP32 on the CPU ──
     "grid_sample": _Case(
-        lambda lib, F, m: F.grid_sample(m(1, 1, 4, 4), m(1, 3, 3, 2), align_corners=False)
+        lambda lib, F, m: F.grid_sample(
+            m(1, 1, 4, 4), m(1, 3, 3, 2), align_corners=False
+        )
     ),
     "irfftn": _cpu(lambda lib, F, m: lib.fft.irfft(m(8))),
     "polar": _cpu(lambda lib, F, m: lib.polar(m(3, pos=True), m(3)).abs()),
@@ -367,12 +395,16 @@ _CASES: dict[str, _Case] = {
         lambda lib, F, m: lib.linalg.dot(m(4), m(4)),
         lambda lib, F, m: lib.dot(m(4), m(4)),
     ),
-    "index_copy": _Case(lambda lib, F, m: lib.index_copy(m(4), 0, m.ints([0, 2]), m(2))),
+    "index_copy": _Case(
+        lambda lib, F, m: lib.index_copy(m(4), 0, m.ints([0, 2]), m(2))
+    ),
     "index_put": _Case(
         lambda lib, F, m: lib.index_put(m(4), (m.ints([0, 2, 1]),), m(3)),
         lambda lib, F, m: m(4).index_put((m.ints([0, 2, 1]),), m(3)),
     ),
-    "scatter_add": _Case(lambda lib, F, m: m(4).scatter_add(0, m.ints([0, 2, 1]), m(3))),
+    "scatter_add": _Case(
+        lambda lib, F, m: m(4).scatter_add(0, m.ints([0, 2, 1]), m(3))
+    ),
     "stack": _Case(lambda lib, F, m: lib.stack([m(4), m(4)])),
     # WIDEST on Metal, LOWER on the CPU.
     "tensordot": _Case(lambda lib, F, m: lib.tensordot(m(3, 4), m(4, 2), 1)),
@@ -429,20 +461,36 @@ _NOT_WIRED: dict[str, tuple[str, _Case]] = {
         _A1,
         _cpu(lambda lib, F, m: F.adaptive_max_pool3d(m(1, 2, 4, 4, 4), 2)),
     ),
-    "addbmm": (_A1, _Case(lambda lib, F, m: lib.addbmm(m(3, 2), m(1, 3, 4), m(1, 4, 2)))),
+    "addbmm": (
+        _A1,
+        _Case(lambda lib, F, m: lib.addbmm(m(3, 2), m(1, 3, 4), m(1, 4, 2))),
+    ),
     "addmm": (_A1, _Case(lambda lib, F, m: lib.addmm(m(3, 2), m(3, 4), m(4, 2)))),
     "addmv": (_A1, _Case(lambda lib, F, m: lib.addmv(m(3), m(3, 4), m(4)))),
     "addr": (_A1, _Case(lambda lib, F, m: lib.addr(m(3, 4), m(3), m(4)))),
     "affine_grid": (
         _E2,
-        _Case(lambda lib, F, m: F.affine_grid(m(1, 2, 3), (1, 1, 4, 4), align_corners=False)),
+        _Case(
+            lambda lib, F, m: F.affine_grid(
+                m(1, 2, 3), (1, 1, 4, 4), align_corners=False
+            )
+        ),
     ),
     "avg_pool3d": (_E2, _Case(lambda lib, F, m: F.avg_pool3d(m(1, 2, 4, 4, 4), 2))),
-    "baddbmm": (_A1, _Case(lambda lib, F, m: lib.baddbmm(m(1, 3, 2), m(1, 3, 4), m(1, 4, 2)))),
-    "bce_loss": (_A1, _Case(lambda lib, F, m: F.binary_cross_entropy(m.unit(4), m.unit(4)))),
+    "baddbmm": (
+        _A1,
+        _Case(lambda lib, F, m: lib.baddbmm(m(1, 3, 2), m(1, 3, 4), m(1, 4, 2))),
+    ),
+    "bce_loss": (
+        _A1,
+        _Case(lambda lib, F, m: F.binary_cross_entropy(m.unit(4), m.unit(4))),
+    ),
     "cdist": (_A1, _Case(lambda lib, F, m: lib.cdist(m(3, 4), m(2, 4)))),
     "cholesky": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.cholesky(m.spd(3)))),
-    "cholesky_ex": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.cholesky_ex(m.spd(3))[0])),
+    "cholesky_ex": (
+        _E2_LINALG,
+        _cpu(lambda lib, F, m: lib.linalg.cholesky_ex(m.spd(3))[0]),
+    ),
     "cond": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.cond(m.spd(3)))),
     "conv_transpose1d": (
         _E2,
@@ -465,11 +513,17 @@ _NOT_WIRED: dict[str, tuple[str, _Case]] = {
     "fftn": (_E2_LINALG, _cpu(lambda lib, F, m: lib.fft.fft(m(8)).abs())),
     "fractional_max_pool2d": (
         _A1,
-        _cpu(lambda lib, F, m: F.fractional_max_pool2d(m(1, 1, 8, 8), 2, output_size=4)),
+        _cpu(
+            lambda lib, F, m: F.fractional_max_pool2d(m(1, 1, 8, 8), 2, output_size=4)
+        ),
     ),
     "fractional_max_pool3d": (
         _A1,
-        _cpu(lambda lib, F, m: F.fractional_max_pool3d(m(1, 1, 8, 8, 8), 2, output_size=4)),
+        _cpu(
+            lambda lib, F, m: F.fractional_max_pool3d(
+                m(1, 1, 8, 8, 8), 2, output_size=4
+            )
+        ),
     ),
     "gaussian_nll_loss": (
         _A1,
@@ -483,11 +537,6 @@ _NOT_WIRED: dict[str, tuple[str, _Case]] = {
     "instance_norm": (_A1, _Case(lambda lib, F, m: F.instance_norm(m(2, 3, 4)))),
     "inv": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.inv(m.spd(3)))),
     "inv_ex": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.inv_ex(m.spd(3))[0])),
-    "kl_div": (_A1, _Case(lambda lib, F, m: F.kl_div(m(4), m(4, pos=True)))),
-    "local_response_norm": (
-        "LCD-500 A1: local_response_norm via _autocast_entry",
-        _Case(lambda lib, F, m: F.local_response_norm(m(1, 4, 3), 2)),
-    ),
     "lstsq": (_A1, _cpu(lambda lib, F, m: lib.linalg.lstsq(m.spd(3), m(3, 1))[0])),
     "matrix_norm": (_A1, _Case(lambda lib, F, m: lib.linalg.matrix_norm(m(3, 3)))),
     "matrix_rank": (
@@ -531,8 +580,17 @@ _NOT_WIRED: dict[str, tuple[str, _Case]] = {
             )
         ),
     ),
-    "soft_margin_loss": (_A1, _Case(lambda lib, F, m: F.soft_margin_loss(m(4), m.signs(4)))),
-    "softplus": (_E2, _Case(lambda lib, F, m: F.softplus(m(4)))),
+    "soft_margin_loss": (
+        _A1,
+        _Case(lambda lib, F, m: F.soft_margin_loss(m(4), m.signs(4))),
+    ),
+    # The engine softplus follows its row; F.softplus below threshold 50
+    # composes it and multiplies its FP32 result by a KEEP 1 / beta.
+    "softplus": (
+        "LCD-500 A1: F.softplus's composite (threshold < 50) multiplies the FP32 "
+        "engine softplus by a half 1 / beta (activations.py, the `mul` after it)",
+        _Case(lambda lib, F, m: F.softplus(m(4))),
+    ),
     "solve": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.solve(m.spd(3), m(3)))),
     "stft": (
         _A1,
@@ -570,10 +628,14 @@ def _want(name: str, case: _Case, device: str, autocast_dt: str, input_dt: str) 
         return case.want
     metal, cpu = _rows().get(name, (_P.KeepInput, _P.KeepInput))
     policy = metal if device == "metal" else cpu
-    return _POLICY_DTYPE[policy](autocast_dt, autocast_dt if input_dt == "half" else "float32")
+    return _POLICY_DTYPE[policy](
+        autocast_dt, autocast_dt if input_dt == "half" else "float32"
+    )
 
 
-def _check(name: str, case: _Case, device: str, autocast_dt: str, input_dt: str) -> None:
+def _check(
+    name: str, case: _Case, device: str, autocast_dt: str, input_dt: str
+) -> None:
     if device not in case.devices:
         pytest.skip(f"{name} is checked on {case.devices} only")
     got = _run_lucid(case, device, autocast_dt, input_dt)
@@ -593,7 +655,9 @@ def test_every_row_has_a_case_or_a_strict_xfail() -> None:
 @pytest.mark.parametrize("input_dt", _INPUTS)
 @pytest.mark.parametrize(("device", "autocast_dt"), _SETTINGS)
 @pytest.mark.parametrize("name", sorted(_CASES))
-def test_a_row_gives_its_dtype(name: str, device: str, autocast_dt: str, input_dt: str) -> None:
+def test_a_row_gives_its_dtype(
+    name: str, device: str, autocast_dt: str, input_dt: str
+) -> None:
     _check(name, _CASES[name], device, autocast_dt, input_dt)
 
 
@@ -626,9 +690,15 @@ def test_a_row_not_wired_yet(name: str) -> None:
 
 @pytest.mark.parametrize(("device", "autocast_dt"), _SETTINGS)
 @pytest.mark.parametrize("name", sorted(_ENGINE_ONLY))
-def test_an_engine_only_row_gives_its_dtype(name: str, device: str, autocast_dt: str) -> None:
+def test_an_engine_only_row_gives_its_dtype(
+    name: str, device: str, autocast_dt: str
+) -> None:
     """``cube`` and ``cube_root`` have no public spelling; they follow ``pow``."""
-    engine_dtype = {"float32": _C_engine.F32, "float16": _C_engine.F16, "bfloat16": _C_engine.BF16}
+    engine_dtype = {
+        "float32": _C_engine.F32,
+        "float16": _C_engine.F16,
+        "bfloat16": _C_engine.BF16,
+    }
     for input_dt in _INPUTS:
         dtype = getattr(lucid, autocast_dt if input_dt == "half" else "float32")
         x = lucid.rand(4, device=device).to(dtype)
@@ -647,7 +717,9 @@ _MIXED: dict[str, _MixedFn] = {
     "addcdiv": lambda lib, F, h, f: lib.addcdiv(h(3), f(3), f(3, pos=True)),
     "addcmul": lambda lib, F, h, f: lib.addcmul(h(3), f(3), f(3)),
     "atan2": lambda lib, F, h, f: lib.atan2(h(4), f(4)),
-    "bilinear_layer": lambda lib, F, h, f: F.bilinear(h(2, 3), f(2, 4), f(5, 3, 4), f(5)),
+    "bilinear_layer": lambda lib, F, h, f: F.bilinear(
+        h(2, 3), f(2, 4), f(5, 3, 4), f(5)
+    ),
     "concatenate": lambda lib, F, h, f: lib.cat([h(4), f(4)]),
     "dot_1d": lambda lib, F, h, f: lib.linalg.dot(h(4), f(4)),
     "grid_sample": lambda lib, F, h, f: F.grid_sample(
@@ -663,7 +735,10 @@ _MIXED: dict[str, _MixedFn] = {
 _MIXED_NOT_WIRED = {
     ("index_copy", "cpu"): "LCD-500 A1: index_copy checks one dtype before the engine",
     ("index_put", "metal"): "LCD-500 A1: index_put checks one dtype before the engine",
-    ("scatter_add", "metal"): "LCD-500 E2a: scatter_add entry (Gfunc.cpp, after LCD-466 c2)",
+    (
+        "scatter_add",
+        "metal",
+    ): "LCD-500 E2a: scatter_add entry (Gfunc.cpp, after LCD-466 c2)",
 }
 
 
@@ -677,13 +752,17 @@ def _widest_columns() -> list[Any]:
             reason = _MIXED_NOT_WIRED.get((name, device))
             if reason is not None:
                 marks.append(pytest.mark.xfail(strict=True, reason=reason))
-            params.append(pytest.param(name, device, id=f"{name}-{device}", marks=marks))
+            params.append(
+                pytest.param(name, device, id=f"{name}-{device}", marks=marks)
+            )
     return params
 
 
 def test_every_widest_row_has_a_mixed_case() -> None:
     widest = {
-        name for name, (metal, cpu) in _rows().items() if _P.PromoteWidest in (metal, cpu)
+        name
+        for name, (metal, cpu) in _rows().items()
+        if _P.PromoteWidest in (metal, cpu)
     }
     assert widest == set(_MIXED)
     assert {name for name, _ in _MIXED_NOT_WIRED} <= widest
@@ -719,6 +798,54 @@ def test_cosine_similarity_promotes_mixed_inputs(device: str) -> None:
     assert float((inside - want).abs().max().item()) < 1e-6
 
 
+@_METAL
+def test_bilinear_bias_joins_the_widest_row() -> None:
+    """``F.bilinear`` hands the bias to the engine with the other operands,
+    so under Metal autocast a float32 bias beside float16 inputs runs the
+    whole op in float32 — it used to be added afterwards, outside the row."""
+    lucid.manual_seed(0)
+    x1, x2 = lucid.randn(2, 3, device="metal"), lucid.randn(2, 4, device="metal")
+    w, b = lucid.randn(5, 3, 4, device="metal"), lucid.randn(5, device="metal")
+    half = lucid.float16
+    with autocast(device_type="metal", dtype=half):
+        out = lucid.nn.functional.bilinear(x1.to(half), x2.to(half), w.to(half), b)
+    assert out.dtype == lucid.float32
+    want = lucid.nn.functional.bilinear(
+        x1.to(half).float(), x2.to(half).float(), w.to(half).float(), b
+    )
+    assert float((out - want).abs().max().item()) < 1e-5
+
+
+@pytest.mark.parametrize("device", [pytest.param("metal", marks=_METAL), "cpu"])
+def test_bilinear_with_bias_matches_the_unbiased_op_plus_bias(device: str) -> None:
+    lucid.manual_seed(0)
+    x1 = lucid.randn(2, 3, device=device, requires_grad=True)
+    x2 = lucid.randn(2, 4, device=device, requires_grad=True)
+    w = lucid.randn(5, 3, 4, device=device, requires_grad=True)
+    b = lucid.randn(5, device=device, requires_grad=True)
+    out = lucid.nn.functional.bilinear(x1, x2, w, b)
+    want = lucid.nn.functional.bilinear(x1, x2, w) + b
+    assert float((out - want).abs().max().item()) < 1e-6
+    grads = lucid.autograd.grad(out.sum(), [x1, x2, w, b])
+    want_grads = lucid.autograd.grad(want.sum(), [x1, x2, w, b])
+    for g, h in zip(grads, want_grads, strict=True):
+        assert float((g - h).abs().max().item()) < 1e-6
+
+
+@_METAL
+def test_bilinear_refuses_a_bias_on_another_device() -> None:
+    x1, x2 = lucid.randn(2, 3, device="metal"), lucid.randn(2, 4, device="metal")
+    w = lucid.randn(5, 3, 4, device="metal")
+    with pytest.raises(_C_engine.DeviceMismatch):
+        lucid.nn.functional.bilinear(x1, x2, w, lucid.randn(5))
+
+
+def test_bilinear_refuses_a_bias_of_another_dtype() -> None:
+    x1, x2, w = lucid.randn(2, 3), lucid.randn(2, 4), lucid.randn(5, 3, 4)
+    with pytest.raises(_C_engine.DtypeMismatch):
+        lucid.nn.functional.bilinear(x1, x2, w, lucid.randn(5, dtype=lucid.float64))
+
+
 # ── documented deviations ────────────────────────────────────────────────────
 
 
@@ -738,8 +865,8 @@ def test_a_cnn_in_eval_mode_runs_under_a_cpu_bfloat16_autocast() -> None:
 
 @pytest.mark.xfail(
     strict=True,
-    reason="pad: one schema for every mode, so the reference's FP32 reflect / replicate "
-    "rows have no row here (AmpPolicyTable.def header)",
+    reason="LCD-500 E2: pad is one schema for every mode, so the reference's FP32 "
+    "reflect / replicate rows have no row here (AmpPolicyTable.def header)",
 )
 @pytest.mark.parametrize("mode", ["reflect", "replicate"])
 def test_cpu_reflect_and_replicate_pad_run_in_float32(mode: str) -> None:
@@ -766,7 +893,10 @@ def test_cpu_ctc_loss_takes_a_bfloat16_log_softmax() -> None:
     assert logits.grad is not None and logits.grad.dtype == lucid.bfloat16
 
     want = lucid.nn.functional.ctc_loss(
-        logits.detach().float().log_softmax(-1), targets, lucid.tensor([6]), lucid.tensor([2])
+        logits.detach().float().log_softmax(-1),
+        targets,
+        lucid.tensor([6]),
+        lucid.tensor([2]),
     )
     assert abs(loss.item() - want.item()) < 5e-2
 
@@ -820,7 +950,9 @@ def test_the_dtype_matches_the_reference(
     dtype = ref_dt if input_dt == "half" else ref.float32
     try:
         with ref.autocast(device_type=ref_device, dtype=ref_dt):
-            out = (case.ref_fn or case.fn)(ref, ref.nn.functional, _Make(ref, ref_device, dtype))
+            out = (case.ref_fn or case.fn)(
+                ref, ref.nn.functional, _Make(ref, ref_device, dtype)
+            )
     except NotImplementedError:
         # Its MPS backend lacks some losses; nothing to compare against.
         pytest.skip(f"the reference has no {ref_device} kernel for {name}")
@@ -831,7 +963,7 @@ def _outcome(fn: Callable[[], Any]) -> str:
     """The output dtype, or ``"raises"`` — what a mixed pair comes to."""
     try:
         return _name(fn().dtype)
-    except (RuntimeError, TypeError, ValueError):
+    except RuntimeError, TypeError, ValueError:
         return "raises"
 
 
@@ -844,8 +976,9 @@ def _outcome(fn: Callable[[], Any]) -> str:
             "vdot",
             marks=pytest.mark.xfail(
                 strict=True,
-                reason="vdot is built on dot, whose dot_1d row is WIDEST on Metal; the "
-                "reference's vdot has no MPS row and refuses the pair",
+                reason="LCD-500 A1: lucid.vdot is built on dot, whose dot_1d row is "
+                "WIDEST on Metal; the reference's vdot has no MPS row and refuses the pair "
+                "(AmpPolicyTable.def header)",
             ),
         ),
     ],
