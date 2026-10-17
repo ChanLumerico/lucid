@@ -58,11 +58,8 @@ backward_roots(const char* op,
     return out;
 }
 
-}  // namespace
-
-// Registers the backward engine, autograd node types, and the custom-function
-// registration helper.
-void register_autograd(py::module_& m) {
+// The graph node types Python sees.
+void register_nodes(py::module_& m) {
     // Node is the abstract base for all backward-graph vertices.  It is held
     // as shared_ptr<Node> because backward-graph edges are also shared_ptrs;
     // Python may hold a reference longer than the graph itself.
@@ -87,7 +84,10 @@ void register_autograd(py::module_& m) {
     // via isinstance(tensor.grad_fn, engine.AccumulateGrad).
     py::class_<AccumulateGrad, Node, std::shared_ptr<AccumulateGrad>>(
         m, "AccumulateGrad", py::custom_type_setup(enable_node_autograd_gc));
+}
 
+// The engine's two passes, each from a list of roots and their seeds.
+void register_passes(py::module_& m) {
     // engine_backward runs one pass from every root, each seeded with its
     // gradient — ones of its shape where that is None — as the reference
     // runs ``backward([a, b], [ga, gb])``: the graph the roots share is
@@ -129,6 +129,15 @@ void register_autograd(py::module_& m) {
         "accumulated. Never reads or writes a leaf's .grad (a non-leaf that "
         "asked for retain_grad keeps what reaches it). An entry is None when "
         "that input lies outside the graph.");
+}
+
+}  // namespace
+
+// Registers the backward engine, autograd node types, and the custom-function
+// registration helper.
+void register_autograd(py::module_& m) {
+    register_nodes(m);
+    register_passes(m);
 
     m.def(
         "_accumulate_grad",

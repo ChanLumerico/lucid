@@ -1004,6 +1004,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - complex_combine assembles via complex_from_parts
 - one owner for the requires_grad dtype rule
 - move jvp's body into _jvp_pass
+- register autograd nodes and passes in helpers
 
 ---
 
