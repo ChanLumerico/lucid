@@ -168,7 +168,7 @@ _OTHER = [
     ("masked_fill", lambda x: lucid.masked_fill(x, x > 0, 0.0), False),
     ("maximum", lambda x: lucid.maximum(x, x * 2), False),
     ("minimum", lambda x: lucid.minimum(x, x * 2), False),
-    ("pad", lambda x: lucid.pad(x, (1, 1, 1, 1)), False),
+    ("pad", lambda x: F.pad(x, (1, 1, 1, 1)), False),
     ("pow", lambda x: lucid.pow(x, 2.0), True),
     ("prod", lambda x: lucid.prod(x, dim=1), True),
     ("sum", lambda x: lucid.sum(x, dim=1), False),
@@ -300,7 +300,7 @@ class TestRankSixIsStagedRatherThanRefused:
             def forward(self, x: lucid.Tensor) -> lucid.Tensor:
                 n, c, h, w = (int(d) for d in x.shape)
                 wide = x.reshape(n, c, h, 1, w, 1)
-                wide = lucid.pad(wide, (0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0))
+                wide = F.pad(wide, (0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0))
                 return wide.reshape(n, c, h * 2, w * 2)
 
         lucid.manual_seed(0)

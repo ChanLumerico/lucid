@@ -273,8 +273,8 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["diagonal"]),
     OpEntry("triu",       A._triu_adapter, 1, method_name="triu",     free_fn_name="triu",
             extra_kwargs=["diagonal"]),
-    OpEntry("pad",        A._pad_adapter, 1, method_name="pad",        free_fn_name="pad",
-            extra_kwargs=["padding", "mode", "value"]),
+    # No ``pad``: the reference has neither ``lucid.pad`` nor ``Tensor.pad``,
+    # and ``nn.functional.pad`` is the one owner of every mode (LCD-473).
 
     # ── index / gather ─────────────────────────────────────────────────────
     # gather(input, dim, index), the reference order.  The engine takes

@@ -2,6 +2,7 @@
 nn.functional sampling / interpolation / padding operations.
 """
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import lucid as _lucid
@@ -645,16 +646,52 @@ def embedding_bag(
 _PAD_MODES: frozenset[str] = frozenset({"constant", "reflect", "replicate", "circular"})
 
 
-def _flat_to_per_dim_pairs(
-    padding: tuple[int, ...], ndim: int
-) -> list[tuple[int, int]]:
-    """Convert flat (last→first) padding tuple to per-dim (first→last) pairs."""
-    n_pad_dims: int = len(padding) // 2
+def _flat_to_per_dim_pairs(padding: Sequence[int], ndim: int) -> list[tuple[int, int]]:
+    """Per-dim (first→last) pairs from a flat (last→first) padding spec.
+
+    The spec is checked as the reference checks it: an odd one dropped its
+    last entry, and one longer than two per dimension wrapped round onto
+    the leading dimensions, padding them instead of being refused.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        An odd-length spec, or one longer than ``2 * ndim``.
+    """
+    n = len(padding)
+    if n % 2:
+        raise _C_engine.InvalidArgument(
+            f"pad: padding length must be divisible by 2, got {n}"
+        )
+    if n > 2 * ndim:
+        raise _C_engine.InvalidArgument(
+            f"pad: padding length should be at most two times the input "
+            f"dimension, got padding length {n} for a {ndim}-D input"
+        )
     pad_pairs: list[tuple[int, int]] = [(0, 0)] * ndim
-    for i in range(n_pad_dims):
-        dim_idx: int = ndim - 1 - i
-        pad_pairs[dim_idx] = (padding[2 * i], padding[2 * i + 1])
+    for i in range(n // 2):
+        pad_pairs[ndim - 1 - i] = (int(padding[2 * i]), int(padding[2 * i + 1]))
     return pad_pairs
+
+
+def _crop(x: Tensor, dim: int, lo: int, hi: int) -> Tensor:
+    """``x`` without the ``-lo`` / ``-hi`` entries a negative pad removes.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        The negative pads remove more than ``dim`` holds.
+    """
+    size = int(x.shape[dim])
+    start, stop = max(-lo, 0), size - max(-hi, 0)
+    if stop < start:
+        raise _C_engine.InvalidArgument(
+            f"pad: the input size {size} at dimension {dim}, plus negative "
+            f"padding {lo} and {hi}, gives a negative output size"
+        )
+    if start == 0 and stop == size:
+        return x
+    return x.narrow(dim, start, stop - start)
 
 
 def _gather_along(x: Tensor, dim: int, indices_1d: list[int]) -> Tensor:
@@ -677,6 +714,39 @@ def _gather_along(x: Tensor, dim: int, indices_1d: list[int]) -> Tensor:
     return _lucid.gather(x, dim, idx)
 
 
+def _edge_indices(
+    mode: str, size: int, lo: int, hi: int
+) -> tuple[list[int], list[int]]:
+    """The source indices of the ``lo`` entries before and ``hi`` after an axis.
+
+    Raises
+    ------
+    lucid._C.engine.InvalidArgument
+        A reflection as wide as the axis, a wrap round it more than once, or
+        an edge to replicate on an empty axis — the reference's refusals.
+    """
+    if mode == "reflect":
+        if max(lo, hi) >= size:
+            raise _C_engine.InvalidArgument(
+                f"pad: mode='reflect' needs padding less than the input size "
+                f"{size}, got ({lo}, {hi})"
+            )
+        # The boundary itself is not repeated: [lo, ..., 1] and [size-2, ...].
+        return list(range(lo, 0, -1)), list(range(size - 2, size - 2 - hi, -1))
+    if mode == "circular":
+        if max(lo, hi) > size:
+            raise _C_engine.InvalidArgument(
+                f"pad: mode='circular' padding ({lo}, {hi}) wraps around an "
+                f"input of size {size} more than once"
+            )
+        return list(range(size - lo, size)), list(range(hi))
+    if size == 0 and (lo or hi):
+        raise _C_engine.InvalidArgument(
+            "pad: mode='replicate' has no edge to repeat on an empty dimension"
+        )
+    return [0] * lo, [size - 1] * hi
+
+
 def _pad_one_dim(x: Tensor, dim: int, lo: int, hi: int, mode: str) -> Tensor:
     """Apply non-constant padding along a single dimension.
 
@@ -688,54 +758,23 @@ def _pad_one_dim(x: Tensor, dim: int, lo: int, hi: int, mode: str) -> Tensor:
     Gather is differentiable via scatter-add, which gives the correct
     gradient accumulation for reflect (where the same source element
     contributes to both the centre and the reflected copy).
+
+    A negative pad removes entries, where the reference removes them: a
+    circular pad wraps what is left, a reflected or replicated one reads
+    the whole axis and is cropped after.
     """
     if lo == 0 and hi == 0:
         return x
-    size: int = x.shape[dim]
-    parts: list[Tensor] = []
-    idx_list: list[int]
-    if lo > 0:
-        if mode == "replicate":
-            idx_list = [0] * lo
-        elif mode == "reflect":
-            if lo > size - 1:
-                raise ValueError(
-                    f"reflect padding {lo} exceeds input size-1 ({size - 1}) "
-                    f"on dim {dim}"
-                )
-            # Reflect mode: indices [lo, lo-1, ..., 1] (boundary excluded).
-            idx_list = list(range(lo, 0, -1))
-        elif mode == "circular":
-            if lo > size:
-                raise ValueError(
-                    f"circular padding {lo} exceeds input size ({size}) on dim {dim}"
-                )
-            idx_list = list(range(size - lo, size))
-        else:
-            raise ValueError(f"unsupported pad mode: {mode!r}")
-        parts.append(_gather_along(x, dim, idx_list))
-    parts.append(x)
-    if hi > 0:
-        if mode == "replicate":
-            idx_list = [size - 1] * hi
-        elif mode == "reflect":
-            if hi > size - 1:
-                raise ValueError(
-                    f"reflect padding {hi} exceeds input size-1 ({size - 1}) "
-                    f"on dim {dim}"
-                )
-            # Reflect mode: indices [size-2, size-3, ..., size-1-hi].
-            idx_list = list(range(size - 2, size - 2 - hi, -1))
-        elif mode == "circular":
-            if hi > size:
-                raise ValueError(
-                    f"circular padding {hi} exceeds input size ({size}) on dim {dim}"
-                )
-            idx_list = list(range(0, hi))
-        parts.append(_gather_along(x, dim, idx_list))
-    if len(parts) == 1:
-        return parts[0]
-    return _lucid.cat(parts, dim)
+    if mode == "circular":
+        x = _crop(x, dim, lo, hi)
+    before, after = _edge_indices(mode, int(x.shape[dim]), max(lo, 0), max(hi, 0))
+    parts = [x]
+    if before:
+        parts.insert(0, _gather_along(x, dim, before))
+    if after:
+        parts.append(_gather_along(x, dim, after))
+    out = parts[0] if len(parts) == 1 else _lucid.cat(parts, dim)
+    return out if mode == "circular" else _crop(out, dim, lo, hi)
 
 
 def pad(
@@ -748,7 +787,8 @@ def pad(
 
     Generalises ``np.pad`` with several boundary modes useful in deep
     learning: zero/constant fill, mirror reflection, edge replication,
-    and circular wrap-around.
+    and circular wrap-around.  This is Lucid's one ``pad``: there is no
+    ``lucid.pad`` or ``Tensor.pad``.
 
     Parameters
     ----------
@@ -763,7 +803,8 @@ def pad(
           second-to-last with ``(t, b)``),
         - ``(l, r, t, b, f, k)`` extends the pattern to three dims.
 
-        Length must be even and at most ``2·N``.
+        Length must be even and at most ``2·N``.  A negative entry removes
+        that many entries from its side instead.
     mode : str, optional
         One of:
 
@@ -782,6 +823,17 @@ def pad(
         ``padding[2·k] + padding[2·k+1]`` where ``k`` is its offset from
         the last dim.
 
+    Raises
+    ------
+    lucid._C.engine.NotImplementedError
+        An unknown ``mode``.
+    lucid._C.engine.InvalidArgument
+        A ``padding`` of odd length or longer than ``2·N``, a reflection
+        as wide as its dim, a circular pad wider than it, a replicated
+        empty dim, or negative pads that remove more than a dim holds.
+        Both a ``RuntimeError``, as the reference raises, and a
+        ``ValueError``.
+
     Notes
     -----
     Non-constant modes are decomposed into gather + concat in Python,
@@ -799,23 +851,25 @@ def pad(
     >>> y = pad(x, (1, 1, 0, 0), mode="reflect")
     >>> y.shape                    # last dim grows by 2
     (1, 1, 2, 5)
+    >>> pad(lucid.arange(4.0), (-1, 2)).tolist()
+    [1.0, 2.0, 3.0, 0.0, 0.0]
     """
     if mode not in _PAD_MODES:
-        raise ValueError(
-            f"unknown pad mode {mode!r}; expected one of {sorted(_PAD_MODES)}"
+        raise _C_engine.NotImplementedError(
+            f"pad: unrecognised padding mode {mode!r}; expected one of "
+            f"{sorted(_PAD_MODES)}"
         )
-    impl: object = _unwrap(x)
-    ndim: int = len(impl.shape)  # type: ignore[attr-defined]
-    pad_pairs: list[tuple[int, int]] = _flat_to_per_dim_pairs(padding, ndim)
-    if mode == "constant":
-        return _wrap(_C_engine.pad(impl, pad_pairs, value))  # type: ignore[arg-type]
-    # Non-constant: pad one dim at a time using existing ops.
-    result: Tensor = x
+    pad_pairs = _flat_to_per_dim_pairs(padding, x.ndim)
+    if mode != "constant":
+        result = x
+        for d, (lo, hi) in enumerate(pad_pairs):
+            result = _pad_one_dim(result, d, lo, hi, mode)
+        return result
+    # The engine pads by non-negative widths: a negative one is a crop.
     for d, (lo, hi) in enumerate(pad_pairs):
-        if lo == 0 and hi == 0:
-            continue
-        result = _pad_one_dim(result, d, lo, hi, mode)
-    return result
+        x = _crop(x, d, lo, hi)
+    widths = [(max(lo, 0), max(hi, 0)) for lo, hi in pad_pairs]
+    return _wrap(_C_engine.pad(_unwrap(x), widths, value))
 
 
 def pixel_shuffle(x: Tensor, upscale_factor: int) -> Tensor:

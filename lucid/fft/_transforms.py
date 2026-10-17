@@ -148,6 +148,8 @@ def _resize_axes(x: Tensor, axes: list[int], sizes: list[int]) -> Tensor:
     received nothing (zero-pad the gradient), and the padding was never an
     input (crop it away).
     """
+    from lucid.nn.functional import pad
+
     for axis, size in zip(axes, sizes, strict=True):
         have = int(x.shape[axis])
         if have > size:
@@ -156,7 +158,7 @@ def _resize_axes(x: Tensor, axes: list[int], sizes: list[int]) -> Tensor:
             # ``pad`` takes (low, high) pairs from the last axis backwards.
             widths = [0] * (2 * x.ndim)
             widths[2 * (x.ndim - 1 - axis) + 1] = size - have
-            x = lucid.pad(x, tuple(widths))
+            x = pad(x, tuple(widths))
     return x
 
 

@@ -336,7 +336,6 @@
     "lucid/models/generative/rectified_flow/_model.py": 9,
     "lucid/models/vision/cvt/_model.py": 2,
     "lucid/models/vision/sknet/_model.py": 3,
-    "lucid/nn/functional/sampling.py": 1,
     "lucid/nn/hooks.py": 6,
     "lucid/nn/intrinsic/qat/modules.py": 1,
     "lucid/nn/module.py": 6,
@@ -379,7 +378,6 @@
     "lucid/compile/_entry/step.py": 4,
     "lucid/models/_utils/_detection.py": 2,
     "lucid/nn/_state_dict.py": 1,
-    "lucid/nn/functional/sampling.py": 1,
     "lucid/nn/module.py": 5,
     "lucid/nn/utils/prune.py": 1,
     "lucid/serialization/__init__.py": 3,
@@ -961,7 +959,7 @@
     "lucid/models/vision/yolo/_v4.py": 1,
     "lucid/nn/functional/attention.py": 1,
     "lucid/nn/functional/loss.py": 1,
-    "lucid/nn/functional/sampling.py": 2,
+    "lucid/nn/functional/sampling.py": 1,
     "lucid/nn/module.py": 1,
     "lucid/nn/modules/attention.py": 1,
     "lucid/utils/data/dataloader.py": 3,
@@ -1081,7 +1079,7 @@
     "lucid/models/vision/yolo/_v4.py": 8,
     "lucid/nn/functional/attention.py": 11,
     "lucid/nn/functional/loss.py": 2,
-    "lucid/nn/functional/sampling.py": 10,
+    "lucid/nn/functional/sampling.py": 9,
     "lucid/nn/module.py": 7,
     "lucid/nn/modules/attention.py": 25,
     "lucid/utils/data/dataloader.py": 19,
@@ -1538,7 +1536,7 @@
     "lucid/models/vision/vjepa2/_config.py": 1,
     "lucid/nn/_state_dict.py": 1,
     "lucid/nn/functional/attention.py": 1,
-    "lucid/nn/functional/sampling.py": 2,
+    "lucid/nn/functional/sampling.py": 1,
     "lucid/nn/module.py": 3,
     "lucid/nn/modules/attention.py": 1,
     "lucid/utils/data/dataloader.py": 2,
@@ -1624,9 +1622,6 @@
    "PIE807": {
     "lucid/coreml/__init__.py": 1
    },
-   "PIE808": {
-    "lucid/nn/functional/sampling.py": 1
-   },
    "PIE810": {
     "lucid/models/text/gpt2/_model.py": 1
    },
@@ -1681,7 +1676,7 @@
     "lucid/models/vision/vjepa/_config.py": 1,
     "lucid/models/vision/vjepa2/_config.py": 1,
     "lucid/nn/functional/attention.py": 1,
-    "lucid/nn/functional/sampling.py": 2,
+    "lucid/nn/functional/sampling.py": 1,
     "lucid/nn/module.py": 1,
     "lucid/nn/modules/attention.py": 1,
     "lucid/utils/data/dataloader.py": 2,

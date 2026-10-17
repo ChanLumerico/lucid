@@ -866,10 +866,6 @@ def test_arithmetic_ops_take_input_and_other_by_keyword(
                 x, lucid.tensor([True, False, True], device=x.device), 0.0
             ),
         ),
-        lambda x, y: (
-            lucid.pad(input=x, padding=(1, 1), value=0.0),
-            lucid.pad(x, (1, 1), "constant", 0.0),
-        ),
         lambda x, y: (lucid.unique(input=x), lucid.unique(x)),
         lambda x, y: (x.matmul(other=y), x.matmul(y)),
         lambda x, y: (x.isclose(other=y), x.isclose(y)),
@@ -890,7 +886,6 @@ def test_arithmetic_ops_take_input_and_other_by_keyword(
         "clamp",
         "gather",
         "masked_fill",
-        "pad",
         "unique",
         "Tensor.matmul",
         "Tensor.isclose",

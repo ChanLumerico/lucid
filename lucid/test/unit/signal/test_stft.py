@@ -374,7 +374,7 @@ _REFUSALS: list[tuple[str, Callable[[], object], type[Exception]]] = [
     (
         "unknown pad mode",
         lambda: lucid.stft(_x(), 8, pad_mode="mirror", return_complex=True),
-        ValueError,
+        NotImplementedError,
     ),
     ("istft real input", lambda: lucid.istft(lucid.zeros(5, 21), 8), _Dtype),
     ("istft 1-D", lambda: lucid.istft(lucid.complex(_x(), _x()), 8), _Shape),

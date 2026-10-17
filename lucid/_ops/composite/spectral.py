@@ -322,8 +322,10 @@ def _padded_window(
         return window
     if window is None:
         window = _ones(win_length, like)
+    from lucid.nn.functional import pad
+
     left = (n_fft - win_length) // 2
-    return lucid.pad(window, (left, n_fft - win_length - left))
+    return pad(window, (left, n_fft - win_length - left))
 
 
 def _ones(n: int, like: Tensor) -> Tensor:
@@ -367,9 +369,9 @@ def _frames(
     align_to_window: bool,
 ) -> Tensor:
     """``signal`` (batch, time) cut into ``(batch, n_frames, n_fft)`` frames."""
-    if center:
-        from lucid.nn.functional import pad
+    from lucid.nn.functional import pad
 
+    if center:
         signal = pad(signal, (n_fft // 2, n_fft // 2), mode=pad_mode)
     length = int(signal.shape[-1])
     if n_fft > length:
@@ -384,7 +386,7 @@ def _frames(
         # n_fft - win in all gives unfold the reference's frame count,
         # 1 + (length - win) // hop, odd margins included.
         left = (n_fft - win) // 2
-        signal = lucid.pad(signal, (left, n_fft - win - left))
+        signal = pad(signal, (left, n_fft - win - left))
     return signal.unfold(-1, n_fft, hop)
 
 
@@ -637,7 +639,9 @@ def _pad_tail(signal: Tensor, missing: int) -> Tensor:
         "tail is padded with zeros",
         stacklevel=3,
     )
-    return lucid.pad(signal, (0, missing))
+    from lucid.nn.functional import pad
+
+    return pad(signal, (0, missing))
 
 
 def istft(

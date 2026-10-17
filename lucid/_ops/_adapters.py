@@ -929,7 +929,7 @@ def _split_method_adapter(
     return _split_pieces(x_impl, split_size, dim, "split_size")
 
 
-# ── tensordot / meshgrid / where / masked_fill / pad ─────────────────────────
+# ── tensordot / meshgrid / where / masked_fill ─────────────────────────────
 
 
 def _tensordot_adapter(
@@ -1186,26 +1186,6 @@ def _masked_fill_adapter(x_impl: _Impl, mask: Tensor, value: float) -> _Impl:
             "which has no infinity or NaN — cast it to a floating dtype first"
         )
     return _C_engine.masked_fill(x_impl, m, fill)
-
-
-def _pad_adapter(
-    x_impl: _Impl,
-    padding: Sequence[int],
-    mode: str = "constant",
-    value: float = 0.0,
-) -> _Impl:
-    """pad(x, padding, mode, value) — reference flat (last-dim-first) convention."""
-    if mode != "constant":
-        raise NotImplementedError(
-            f"pad: mode={mode!r} not supported; only 'constant' is wired"
-        )
-    ndim = len(x_impl.shape)
-    n_pad_dims = len(padding) // 2
-    pad_pairs: list[tuple[int, int]] = [(0, 0)] * ndim
-    for i in range(n_pad_dims):
-        dim_idx = ndim - 1 - i
-        pad_pairs[dim_idx] = (int(padding[2 * i]), int(padding[2 * i + 1]))
-    return _C_engine.pad(x_impl, pad_pairs, float(value))
 
 
 # ── Stats / search / combinatorial ───────────────────────────────────────────

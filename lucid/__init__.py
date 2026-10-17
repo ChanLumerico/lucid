@@ -178,7 +178,7 @@ __all__ = [
     "split", "chunk", "unbind",
     "gather", "scatter", "scatter_add", "take", "index_select", "masked_select",
     "kthvalue",
-    "where", "masked_fill", "pad", "roll", "flip", "fliplr", "flipud",
+    "where", "masked_fill", "roll", "flip", "fliplr", "flipud",
     "sort", "argsort", "topk",
     "nonzero", "unique", "meshgrid",
     "tril", "triu",
@@ -293,7 +293,7 @@ _OPS_NAMES: frozenset[str] = frozenset([
     "cat", "concat", "stack", "hstack", "vstack",
     "split", "chunk", "unbind",
     "ravel", "diagonal", "tril", "triu",
-    "flip", "fliplr", "flipud", "roll", "pad",
+    "flip", "fliplr", "flipud", "roll",
     "contiguous", "detach", "clone",
     # ── indexing / scatter ────────────────────────────────────────────────
     "gather", "scatter", "scatter_add",

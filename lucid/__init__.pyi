@@ -2027,49 +2027,6 @@ def triu(input: Tensor, diagonal: _int = ...) -> Tensor:
     tensor([[0., 1., 1.], [0., 0., 1.], [0., 0., 0.]])
     """
     ...
-def pad(input: Tensor, padding: Sequence[_int], mode: str = ..., value: _float = ...) -> Tensor:
-    r"""    Pad a tensor with the specified border widths.
-    
-    ``padding`` lists ``(left, right)`` pairs starting from the *last*
-    dimension and proceeding outward — the same convention used by the
-    reference framework.  The ``mode`` selects how new elements are
-    filled.
-    
-    Parameters
-    ----------
-    input : Tensor
-        Source tensor.
-    padding : sequence of int
-        Border widths, in last-axis-first order.
-    mode : str, default ``'constant'``
-        One of ``'constant'``, ``'reflect'``, ``'replicate'``,
-        ``'circular'``.
-    value : float, default 0.0
-        Fill value used by ``mode='constant'``.
-    
-    Returns
-    -------
-    Tensor
-        Padded tensor.
-    
-    Notes
-    -----
-    Padding mode semantics:
-    
-    * ``constant`` — fill with ``value``;
-    * ``reflect`` — mirror without repeating the edge element;
-    * ``replicate`` — repeat the edge element;
-    * ``circular`` — wrap around.
-    
-    Examples
-    --------
-    >>> import lucid
-    >>> x = lucid.tensor([[1, 2], [3, 4]])
-    >>> lucid.pad(x, [1, 1, 0, 0], mode='constant', value=0)
-    Tensor([[0, 1, 2, 0],
-            [0, 3, 4, 0]])
-    """
-    ...
 def sort(input: Tensor, dim: _int = ..., descending: _bool = ...) -> Tensor:
     r"""    Sort ``input`` along ``dim`` and return the sorted values.
     
