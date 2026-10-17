@@ -139,8 +139,8 @@ def test_float32_scalar_pow_agrees_with_tensor_pow_under_autocast(
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "FOUND in LCD-462: pow_scalar never consults its ForceFP32 schema, so "
-        "a half base under autocast stays half; honouring it breaks "
+        "LCD-475: pow_scalar never consults its ForceFP32 schema, so a half "
+        "base under autocast stays half; honouring it breaks "
         "local_response_norm's same-dtype div under autocast"
     ),
 )
