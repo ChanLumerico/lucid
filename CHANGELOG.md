@@ -976,6 +976,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - clamp_ promotes and refuses as add_ does (LCD-519)
 
+- smoke builds CompiledModule from a live model (LCD-532)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

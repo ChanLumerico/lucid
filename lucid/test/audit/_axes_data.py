@@ -236,6 +236,11 @@ _BUILD_BY_NAME: dict[str, Any] = {
     "opt": lambda: lucid.optim.SGD(
         [lucid.nn.Parameter(lucid.tensor(np.zeros(3, dtype=np.float32)))], lr=0.1
     ),
+    # ``CompiledModule(model)`` wraps a live module.  Without this the
+    # smoke axis reached it only through its ``(tensor)`` rung, which
+    # passed while the constructor never looked at what it was handed and
+    # went unanswered once it did (it reads ``model.modules()``).
+    "model": lambda: lucid.nn.Linear(2, 2),
     "hooks_list": list,
     "events": list,
     # A transform, and a list of them.  ``ComposeTransform`` and its two
