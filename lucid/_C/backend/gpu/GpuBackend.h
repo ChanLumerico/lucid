@@ -927,17 +927,6 @@ public:
         return x.dtype() == ::mlx::core::complex64;
     }
 
-    // A complex64 array of ``like``'s shape from float32 parts.  Assembling
-    // it as ``re + im * 1j`` turns an infinite part into NaN (the product
-    // computes inf * 0 for the other lane), so the parts are interleaved and
-    // the pairs reinterpreted.
-    static ::mlx::core::array complex_from_parts(const ::mlx::core::array& re,
-                                                 const ::mlx::core::array& im,
-                                                 const ::mlx::core::array& like) {
-        auto pairs = ::mlx::core::stack({re, im}, -1);
-        return ::mlx::core::reshape(::mlx::core::view(pairs, ::mlx::core::complex64), like.shape());
-    }
-
     Storage isinf(const Storage& a, const Shape& shape, Dtype dt) override {
         return mlx_unary(a, shape, Dtype::Bool, [](auto& x) {
             if (is_complex_array(x))
@@ -998,7 +987,7 @@ public:
             if (is_complex_array(x))
                 return complex_from_parts(
                     replace_nonfinite(::mlx::core::real(x), nan_val, posinf_val, neginf_val),
-                    replace_nonfinite(::mlx::core::imag(x), nan_val, posinf_val, neginf_val), x);
+                    replace_nonfinite(::mlx::core::imag(x), nan_val, posinf_val, neginf_val));
             return replace_nonfinite(x, nan_val, posinf_val, neginf_val);
         });
     }
@@ -1823,7 +1812,7 @@ public:
             base, indices, src, base_shape, idx_shape, dim, dt, ScatterReduce::Prod,
             [](const ::mlx::core::array& a, const std::vector<::mlx::core::array>& idxs,
                const ::mlx::core::array& upd,
-               const std::vector<int>& axes) { return scatter_prod_widened(a, idxs, upd, axes); });
+               const std::vector<int>& axes) { return gpu_scatter_prod(a, idxs, upd, axes); });
     }
 
     // Sliding-window unfold along ``dim`` producing rank+1 windows of ``size``.

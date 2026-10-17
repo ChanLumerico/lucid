@@ -49,6 +49,8 @@
 
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
+#include "ComplexParts.h"
+#include "HalfAccumulation.h"
 
 namespace lucid {
 namespace backend {
@@ -486,49 +488,72 @@ inline bool scatter_places_nothing(const ::mlx::core::array& base,
 
 using ScatterIndices = std::vector<::mlx::core::array>;
 
+// MLX's scatter-add kernels have no complex64 form, so a complex scatter-add
+// runs on each part (``by_complex_parts``): the real parts add to the real
+// parts and the imaginary to the imaginary.
 inline ::mlx::core::array gpu_scatter_add(const ::mlx::core::array& base,
                                           const ScatterIndices& idx,
                                           const ::mlx::core::array& upd,
                                           const std::vector<int>& axes) {
-    namespace mx = ::mlx::core;
-    if (scatter_places_nothing(base, upd))
-        return base;
-    if (base.dtype() == mx::complex64) {
-        auto re = mx::scatter_add(mx::real(base), idx, mx::real(upd), axes);
-        auto im = mx::scatter_add(mx::imag(base), idx, mx::imag(upd), axes);
-        return mx::add(
-            mx::astype(re, mx::complex64),
-            mx::multiply(mx::astype(im, mx::complex64), mx::array(mx::complex64_t{0.0f, 1.0f})));
-    }
-    return mx::scatter_add(base, idx, upd, axes);
+    if (base.dtype() == ::mlx::core::complex64)
+        return by_complex_parts(base, upd, [&](const auto& b, const auto& u) {
+            return gpu_scatter_add(b, idx, u, axes);
+        });
+    return scatter_places_nothing(base, upd) ? base
+                                             : ::mlx::core::scatter_add(base, idx, upd, axes);
 }
 
 inline ::mlx::core::array gpu_scatter_add(const ::mlx::core::array& base,
                                           const ::mlx::core::array& idx,
                                           const ::mlx::core::array& upd,
                                           int axis) {
-    namespace mx = ::mlx::core;
-    if (scatter_places_nothing(base, upd))
-        return base;
-    if (base.dtype() == mx::complex64) {
-        auto re = mx::scatter_add(mx::real(base), idx, mx::real(upd), axis);
-        auto im = mx::scatter_add(mx::imag(base), idx, mx::imag(upd), axis);
-        return mx::add(
-            mx::astype(re, mx::complex64),
-            mx::multiply(mx::astype(im, mx::complex64), mx::array(mx::complex64_t{0.0f, 1.0f})));
-    }
-    return mx::scatter_add(base, idx, upd, axis);
+    if (base.dtype() == ::mlx::core::complex64)
+        return by_complex_parts(base, upd, [&](const auto& b, const auto& u) {
+            return gpu_scatter_add(b, idx, u, axis);
+        });
+    return scatter_places_nothing(base, upd) ? base
+                                             : ::mlx::core::scatter_add(base, idx, upd, axis);
 }
 
-inline ::mlx::core::array gpu_scatter_nan_propagate(const ::mlx::core::array& out,
-                                                    const ::mlx::core::array& base,
-                                                    const ScatterIndices& idx,
-                                                    const ::mlx::core::array& upd,
-                                                    const std::vector<int>& axes) {
+// MLX's own ``scatter_max`` / ``scatter_min`` / ``scatter_prod``, guarded.
+// The two extrema let a NaN through only when it wins a comparison, which a
+// NaN never does; ``gpu_scatter_max`` / ``gpu_scatter_min`` put it back.
+inline ::mlx::core::array mlx_scatter_max(const ::mlx::core::array& base,
+                                          const ScatterIndices& idx,
+                                          const ::mlx::core::array& upd,
+                                          const std::vector<int>& axes) {
+    return scatter_places_nothing(base, upd) ? base
+                                             : ::mlx::core::scatter_max(base, idx, upd, axes);
+}
+
+inline ::mlx::core::array mlx_scatter_min(const ::mlx::core::array& base,
+                                          const ScatterIndices& idx,
+                                          const ::mlx::core::array& upd,
+                                          const std::vector<int>& axes) {
+    return scatter_places_nothing(base, upd) ? base
+                                             : ::mlx::core::scatter_min(base, idx, upd, axes);
+}
+
+inline ::mlx::core::array mlx_scatter_prod(const ::mlx::core::array& base,
+                                           const ScatterIndices& idx,
+                                           const ::mlx::core::array& upd,
+                                           const std::vector<int>& axes) {
+    return scatter_places_nothing(base, upd) ? base
+                                             : ::mlx::core::scatter_prod(base, idx, upd, axes);
+}
+
+// ``out`` (an extremum scatter of ``upd`` into ``base``) with NaN wherever
+// ``base`` held one or a NaN update landed, as the reference's ``amax`` and
+// ``amin`` propagate it.
+inline ::mlx::core::array with_scattered_nan(const ::mlx::core::array& out,
+                                             const ::mlx::core::array& base,
+                                             const ScatterIndices& idx,
+                                             const ::mlx::core::array& upd,
+                                             const std::vector<int>& axes) {
     namespace mx = ::mlx::core;
-    if (!mx::issubdtype(base.dtype(), mx::floating))
+    if (!mx::issubdtype(base.dtype(), mx::floating) || scatter_places_nothing(base, upd))
         return out;
-    auto any_nan = mx::scatter_max(mx::isnan(base), idx, mx::isnan(upd), axes);
+    auto any_nan = mlx_scatter_max(mx::isnan(base), idx, mx::isnan(upd), axes);
     return mx::where(any_nan, mx::array(std::numeric_limits<float>::quiet_NaN(), out.dtype()), out);
 }
 
@@ -536,28 +561,24 @@ inline ::mlx::core::array gpu_scatter_max(const ::mlx::core::array& base,
                                           const ScatterIndices& idx,
                                           const ::mlx::core::array& upd,
                                           const std::vector<int>& axes) {
-    if (scatter_places_nothing(base, upd))
-        return base;
-    return gpu_scatter_nan_propagate(::mlx::core::scatter_max(base, idx, upd, axes), base, idx, upd,
-                                     axes);
+    return with_scattered_nan(mlx_scatter_max(base, idx, upd, axes), base, idx, upd, axes);
 }
 
 inline ::mlx::core::array gpu_scatter_min(const ::mlx::core::array& base,
                                           const ScatterIndices& idx,
                                           const ::mlx::core::array& upd,
                                           const std::vector<int>& axes) {
-    if (scatter_places_nothing(base, upd))
-        return base;
-    return gpu_scatter_nan_propagate(::mlx::core::scatter_min(base, idx, upd, axes), base, idx, upd,
-                                     axes);
+    return with_scattered_nan(mlx_scatter_min(base, idx, upd, axes), base, idx, upd, axes);
 }
 
+// A product accumulated in float32 for a half input and returned in
+// ``base``'s dtype: MLX's kernel multiplies in its operand dtype.
 inline ::mlx::core::array gpu_scatter_prod(const ::mlx::core::array& base,
                                            const ScatterIndices& idx,
                                            const ::mlx::core::array& upd,
                                            const std::vector<int>& axes) {
-    return scatter_places_nothing(base, upd) ? base
-                                             : ::mlx::core::scatter_prod(base, idx, upd, axes);
+    return narrow_half(mlx_scatter_prod(widen_half(base), idx, widen_half(upd), axes),
+                       base.dtype());
 }
 
 }  // namespace backend

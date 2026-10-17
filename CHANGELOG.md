@@ -802,6 +802,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - own the einops grammar in Python (LCD-189)
 
+- GPU multi-axis scatters only via the guard (LCD-462)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

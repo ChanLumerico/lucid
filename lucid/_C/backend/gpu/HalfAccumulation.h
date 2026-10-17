@@ -52,6 +52,8 @@
 #include <mlx/compile.h>
 #include <mlx/ops.h>
 
+#include "ComplexParts.h"
+
 namespace lucid {
 namespace backend {
 
@@ -232,32 +234,18 @@ inline ::mlx::core::array normalized_input_grad(const ::mlx::core::array& g,
 // ``base``'s dtype.  MLX's scatter-add kernel accumulates in its operand
 // dtype, so 1000 duplicate updates of 1.0 in bfloat16 stalled at 256.0
 // (``256.0 + 1.0 == 256.0`` at 7-bit mantissa) and 3000 in float16 stalled at
-// 2048.0.
+// 2048.0.  The kernel has no complex64 form, so a complex base is summed one
+// part at a time.
 inline ::mlx::core::array scatter_add_axis_widened(const ::mlx::core::array& base,
                                                    const ::mlx::core::array& idx,
                                                    const ::mlx::core::array& updates,
                                                    int axis) {
     namespace mx = ::mlx::core;
-    if (base.dtype() == mx::complex64) {
-        auto re = mx::scatter_add_axis(mx::real(base), idx, mx::real(updates), axis);
-        auto im = mx::scatter_add_axis(mx::imag(base), idx, mx::imag(updates), axis);
-        return mx::add(
-            mx::astype(re, mx::complex64),
-            mx::multiply(mx::astype(im, mx::complex64), mx::array(mx::complex64_t{0.0f, 1.0f})));
-    }
+    if (base.dtype() == mx::complex64)
+        return by_complex_parts(base, updates, [&](const auto& b, const auto& u) {
+            return mx::scatter_add_axis(b, idx, u, axis);
+        });
     return narrow_half(mx::scatter_add_axis(widen_half(base), idx, widen_half(updates), axis),
-                       base.dtype());
-}
-
-// Multi-axis ``scatter_prod`` accumulated in float32 for a half input,
-// returned in ``base``'s dtype.
-inline ::mlx::core::array scatter_prod_widened(const ::mlx::core::array& base,
-                                               const std::vector<::mlx::core::array>& idx,
-                                               const ::mlx::core::array& updates,
-                                               const std::vector<int>& axes) {
-    if (base.size() == 0 || updates.size() == 0)
-        return base;
-    return narrow_half(::mlx::core::scatter_prod(widen_half(base), idx, widen_half(updates), axes),
                        base.dtype());
 }
 
