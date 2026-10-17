@@ -794,6 +794,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - resolve LCD-116, LCD-319, LCD-321, LCD-330/69, and LCD-340
 
+- resolve GC hook holders for registered node subclasses
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

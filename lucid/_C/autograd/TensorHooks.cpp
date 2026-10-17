@@ -345,21 +345,41 @@ void reset_gc_decref_pass() noexcept {
     gc_decref_state().reset();
 }
 
+// The C++ ``T`` behind a pybind11 instance whose Python type is ``T``'s or
+// derives from it, or null.  Runs inside ``tp_traverse`` / ``tp_clear``, so
+// it must neither raise nor allocate.
+//
+// pybind11 keeps one value slot per registered C++ type the Python type
+// derives from, keyed by the most-derived one: an ``AccumulateGrad`` or
+// ``_PythonBackwardNode`` instance holds its value under its own type_info,
+// never under ``Node``'s.  ``get_value_and_holder(tinfo, false)`` therefore
+// answers "not found" for every registered subclass, with an empty
+// value_and_holder whose ``operator bool`` reads through a null pointer —
+// one garbage collection with such a node alive was a SIGSEGV.  So walk the
+// slots and take the one whose type is ``T`` or a subclass of it.  The
+// subclass pointer is a ``T*`` only when no registered type in the hierarchy
+// uses multiple inheritance (``simple_type``) — the condition pybind11 itself
+// casts under — and anything else is declined rather than guessed.
 template <typename T>
 T* try_get_cpp_ptr(PyObject* self) noexcept {
     if (self == nullptr)
         return nullptr;
-    auto* tinfo = py::detail::get_type_info(typeid(T));
+    const auto* tinfo = py::detail::get_type_info(typeid(T));
     if (tinfo == nullptr)
         return nullptr;
     PyTypeObject* type = Py_TYPE(self);
     if (type != tinfo->type && !PyType_IsSubtype(type, tinfo->type))
         return nullptr;
     auto* inst = reinterpret_cast<py::detail::instance*>(self);
-    auto vh = inst->get_value_and_holder(tinfo, /*throw_if_missing=*/false);
-    if (!vh || !vh.holder_constructed())
-        return nullptr;
-    return vh.value_ptr<T>();
+    for (const auto& vh : py::detail::values_and_holders(inst)) {
+        const bool exact = vh.type == tinfo;
+        if (!exact && !(tinfo->simple_type && PyType_IsSubtype(vh.type->type, tinfo->type)))
+            continue;
+        if (!vh.holder_constructed())
+            return nullptr;
+        return static_cast<T*>(vh.value_ptr());
+    }
+    return nullptr;
 }
 
 struct AutogradGcVisitor {
