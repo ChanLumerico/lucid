@@ -222,6 +222,13 @@ GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype);
 // arrays, so :func:`wrap_mlx_array` notes each one it wraps (as a weak
 // reference that never keeps it alive) and this runs whichever are still
 // alive and unevaluated.
+//
+// Raises
+// ------
+// LucidError
+//     When an array cannot be evaluated (an allocation past the device's
+//     buffer limit, a kernel that refuses its arguments).  The others still
+//     run first; the first failure is raised with the count of failures.
 std::size_t evaluate_pending();
 
 // Convert a Lucid :class:`Shape` (int64) to an ``mlx::core::Shape`` (int32).

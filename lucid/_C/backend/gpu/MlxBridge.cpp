@@ -34,11 +34,13 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
+#include <exception>
 #include <iterator>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -312,6 +314,51 @@ GpuStorage wrap_mlx_array(::mlx::core::array&& arr, Dtype dtype) {
     return out;
 }
 
+namespace {
+
+// ``first`` again, the first of ``failed`` arrays out of ``total`` whose
+// evaluation threw, with what was being run in the message.  A Lucid error
+// already names its op and keeps its class; what MLX threw (an allocation
+// past the device's buffer limit, a kernel that refused its arguments)
+// becomes a ``LucidError`` — ``InvalidArgument`` for MLX's argument
+// refusals, as the binding translator maps them everywhere else.
+[[noreturn]] void
+raise_eval_failure(const std::exception_ptr& first, std::size_t failed, std::size_t total) {
+    const std::string what = "metal synchronize: " + std::to_string(failed) + " of " +
+                             std::to_string(total) +
+                             " pending GPU arrays failed to evaluate; the first raised: ";
+    try {
+        std::rethrow_exception(first);
+    } catch (const LucidError&) {
+        throw;
+    } catch (const std::invalid_argument& e) {
+        throw InvalidArgument(what + e.what());
+    } catch (const std::exception& e) {
+        throw LucidError(what + e.what());
+    }
+}
+
+// Run each array on its own, so one graph that cannot run does not keep the
+// others from completing, and raise the first failure once all have had
+// their turn.  Rerunning an array the batch already evaluated is a no-op.
+void evaluate_each(std::vector<::mlx::core::array>& arrays) {
+    std::exception_ptr first;
+    std::size_t failed = 0;
+    for (auto& arr : arrays) {
+        try {
+            arr.eval();
+        } catch (const std::exception&) {
+            if (!first)
+                first = std::current_exception();
+            ++failed;
+        }
+    }
+    if (first)
+        raise_eval_failure(first, failed, arrays.size());
+}
+
+}  // namespace
+
 std::size_t evaluate_pending() {
     std::vector<::mlx::core::array> arrays;
     {
@@ -322,17 +369,16 @@ std::size_t evaluate_pending() {
         g_pending.clear();
         g_prune_at = kPruneFloor;
     }
-    if (!arrays.empty()) {
-        try {
-            ::mlx::core::eval(arrays);
-        } catch (...) {
-            for (auto& arr : arrays) {
-                try {
-                    arr.eval();
-                } catch (...) {
-                }
-            }
-        }
+    if (arrays.empty())
+        return 0;
+    try {
+        ::mlx::core::eval(arrays);
+    } catch (const std::exception&) {
+        // One graph that cannot run fails the whole batch and leaves the
+        // rest unrun.  The batch's error is not raised here: the per-array
+        // pass meets the same failure and raises it with the count, and a
+        // batch too large as a whole that runs piece by piece is no error.
+        evaluate_each(arrays);
     }
     return arrays.size();
 }
