@@ -382,6 +382,11 @@ _BY_NAME: dict[str, Any] = {
     "chunks": 2,
     "sections": 2,
     "split_size": 2,
+    # An int every axis divides into.  The annotation fallback gave the
+    # sequence ``(2, 2)``, which sums to the axis of a 1-D probe only; since
+    # LCD-490 split refuses sizes that do not, and the first call left to
+    # run was rank 1, so the rank axis had nothing to take away.
+    "split_size_or_sections": 1,
     "start": 0,
     "end": 4,
     "step": 1,

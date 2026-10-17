@@ -34,6 +34,7 @@ from lucid.test.audit._axes import (
     SecondGradientAxis,
 )
 from lucid.test.audit._axes_data import SchedulerAxis
+from lucid.test.audit._axes_stability import RankAxis
 from lucid.test.audit._axes_subsystem import DistributionAxis, SmokeAxis
 from lucid.test.audit._result import Status
 
@@ -136,3 +137,10 @@ def test_signature_derived_calls_use_the_values_the_annotation_names(
 )
 def test_private_grid_helpers_are_not_audited_as_api(helper: str) -> None:
     assert f"F.{helper}" not in _symbols()
+
+
+def test_split_is_probed_with_sizes_its_axis_takes() -> None:
+    # Since LCD-490 split refuses sizes that do not sum to the axis; the
+    # derived ``(2, 2)`` fitted only a 1-D probe, and the rank axis lost it.
+    finding = RankAxis().run(_symbol("lucid.split"), _context())
+    assert finding.status == Status.PASS, finding.detail
