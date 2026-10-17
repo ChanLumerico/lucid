@@ -2,7 +2,7 @@ r"""
 Normalization modules.
 """
 
-from typing import override
+from typing import ClassVar, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
@@ -12,6 +12,7 @@ from lucid.nn.modules._lazy import fill as _fill
 from lucid._factories.creation import ones, zeros
 import lucid as _lucid
 from lucid._C import engine as _C_engine
+import lucid.nn.init as init
 from lucid.nn.functional._spatial_args import _add_batch_axis, _drop_batch_axis
 from lucid.nn.functional.normalization import (
     layer_norm,
@@ -425,14 +426,145 @@ class GroupNorm(Module):
         return f"{self.num_groups}, {self.num_channels}, eps={self.eps}, affine={self.affine}"
 
 
-class _BatchNormBase(Module):
+class _NormBase(Module):
+    """The state BatchNorm and InstanceNorm share, as the reference shares it.
+
+    An optional affine pair and optional running statistics, ``num_features``
+    long each; their reset; and the migration of checkpoints older than the
+    batch counter.  Only the forwards differ.
+    """
+
+    # Version 2 introduced ``num_batches_tracked``.
+    _version: ClassVar[int] = 2
+    weight: Parameter | None
+    bias: Parameter | None
+
+    def __init__(
+        self,
+        num_features: int,
+        eps: float,
+        momentum: float | None,
+        affine: bool,
+        track_running_stats: bool,
+        device: DeviceLike,
+        dtype: DTypeLike,
+    ) -> None:
+        """Initialise the shared state.  See the subclasses for the parameters."""
+        super().__init__()
+        self.num_features: int = num_features
+        self.eps: float = eps
+        self.momentum: float | None = momentum
+        self.affine: bool = affine
+        self.track_running_stats: bool = track_running_stats
+        if not affine:
+            self.weight = None
+            self.bias = None
+        for name in ("running_mean", "running_var", "num_batches_tracked"):
+            self.register_buffer(name, None)
+        self._make_state(num_features, device, dtype)
+
+    def _make_state(
+        self, num_features: int, device: DeviceLike, dtype: DTypeLike
+    ) -> None:
+        """Make the parameters and buffers this layer keeps, ``num_features`` long."""
+        if self.affine:
+            # ``fill``: a lazy layer's placeholders are what anything that
+            # read ``parameters()`` early holds; an eager layer has none.
+            weight = ones(num_features, dtype=dtype, device=device)
+            bias = zeros(num_features, dtype=dtype, device=device)
+            _fill(self, "weight", Parameter(weight))
+            _fill(self, "bias", Parameter(bias))
+        if self.track_running_stats:
+            mean = zeros(num_features, dtype=dtype, device=device)
+            var = ones(num_features, dtype=dtype, device=device)
+            # ``int64`` whatever the layer's dtype: it counts batches.
+            count = _lucid.zeros((), dtype=_lucid.int64, device=device)
+            self._buffers["running_mean"] = mean
+            self._buffers["running_var"] = var
+            self._buffers["num_batches_tracked"] = count
+
+    def reset_running_stats(self) -> None:
+        """Put ``running_mean`` to zeros, ``running_var`` to ones and the count to zero.
+
+        In place, so anything holding a buffer sees the reset.  Nothing to do
+        without ``track_running_stats``, or on a lazy layer before its first
+        input.
+        """
+        if not self.track_running_stats:
+            return
+        for name, value in (
+            ("running_mean", 0),
+            ("running_var", 1),
+            ("num_batches_tracked", 0),
+        ):
+            buffer = self._buffers.get(name)
+            if buffer is not None:
+                buffer.fill_(value)
+
+    def reset_parameters(self) -> None:
+        """Reset the running statistics, then ``weight`` to ones and ``bias`` to zeros.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> import lucid.nn as nn
+        >>> bn = nn.BatchNorm1d(2)
+        >>> _ = bn(lucid.randn(4, 2))
+        >>> bn.reset_parameters()
+        >>> bn.running_mean.tolist(), int(bn.num_batches_tracked.item())
+        ([0.0, 0.0], 0)
+        """
+        self.reset_running_stats()
+        if self.affine and self.weight is not None and self.bias is not None:
+            init.ones_(self.weight)
+            init.zeros_(self.bias)
+
+    @override
+    def _load_from_state_dict(
+        self,
+        state_dict: dict[str, Tensor],
+        prefix: str,
+        local_metadata: dict[str, object],
+        strict: bool,
+        missing_keys: list[str],
+        unexpected_keys: list[str],
+        error_msgs: list[str],
+    ) -> None:
+        """Load, giving a checkpoint older than the batch counter a zero count."""
+        version = local_metadata.get("version") if local_metadata else None
+        if (not isinstance(version, int) or version < 2) and self.track_running_stats:
+            key = f"{prefix}num_batches_tracked"
+            if key not in state_dict:
+                state_dict[key] = _lucid.zeros((), dtype=_lucid.int64)
+        from lucid.nn._state_dict import _default_load_from_state_dict
+
+        _default_load_from_state_dict(
+            self,
+            state_dict,
+            prefix,
+            local_metadata,
+            strict,
+            missing_keys,
+            unexpected_keys,
+            error_msgs,
+        )
+
+    @override
+    def extra_repr(self) -> str:
+        """Return a string representation of the layer's configuration."""
+        return (
+            f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, "
+            f"affine={self.affine}, track_running_stats={self.track_running_stats}"
+        )
+
+
+class _BatchNormBase(_NormBase):
     r"""Private base class for BatchNorm1d, BatchNorm2d, and BatchNorm3d.
 
-    Implements the shared parameter layout, running-statistics bookkeeping,
-    and checkpoint-migration logic that all batch normalization variants
-    share.  Concrete subclasses differ only in the rank of input they
-    accept — the actual normalization computation is delegated to
-    :func:`lucid.nn.functional.batch_norm`.
+    Implements the running-statistics update on top of the state
+    :class:`_NormBase` keeps.  Concrete subclasses differ only in the rank
+    of input they accept — the actual normalization computation is
+    delegated to :func:`lucid.nn.functional.batch_norm`.
 
     The normalization formula is:
 
@@ -505,10 +637,6 @@ class _BatchNormBase(Module):
       batch-norm conventions.
     """
 
-    # Version 2 introduces `num_batches_tracked`.  Checkpoints saved with
-    # version < 2 (or no metadata) are migrated by `_load_from_state_dict`.
-    _version: int = 2  # type: ignore[misc]
-
     def __init__(
         self,
         num_features: int,
@@ -520,74 +648,8 @@ class _BatchNormBase(Module):
         dtype: DTypeLike = None,
     ) -> None:
         """Initialise the _BatchNormBase module. See the class docstring for parameter semantics."""
-        super().__init__()
-        self.num_features = num_features
-        self.eps = eps
-        self.momentum = momentum
-        self.affine = affine
-        self.track_running_stats = track_running_stats
-
-        if affine:
-            self.weight: Parameter | None = Parameter(
-                ones(num_features, dtype=dtype, device=device)
-            )
-            self.bias: Parameter | None = Parameter(
-                zeros(num_features, dtype=dtype, device=device)
-            )
-        else:
-            self.weight = None
-            self.bias = None
-
-        if track_running_stats:
-            self.register_buffer(
-                "running_mean", zeros(num_features, dtype=dtype, device=device)
-            )
-            self.register_buffer(
-                "running_var", ones(num_features, dtype=dtype, device=device)
-            )
-            # `num_batches_tracked` is int64 scalar regardless of the module's
-            # float dtype.  When momentum is None this drives the cumulative
-            # moving average via 1/num_batches_tracked.
-            self.register_buffer(
-                "num_batches_tracked",
-                _lucid.zeros((), dtype=_lucid.int64, device=device),
-            )
-        else:
-            self.register_buffer("running_mean", None)
-            self.register_buffer("running_var", None)
-            self.register_buffer("num_batches_tracked", None)
-
-    @override
-    def _load_from_state_dict(
-        self: _BatchNormBase | _InstanceNormBase,
-        state_dict: dict[str, Tensor],
-        prefix: str,
-        local_metadata: dict[str, object],
-        strict: bool,
-        missing_keys: list[str],
-        unexpected_keys: list[str],
-        error_msgs: list[str],
-    ) -> None:
-        # Version-1 checkpoints predate `num_batches_tracked`.
-        """Internal helper for the _BatchNormBase module."""
-        version: int | None = (
-            local_metadata.get("version") if local_metadata else None  # type: ignore[assignment]
-        )
-        if (version is None or version < 2) and self.track_running_stats:
-            key: str = f"{prefix}num_batches_tracked"
-            if key not in state_dict:
-                state_dict[key] = _lucid.zeros((), dtype=_lucid.int64)
-        from lucid.nn._state_dict import _default_load_from_state_dict
-
-        _default_load_from_state_dict(
-            self,
-            state_dict,
-            prefix,
-            local_metadata,
-            strict,
-            missing_keys,
-            unexpected_keys,
-            error_msgs,
+        super().__init__(
+            num_features, eps, momentum, affine, track_running_stats, device, dtype
         )
 
     @override
@@ -660,14 +722,6 @@ class _BatchNormBase(Module):
         if counter is None:
             return 0.0
         return 1.0 / float(int(counter.item()) + 1)
-
-    @override
-    def extra_repr(self) -> str:
-        """Return a string representation of the layer's configuration."""
-        return (
-            f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, "
-            f"affine={self.affine}, track_running_stats={self.track_running_stats}"
-        )
 
 
 class BatchNorm1d(_BatchNormBase):
@@ -949,7 +1003,7 @@ class BatchNorm3d(_BatchNormBase):
     """
 
 
-class _InstanceNormBase(Module):
+class _InstanceNormBase(_NormBase):
     r"""Private base class for InstanceNorm1d, InstanceNorm2d, and InstanceNorm3d.
 
     Performs per-instance normalization: each ``(n, c)`` slice of the
@@ -978,8 +1032,9 @@ class _InstanceNormBase(Module):
         Number of channels :math:`C`.
     eps : float, optional
         Stability constant.  Default: ``1e-5``.
-    momentum : float, optional
-        EMA factor for optional running statistics.  Default: ``0.1``.
+    momentum : float or None, default=0.1
+        EMA factor for optional running statistics; ``None`` leaves them
+        where they are, as ``0`` would.
     affine : bool, optional
         If ``True``, allocates per-channel :math:`\gamma` and
         :math:`\beta`.  Default: ``False``.
@@ -1015,55 +1070,20 @@ class _InstanceNormBase(Module):
     """
 
     _expected_dim: int = 0  # subclass overrides: 3 / 4 / 5
-    _version = _BatchNormBase._version
-    _load_from_state_dict = _BatchNormBase._load_from_state_dict
 
     def __init__(
         self,
         num_features: int,
         eps: float = 1e-5,
-        momentum: float = 0.1,
+        momentum: float | None = 0.1,
         affine: bool = False,
         track_running_stats: bool = False,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
         """Initialise the _InstanceNormBase module. See the class docstring for parameter semantics."""
-        super().__init__()
-        self.num_features: int = num_features
-        self.eps: float = eps
-        self.momentum: float = momentum
-        self.affine: bool = affine
-        self.track_running_stats: bool = track_running_stats
-
-        if affine:
-            self.weight: Parameter | None = Parameter(
-                ones(num_features, dtype=dtype, device=device)
-            )
-            self.bias: Parameter | None = Parameter(
-                zeros(num_features, dtype=dtype, device=device)
-            )
-        else:
-            self.weight = None
-            self.bias = None
-
-        if track_running_stats:
-            self.register_buffer(
-                "running_mean", zeros(num_features, dtype=dtype, device=device)
-            )
-            self.register_buffer(
-                "running_var", ones(num_features, dtype=dtype, device=device)
-            )
-        else:
-            self.register_buffer("running_mean", None)
-            self.register_buffer("running_var", None)
-        self.register_buffer(
-            "num_batches_tracked",
-            (
-                _lucid.zeros((), dtype=_lucid.int64, device=device)
-                if track_running_stats
-                else None
-            ),
+        super().__init__(
+            num_features, eps, momentum, affine, track_running_stats, device, dtype
         )
 
     def _check_input_dim(self, x: Tensor) -> None:
@@ -1103,18 +1123,12 @@ class _InstanceNormBase(Module):
             weight=self.weight,
             bias=self.bias,
             use_input_stats=self.training or not self.track_running_stats,
-            momentum=self.momentum,
+            # ``None`` is no update here, not a cumulative average: the
+            # reference passes it on as 0 and counts no batches.
+            momentum=0.0 if self.momentum is None else self.momentum,
             eps=self.eps,
         )
         return _drop_batch_axis(out, unbatched)
-
-    @override
-    def extra_repr(self) -> str:
-        """Return a string representation of the layer's configuration."""
-        return (
-            f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, "
-            f"affine={self.affine}, track_running_stats={self.track_running_stats}"
-        )
 
 
 class InstanceNorm1d(_InstanceNormBase):
@@ -1141,8 +1155,8 @@ class InstanceNorm1d(_InstanceNormBase):
         Number of channels :math:`C`.
     eps : float, optional
         Numerical stability constant.  Default: ``1e-5``.
-    momentum : float, optional
-        EMA factor used when ``track_running_stats=True``.  Default: ``0.1``.
+    momentum : float or None, default=0.1
+        EMA factor for running stats; ``None`` never updates them.
     affine : bool, optional
         If ``True``, learns per-channel scale and shift.  Default: ``False``.
     track_running_stats : bool, optional
@@ -1229,8 +1243,8 @@ class InstanceNorm2d(_InstanceNormBase):
         Number of feature channels :math:`C`.
     eps : float, optional
         Numerical stability constant.  Default: ``1e-5``.
-    momentum : float, optional
-        EMA factor for optional running stats.  Default: ``0.1``.
+    momentum : float or None, default=0.1
+        EMA factor for running stats; ``None`` never updates them.
     affine : bool, optional
         If ``True``, learns per-channel :math:`\gamma` and :math:`\beta`.
         Default: ``False``.
@@ -1318,8 +1332,8 @@ class InstanceNorm3d(_InstanceNormBase):
         Number of feature channels :math:`C`.
     eps : float, optional
         Numerical stability constant.  Default: ``1e-5``.
-    momentum : float, optional
-        EMA factor for optional running stats.  Default: ``0.1``.
+    momentum : float or None, default=0.1
+        EMA factor for running stats; ``None`` never updates them.
     affine : bool, optional
         If ``True``, learns per-channel :math:`\gamma` and :math:`\beta`.
         Default: ``False``.
@@ -1583,31 +1597,9 @@ class _LazyBatchNormMixin(_BatchNormBase):
             self.register_buffer("num_batches_tracked", None)
 
     def _initialize(self, num_features: int) -> None:
-        """Internal helper for the _LazyBatchNormMixin module."""
+        """Size the layer: make its state ``num_features`` long."""
         self.num_features = num_features
-        if self.affine:
-            # ``fill`` and not assignment — the placeholder object is what
-            # anything that read ``parameters()`` early is holding on to.
-            _fill(
-                self,
-                "weight",
-                Parameter(ones(num_features, dtype=self._dtype, device=self._device)),
-            )
-            _fill(
-                self,
-                "bias",
-                Parameter(zeros(num_features, dtype=self._dtype, device=self._device)),
-            )
-        if self.track_running_stats:
-            self._buffers["running_mean"] = zeros(
-                num_features, dtype=self._dtype, device=self._device
-            )
-            self._buffers["running_var"] = ones(
-                num_features, dtype=self._dtype, device=self._device
-            )
-            self._buffers["num_batches_tracked"] = _lucid.zeros(
-                (), dtype=_lucid.int64, device=self._device
-            )
+        self._make_state(num_features, self._device, self._dtype)
 
     @override
     def _load_from_state_dict(
@@ -1863,8 +1855,8 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
     ----------
     eps : float, optional
         Numerical stability constant.  Default: ``1e-5``.
-    momentum : float, optional
-        EMA factor for optional running statistics.  Default: ``0.1``.
+    momentum : float or None, default=0.1
+        EMA factor for running stats; ``None`` never updates them.
     affine : bool, optional
         If ``True``, lazily allocates per-channel scale and shift.
         Default: ``False``.
@@ -1888,7 +1880,7 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
     def __init__(
         self,
         eps: float = 1e-5,
-        momentum: float = 0.1,
+        momentum: float | None = 0.1,
         affine: bool = False,
         track_running_stats: bool = False,
         device: DeviceLike = None,
@@ -1898,7 +1890,7 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
         Module.__init__(self)
         self.num_features: int | None = None  # type: ignore[assignment]
         self.eps: float = eps
-        self.momentum: float = momentum
+        self.momentum: float | None = momentum
         self.affine: bool = affine
         self.track_running_stats: bool = track_running_stats
         self._device: DeviceLike = device
@@ -1913,31 +1905,9 @@ class _LazyInstanceNormMixin(_InstanceNormBase):
             self.register_buffer(bname, None)
 
     def _initialize(self, num_features: int) -> None:
-        """Internal helper for the _LazyInstanceNormMixin module."""
+        """Size the layer: make its state ``num_features`` long."""
         self.num_features = num_features
-        if self.affine:
-            # ``fill`` and not assignment — the placeholder object is what
-            # anything that read ``parameters()`` early is holding on to.
-            _fill(
-                self,
-                "weight",
-                Parameter(ones(num_features, dtype=self._dtype, device=self._device)),
-            )
-            _fill(
-                self,
-                "bias",
-                Parameter(zeros(num_features, dtype=self._dtype, device=self._device)),
-            )
-        if self.track_running_stats:
-            self._buffers["running_mean"] = zeros(
-                num_features, dtype=self._dtype, device=self._device
-            )
-            self._buffers["running_var"] = ones(
-                num_features, dtype=self._dtype, device=self._device
-            )
-            self._buffers["num_batches_tracked"] = _lucid.zeros(
-                (), dtype=_lucid.int64, device=self._device
-            )
+        self._make_state(num_features, self._device, self._dtype)
 
     @override
     def _load_from_state_dict(
@@ -2002,8 +1972,8 @@ class LazyInstanceNorm1d(_LazyInstanceNormMixin):
     ----------
     eps : float, optional
         Numerical stability constant.  Default: ``1e-5``.
-    momentum : float, optional
-        EMA factor for optional running statistics.  Default: ``0.1``.
+    momentum : float or None, default=0.1
+        EMA factor for running stats; ``None`` never updates them.
     affine : bool, optional
         If ``True``, lazily allocates per-channel scale and shift.
         Default: ``False``.
@@ -2052,8 +2022,8 @@ class LazyInstanceNorm2d(_LazyInstanceNormMixin):
     ----------
     eps : float, optional
         Numerical stability constant.  Default: ``1e-5``.
-    momentum : float, optional
-        EMA factor for optional running statistics.  Default: ``0.1``.
+    momentum : float or None, default=0.1
+        EMA factor for running stats; ``None`` never updates them.
     affine : bool, optional
         If ``True``, lazily allocates per-channel scale and shift.
         Default: ``False``.
@@ -2103,8 +2073,8 @@ class LazyInstanceNorm3d(_LazyInstanceNormMixin):
     ----------
     eps : float, optional
         Numerical stability constant.  Default: ``1e-5``.
-    momentum : float, optional
-        EMA factor for optional running statistics.  Default: ``0.1``.
+    momentum : float or None, default=0.1
+        EMA factor for running stats; ``None`` never updates them.
     affine : bool, optional
         If ``True``, lazily allocates per-channel scale and shift.
         Default: ``False``.

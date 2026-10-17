@@ -2,6 +2,7 @@
 nn.functional normalization operations.
 """
 
+import math
 from typing import TYPE_CHECKING
 
 from lucid._C import engine as _C_engine
@@ -445,6 +446,22 @@ def _fold_instance_stats(
     _C_engine.eval_tensors_async([running_mean._impl, running_var._impl])
 
 
+def _check_instance_norm_input(x: Tensor, use_input_stats: bool) -> None:
+    """Refuse an input instance normalisation has no statistics for."""
+    if x.ndim < 3:
+        raise ValueError(
+            f"instance_norm: expected at least 3-D input (N, C, *spatial), "
+            f"got ndim={x.ndim}"
+        )
+    if use_input_stats and math.prod(x.shape[2:]) == 1:
+        # One element is its own mean with zero variance, so the output is
+        # ``bias`` whatever the input; the reference refuses it too.
+        raise ValueError(
+            "instance_norm: expected more than 1 spatial element when training, "
+            f"got input size {tuple(x.shape)}"
+        )
+
+
 def instance_norm(
     x: Tensor,
     running_mean: Tensor | None = None,
@@ -481,8 +498,8 @@ def instance_norm(
         Per-channel shift :math:`\beta` of shape ``(C,)``.
     use_input_stats : bool, optional
         When ``True`` (default) statistics come from the current
-        instance.  When ``False`` and running buffers are supplied,
-        those are used instead.
+        instance, which needs more than one spatial element (else
+        ``ValueError``).  When ``False``, the running buffers if given.
     momentum : float, optional
         Weight the batch takes when it is folded into the running
         buffers: ``running = (1 - momentum) * running + momentum * batch``.
@@ -518,11 +535,7 @@ def instance_norm(
     >>> y.shape
     (4, 3, 64, 64)
     """
-    if x.ndim < 3:
-        raise ValueError(
-            f"instance_norm: expected at least 3-D input (N, C, *spatial), "
-            f"got ndim={x.ndim}"
-        )
+    _check_instance_norm_input(x, use_input_stats)
     spatial_dims: list[int] = list(range(2, x.ndim))
     C: int = int(x.shape[1])
     # Channel-broadcast shape (1, C, 1, 1, ...) for affine + running stats.

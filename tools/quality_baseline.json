@@ -256,7 +256,7 @@
     "lucid/nn/functional/pooling.py": 39,
     "lucid/nn/modules/activation.py": 727,
     "lucid/nn/modules/loss.py": 1090,
-    "lucid/nn/modules/normalization.py": 644,
+    "lucid/nn/modules/normalization.py": 614,
     "lucid/nn/modules/pooling.py": 808,
     "lucid/nn/modules/rnn.py": 87,
     "lucid/optim/lr_scheduler.py": 446,
@@ -360,7 +360,7 @@
     "lucid/nn/module.py": 1,
     "lucid/nn/modules/attention.py": 4,
     "lucid/nn/modules/container.py": 1,
-    "lucid/nn/modules/normalization.py": 3,
+    "lucid/nn/modules/normalization.py": 2,
     "lucid/nn/parameter.py": 1,
     "lucid/utils/tokenizer/_byte_bpe.py": 2,
     "lucid/weights/_loading.py": 1
@@ -393,7 +393,6 @@
    "type-ignore[misc]": {
     "lucid/_tensor/tensor.py": 1,
     "lucid/nn/modules/container.py": 1,
-    "lucid/nn/modules/normalization.py": 1,
     "lucid/nn/utils/spectral_norm.py": 1,
     "lucid/utils/tokenizer/_bpe.py": 1
    },
@@ -774,7 +773,7 @@
     "lucid/nn/init.py": 2,
     "lucid/nn/intrinsic/modules.py": 10,
     "lucid/nn/intrinsic/qat/modules.py": 20,
-    "lucid/nn/module.py": 2,
+    "lucid/nn/module.py": 1,
     "lucid/nn/modules/__init__.py": 3,
     "lucid/nn/modules/_conv_common.py": 5,
     "lucid/nn/modules/activation.py": 42,
@@ -1345,7 +1344,7 @@
     "lucid/nn/functional/dropout.py": 11,
     "lucid/nn/functional/linear.py": 9,
     "lucid/nn/functional/loss.py": 203,
-    "lucid/nn/functional/normalization.py": 63,
+    "lucid/nn/functional/normalization.py": 59,
     "lucid/nn/functional/positional.py": 7,
     "lucid/nn/functional/sampling.py": 186,
     "lucid/nn/functional/sparse.py": 9,

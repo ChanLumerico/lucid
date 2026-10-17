@@ -926,6 +926,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - widen CPU half BatchNorm eval to float32 (LCD-487)
 
+- norm layers share one base; reset, momentum=None (LCD-502)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
