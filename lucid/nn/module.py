@@ -30,6 +30,7 @@ from lucid.nn.hooks import (
     _GLOBAL_FORWARD_PRE_HOOKS,
     RemovableHandle,
 )
+from lucid.nn._tree_version import _TrackedDict, _tree_changed
 from lucid._types import _ModuleOutput, _ForwardPreHook, _ForwardHook, _BackwardHook
 
 if TYPE_CHECKING:
@@ -50,6 +51,17 @@ class UninitializedParameterWarning(UserWarning):
 
 
 _HOOK_ID: int = 0
+
+# The registries ``lucid.compile`` keys an executable on, held as
+# ``_TrackedDict``s so every write to one moves the tree version
+# (``nn/_tree_version.py``) — they are written directly, not set as attributes.
+_TRACKED_REGISTRIES = (
+    "_modules",
+    "_forward_pre_hooks",
+    "_forward_hooks",
+    "_backward_pre_hooks",
+    "_backward_hooks",
+)
 
 
 def _next_hook_id() -> int:
@@ -157,15 +169,12 @@ class Module:
         """Initialise the instance.  See the class docstring for parameter semantics."""
         object.__setattr__(self, "_parameters", OrderedDict())
         object.__setattr__(self, "_buffers", OrderedDict())
-        object.__setattr__(self, "_modules", OrderedDict())
         object.__setattr__(self, "_non_persistent_buffers", set())
-        object.__setattr__(self, "_forward_pre_hooks", OrderedDict())
-        object.__setattr__(self, "_forward_hooks", OrderedDict())
         object.__setattr__(self, "_forward_pre_hooks_with_kwargs", set())
         object.__setattr__(self, "_forward_hooks_with_kwargs", set())
         object.__setattr__(self, "_forward_hooks_always_called", set())
-        object.__setattr__(self, "_backward_pre_hooks", OrderedDict())
-        object.__setattr__(self, "_backward_hooks", OrderedDict())
+        for name in _TRACKED_REGISTRIES:
+            object.__setattr__(self, name, _TrackedDict())
         object.__setattr__(self, "_load_state_dict_pre_hooks", OrderedDict())
         object.__setattr__(self, "_load_state_dict_post_hooks", OrderedDict())
         object.__setattr__(self, "training", True)
@@ -507,6 +516,28 @@ class Module:
                 self._non_persistent_buffers.add(name)
         else:
             object.__setattr__(self, name, value)
+        _tree_changed()
+
+    def __setstate__(self, state: object) -> None:
+        """Restore a pickled or copied module, its registries tracked.
+
+        ``state`` is what the default reduce produced: the instance
+        ``__dict__``, or a ``(dict, slots)`` pair for a subclass with
+        ``__slots__``.  A module pickled before its registries were
+        ``_TrackedDict``\\ s brings plain ones back, whose writes the
+        compiled cache would not see; they are converted.
+        """
+        dict_state, slot_state = state if isinstance(state, tuple) else (state, None)
+        if isinstance(dict_state, dict):
+            self.__dict__.update(dict_state)
+        if isinstance(slot_state, dict):
+            for name, value in slot_state.items():
+                object.__setattr__(self, name, value)
+        for name in _TRACKED_REGISTRIES:
+            registry = self.__dict__.get(name)
+            if isinstance(registry, dict) and not isinstance(registry, _TrackedDict):
+                self.__dict__[name] = _TrackedDict(registry)
+        _tree_changed()
 
     def __getattr__(self, name: str) -> Tensor | Parameter | Module:
         """Attribute lookup fallback; resolves Parameter / buffer / submodule registries when ordinary lookup fails."""
@@ -537,6 +568,7 @@ class Module:
             self.__dict__.pop(name, None)
             return
         object.__delattr__(self, name)
+        _tree_changed()
 
     # ── parameter / module / buffer traversal ─────────────────────────────
 

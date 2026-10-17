@@ -130,6 +130,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - vectorize f16 and bf16 conversions in Half.h (LCD-298)
 
+- cache the per-call module-tree walk behind a version
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats

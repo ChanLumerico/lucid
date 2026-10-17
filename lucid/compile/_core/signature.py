@@ -29,7 +29,8 @@ for ``forward(self, x, training=True)`` style guard arguments).
 """
 
 import struct
-from collections.abc import Iterable
+import weakref
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -213,12 +214,17 @@ def _parametrization_modules(mod: Module) -> list[Module]:
     return [c for c in param_d.values() if isinstance(c, Module)]
 
 
-def _iter_modules(model: object) -> list[Module]:
-    """Return ``model`` and every reachable submodule in deterministic order."""
+def _root_modules(model: object) -> list[Module]:
+    """``model`` if it is a module, then the modules its ``_fn`` closes over."""
     from lucid.nn.module import Module
 
     roots: list[Module] = [model] if isinstance(model, Module) else []
     roots.extend(_closure_modules(model))
+    return roots
+
+
+def _iter_modules(roots: Sequence[Module]) -> list[Module]:
+    """Every module reachable from ``roots``, each once, in deterministic order."""
     seen: set[int] = set()
     out: list[Module] = []
     for root in roots:
@@ -268,16 +274,13 @@ def _module_state(model: object) -> tuple[object, ...]:
     """Snapshot every submodule's ``training`` flag and public scalar attributes."""
     if model is None:
         return ()
-    states: list[object] = [
-        (bool(getattr(sub, "training", False)), _dict_scalar_attrs(sub))
-        for sub in _iter_modules(model)
-    ]
+    states = _tree_walk(model).states
     fn = getattr(model, "_fn", None)
     if fn is not None:
         fn_attrs = _dict_scalar_attrs(fn)
         if fn_attrs:
-            states.append(("fn", fn_attrs))
-    return tuple(states)
+            return (*states, ("fn", fn_attrs))
+    return states
 
 
 def _handle_key(handle: object) -> int | None:
@@ -314,6 +317,59 @@ def _sub_has_active_hooks(sub: Module) -> bool:
     return bool(pre_hooks and (set(pre_hooks) - _internal_pre_hook_keys(sub)))
 
 
+@dataclass(frozen=True, slots=True)
+class _TreeWalk:
+    """What one walk of a model's module tree found, and when it was taken."""
+
+    version: int
+    # The roots walked from, held weakly: a closure that now names another
+    # module is another tree, and a root that has died cannot be mistaken
+    # for a new module at its address.
+    roots: tuple[weakref.ref[Module], ...]
+    states: tuple[object, ...]
+    hooked: bool
+
+    def walked_from(self, roots: Sequence[Module]) -> bool:
+        return len(roots) == len(self.roots) and all(
+            ref() is root for ref, root in zip(self.roots, roots, strict=True)
+        )
+
+
+_WALKS: weakref.WeakKeyDictionary[Module, _TreeWalk] = weakref.WeakKeyDictionary()
+
+
+def _tree_walk(model: object) -> _TreeWalk:
+    """The ``training`` flags, scalar attributes and hooks of ``model``'s tree.
+
+    The walk is O(submodules) — a millisecond a call on a 200-module model —
+    so it is kept per model and taken again only when the tree version
+    (``lucid/nn/_tree_version.py``) has moved or the closure names other
+    modules.  The version is read before the walk: a change made while it
+    runs moves it past the version stored, and the next call walks again.
+    """
+    from lucid.nn._tree_version import _tree_version
+    from lucid.nn.module import Module
+
+    version = _tree_version()
+    roots = _root_modules(model)
+    cached = _WALKS.get(model) if isinstance(model, Module) else None
+    if cached is not None and cached.version == version and cached.walked_from(roots):
+        return cached
+    subs = _iter_modules(roots)
+    walk = _TreeWalk(
+        version=version,
+        roots=tuple(weakref.ref(root) for root in roots),
+        states=tuple(
+            (bool(getattr(sub, "training", False)), _dict_scalar_attrs(sub))
+            for sub in subs
+        ),
+        hooked=any(_sub_has_active_hooks(sub) for sub in subs),
+    )
+    if isinstance(model, Module):
+        _WALKS[model] = walk
+    return walk
+
+
 def model_has_active_hooks(model: object) -> bool:
     """Return ``True`` if ``model`` or any submodule has active forward/backward hooks."""
     from lucid.nn.hooks import (
@@ -330,7 +386,7 @@ def model_has_active_hooks(model: object) -> bool:
         or _GLOBAL_BACKWARD_HOOKS
     ):
         return True
-    return any(_sub_has_active_hooks(sub) for sub in _iter_modules(model))
+    return _tree_walk(model).hooked
 
 
 def leaf_tensors(args: Iterable[object], kwargs: dict[str, object]) -> list[Tensor]:
