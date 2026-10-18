@@ -111,3 +111,17 @@ def test_part_checks_stage_helper_continues_and_exits_one_at_end(
     assert "RAN_SECOND" in result.stdout
     assert "First failing stage" in result.stderr
     assert "First failing stage" in summary_file.read_text()
+
+
+def test_pyproject_test_extra_includes_quality_gate_collectors() -> None:
+    """``[project.optional-dependencies].test`` must include lizard and vulture for unit tests."""
+    import tomllib
+
+    root = Path(__file__).resolve().parents[4]
+    data = tomllib.loads((root / "pyproject.toml").read_text())
+    test_deps = data["project"]["optional-dependencies"]["test"]
+    quality_deps = data["dependency-groups"]["quality"]
+    for pkg in ("lizard", "vulture"):
+        pinned = next(d for d in quality_deps if d.startswith(f"{pkg}=="))
+        assert pinned in test_deps, f"{pinned!r} missing from [project.optional-dependencies].test"
+

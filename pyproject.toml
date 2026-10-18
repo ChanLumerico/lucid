@@ -112,6 +112,10 @@ test = [
     "numpy>=1.24",
     # Used by models serialization round-trip tests.
     "safetensors>=0.4",
+    # Used by lucid/test/unit/test_quality_gate_deadcode.py (pinned to match
+    # [dependency-groups].quality).
+    "lizard==1.24.0",
+    "vulture==2.16",
     # The reference framework is *intentionally* not declared here —
     # parity tests use a lazy import and skip cleanly when missing.
     # Install it separately when running parity / perf comparisons.
