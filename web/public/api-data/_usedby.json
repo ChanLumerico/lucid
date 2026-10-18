@@ -74,11 +74,11 @@
     },
     {
       "kind": "module",
-      "module": "lucid._ops.composite.elementwise"
+      "module": "lucid._ops.composite.indexing"
     },
     {
       "kind": "module",
-      "module": "lucid._ops.composite.indexing"
+      "module": "lucid._ops.composite.reductions"
     },
     {
       "kind": "module",

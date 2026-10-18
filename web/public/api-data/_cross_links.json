@@ -664,7 +664,7 @@
         "kind": "free_function"
       }
     ],
-    "lucid.ops.composite.log_softmax": [
+    "lucid.ops.log_softmax": [
       {
         "name": "LogSoftmaxBackward",
         "kind": "backward_node"
@@ -1058,7 +1058,7 @@
         "kind": "free_function"
       }
     ],
-    "lucid.ops.composite.softmax": [
+    "lucid.ops.softmax": [
       {
         "name": "SoftmaxBackward",
         "kind": "backward_node"
@@ -2654,8 +2654,8 @@
         "kind": "function"
       },
       {
-        "path": "lucid.ops.composite.log_softmax",
-        "module": "lucid.ops.composite",
+        "path": "lucid.ops.log_softmax",
+        "module": "lucid.ops",
         "kind": "function"
       }
     ],
@@ -2929,8 +2929,8 @@
         "kind": "function"
       },
       {
-        "path": "lucid.ops.composite.softmax",
-        "module": "lucid.ops.composite",
+        "path": "lucid.ops.softmax",
+        "module": "lucid.ops",
         "kind": "function"
       }
     ],
@@ -3900,8 +3900,8 @@
         "kind": "function"
       },
       {
-        "path": "lucid.ops.composite.log_softmax",
-        "module": "lucid.ops.composite",
+        "path": "lucid.ops.log_softmax",
+        "module": "lucid.ops",
         "kind": "function"
       }
     ],
@@ -4455,8 +4455,8 @@
         "kind": "function"
       },
       {
-        "path": "lucid.ops.composite.softmax",
-        "module": "lucid.ops.composite",
+        "path": "lucid.ops.softmax",
+        "module": "lucid.ops",
         "kind": "function"
       }
     ],
