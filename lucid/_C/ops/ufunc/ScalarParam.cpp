@@ -12,6 +12,7 @@
 #include "../../backend/Dispatcher.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
+#include "../../core/Half.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
@@ -21,6 +22,7 @@
 #include "../bfunc/Compare.h"
 #include "../bfunc/Mul.h"
 #include "../gfunc/Gfunc.h"
+#include "../utils/Promote.h"
 #include "../utils/Select.h"
 #include "Astype.h"
 #include "Predicate.h"
@@ -43,8 +45,16 @@ Storage PowScalarBackward::grad_formula(const Storage& g) {
 }
 
 // Capture exp before wiring autograd so grad_formula has it at backward time.
-TensorImplPtr PowScalarBackward::forward(const TensorImplPtr& a, double exp) {
-    Validator::input(a, "pow_scalar.a").non_null();
+TensorImplPtr PowScalarBackward::forward(const TensorImplPtr& a_in, double exp) {
+    Validator::input(a_in, "pow_scalar.a").non_null();
+    const TensorImplPtr a = promote_for_schema(schema_v1, a_in);
+    if (a->dtype() == Dtype::F16) {
+        exp = backend::detail::half_bits_to_float(
+            backend::detail::float_to_half_bits(static_cast<float>(exp)));
+    } else if (a->dtype() == Dtype::BF16) {
+        exp = backend::detail::bfloat16_bits_to_float(
+            backend::detail::float_to_bfloat16_bits(static_cast<float>(exp)));
+    }
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     scope.set_attr("exp", exp);
@@ -86,8 +96,9 @@ TensorImplPtr RPowScalarBackward::grad_formula_impl(const TensorImplPtr& g,
 
 // Manually saves the output in bwd->saved_output_ because the standard
 // wire_autograd helper (called with save_output=false) does not do so.
-TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a) {
-    Validator::input(a, "rpow_scalar.a").non_null();
+TensorImplPtr RPowScalarBackward::forward(double base, const TensorImplPtr& a_in) {
+    Validator::input(a_in, "rpow_scalar.a").non_null();
+    const TensorImplPtr a = promote_for_schema(schema_v1, a_in);
 
     OpScopeFull scope{schema_v1.name, a->device(), a->dtype(), a->shape()};
     scope.set_attr("base", base);

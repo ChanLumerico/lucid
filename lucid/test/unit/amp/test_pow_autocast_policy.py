@@ -136,21 +136,47 @@ def test_float32_scalar_pow_agrees_with_tensor_pow_under_autocast(
 
 
 @_metal_only
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "LCD-475: pow_scalar never consults its ForceFP32 schema, so a half "
-        "base under autocast stays half; honouring it breaks "
-        "local_response_norm's same-dtype div under autocast"
-    ),
-)
+@pytest.mark.parametrize("exponent", [2.0, 1.1])
 @pytest.mark.parametrize("dtype", [lucid.float16, lucid.bfloat16], ids=str)
 def test_half_scalar_pow_under_metal_autocast_runs_in_float32(
-    ref: ModuleType, dtype: lucid.dtype
+    ref: ModuleType, dtype: lucid.dtype, exponent: float
 ) -> None:
-    got, want = _run_both(ref, "metal", dtype, lambda lib, a, b: a**2.0)
+    got, want = _run_both(ref, "metal", dtype, lambda lib, a, b: a**exponent)
     assert got.dtype == lucid.float32
     _assert_matches(got, want)
+
+    x = lucid.tensor([0.5, 1.25, 2.0, 3.0], dtype=dtype, device="metal", requires_grad=True)
+    with autocast(device_type="metal", dtype=lucid.float16):
+        y_pow = _C_engine.pow_scalar(x._impl, exponent)
+        y_rpow = _C_engine.rpow_scalar(2.0, x._impl)
+    assert y_pow.dtype == _C_engine.Dtype.F32
+    assert y_rpow.dtype == _C_engine.Dtype.F32
+
+
+@_metal_only
+@pytest.mark.parametrize("dtype", [lucid.float32, lucid.float16, lucid.bfloat16], ids=str)
+def test_local_response_norm_under_metal_autocast_runs_in_float32(
+    ref: ModuleType, dtype: lucid.dtype
+) -> None:
+    rdev = _ref_device(ref, "metal")
+    rdt = _ref_dtype(ref, dtype)
+    vals = [[[0.5, 1.25], [2.0, 3.0], [0.75, 1.5], [4.0, 2.5]]]
+    x = lucid.tensor(vals, dtype=dtype, device="metal", requires_grad=True)
+    rx = ref.tensor(vals, dtype=rdt, device=rdev, requires_grad=True)
+    with autocast(device_type="metal", dtype=lucid.float16):
+        got = lucid.nn.functional.local_response_norm(x, size=2)
+    with ref.autocast(device_type=rdev, dtype=ref.float16):
+        want_amp = ref.nn.functional.local_response_norm(rx.detach(), size=2)
+    want = ref.nn.functional.local_response_norm(rx.float(), size=2)
+    assert got.dtype == lucid.float32
+    assert want_amp.dtype == ref.float32
+    _assert_matches(got.detach(), want.detach())
+    got.sum().backward()
+    want.sum().backward()
+    assert x.grad is not None and x.grad.dtype == dtype
+    np.testing.assert_allclose(
+        x.grad.float().numpy(), rx.grad.float().cpu().numpy(), rtol=1e-2, atol=1e-3
+    )
 
 
 @_metal_only

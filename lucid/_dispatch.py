@@ -1,5 +1,3 @@
-import math
-import struct
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 from lucid._C import engine as _C_engine
@@ -98,40 +96,15 @@ def _scalar_power(
 
     Returns ``None`` for anything else — a tensor, a bool, an integer or
     complex base — which keeps the general path and its promotion rules.
-
-    A half base takes the exponent rounded to its own dtype, as the general
-    path would hand it over: only mul, div and floor division read a number
-    at float32 (see :func:`_binary_operands`).  The Metal kernel rounded it
-    already; the CPU kernel read the double, so ``f16 ** 1.1`` differed
-    between the two streams and from the reference.
+    When the computation stays in a half dtype (outside Metal autocast),
+    ``PowScalarBackward::forward`` rounds the exponent to that half dtype.
     """
     _promotion.check_pow_scalar(base.dtype, exponent)
     if isinstance(exponent, bool) or not isinstance(exponent, (int, float)):
         return None
     if base.dtype not in _REAL_FLOATS:
         return None
-    e = float(exponent)
-    if _promotion.is_half(base.dtype):
-        e = _round_to_half(e, base.dtype)
-    return _C_engine.pow_scalar(base, e)
-
-
-def _round_to_half(x: float, dt: _C_engine.Dtype) -> float:
-    """``x`` rounded to nearest-even in the half dtype ``dt``, as a float.
-
-    Done on the host with the standard library rather than through a 0-d
-    tensor, so it costs no engine call and works under shadow allocation.
-    """
-    try:
-        if dt == _C_engine.Dtype.F16:
-            return float(struct.unpack("<e", struct.pack("<e", x))[0])
-        bits = struct.unpack("<I", struct.pack("<f", x))[0]
-    except OverflowError:
-        return math.copysign(math.inf, x)
-    if math.isnan(x):
-        return x
-    bits = ((bits + 0x7FFF + ((bits >> 16) & 1)) >> 16) << 16
-    return float(struct.unpack("<f", struct.pack("<I", bits & 0xFFFFFFFF))[0])
+    return _C_engine.pow_scalar(base, float(exponent))
 
 
 def _is_bool_operand(x: object) -> bool:
