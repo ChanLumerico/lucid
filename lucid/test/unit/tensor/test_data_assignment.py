@@ -80,13 +80,117 @@ def test_the_value_keeps_its_own_flag_and_graph(device):
     assert value.requires_grad and value.grad_fn is not None
 
 
-def test_the_storage_is_shared_with_the_value_and_not_with_old_views():
-    value, t = lucid.zeros(2), lucid.ones(3)
+def test_the_storage_is_shared_with_the_value_and_not_with_old_views(device):
+    value = lucid.zeros(2, device=device)
+    t = lucid.ones(3, device=device)
     view = t[:2]
     t.data = value
     value.add_(5.0)
     assert t.tolist() == [5.0, 5.0]
     assert view.tolist() == [1.0, 1.0]
+    view.add_(10.0)
+    assert view.tolist() == [11.0, 11.0]
+    assert t.tolist() == [5.0, 5.0]
+    assert value.tolist() == [5.0, 5.0]
+
+
+@pytest.mark.parametrize(
+    "take",
+    [
+        lambda y: y[0],
+        lambda y: y[:, 0],
+        lambda y: y.view(-1),
+        lambda y: y.T,
+    ],
+    ids=["row", "col", "flat", "transpose"],
+)
+def test_setting_data_on_a_view_detaches_it_from_its_old_base(device, take):
+    y = lucid.zeros(2, 3, device=device)
+    w = take(y)
+    replacement = lucid.ones(w.shape, device=device)
+    w.data = replacement
+    w.add_(2.0)
+    assert y.tolist() == [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+    assert w.tolist() == lucid.full(w.shape, 3.0).tolist()
+    assert replacement.tolist() == w.tolist()
+    assert w.stride() == replacement.stride()
+    assert w.storage_offset() == 0
+    assert w.is_contiguous() is True
+
+
+def test_setting_data_to_another_view_retargets_writes_to_the_new_base(device):
+    y = lucid.zeros(2, 3, device=device)
+    z = lucid.zeros(3, 2, device=device)
+    w = y[0]
+    v = z[:, 0]
+    w.data = v
+    assert w.stride() == (2,)
+    assert w.is_contiguous() is False
+    w.add_(5.0)
+    assert y.tolist() == [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+    assert z.tolist() == [[5.0, 0.0], [5.0, 0.0], [5.0, 0.0]]
+    assert v.tolist() == [5.0, 5.0, 5.0]
+
+
+def test_module_apply_and_load_state_dict_on_a_view_parameter(device):
+    base = lucid.zeros(2, 3, device=device)
+    module = nn.Linear(3, 1, bias=False).to(device)
+    module.weight = nn.Parameter(base[:1])
+    with lucid.no_grad():
+        module.weight.add_(2.0)
+    assert base.tolist() == [[2.0, 2.0, 2.0], [0.0, 0.0, 0.0]]
+
+    module.load_state_dict({"weight": lucid.full((1, 3), 4.0, device=device)})
+    assert base.tolist() == [[4.0, 4.0, 4.0], [0.0, 0.0, 0.0]]
+
+    module._apply(lambda t: lucid.ones_like(t))
+    with lucid.no_grad():
+        module.weight.add_(10.0)
+    assert module.weight.tolist() == [[11.0, 11.0, 11.0]]
+    assert base.tolist() == [[4.0, 4.0, 4.0], [0.0, 0.0, 0.0]]
+
+    base2 = lucid.zeros(2, 3, device=device)
+    module.weight.data = base2[1:]
+    module.load_state_dict(
+        {"weight": lucid.full((1, 3), 7.0, device=device)}, assign=True
+    )
+    with lucid.no_grad():
+        module.weight.add_(1.0)
+    assert module.weight.tolist() == [[8.0, 8.0, 8.0]]
+    assert base2.tolist() == [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+
+
+@pytest.mark.parametrize(
+    "take",
+    [lambda y: y[0], lambda y: y[:, 0], lambda y: y.view(-1)],
+    ids=["row", "col", "flat"],
+)
+def test_detach_in_place_on_a_view_matches_cpu_and_metal(device, take):
+    # A detached view shares storage with its base, and writes through it are
+    # untracked by autograd on both a leaf and a computed tensor.
+    leaf = lucid.zeros(2, 3, device=device, requires_grad=True)
+    v_leaf = take(leaf)
+    v_leaf.detach_()
+    assert not v_leaf.requires_grad and v_leaf.grad_fn is None
+    v_leaf.add_(3.0)
+
+    x = lucid.ones(2, 3, device=device, requires_grad=True)
+    y = x * 2.0
+    v = take(y)
+    v.detach_()
+    assert not v.requires_grad and v.grad_fn is None
+    v.add_(10.0)
+    y.sum().backward()
+    assert x.grad is not None
+    assert x.grad.tolist() == [[2.0, 2.0, 2.0], [2.0, 2.0, 2.0]]
+
+    # Detaching the base itself in-place leaves the base writable even when an
+    # older view was taken while it required grad.
+    b = lucid.zeros(2, 3, device=device, requires_grad=True)
+    _held = b[:, 0]
+    b.detach_()
+    b.add_(1.0)
+    assert b.tolist() == [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]
 
 
 def test_an_integer_value_on_a_tensor_without_grad_is_taken():

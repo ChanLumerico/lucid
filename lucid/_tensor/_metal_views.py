@@ -79,6 +79,7 @@ if TYPE_CHECKING:
     from lucid._types import _IndexType
 
 _ATTR = "_metal_view"
+_EPOCH = "_metal_epoch"
 
 _DETACHED = 0  # .data / detach(): copy into the base, outside autograd
 _KEY = 1  # basic indexing: base[key] = view
@@ -126,7 +127,7 @@ class _Link:
 
     __slots__ = (
         "_base",
-        "_weak",
+        "_epoch",
         "kind",
         "key",
         "replay",
@@ -156,8 +157,8 @@ class _Link:
         # detached into a history list — and a strong reference would keep
         # the base's whole autograd graph alive with it.  If the base is
         # gone, nothing is left to see a write.
-        self._weak = weak
-        self._base: object = weakref.ref(base) if weak else base
+        self._base: Tensor | weakref.ref[Tensor] = weakref.ref(base) if weak else base
+        self._epoch: object = base.__dict__.get(_EPOCH)
         self.kind = kind
         self.key = key
         self.replay = replay
@@ -174,11 +175,11 @@ class _Link:
 
     @property
     def base(self) -> Tensor | None:
-        """The tensor this view was taken from, or ``None`` once it is gone."""
-        if self._weak:
-            ref: Callable[[], Tensor | None] = self._base  # type: ignore[assignment]
-            return ref()
-        return self._base  # type: ignore[return-value]
+        """The tensor this view was taken from, or ``None`` once it or its storage is gone."""
+        b = self._base() if isinstance(self._base, weakref.ref) else self._base
+        if b is not None and b.__dict__.get(_EPOCH) is not self._epoch:
+            return None
+        return b
 
 
 #: :class:`lucid.Tensor`, bound by :func:`install` — an import here would
@@ -1105,9 +1106,37 @@ def _reporter(
     return query
 
 
+def _rebind_view(target: Tensor, source: object) -> None:
+    """Propagate ``source``'s Metal view link to ``target`` after rebinding ``_impl``."""
+    link = source.__dict__.get(_ATTR) if isinstance(source, _TENSOR) else None
+    if link is not None:
+        target.__dict__[_ATTR] = link
+    else:
+        target.__dict__.pop(_ATTR, None)
+
+
+def _detach_in_place(original: Callable[..., object]) -> Callable[..., object]:
+    """Wrap ``Tensor.detach_`` so a Metal view stays linked outside autograd."""
+
+    @functools.wraps(original)
+    def detach_(self: Tensor) -> object:
+        old_link: _Link | None = self.__dict__.get(_ATTR)
+        if old_link is None or old_link.kind == _DETACHED:
+            return original(self)
+        old_impl = self._impl
+        out = original(self)
+        holder: Tensor = _TENSOR.__new_from_impl__(old_impl)
+        holder.__dict__[_ATTR] = old_link
+        _link(self, holder, _DETACHED)
+        return out
+
+    return detach_
+
+
 def _property(prop: property, kind: int) -> property:
     getter = prop.fget
     assert getter is not None
+    original_set = prop.fset
 
     def fget(self: Tensor) -> object:
         out = getter(self)
@@ -1120,7 +1149,18 @@ def _property(prop: property, kind: int) -> property:
         return out
 
     functools.update_wrapper(fget, getter)
-    return property(fget, prop.fset, prop.fdel, prop.__doc__)
+    if original_set is not None and kind == _DETACHED:
+
+        def fset(self: Tensor, value: object) -> None:
+            was_metal = _on_metal(self)
+            original_set(self, value)
+            if was_metal or _on_metal(self):
+                self.__dict__[_EPOCH] = object()
+            _rebind_view(self, value)
+
+        functools.update_wrapper(fset, original_set)
+        return property(fget, fset, prop.fdel, prop.__doc__)
+    return property(fget, original_set, prop.fdel, prop.__doc__)
 
 
 def _install_writers(cls: type) -> None:
@@ -1156,6 +1196,7 @@ def install(cls: type) -> None:
     _install_writers(cls)
     setattr(cls, "__getitem__", _getitem(getattr(cls, "__getitem__")))
     makers = _makers()
+    makers["detach_"] = _detach_in_place
     for name, make in makers.items():
         if hasattr(cls, name):
             setattr(cls, name, make(getattr(cls, name)))

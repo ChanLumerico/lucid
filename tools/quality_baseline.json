@@ -364,7 +364,6 @@
     "lucid/utils/data/dataloader.py": 3
    },
    "type-ignore[assignment]": {
-    "lucid/_tensor/_metal_views.py": 1,
     "lucid/_tensor/tensor.py": 2,
     "lucid/models/vision/pvt/_model.py": 2,
     "lucid/nn/module.py": 1,
@@ -419,7 +418,6 @@
     "lucid/utils/tokenizer/_byte_bpe.py": 2
    },
    "type-ignore[return-value]": {
-    "lucid/_tensor/_metal_views.py": 1,
     "lucid/_tensor/_methods.py": 2,
     "lucid/_tensor/tensor.py": 33,
     "lucid/amp/autocast.py": 1,

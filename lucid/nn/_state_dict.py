@@ -138,8 +138,11 @@ def _put(module: Module, name: str, attr: Tensor, src: Tensor, assign: bool) -> 
         # dtype and device, as the reference does.  Rebinding it to a new
         # impl left everything that held the old one — a view of the
         # weight, an alias, a hook — reading the old values.
+        from lucid._tensor import _metal_views
+
         converted: Tensor = src.to(device=attr.device, dtype=attr.dtype)
         attr._impl.copy_from(_C_engine.contiguous(converted._impl))
+        _metal_views.write_back(attr)
         return
     # Replace the parameter/buffer object, taking the checkpoint's dtype and
     # device.  A Parameter keeps the module's requires_grad; a buffer is the

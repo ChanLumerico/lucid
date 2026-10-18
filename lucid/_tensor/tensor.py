@@ -1369,7 +1369,7 @@ class Tensor:
         :math:`\text{requires\_grad} \leftarrow \text{False}` and
         clearing ``grad_fn``. Returns ``self`` to permit fluent chaining.
         """
-        self._impl = _impl_with_grad(self._impl, False)
+        self._impl = self._impl.data_alias()
         return self
 
     def clamp_(

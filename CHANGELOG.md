@@ -1000,6 +1000,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - fold InstanceNorm running stats under a tracer (LCD-529)
 
+- keep Metal view links consistent across .data and detach_
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
