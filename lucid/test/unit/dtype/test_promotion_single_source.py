@@ -224,13 +224,23 @@ def _expected(op: _Op, a: Operand, b: Operand) -> lucid.dtype:
     return rt
 
 
+def _is_bool_operand(x: Operand) -> bool:
+    return isinstance(x, bool) or (
+        isinstance(x, lucid.Tensor) and x.dtype is lucid.bool_
+    )
+
+
 @pytest.mark.parametrize("symbol", list(_OPS))
 def test_every_spelling_answers_at_the_promoted_dtype(symbol: str, device: str) -> None:
     op = _OPS[symbol]
     problems: list[str] = []
     for label, a, b in _cells(device):
         expected = _expected(op, a, b)
-        supported = op.supported(expected)
+        supported = (
+            False
+            if symbol == "-" and (_is_bool_operand(a) or _is_bool_operand(b))
+            else op.supported(expected)
+        )
         out_dtype = lucid.bool_ if op.compare else expected
         outcomes = {k: _outcome(c) for k, c in _spellings(op, a, b).items()}
         inplace = {k: _outcome(c) for k, c in _inplace_spellings(op, a, b).items()}
