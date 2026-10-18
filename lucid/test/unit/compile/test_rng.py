@@ -194,3 +194,52 @@ def test_own_generator_runs_eager() -> None:
     a, b = compiled(x).numpy(), compiled(x).numpy()
     assert not np.array_equal(a, b)
     assert compiled.cache_info()["eager_only"]
+
+
+class _ReshapedDraws(nn.Module):
+    """RNG draws that have views taken during tracing (flow_matching pattern)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(8, 8)
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        t = lucid.rand((x.shape[0],), device=x.device)
+        noise = lucid.randn(x.shape, device=x.device)
+        t_view = t.reshape(-1, 1)
+        xt = (1.0 - t_view) * noise + t_view * x
+        return self.lin(xt) + t_view
+
+
+def test_rng_draw_with_view_taken_redraws_like_eager() -> None:
+    """Taking a view (e.g. reshape) of a traced RNG draw must not freeze it on replay."""
+    lucid.manual_seed(0)
+    model = _ReshapedDraws().to(COMPILE_DEVICE).eval()
+    x = _x()
+
+    def loss_fn(out: lucid.Tensor) -> lucid.Tensor:
+        return (out * out).mean()
+
+    step = lucid.compile.make_step(model, loss_fn)
+    step(x).backward()  # trace
+    assert not step.eager_only
+
+    for seed in (7, 8):
+        for p in model.parameters():
+            p.grad = None
+        lucid.manual_seed(seed)
+        got = step(x)
+        got.backward()
+        got_grads = [p.grad.numpy().copy() for p in model.parameters()]
+
+        for p in model.parameters():
+            p.grad = None
+        lucid.manual_seed(seed)
+        want = loss_fn(model(x))
+        want.backward()
+        want_grads = [p.grad.numpy() for p in model.parameters()]
+
+        assert np.allclose(got.item(), want.item(), rtol=1e-5)
+        for g, w in zip(got_grads, want_grads):
+            assert np.allclose(g, w, rtol=1e-4, atol=1e-5)
+

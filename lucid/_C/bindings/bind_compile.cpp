@@ -29,6 +29,7 @@
 #include "../compile/ExecutableCache.h"
 #include "../compile/MpsBuilder.h"
 #include "../compile/OpEmitters/OpEmitter.h"
+#include "../compile/RngFeeds.h"
 #include "../compile/Tracer.h"
 #include "../compile/VjpEmitters/VjpEmitter.h"
 #include "../core/TensorImpl.h"
@@ -76,11 +77,14 @@ namespace {
 // reads its value out of its family's root and caches it in the tensor, and
 // another Python thread may write the family meanwhile — replacing the root
 // and dropping that cache — so each view is resolved here, with the GIL
-// held, into a tensor that owns its value.  Anything else is fed as it is.
+// held, into a tensor that owns its value.  Traced RNG draws are redrawn
+// first so a draw whose trace also took a view of it (joining a family)
+// still matches its original TensorImpl in the RNG feed registry.
 std::vector<lucid::TensorImplPtr> resolve_feeds(const std::vector<lucid::TensorImplPtr>& inputs) {
+    const auto redrawn = lucid::compile::redraw_rng_feeds(inputs);
     std::vector<lucid::TensorImplPtr> feeds;
-    feeds.reserve(inputs.size());
-    for (const auto& t : inputs) {
+    feeds.reserve(redrawn.size());
+    for (const auto& t : redrawn) {
         if (t && t->family_key() != nullptr)
             feeds.push_back(std::make_shared<lucid::TensorImpl>(t->storage(), t->shape(),
                                                                 t->dtype(), t->device(), false));
