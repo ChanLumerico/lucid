@@ -9,13 +9,6 @@
 
 #pragma once
 
-#if defined(__APPLE__)
-#include <Accelerate/Accelerate.h>
-#if !defined(__OBJC__) && defined(nil)
-#undef nil
-#endif
-#endif
-
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -135,37 +128,18 @@ inline std::uint16_t float_to_half_bits(float value) {
 #endif
 }
 
-// Bulk contiguous conversions: Accelerate vImageConvert for IEEE binary16
-// (Rule H3: CPU = Accelerate) and NEON-vectorizable branchless loops for
-// bfloat16.
+// Bulk contiguous conversions: NEON-vectorizable branchless loops over
+// hardware ``__fp16`` (IEEE binary16) and bit-shift (bfloat16) helpers.
 inline void
 half_bits_to_float_bulk(const std::uint16_t* __restrict src, float* __restrict dst, std::size_t n) {
-    if (n == 0)
-        return;
-#if defined(__APPLE__)
-    vImage_Buffer src_buf{const_cast<std::uint16_t*>(src), 1, static_cast<vImagePixelCount>(n),
-                          n * sizeof(std::uint16_t)};
-    vImage_Buffer dst_buf{dst, 1, static_cast<vImagePixelCount>(n), n * sizeof(float)};
-    vImageConvert_Planar16FtoPlanarF(&src_buf, &dst_buf, kvImageDoNotTile);
-#else
     for (std::size_t i = 0; i < n; ++i)
         dst[i] = half_bits_to_float(src[i]);
-#endif
 }
 
 inline void
 float_to_half_bits_bulk(const float* __restrict src, std::uint16_t* __restrict dst, std::size_t n) {
-    if (n == 0)
-        return;
-#if defined(__APPLE__)
-    vImage_Buffer src_buf{const_cast<float*>(src), 1, static_cast<vImagePixelCount>(n),
-                          n * sizeof(float)};
-    vImage_Buffer dst_buf{dst, 1, static_cast<vImagePixelCount>(n), n * sizeof(std::uint16_t)};
-    vImageConvert_PlanarFtoPlanar16F(&src_buf, &dst_buf, kvImageDoNotTile);
-#else
     for (std::size_t i = 0; i < n; ++i)
         dst[i] = float_to_half_bits(src[i]);
-#endif
 }
 
 inline void bfloat16_bits_to_float_bulk(const std::uint16_t* __restrict src,

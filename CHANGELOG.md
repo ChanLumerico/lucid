@@ -992,6 +992,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - narrow compile/_optim/compiler.py H4 exemption to state_dict
 
+- remove Accelerate dependency and #undef nil from core/Half.h
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

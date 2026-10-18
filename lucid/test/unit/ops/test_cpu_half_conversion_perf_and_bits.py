@@ -1,13 +1,13 @@
-"""Bit-exactness and bulk conversion paths for CPU float16 and bfloat16 (LCD-298).
+"""Bit-exactness and bulk conversion paths for CPU float16 and bfloat16 (LCD-298, LCD-462).
 
 CPU ``float16`` and ``bfloat16`` widen/narrow/cast paths share ``core/Half.h``:
-* ``float16 <-> float32`` uses Accelerate ``vImageConvert_PlanarFtoPlanar16F`` /
-  ``vImageConvert_Planar16FtoPlanarF`` for bulk buffers and ARM64 hardware
-  ``__fp16`` for scalar elements.
+* ``float16 <-> float32`` uses ARM64 hardware ``__fp16`` (``fcvt`` / NEON
+  auto-vectorized loops) without depending on ``<Accelerate/Accelerate.h>``.
 * ``bfloat16 <-> float32`` uses branchless round-to-nearest-even shifts with
   quiet-NaN preservation so the compiler auto-vectorizes bulk loops with NEON.
 """
 
+from pathlib import Path
 import numpy as np
 import pytest
 
@@ -24,6 +24,16 @@ def _u16_of_f16_tensor(t: lucid.Tensor) -> np.ndarray:
 
 def _u32_of_f32_tensor(t: lucid.Tensor) -> np.ndarray:
     return t.numpy().view(np.uint32)
+
+
+def test_core_headers_do_not_include_accelerate_or_undef_nil() -> None:
+    core_dir = Path(lucid.__file__).resolve().parent / "_C" / "core"
+    headers = sorted(core_dir.glob("*.h"))
+    assert headers
+    for hdr in headers:
+        text = hdr.read_text(encoding="utf-8")
+        assert "<Accelerate/" not in text, f"{hdr.name} must not include Accelerate"
+        assert "#undef nil" not in text, f"{hdr.name} must not #undef nil"
 
 
 def test_f16_to_f32_all_65536_bit_patterns() -> None:
