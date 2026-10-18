@@ -328,8 +328,13 @@ Storage MeanBackward::grad_formula(const Storage& grad_out) {
     const double n = reduced_count(this->full_input_shape_, this->reduce_axes_);
     const std::size_t out_n = shape_numel(this->out_shape_);
     auto& be = backend::Dispatcher::for_device(this->device_);
-    Storage denom = be.full(this->out_shape_, this->dtype_, n);
-    Storage scaled = divide_storages(grad_out, denom, out_n, this->dtype_, this->device_);
+    const bool half = is_half_float(this->dtype_);
+    const Dtype div_dt = half ? Dtype::F32 : this->dtype_;
+    Storage g = half ? be.cast(grad_out, this->out_shape_, this->dtype_, Dtype::F32) : grad_out;
+    Storage denom = be.full(this->out_shape_, div_dt, n);
+    Storage scaled = divide_storages(g, denom, out_n, div_dt, this->device_);
+    if (half)
+        scaled = be.cast(scaled, this->out_shape_, Dtype::F32, this->dtype_);
     return broadcast_back_for_reduce(scaled, this->out_shape_, this->full_input_shape_,
                                      this->reduce_axes_, this->keepdims_, this->dtype_,
                                      this->device_);
@@ -338,6 +343,11 @@ Storage MeanBackward::grad_formula(const Storage& grad_out) {
 // Graph-mode mean backward: divide the broadcast-expanded gradient by n_reduced.
 TensorImplPtr MeanBackward::scale_graph_grad(const TensorImplPtr& g) {
     const double n = reduced_count(this->full_input_shape_, this->reduce_axes_);
+    if (is_half_float(g->dtype())) {
+        auto g32 = astype_op(g, Dtype::F32);
+        auto n_tensor = full_like_op(g32, n, /*requires_grad=*/false);
+        return astype_op(div_op(g32, n_tensor), g->dtype());
+    }
     // Create a constant tensor with value n (same shape as g) and divide.
     // The division is tracked by div_op so second-order gradients flow correctly.
     auto n_tensor = full_like_op(g, n, /*requires_grad=*/false);

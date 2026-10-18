@@ -11968,9 +11968,8 @@ private:
                         } else {  // Min
                             acc = std::numeric_limits<std::int64_t>::max();
                         }
-                        const std::int64_t* base = ip + (o * rd * inner) + i;
                         for (std::size_t r = 0; r < rd; ++r) {
-                            std::int64_t v = base[r * inner];
+                            std::int64_t v = ip[(o * rd + r) * inner + i];
                             if (op == ReduceOp::Sum || op == ReduceOp::Mean) {
                                 acc += v;
                             } else if (op == ReduceOp::Max) {
