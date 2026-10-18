@@ -17,7 +17,17 @@ from lucid import _dispatch
 from lucid._C import engine as _C_engine
 from lucid._ops import _adapters as A  # accessor for every signature-normaliser
 from lucid._ops._division import _make_div_adapter
-from lucid._ops._reduce import _std_adapter, _var_adapter
+from lucid._ops._reduce import (
+    _cumprod_adapter,
+    _cumsum_adapter,
+    _log_softmax_adapter,
+    _mean_adapter,
+    _prod_adapter,
+    _softmax_adapter,
+    _std_adapter,
+    _sum_adapter,
+    _var_adapter,
+)
 
 
 @dataclass(slots=True)
@@ -242,12 +252,12 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("minimum_", A._make_arith_adapter(_R.minimum_, inplace=True), 2, inplace=True, method_name="minimum_"),
 
     # ── reduction (with API-compat adapters) ───────────────────────────────
-    OpEntry("sum",    A._sum_adapter,    1, method_name="sum",    free_fn_name="sum",
-            extra_kwargs=["dim", "keepdim"]),
-    OpEntry("mean",   A._mean_adapter,   1, method_name="mean",   free_fn_name="mean",
-            extra_kwargs=["dim", "keepdim"]),
-    OpEntry("prod",   A._prod_adapter,   1, method_name="prod",   free_fn_name="prod",
-            extra_kwargs=["dim", "keepdim"]),
+    OpEntry("sum",    _sum_adapter,    1, method_name="sum",    free_fn_name="sum",
+            extra_kwargs=["dim", "keepdim", "dtype"]),
+    OpEntry("mean",   _mean_adapter,   1, method_name="mean",   free_fn_name="mean",
+            extra_kwargs=["dim", "keepdim", "dtype"]),
+    OpEntry("prod",   _prod_adapter,   1, method_name="prod",   free_fn_name="prod",
+            extra_kwargs=["dim", "keepdim", "dtype"]),
     OpEntry("max",    A._max_adapter,    1, method_name="max",    free_fn_name="max",
             extra_kwargs=["dim", "keepdim"]),
     OpEntry("min",    A._min_adapter,    1, method_name="min",    free_fn_name="min",
@@ -258,10 +268,10 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["dim", "keepdim"]),
     OpEntry("argmin", A._argmin_adapter, 1, method_name="argmin", free_fn_name="argmin",
             extra_kwargs=["dim", "keepdim"]),
-    OpEntry("cumsum", _R.cumsum, 1, method_name="cumsum", free_fn_name="cumsum",
-            extra_kwargs=["dim"]),
-    OpEntry("cumprod",_R.cumprod,1, method_name="cumprod",free_fn_name="cumprod",
-            extra_kwargs=["dim"]),
+    OpEntry("cumsum", _cumsum_adapter, 1, method_name="cumsum", free_fn_name="cumsum",
+            extra_kwargs=["dim", "dtype"]),
+    OpEntry("cumprod",_cumprod_adapter,1, method_name="cumprod",free_fn_name="cumprod",
+            extra_kwargs=["dim", "dtype"]),
     OpEntry("cummax", _R.cummax, 1, method_name="cummax", free_fn_name="cummax",
             extra_kwargs=["dim"]),
     OpEntry("cummin", _R.cummin, 1, method_name="cummin", free_fn_name="cummin",
@@ -369,11 +379,11 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("meshgrid",    A._meshgrid_adapter, 0, free_fn_name="meshgrid",
             extra_kwargs=["indexing"]),
 
-    # ── softmax / log_softmax (have axis kwarg) ────────────────────────────
-    OpEntry("softmax",     _R.softmax,     1, method_name="softmax",     free_fn_name="softmax",
-            extra_kwargs=["dim"]),
-    OpEntry("log_softmax", _R.log_softmax, 1, method_name="log_softmax", free_fn_name="log_softmax",
-            extra_kwargs=["dim"]),
+    # ── softmax / log_softmax (have dim and dtype kwargs) ──────────────────
+    OpEntry("softmax",     _softmax_adapter,     1, method_name="softmax",     free_fn_name="softmax",
+            extra_kwargs=["dim", "dtype"]),
+    OpEntry("log_softmax", _log_softmax_adapter, 1, method_name="log_softmax", free_fn_name="log_softmax",
+            extra_kwargs=["dim", "dtype"]),
 
     # ── rsqrt / std (engine-native) ────────────────────────────────────────
     OpEntry("rsqrt", _float_valued(_R.rsqrt), 1, method_name="rsqrt", free_fn_name="rsqrt"),

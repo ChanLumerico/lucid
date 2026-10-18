@@ -16,8 +16,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
 import lucid
-from lucid._C import engine as _C_engine
-from lucid._dispatch import _binary_operands, _float_input, _unwrap, _wrap
+from lucid._dispatch import _binary_operands, _float_input, _wrap
 from lucid._ops.composite import _bessel
 from lucid._ops.composite._gamma import _lgamma, _polygamma
 from lucid._ops.composite._opmath import _in_float32, _real
@@ -1533,66 +1532,6 @@ def _i0_as_fit(input: Tensor) -> Tensor:
     )
 
 
-def softmax(input: Tensor, dim: int | None = None) -> Tensor:
-    r"""Softmax along ``dim`` — :math:`\sigma(x)_i = e^{x_i} / \sum_j e^{x_j}`.
-
-    Dispatches to the engine's numerically stable softmax kernel
-    (max-subtraction baked in), so no caller-side stabilisation
-    is needed.  Equivalent to ``lucid.nn.functional.softmax`` but
-    lives in the top-level ``lucid`` namespace for parity with
-    NumPy / SciPy-style usage.
-
-    Parameters
-    ----------
-    input : Tensor
-        Input logits of any shape.
-    dim : int, optional
-        Axis along which the softmax is normalised.  Default ``-1``
-        (last axis).
-
-    Returns
-    -------
-    Tensor
-        Same shape and dtype as ``input``.  Each slice along ``dim`` sums to 1.
-
-    See Also
-    --------
-    log_softmax : numerically safer when the result feeds an
-        ``NLLLoss`` / cross-entropy downstream.
-    """
-    axis = dim if dim is not None else -1
-    return _wrap(_C_engine.softmax(_unwrap(input), axis))
-
-
-def log_softmax(input: Tensor, dim: int | None = None) -> Tensor:
-    r"""Logarithm of softmax along ``dim``: :math:`\log \sigma(x)`.
-
-    Computed as ``log(softmax(x))`` — Lucid's softmax kernel is
-    max-stabilised, so this composite avoids most underflow you'd hit
-    from naive ``log(exp(x) / sum(exp(x)))``.  Pair with
-    ``F.nll_loss`` for a numerically stable cross-entropy.
-
-    Parameters
-    ----------
-    input : Tensor
-        Input logits of any shape.
-    dim : int, optional
-        Axis along which the softmax is normalised.  Default ``-1``.
-
-    Returns
-    -------
-    Tensor
-        Same shape and dtype as ``input``.
-
-    See Also
-    --------
-    softmax : the un-logged form.
-    """
-    axis = dim if dim is not None else -1
-    sm = _C_engine.softmax(_unwrap(input), axis)
-    return _wrap(_C_engine.log(sm))
-
-
 __all__ = [
     "absolute",
     "negative",
@@ -1627,8 +1566,6 @@ __all__ = [
     "lgamma",
     "digamma",
     "i0",
-    "softmax",
-    "log_softmax",
 ]
 
 

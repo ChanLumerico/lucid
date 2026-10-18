@@ -3,8 +3,11 @@
 from typing import Sequence, TYPE_CHECKING
 
 import lucid
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _wrap
 from lucid._ops._dims import _wrap_dim
-from lucid._ops._reduce import _reduction_axes
+from lucid._ops._reduce import _reduction_axes, _run_with_dtype
+from lucid._types import DTypeLike
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -14,6 +17,8 @@ def nansum(
     input: Tensor,
     dim: int | Sequence[int] | None = None,
     keepdim: bool = False,
+    *,
+    dtype: DTypeLike | None = None,
 ) -> Tensor:
     r"""Sum the tensor, treating NaN entries as zero.
 
@@ -31,6 +36,9 @@ def nansum(
     keepdim : bool, optional
         If ``True``, retains the reduced dimensions with size 1.
         Defaults to ``False``.
+    dtype : DTypeLike | None, optional
+        Target dtype for the reduction. When given, the input is cast to
+        ``dtype`` before summing.
 
     Returns
     -------
@@ -60,17 +68,40 @@ def nansum(
     >>> lucid.nansum(x)
     tensor(4.)
     """
-    safe = lucid.where(lucid.isnan(input), lucid.full_like(input, 0.0), input)
-    if dim is None:
-        return lucid.sum(safe)
-    _dim = _reduction_axes(input._impl, dim, "nansum")
-    return lucid.sum(safe, _dim, keepdim)
+    axes = _reduction_axes(input._impl, dim, "nansum")
+    safe = _C_engine.where(
+        _C_engine.isnan(input._impl), _C_engine.zeros_like(input._impl), input._impl
+    )
+    return _wrap(
+        _run_with_dtype(
+            safe,
+            dtype,
+            lambda xi: _C_engine.sum(xi, axes, bool(keepdim)),
+            op="nansum",
+        )
+    )
+
+
+def _nanmean_impl(
+    x_impl: _C_engine.TensorImpl, axes: list[int], keepdim: bool
+) -> _C_engine.TensorImpl:
+    mask = _C_engine.isnan(x_impl)
+    zero = _C_engine.zeros_like(x_impl)
+    one = _C_engine.ones_like(x_impl)
+    safe = _C_engine.where(mask, zero, x_impl)
+    not_nan = _C_engine.where(mask, zero, one)
+    return _C_engine.div(
+        _C_engine.sum(safe, axes, keepdim),
+        _C_engine.sum(not_nan, axes, keepdim),
+    )
 
 
 def nanmean(
     input: Tensor,
     dim: int | Sequence[int] | None = None,
     keepdim: bool = False,
+    *,
+    dtype: DTypeLike | None = None,
 ) -> Tensor:
     r"""Mean of the tensor, ignoring NaN entries.
 
@@ -88,6 +119,9 @@ def nanmean(
     keepdim : bool, optional
         If ``True``, retains the reduced dimensions with size 1.
         Defaults to ``False``.
+    dtype : DTypeLike | None, optional
+        Target floating-point or complex dtype for the reduction. When
+        given, ``input`` is cast to ``dtype`` before averaging.
 
     Returns
     -------
@@ -116,16 +150,16 @@ def nanmean(
     >>> lucid.nanmean(x)
     tensor(2.)
     """
-    mask = lucid.isnan(input)
-    safe = lucid.where(mask, lucid.full_like(input, 0.0), input)
-    # Count non-NaN via where: 1.0 where not NaN, 0.0 where NaN
-    not_nan = lucid.where(
-        mask, lucid.full_like(input, 0.0), lucid.full_like(input, 1.0)
+    axes = _reduction_axes(input._impl, dim, "nanmean")
+    return _wrap(
+        _run_with_dtype(
+            input._impl,
+            dtype,
+            lambda xi: _nanmean_impl(xi, axes, bool(keepdim)),
+            op="nanmean",
+            inexact_only=True,
+        )
     )
-    if dim is None:
-        return lucid.sum(safe) / lucid.sum(not_nan)
-    _dim = _reduction_axes(input._impl, dim, "nanmean")
-    return lucid.sum(safe, _dim, keepdim) / lucid.sum(not_nan, _dim, keepdim)
 
 
 def nanmedian(

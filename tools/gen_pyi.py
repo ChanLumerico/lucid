@@ -988,17 +988,17 @@ def gen_tensor_pyi() -> tuple[str, int]:
     # hand.  Uses the _int / _bool / DimLike aliases of the header above;
     # ``tools/stub_namespaces.tensor_drift`` holds every name to the runtime.
     python_only = [
-        "    def sum(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
-        "    def mean(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
-        "    def prod(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
+        "    def sum(self, dim: DimLike = None, keepdim: _bool = False, *, dtype: DTypeLike = None) -> Tensor: ...",
+        "    def mean(self, dim: DimLike = None, keepdim: _bool = False, *, dtype: DTypeLike = None) -> Tensor: ...",
+        "    def prod(self, dim: DimLike = None, keepdim: _bool = False, *, dtype: DTypeLike = None) -> Tensor: ...",
         "    def max(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
         "    def min(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
         "    def var(self, dim: DimLike = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> Tensor: ...",
         "    def std(self, dim: DimLike = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> Tensor: ...",
         "    def argmax(self, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
         "    def argmin(self, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
-        "    def cumsum(self, dim: _int | None = None) -> Tensor: ...",
-        "    def cumprod(self, dim: _int | None = None) -> Tensor: ...",
+        "    def cumsum(self, dim: _int = -1, *, dtype: DTypeLike = None) -> Tensor: ...",
+        "    def cumprod(self, dim: _int = -1, *, dtype: DTypeLike = None) -> Tensor: ...",
         "    def cummax(self, dim: _int | None = None) -> Tensor: ...",
         "    def cummin(self, dim: _int | None = None) -> Tensor: ...",
         "    def squeeze(self, dim: _int | list[_int] | None = None) -> Tensor: ...",
@@ -1008,8 +1008,8 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def argsort(self, dim: _int = -1, descending: _bool = False) -> Tensor: ...",
         "    def topk(self, k: _int, dim: _int = -1, largest: _bool = True) -> tuple[Tensor, Tensor]: ...",
         "    def chunk(self, chunks: _int, dim: _int = 0) -> list[Tensor]: ...",
-        "    def softmax(self, dim: _int = -1) -> Tensor: ...",
-        "    def log_softmax(self, dim: _int = -1) -> Tensor: ...",
+        "    def softmax(self, dim: _int = -1, dtype: DTypeLike = None) -> Tensor: ...",
+        "    def log_softmax(self, dim: _int = -1, dtype: DTypeLike = None) -> Tensor: ...",
         "    def clip(self, min: Tensor | Scalar | None = None, max: Tensor | Scalar | None = None) -> Tensor: ...",
         "    def clamp(self, min: Tensor | Scalar | None = None, max: Tensor | Scalar | None = None) -> Tensor: ...",
         "    @overload",
@@ -2132,9 +2132,9 @@ def gen_init_pyi() -> tuple[str, int]:
     # Uses _int / _bool aliases (defined at top of _INIT_HEADER) to avoid shadowing
     # by lucid's own int / bool dtype aliases.
     overrides = [
-        "def sum(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
-        "def mean(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
-        "def prod(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
+        "def sum(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, dtype: DTypeLike = None) -> Tensor: ...",
+        "def mean(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, dtype: DTypeLike = None) -> Tensor: ...",
+        "def prod(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False, *, dtype: DTypeLike = None) -> Tensor: ...",
         "def max(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
         "def min(input: Tensor, dim: _int | list[_int] | None = None, keepdim: _bool = False) -> Tensor: ...",
         "def var(input: Tensor, dim: _int | Sequence[_int] | None = None, unbiased: _bool | None = None, keepdim: _bool = False, *, correction: _int | _float | None = None) -> Tensor: ...",

@@ -668,34 +668,7 @@ def _squeeze_adapter(
     return _own_impl(result, x_impl)
 
 
-# ── Reduction adapters (dim/keepdim/correction kwargs) ───────────────────────
-
-
-def _sum_adapter(
-    x_impl: _Impl,
-    dim: int | Sequence[int] | None = None,
-    keepdim: bool = False,
-) -> _Impl:
-    """sum(x, dim=None, keepdim=False)."""
-    return _C_engine.sum(x_impl, _reduction_axes(x_impl, dim, "sum"), bool(keepdim))
-
-
-def _mean_adapter(
-    x_impl: _Impl,
-    dim: int | Sequence[int] | None = None,
-    keepdim: bool = False,
-) -> _Impl:
-    """mean(x, dim=None, keepdim=False)."""
-    return _C_engine.mean(x_impl, _reduction_axes(x_impl, dim, "mean"), bool(keepdim))
-
-
-def _prod_adapter(
-    x_impl: _Impl,
-    dim: int | Sequence[int] | None = None,
-    keepdim: bool = False,
-) -> _Impl:
-    """prod(x, dim=None, keepdim=False)."""
-    return _C_engine.prod(x_impl, _reduction_axes(x_impl, dim, "prod"), bool(keepdim))
+# ── Reduction adapters (dim/keepdim/correction/dtype kwargs) ─────────────────
 
 
 def _max_adapter(

@@ -21,13 +21,16 @@ The four variance functions also read their arguments in one place,
 """
 
 import math
+import operator
 import warnings
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._deprecation import _PACKAGE_DIR
-from lucid._dtype import _ENGINE_TO_DTYPE
+from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
 from lucid._ops._dims import _to_axes, _wrap_dims
+from lucid._types import DTypeLike
 
 _Impl = _C_engine.TensorImpl
 
@@ -355,3 +358,148 @@ def _std_adapter(input: _Impl, *args: object, **kwargs: object) -> _Impl:
     gradient where that variance is 0 (a constant slice).
     """
     return _zero_safe_root(_variance("std", input, args, kwargs), 2)
+
+
+def _run_with_dtype(
+    x_impl: _Impl,
+    dtype: DTypeLike | None,
+    call: Callable[[_Impl], _Impl],
+    *,
+    op: str,
+    inexact_only: bool = False,
+    floating_only: bool = False,
+) -> _Impl:
+    """Cast ``x_impl`` to ``dtype`` before ``call`` when ``dtype`` is given.
+
+    Suspends autocast while evaluating ``call`` so an explicit ``dtype=``
+    overrides the active autocast policy, and narrows the output back to
+    ``target`` when an integer reduction kernel widens narrow ints to int64.
+    """
+    if dtype is None:
+        return call(x_impl)
+    target = to_engine_dtype(dtype)
+    if floating_only and target not in _FLOATING:
+        raise _C_engine.NotImplementedError(
+            f"{op}: not implemented for {_ENGINE_TO_DTYPE[target]}"
+        )
+    if inexact_only and _promotion.is_integral(target):
+        raise _C_engine.DtypeMismatch(
+            f"{op}(): could not infer output dtype. Optional dtype must be "
+            f"either a floating point or complex dtype. Got: {_ENGINE_TO_DTYPE[target]}"
+        )
+    cast_impl = _C_engine.astype(x_impl, target) if x_impl.dtype != target else x_impl
+    if _C_engine.amp_is_active(cast_impl.device):
+        with _C_engine.AutocastGuard(_C_engine.F32, cast_impl.device, False):
+            out = call(cast_impl)
+    else:
+        out = call(cast_impl)
+    return _C_engine.astype(out, target) if out.dtype != target else out
+
+
+def _sum_adapter(
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+    *,
+    dtype: DTypeLike | None = None,
+) -> _Impl:
+    """sum(x, dim=None, keepdim=False, *, dtype=None)."""
+    axes = _reduction_axes(x_impl, dim, "sum")
+    return _run_with_dtype(
+        x_impl, dtype, lambda xi: _C_engine.sum(xi, axes, bool(keepdim)), op="sum"
+    )
+
+
+def _mean_adapter(
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+    *,
+    dtype: DTypeLike | None = None,
+) -> _Impl:
+    """mean(x, dim=None, keepdim=False, *, dtype=None)."""
+    axes = _reduction_axes(x_impl, dim, "mean")
+    return _run_with_dtype(
+        x_impl,
+        dtype,
+        lambda xi: _C_engine.mean(xi, axes, bool(keepdim)),
+        op="mean",
+        inexact_only=True,
+    )
+
+
+def _prod_adapter(
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+    *,
+    dtype: DTypeLike | None = None,
+) -> _Impl:
+    """prod(x, dim=None, keepdim=False, *, dtype=None)."""
+    axes = _reduction_axes(x_impl, dim, "prod")
+    return _run_with_dtype(
+        x_impl, dtype, lambda xi: _C_engine.prod(xi, axes, bool(keepdim)), op="prod"
+    )
+
+
+def _cumsum_adapter(
+    x_impl: _Impl, dim: int = -1, *, dtype: DTypeLike | None = None
+) -> _Impl:
+    """cumsum(x, dim=-1, *, dtype=None)."""
+    axis = operator.index(dim)
+    return _run_with_dtype(
+        x_impl, dtype, lambda xi: _C_engine.cumsum(xi, axis), op="cumsum"
+    )
+
+
+def _cumprod_adapter(
+    x_impl: _Impl, dim: int = -1, *, dtype: DTypeLike | None = None
+) -> _Impl:
+    """cumprod(x, dim=-1, *, dtype=None)."""
+    axis = operator.index(dim)
+    return _run_with_dtype(
+        x_impl, dtype, lambda xi: _C_engine.cumprod(xi, axis), op="cumprod"
+    )
+
+
+def _softmax_adapter(
+    x_impl: _Impl, dim: int = -1, dtype: DTypeLike | None = None
+) -> _Impl:
+    """softmax(x, dim=-1, dtype=None)."""
+    axis = operator.index(dim)
+    return _run_with_dtype(
+        x_impl,
+        dtype,
+        lambda xi: _C_engine.softmax(xi, axis),
+        op="softmax",
+        floating_only=True,
+    )
+
+
+def _softmin_adapter(
+    x_impl: _Impl, dim: int = -1, dtype: DTypeLike | None = None
+) -> _Impl:
+    """softmin(x, dim=-1, dtype=None)."""
+    axis = operator.index(dim)
+    return _run_with_dtype(
+        _C_engine.neg(x_impl),
+        dtype,
+        lambda xi: _C_engine.softmax(xi, axis),
+        op="softmin",
+        floating_only=True,
+    )
+
+
+def _log_softmax_adapter(
+    x_impl: _Impl, dim: int = -1, dtype: DTypeLike | None = None
+) -> _Impl:
+    """log_softmax(x, dim=-1, dtype=None)."""
+    axis = operator.index(dim)
+    return _run_with_dtype(
+        x_impl,
+        dtype,
+        lambda xi: _C_engine.log_softmax(xi, axis),
+        op="log_softmax",
+        floating_only=True,
+    )
+

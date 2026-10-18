@@ -938,7 +938,7 @@ class Softmax(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return softmax(x, self.dim)
+        return softmax(x, self.dim, _stacklevel=5)
 
     @override
     def extra_repr(self) -> str:
@@ -1010,7 +1010,7 @@ class LogSoftmax(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return log_softmax(x, self.dim)
+        return log_softmax(x, self.dim, _stacklevel=5)
 
     @override
     def extra_repr(self) -> str:
@@ -1077,7 +1077,7 @@ class Softmax2d(Module):
             raise ValueError(
                 f"Softmax2d: expected 4-D input (N, C, H, W), got ndim={x.ndim}"
             )
-        return softmax(x, -3)
+        return softmax(x, -3, _stacklevel=5)
 
 
 class RReLU(Module):
@@ -1686,7 +1686,7 @@ class Softmin(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return softmin(x, self.dim)
+        return softmin(x, self.dim, _stacklevel=5)
 
     @override
     def extra_repr(self) -> str:

@@ -329,7 +329,7 @@ def _mismatches(ours: list[_Param], theirs: list[_Param], method: bool) -> list[
         p
         for p in theirs
         if p.name not in _OMITTED
-        and not p.name.startswith("_")
+        and not (p.name.startswith("_") and p.name not in have)
         and not (p.name in _FACTORY and p.name not in have)
     ]
     problems = []
@@ -633,7 +633,6 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "nn.functional.leaky_relu_": _LCD_430,
     "nn.functional.linear": _LCD_430,
     "nn.functional.local_response_norm": _LCD_430,
-    "nn.functional.log_softmax": _LCD_430,
     "nn.functional.margin_ranking_loss": _LCD_430,
     "nn.functional.mish": _LCD_430,
     "nn.functional.mse_loss": _LCD_430,
@@ -660,8 +659,6 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "nn.functional.sigmoid": _LCD_430,
     "nn.functional.silu": _LCD_430,
     "nn.functional.smooth_l1_loss": _LCD_430,
-    "nn.functional.softmax": _LCD_430,
-    "nn.functional.softmin": _LCD_430,
     "nn.functional.softplus": _LCD_430,
     "nn.functional.softshrink": _LCD_430,
     "nn.functional.softsign": _LCD_430,

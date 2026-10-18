@@ -380,3 +380,136 @@ class TestGridSample:
             pass
         else:
             raise AssertionError("expected ValueError for unknown mode")
+
+
+class TestSoftmaxAndReductionDtype:
+    """Guard for LCD-510: dtype= on softmax / log_softmax / softmin and
+    reduction ops (sum, mean, prod, cumsum, cumprod, nansum, nanmean), plus
+    F.softmax / log_softmax / softmin input/dim=None/_stacklevel parity."""
+
+    @pytest.mark.parametrize("device", ["cpu", "metal"])
+    @pytest.mark.parametrize(
+        "fn_name", ["softmax", "log_softmax", "softmin"]
+    )
+    def test_softmax_family_dtype_forward_and_backward(
+        self, ref: object, device: str, fn_name: str
+    ) -> None:
+        if device == "metal" and not lucid.metal.is_available():
+            pytest.skip("metal not available")
+        ref_mod = ref  # type: ignore[assignment]
+        np_x = np.linspace(-3.0, 3.0, 16, dtype=np.float16).reshape(4, 4)
+        x = lucid.tensor(np_x, dtype=lucid.float16, device=device, requires_grad=True)
+        rx = ref_mod.tensor(np_x, dtype=ref_mod.float16, requires_grad=True)
+
+        fn = getattr(F, fn_name)
+        rfn = getattr(ref_mod.nn.functional, fn_name)
+        out = fn(input=x, dim=-1, dtype=lucid.float32)
+        rout = rfn(input=rx, dim=-1, dtype=ref_mod.float32)
+
+        assert out.dtype == lucid.float32
+        np.testing.assert_allclose(
+            out.cpu().numpy(), rout.detach().numpy(), rtol=1e-3, atol=1e-3
+        )
+        weights = lucid.arange(1, 17, dtype=lucid.float32, device=device).reshape(4, 4)
+        rweights = ref_mod.arange(1, 17, dtype=ref_mod.float32).reshape(4, 4)
+        (out * weights).sum().backward()
+        (rout * rweights).sum().backward()
+        assert x.grad is not None
+        assert x.grad.dtype == lucid.float16
+        np.testing.assert_allclose(
+            x.grad.cpu().numpy(), rx.grad.numpy(), rtol=1e-2, atol=1e-2
+        )
+
+    @pytest.mark.parametrize("device", ["cpu", "metal"])
+    def test_top_level_and_tensor_method_softmax_dtype(
+        self, ref: object, device: str
+    ) -> None:
+        if device == "metal" and not lucid.metal.is_available():
+            pytest.skip("metal not available")
+        ref_mod = ref  # type: ignore[assignment]
+        np_x = np.linspace(-2.0, 2.0, 16, dtype=np.float32).reshape(4, 4)
+        x = lucid.tensor(np_x, dtype=lucid.float16, device=device)
+        rx = ref_mod.tensor(np_x, dtype=ref_mod.float16)
+
+        for l_out, r_out in [
+            (lucid.softmax(x, dim=-1, dtype=lucid.float32), ref_mod.softmax(rx, dim=-1, dtype=ref_mod.float32)),
+            (lucid.log_softmax(x, dim=-1, dtype=lucid.float32), ref_mod.log_softmax(rx, dim=-1, dtype=ref_mod.float32)),
+            (x.softmax(dim=-1, dtype=lucid.float32), rx.softmax(dim=-1, dtype=ref_mod.float32)),
+            (x.log_softmax(dim=-1, dtype=lucid.float32), rx.log_softmax(dim=-1, dtype=ref_mod.float32)),
+        ]:
+            assert l_out.dtype == lucid.float32
+            np.testing.assert_allclose(
+                l_out.cpu().numpy(), r_out.numpy(), rtol=1e-3, atol=1e-3
+            )
+
+    def test_softmax_dim_none_warns_and_selects_reference_dim(
+        self, ref: object
+    ) -> None:
+        ref_mod = ref  # type: ignore[assignment]
+        for shape in [(16,), (4, 4), (2, 2, 4), (2, 2, 2, 2)]:
+            np_x = np.arange(16, dtype=np.float32).reshape(shape)
+            x = lucid.tensor(np_x)
+            rx = ref_mod.tensor(np_x)
+            for fn_name in ("softmax", "log_softmax", "softmin"):
+                with pytest.warns(UserWarning, match="Implicit dimension choice"):
+                    out = getattr(F, fn_name)(x)
+                with pytest.warns(UserWarning):
+                    rout = getattr(ref_mod.nn.functional, fn_name)(rx)
+                np.testing.assert_allclose(
+                    out.numpy(), rout.numpy(), rtol=1e-6, atol=1e-6
+                )
+
+    def test_softmax_explicit_dtype_honored_under_autocast(self) -> None:
+        if not lucid.metal.is_available():
+            pytest.skip("metal not available")
+        x = lucid.linspace(-2.0, 2.0, 16, dtype=lucid.float32, device="metal").reshape(4, 4)
+        with lucid.amp.autocast("metal", dtype=lucid.float16):
+            out_default = F.softmax(x, dim=-1)
+            out_f16 = F.softmax(x, dim=-1, dtype=lucid.float16)
+        assert out_default.dtype == lucid.float32
+        assert out_f16.dtype == lucid.float16
+
+    @pytest.mark.parametrize("device", ["cpu", "metal"])
+    @pytest.mark.parametrize(
+        "op_name",
+        ["sum", "mean", "prod", "cumsum", "cumprod", "nansum", "nanmean"],
+    )
+    def test_reduction_dtype_keyword(
+        self, ref: object, device: str, op_name: str
+    ) -> None:
+        if device == "metal" and not lucid.metal.is_available():
+            pytest.skip("metal not available")
+        ref_mod = ref  # type: ignore[assignment]
+        np_x = np.linspace(0.5, 2.0, 16, dtype=np.float16).reshape(4, 4)
+        x = lucid.tensor(np_x, dtype=lucid.float16, device=device, requires_grad=True)
+        rx = ref_mod.tensor(np_x, dtype=ref_mod.float16, requires_grad=True)
+
+        fn = getattr(lucid, op_name)
+        rfn = getattr(ref_mod, op_name)
+        if op_name in ("cumsum", "cumprod"):
+            out = fn(x, dim=1, dtype=lucid.float32)
+            rout = rfn(rx, dim=1, dtype=ref_mod.float32)
+        else:
+            out = fn(x, dim=1, dtype=lucid.float32)
+            rout = rfn(rx, dim=1, dtype=ref_mod.float32)
+        assert out.dtype == lucid.float32
+        np.testing.assert_allclose(
+            out.cpu().numpy(), rout.detach().numpy(), rtol=1e-3, atol=1e-3
+        )
+        out.sum().backward()
+        rout.sum().backward()
+        assert x.grad is not None
+        assert x.grad.dtype == lucid.float16
+        np.testing.assert_allclose(
+            x.grad.cpu().numpy(), rx.grad.numpy(), rtol=1e-2, atol=1e-2
+        )
+
+    def test_dtype_error_classes(self) -> None:
+        x = lucid.ones((16,), dtype=lucid.float32)
+        with pytest.raises(NotImplementedError):
+            F.softmax(x, dim=0, dtype=lucid.int64)
+        with pytest.raises(TypeError):
+            lucid.mean(x, dtype=lucid.int64)
+        with pytest.raises(TypeError):
+            lucid.nanmean(x, dtype=lucid.int64)
+

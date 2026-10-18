@@ -1073,6 +1073,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `autograd.functional.*` take a Tensor or a tuple of Tensors; lists raise TypeError (LCD-334). `detect_anomaly()` raises when a backward returns NaN; it used to do nothing (LCD-52).
   - `lucid.load` restores `nn.Parameter`, `requires_grad` and view storage sharing, so `.detach()` a loaded tensor before editing it in place. `lucid.Tensor(t)` aliases `t` and keeps its graph instead of copying (LCD-104, LCD-67).
   - `can_cast` allows narrowing within a category (`float64 → float32`). Ordering comparisons on complex tensors raise NotImplementedError. `diff`, `sort`, `linalg.cross` and `nanquantile` raise IndexError for an out-of-range dim (LCD-343, LCD-424).
+  - `F.softmax`, `F.log_softmax` and `F.softmin` rename their first parameter from `x` to `input`, take `(input, dim=None, _stacklevel=3, dtype=None)`, and emit a `UserWarning` when `dim=None` (choosing axis 0 for 0/1/3-D inputs and axis 1 otherwise, as the reference does; LCD-510).
   - Same input, different numbers:
     - maximum/minimum gradients at ties are split (LCD-436), and clamp/fmax/fmin gradients follow the reference at the bound and at NaN (LCD-441);
     - complex `vdot` conjugates its first argument (LCD-207);

@@ -2,19 +2,22 @@
 nn.functional activation functions.
 """
 
+import operator
 from typing import TYPE_CHECKING
+import warnings
 
 import lucid as _l
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._autocast import _autocast_entry
 from lucid._ops._dims import _dim_size, _wrap_dim
-from lucid._ops._reduce import _require_floating
-from lucid._tensor._metal_views import (
-    _check as _metal_check,
-    write_back as _metal_write_back,
+from lucid._ops._reduce import (
+    _log_softmax_adapter, _require_floating, _softmax_adapter, _softmin_adapter
 )
-from lucid._types import GeluApproximate
+from lucid._tensor._metal_views import (
+    _check as _metal_check, write_back as _metal_write_back
+)
+from lucid._types import DTypeLike, GeluApproximate
 from lucid.nn.functional._inplace import _in_place
 from lucid.nn.functional.normalization import normalize
 
@@ -558,46 +561,47 @@ def tanh(x: Tensor) -> Tensor:
     return _wrap(_C_engine.tanh(_unwrap(x)))
 
 
-def softmax(x: Tensor, dim: int | None = None) -> Tensor:
-    r"""Apply the softmax function along a dimension.
+def _get_softmax_dim(name: str, ndim: int, dim: int | None, stacklevel: int) -> int:
+    if dim is not None:
+        return operator.index(dim)
+    warnings.warn(
+        f"Implicit dimension choice for {name} has been deprecated. "
+        "Change the call to include dim=X as an argument.",
+        UserWarning,
+        stacklevel=stacklevel,
+    )
+    return 0 if ndim in (0, 1, 3) else 1
 
-    Converts a vector of real-valued logits into a probability
-    distribution: the outputs are non-negative and sum to one along
-    ``dim``.  The central tool for multi-class classification heads and
-    attention weights.
+
+def softmax(
+    input: Tensor, dim: int | None = None, _stacklevel: int = 3, dtype: DTypeLike | None = None
+) -> Tensor:
+    r"""Apply the softmax function along a dimension.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape (the "logits").
-    dim : int, optional
-        Dimension along which softmax is computed.  Defaults to ``-1``
-        (the last axis).
+    dim : int or None, optional
+        Dimension along which softmax is computed.
+    _stacklevel : int, optional
+        Internal stack level for the implicit-dimension warning.
+    dtype : DTypeLike or None, optional
+        Target floating-point dtype to cast ``input`` to before softmax.
 
     Returns
     -------
     Tensor
-        Same-shape tensor whose entries along ``dim`` form a probability
-        simplex (each non-negative, summing to 1).
+        Same-shape tensor whose entries along ``dim`` sum to 1.
 
     Notes
     -----
-    Mathematical definition (per-vector along ``dim``):
-
     .. math::
 
         \text{softmax}(x)_i = \frac{e^{x_i}}{\sum_j e^{x_j}}
 
-    A naïve implementation overflows for large positive ``x``; the engine
-    uses the standard log-sum-exp shift :math:`x_i \mapsto x_i - \max_j x_j`
-    to evaluate it in finite precision.
-
-    For loss computation, prefer :func:`log_softmax` followed by
-    :func:`nll_loss` (or :func:`cross_entropy` end-to-end), since the
-    composition of ``log(softmax(...))`` loses precision.  The gradient
-    has the convenient closed form
-    :math:`\partial p_i / \partial x_j = p_i (\delta_{ij} - p_j)` —
-    the Jacobian factorises out cleanly during backprop through softmax-CE.
+    The engine uses the log-sum-exp shift :math:`x_i \mapsto x_i - \max_j x_j`.
+    For loss computation, prefer :func:`log_softmax` followed by :func:`nll_loss`.
 
     Examples
     --------
@@ -610,32 +614,33 @@ def softmax(x: Tensor, dim: int | None = None) -> Tensor:
     >>> p.sum(dim=1)
     tensor([1.])
     """
-    axis = dim if dim is not None else -1
-    return _wrap(_C_engine.softmax(_unwrap(x), axis))
+    return _wrap(
+        _softmax_adapter(
+            _unwrap(input), _get_softmax_dim("softmax", input.ndim, dim, _stacklevel), dtype
+        )
+    )
 
 
-def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
+def log_softmax(
+    input: Tensor, dim: int | None = None, _stacklevel: int = 3, dtype: DTypeLike | None = None
+) -> Tensor:
     r"""Numerically stable log-softmax along a dimension.
-
-    Equivalent to ``log(softmax(x, dim))`` but computed in a way that
-    avoids overflow in the exponentials and the loss of precision incurred
-    by taking the logarithm of small softmax probabilities.  Almost always
-    the right thing to use as the input to negative-log-likelihood / NLL
-    classification losses.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input logits of any shape.
-    dim : int, optional
-        Dimension along which the log-softmax is computed.  Defaults to
-        the last dimension (``-1``).
+    dim : int or None, optional
+        Dimension along which the log-softmax is computed.
+    _stacklevel : int, optional
+        Internal stack level for the implicit-dimension warning.
+    dtype : DTypeLike or None, optional
+        Target floating-point dtype to cast ``input`` to before log-softmax.
 
     Returns
     -------
     Tensor
-        Log-probabilities of the same shape as ``x``, summing-to-one on
-        the exponentiated scale along ``dim``.
+        Log-probabilities of the same shape as ``input``.
 
     Notes
     -----
@@ -644,11 +649,8 @@ def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
         \text{log\_softmax}(x)_i = x_i - \log\!\sum_j e^{x_j}
         = (x_i - m) - \log\!\sum_j e^{x_j - m}, \quad m = \max_j x_j
 
-    The :math:`-m` shift inside the exponent is the key numerical trick:
-    it makes every exponent non-positive so :math:`e^{x_j - m} \in (0, 1]`
-    and the sum is bounded.  Pairing ``log_softmax`` with
-    :func:`nll_loss` is numerically equivalent to — and more stable than —
-    ``softmax`` followed by :func:`cross_entropy`.
+    Pairing ``log_softmax`` with :func:`nll_loss` is numerically equivalent
+    to — and more stable than — ``softmax`` followed by :func:`cross_entropy`.
 
     Examples
     --------
@@ -658,13 +660,13 @@ def log_softmax(x: Tensor, dim: int | None = None) -> Tensor:
     >>> log_softmax(logits, dim=1)
     tensor([[-2.408, -1.408, -0.4076]])
     """
-    axis = dim if dim is not None else -1
-    # Route through the engine's dedicated log_softmax kernel, which computes
-    # ``(x - m) - log(sum(exp(x - m)))`` with the max-subtraction stabilisation.
-    # The naive ``log(softmax(x))`` form underflows: at large logits the
-    # non-max softmax probabilities round to 0, so ``log(0) = -inf`` (the engine
-    # softmax itself is stable, but the subsequent ``log`` is not).
-    return _wrap(_C_engine.log_softmax(_unwrap(x), axis))
+    return _wrap(
+        _log_softmax_adapter(
+            _unwrap(input),
+            _get_softmax_dim("log_softmax", input.ndim, dim, _stacklevel),
+            dtype,
+        )
+    )
 
 
 def softplus(x: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tensor:
@@ -777,35 +779,32 @@ def relu6(x: Tensor, inplace: bool = False) -> Tensor:
     return _wrap(_C_engine.relu6(_unwrap(x)))
 
 
-def softmin(x: Tensor, dim: int | None = None) -> Tensor:
+def softmin(
+    input: Tensor, dim: int | None = None, _stacklevel: int = 3, dtype: DTypeLike | None = None
+) -> Tensor:
     r"""Softmin — softmax applied to the negation of the input.
-
-    Useful when small input values should receive high probability, e.g.
-    when ``x`` represents distances or costs and a soft-argmin is needed.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape.
-    dim : int, optional
-        Dimension along which softmin is computed.  Defaults to the last
-        dimension (``-1``).
+    dim : int or None, optional
+        Dimension along which softmin is computed.
+    _stacklevel : int, optional
+        Internal stack level for the implicit-dimension warning.
+    dtype : DTypeLike or None, optional
+        Target floating-point dtype to cast ``input`` to before softmin.
 
     Returns
     -------
     Tensor
-        Tensor of the same shape with values summing to ``1`` along
-        ``dim``.
+        Tensor of the same shape with values summing to ``1`` along ``dim``.
 
     Notes
     -----
     .. math::
 
         \text{softmin}(x)_i = \text{softmax}(-x)_i = \frac{e^{-x_i}}{\sum_j e^{-x_j}}
-
-    Exactly equivalent to :func:`softmax` on the negated input; produced
-    as a separate function purely for readability when modelling
-    minimum-cost attention or temperature-scaled retrieval.
 
     Examples
     --------
@@ -815,8 +814,8 @@ def softmin(x: Tensor, dim: int | None = None) -> Tensor:
     >>> softmin(x, dim=1)
     tensor([[0.6652, 0.2447, 0.09003]])
     """
-    axis = dim if dim is not None else -1
-    return _wrap(_C_engine.softmax(_C_engine.neg(_unwrap(x)), axis))
+    axis = _get_softmax_dim("softmin", input.ndim, dim, _stacklevel)
+    return _wrap(_softmin_adapter(_unwrap(input), axis, dtype=dtype))
 
 
 def glu(x: Tensor, dim: int = -1) -> Tensor:
