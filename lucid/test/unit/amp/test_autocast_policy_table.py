@@ -288,11 +288,8 @@ _CASES: dict[str, _Case] = {
         lambda lib, F, m: lib.einsum("ij,jk->ik", m(3, 4), m(4, 2)),
     ),
     "linear": _Case(lambda lib, F, m: F.linear(m(2, 4), m(3, 4), m(3))),
-    # LOWER on Metal: the float32 weights and zero state cast with the input.
-    # The CPU column keeps, and there a half input meets float32 weights.
     "lstm_cell": _Case(
         lambda lib, F, m: lib.nn.LSTMCell(4, 5).to(m.device)(m(2, 4))[0],
-        devices=("metal",),
     ),
     "matmul": _Case(lambda lib, F, m: m(3, 4) @ m(4, 2)),
     "mm": _Case(lambda lib, F, m: lib.mm(m(3, 4), m(4, 2))),
@@ -428,6 +425,8 @@ _KEEP_CASES: dict[str, _Case] = {
     "fmod": _Case(lambda lib, F, m: lib.fmod(m(4), m(4, pos=True))),
     "frac": _Case(lambda lib, F, m: lib.frac(m(4))),
     "gelu": _Case(lambda lib, F, m: F.gelu(m(4))),
+    "gru": _cpu(lambda lib, F, m: lib.nn.GRU(4, 5).to(m.device)(m(3, 2, 4))[0]),
+    "gru_cell": _Case(lambda lib, F, m: lib.nn.GRUCell(4, 5).to(m.device)(m(2, 4))),
     "hypot": _Case(lambda lib, F, m: lib.hypot(m(4), m(4))),
     "interpolate_bilinear": _Case(
         lambda lib, F, m: F.interpolate(m(1, 1, 4, 4), scale_factor=2, mode="bilinear")
@@ -435,6 +434,7 @@ _KEEP_CASES: dict[str, _Case] = {
     "kron": _Case(lambda lib, F, m: lib.kron(m(2, 2), m(2, 2))),
     "logaddexp": _Case(lambda lib, F, m: lib.logaddexp(m(4), m(4))),
     "lp_normalize": _Case(lambda lib, F, m: F.normalize(m(3, 4))),
+    "lstm": _cpu(lambda lib, F, m: lib.nn.LSTM(4, 5).to(m.device)(m(3, 2, 4))[0]),
     "maximum": _Case(lambda lib, F, m: lib.maximum(m(4), m(4))),
     "mean": _Case(lambda lib, F, m: m(4).mean()),
     "mish": _Case(lambda lib, F, m: F.mish(m(4))),
@@ -913,6 +913,36 @@ def test_cpu_ctc_loss_takes_a_bfloat16_log_softmax() -> None:
         lucid.tensor([2]),
     )
     assert abs(loss.item() - want.item()) < 5e-2
+
+
+@pytest.mark.parametrize(
+    ("kind", "kwargs"),
+    [
+        ("LSTM", {}),
+        ("LSTM", {"proj_size": 3}),
+        ("LSTM", {"num_layers": 2, "bidirectional": True}),
+        ("GRU", {}),
+        ("RNN", {}),
+    ],
+)
+def test_cpu_recurrent_modules_cast_weights_for_bfloat16_input(
+    kind: str, kwargs: dict[str, Any]
+) -> None:
+    """Under a CPU bfloat16 autocast, a bfloat16 input to an RNN / GRU / LSTM
+    with float32 weights casts the weights to bfloat16 and returns bfloat16
+    outputs and states, while gradients flow back to the float32 parameters."""
+    lucid.manual_seed(0)
+    mod = getattr(nn, kind)(4, 8, **kwargs)
+    x = lucid.randn(5, 2, 4).to(lucid.bfloat16).detach().requires_grad_()
+    with autocast(device_type="cpu", dtype=lucid.bfloat16):
+        out, state = mod(x)
+    assert out.dtype == lucid.bfloat16
+    states = list(state) if isinstance(state, tuple) else [state]
+    assert all(s.dtype == lucid.bfloat16 for s in states)
+    out.float().sum().backward()
+    assert x.grad is not None and x.grad.dtype == lucid.bfloat16
+    for p in mod.parameters():
+        assert p.grad is not None and p.grad.dtype == lucid.float32
 
 
 # ── the engine turns autocast off inside an op, and back on after it ────────

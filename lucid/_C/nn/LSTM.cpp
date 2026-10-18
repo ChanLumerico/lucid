@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -33,11 +34,13 @@
 #include "../backend/Dispatcher.h"
 #include "../compile/Tracer.h"
 #include "../core/Allocator.h"
+#include "../core/AmpPolicy.h"
 #include "../core/Error.h"
 #include "../core/ErrorBuilder.h"
 #include "../core/GradMode.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
+#include "../ops/ufunc/Astype.h"
 
 namespace lucid {
 
@@ -167,6 +170,58 @@ namespace {
                          "retain_graph=True with multiple backward calls instead");
 }
 
+void autocast_lstm_operands(TensorImplPtr& input,
+                            TensorImplPtr& h0,
+                            TensorImplPtr& c0,
+                            std::vector<TensorImplPtr>& weights,
+                            std::optional<amp::AutocastGuard>& guard) {
+    if (!input || !h0 || !c0)
+        return;
+    const auto autocast_dt = amp::active_dtype(input->device());
+    if (!autocast_dt)
+        return;
+    const bool all_eligible =
+        amp::is_autocast_eligible(input->dtype()) && amp::is_autocast_eligible(h0->dtype()) &&
+        amp::is_autocast_eligible(c0->dtype()) &&
+        std::all_of(weights.begin(), weights.end(), [](const TensorImplPtr& w) {
+            return w && amp::is_autocast_eligible(w->dtype());
+        });
+    if (!all_eligible)
+        return;
+    const Dtype eff_dt = (c0->dtype() == *autocast_dt) ? *autocast_dt : Dtype::F32;
+    guard.emplace(*autocast_dt, input->device(), /*enabled=*/false);
+    input = astype_op(input, eff_dt);
+    h0 = astype_op(h0, eff_dt);
+    c0 = astype_op(c0, eff_dt);
+    for (auto& w : weights)
+        w = astype_op(w, eff_dt);
+}
+
+void record_saved_sources(LstmBackward& bwd,
+                          const TensorImplPtr& input_in,
+                          const TensorImplPtr& h0_in,
+                          const TensorImplPtr& c0_in,
+                          const std::vector<TensorImplPtr>& weights_in) {
+    // Versions, by forward argument, of what BPTT reads by value — input,
+    // h0 and the weight matrices — whether or not it takes a gradient: a
+    // write into a weight that does not require grad still changes every
+    // other input's gradient.  c0 and the biases are not read, so their
+    // entries stay empty and a write into them after forward is allowed.
+    std::vector<TensorImplPtr> source_tensors{input_in, h0_in, c0_in};
+    for (const auto& w : weights_in)
+        source_tensors.push_back(w);
+    const auto read_by_bptt = [](std::size_t arg) { return arg != 2 && arg != 5 && arg != 6; };
+    std::vector<std::int64_t> versions;
+    versions.reserve(source_tensors.size());
+    bwd.saved_sources.reserve(source_tensors.size());
+    for (std::size_t arg = 0; arg < source_tensors.size(); ++arg) {
+        const bool held = read_by_bptt(arg);
+        bwd.saved_sources.push_back(held ? source_tensors[arg] : TensorImplPtr{});
+        versions.push_back(held ? source_tensors[arg]->version() : 0);
+    }
+    bwd.set_saved_versions(std::move(versions));
+}
+
 }  // namespace
 
 void LstmBackward::accumulate_barrier_grad_for_graph(std::uint32_t /*input_nr*/,
@@ -196,11 +251,17 @@ void LstmBackward::validate_versions() {
         check_saved_version(saved_sources[k], k, "lstm", k);
 }
 
-std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
-                                                 const TensorImplPtr& h0,
-                                                 const TensorImplPtr& c0,
-                                                 const std::vector<TensorImplPtr>& weights,
+std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input_in,
+                                                 const TensorImplPtr& h0_in,
+                                                 const TensorImplPtr& c0_in,
+                                                 const std::vector<TensorImplPtr>& weights_in,
                                                  const backend::IBackend::LstmOpts& opts) {
+    TensorImplPtr input = input_in;
+    TensorImplPtr h0 = h0_in;
+    TensorImplPtr c0 = c0_in;
+    std::vector<TensorImplPtr> weights = weights_in;
+    std::optional<amp::AutocastGuard> autocast_off;
+    autocast_lstm_operands(input, h0, c0, weights, autocast_off);
     validate_operands(input, h0, c0, weights, opts);
 
     auto& be = backend::Dispatcher::for_device(input->device());
@@ -332,22 +393,7 @@ std::vector<TensorImplPtr> LstmBackward::forward(const TensorImplPtr& input,
         }
     }
     bwd->set_next_edges(std::move(edges));
-
-    // Versions, by forward argument, of what BPTT reads by value — input,
-    // h0 and the weight matrices — whether or not it takes a gradient: a
-    // write into a weight that does not require grad still changes every
-    // other input's gradient.  c0 and the biases are not read, so their
-    // entries stay empty and a write into them after forward is allowed.
-    const auto read_by_bptt = [](std::size_t arg) { return arg != 2 && arg != 5 && arg != 6; };
-    std::vector<std::int64_t> versions;
-    versions.reserve(edge_tensors.size());
-    bwd->saved_sources.reserve(edge_tensors.size());
-    for (std::size_t arg = 0; arg < edge_tensors.size(); ++arg) {
-        const bool held = read_by_bptt(arg);
-        bwd->saved_sources.push_back(held ? edge_tensors[arg] : TensorImplPtr{});
-        versions.push_back(held ? edge_tensors[arg]->version() : 0);
-    }
-    bwd->set_saved_versions(std::move(versions));
+    record_saved_sources(*bwd, input_in, h0_in, c0_in, weights_in);
 
     // Every output shares the one node; ``grad_output_nr`` tells the engine
     // which barrier slot an arriving gradient belongs to.
