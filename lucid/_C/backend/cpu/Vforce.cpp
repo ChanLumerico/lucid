@@ -11,8 +11,11 @@
 // pass expo before base to the vForce API.
 //
 // The LUCID_VFORCE_UNARY macro at the bottom expands pairs of f32/f64 wrappers
-// for functions that share a uniform (out, in, &count) signature (asin, acos,
-// atan, sinh, cosh, log2, fabs, floor, ceil, round).
+// for functions that share a uniform (out, in, &count) signature (log2, fabs,
+// floor, ceil, round).  Trigonometric and hyperbolic functions use
+// LUCID_LIBM_UNARY over <cmath> (LCD-472): Accelerate's vvcosf/vvcos return
+// 1 - 1 ulp at 0, vvtanf/vvtan lose the negative sign of -0.0, and the vForce
+// trig/hyperbolic entries have 2-3 ulp errors on Gaussian inputs.
 //
 // Square root and reciprocal are IEEE operations the reference rounds
 // correctly, and the float vForce entries for them do not, so their float
@@ -84,22 +87,6 @@ void vsqrt_f32(const float* in, float* out, std::size_t n) {
     split_map(in, out, n, [](float x) { return std::sqrt(x); });
 }
 
-void vtanh_f32(const float* in, float* out, std::size_t n) {
-    split(in, out, n, [](auto* o, const auto* i, int* c) { vvtanhf(o, i, c); });
-}
-
-void vsin_f32(const float* in, float* out, std::size_t n) {
-    split(in, out, n, [](auto* o, const auto* i, int* c) { vvsinf(o, i, c); });
-}
-
-void vcos_f32(const float* in, float* out, std::size_t n) {
-    split(in, out, n, [](auto* o, const auto* i, int* c) { vvcosf(o, i, c); });
-}
-
-void vtan_f32(const float* in, float* out, std::size_t n) {
-    split(in, out, n, [](auto* o, const auto* i, int* c) { vvtanf(o, i, c); });
-}
-
 void vexp_f64(const double* in, double* out, std::size_t n) {
     split(in, out, n, [](auto* o, const auto* i, int* c) { vvexp(o, i, c); });
 }
@@ -110,22 +97,6 @@ void vlog_f64(const double* in, double* out, std::size_t n) {
 
 void vsqrt_f64(const double* in, double* out, std::size_t n) {
     split(in, out, n, [](auto* o, const auto* i, int* c) { vvsqrt(o, i, c); });
-}
-
-void vtanh_f64(const double* in, double* out, std::size_t n) {
-    split(in, out, n, [](auto* o, const auto* i, int* c) { vvtanh(o, i, c); });
-}
-
-void vsin_f64(const double* in, double* out, std::size_t n) {
-    split(in, out, n, [](auto* o, const auto* i, int* c) { vvsin(o, i, c); });
-}
-
-void vcos_f64(const double* in, double* out, std::size_t n) {
-    split(in, out, n, [](auto* o, const auto* i, int* c) { vvcos(o, i, c); });
-}
-
-void vtan_f64(const double* in, double* out, std::size_t n) {
-    split(in, out, n, [](auto* o, const auto* i, int* c) { vvtan(o, i, c); });
 }
 
 void vpow_f32(const float* base, const float* expo, float* out, std::size_t n) {
@@ -139,6 +110,31 @@ void vpow_f64(const double* base, const double* expo, double* out, std::size_t n
     vvpow(out, expo, base, &count);
 }
 
+// Trigonometric and hyperbolic functions use libm (<cmath>) rather than
+// vForce (LCD-472): vvcosf(0) = 0.99999994 and vvcos(0) = 0.9999999999999999
+// (1 ulp below 1.0), vvtanf(-0.0) and vvtan(-0.0) return +0.0, and the vForce
+// trig/hyperbolic entries have 2-3 ulp errors on Gaussian inputs.  libm is
+// exact at +-0.0 and within 1 ulp across both widths.
+#define LUCID_LIBM_UNARY(NAME, FN)                                                                 \
+    void NAME##_f32(const float* in, float* out, std::size_t n) {                                  \
+        split_map(in, out, n, [](float x) { return std::FN(x); });                                 \
+    }                                                                                              \
+    void NAME##_f64(const double* in, double* out, std::size_t n) {                                \
+        split_map(in, out, n, [](double x) { return std::FN(x); });                                \
+    }
+
+LUCID_LIBM_UNARY(vsin, sin)
+LUCID_LIBM_UNARY(vcos, cos)
+LUCID_LIBM_UNARY(vtan, tan)
+LUCID_LIBM_UNARY(vasin, asin)
+LUCID_LIBM_UNARY(vacos, acos)
+LUCID_LIBM_UNARY(vatan, atan)
+LUCID_LIBM_UNARY(vsinh, sinh)
+LUCID_LIBM_UNARY(vcosh, cosh)
+LUCID_LIBM_UNARY(vtanh, tanh)
+
+#undef LUCID_LIBM_UNARY
+
 // Expands a matching f32 and f64 wrapper pair for any vForce function that
 // follows the (output_ptr, input_ptr, &count) calling convention.
 #define LUCID_VFORCE_UNARY(NAME, F32, F64)                                                         \
@@ -149,11 +145,6 @@ void vpow_f64(const double* base, const double* expo, double* out, std::size_t n
         split(in, out, n, [](double* o, const double* i, int* c) { F64(o, i, c); });               \
     }
 
-LUCID_VFORCE_UNARY(vasin, vvasinf, vvasin)
-LUCID_VFORCE_UNARY(vacos, vvacosf, vvacos)
-LUCID_VFORCE_UNARY(vatan, vvatanf, vvatan)
-LUCID_VFORCE_UNARY(vsinh, vvsinhf, vvsinh)
-LUCID_VFORCE_UNARY(vcosh, vvcoshf, vvcosh)
 LUCID_VFORCE_UNARY(vlog2, vvlog2f, vvlog2)
 LUCID_VFORCE_UNARY(vfabs, vvfabsf, vvfabs)
 LUCID_VFORCE_UNARY(vfloor, vvfloorf, vvfloor)
