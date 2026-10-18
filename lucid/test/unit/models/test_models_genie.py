@@ -661,7 +661,12 @@ class TestObjectives:
             float(first.latent_action_loss.item()),
             float(first.dynamics_loss.item()),
         )
-        for _ in range(40):
+        # Joint training updates the tokenizer codebook while the dynamics
+        # model chases its discrete assignments: around steps 25-35 the
+        # tokenizer breaks out of initial single-code collapse into ~12
+        # active codes, which transiently raises the target entropy before
+        # the dynamics transformer fits the settled codes by step 60.
+        for _ in range(60):
             optimizer.zero_grad()
             model(video).loss.backward()
             optimizer.step()
