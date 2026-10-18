@@ -1004,6 +1004,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - redraw RNG feeds before resolving Metal view families
 
+- use IEEE-754 loop for vdiv_f32 instead of vDSP_vdiv
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

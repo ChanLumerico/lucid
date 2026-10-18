@@ -71,10 +71,8 @@ LUCID_INTERNAL void vsub_f32(const float* a, const float* b, float* out, std::si
 // Accelerate.framework ``vDSP_vmul``.
 LUCID_INTERNAL void vmul_f32(const float* a, const float* b, float* out, std::size_t n);
 
-// Single-precision elementwise vector division.
-//
-// Computes $\text{out}_i = a_i / b_i$ via ``vDSP_vdiv``.  Division-by-zero
-// follows IEEE-754 semantics (yields ±Inf or NaN).
+// Single-precision elementwise vector division, correctly rounded.  A plain
+// loop: ``vDSP_vdiv`` is not correctly rounded on macOS 26 (see Vdsp.cpp).
 //
 // Parameters
 // ----------
@@ -84,10 +82,6 @@ LUCID_INTERNAL void vmul_f32(const float* a, const float* b, float* out, std::si
 //     Output buffer.
 // n : std::size_t
 //     Element count.
-//
-// References
-// ----------
-// Accelerate.framework ``vDSP_vdiv``.
 LUCID_INTERNAL void vdiv_f32(const float* a, const float* b, float* out, std::size_t n);
 
 // Double-precision elementwise addition.  Uses ``vDSP_vaddD``.

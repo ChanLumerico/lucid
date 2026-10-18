@@ -6,10 +6,10 @@
 // Lucid std::size_t element count to vDSP_Length (also std::size_t on Apple
 // Silicon, but the cast documents the intent).
 //
-// Note on vDSP_vsub / vDSP_vdiv argument order: vDSP uses (B, ib, A, ia, C,
-// ic, N) with the convention C = A - B and C = A / B.  Both vsub_f32 and
-// vdiv_f32 therefore swap the a/b argument order when calling vDSP so that the
-// wrapper's semantics match the caller's expectation (out = a op b).
+// Note on vDSP_vsub argument order: vDSP uses (B, ib, A, ia, C, ic, N) with
+// the convention C = A - B.  vsub_f32 and vsub_f64 therefore swap the a/b
+// argument order when calling vDSP so that the wrapper's semantics match the
+// caller's expectation (out = a - b).
 
 #include "Vdsp.h"
 
@@ -44,8 +44,18 @@ void vmul_f32(const float* a, const float* b, float* out, std::size_t n) {
     vDSP_vmul(a, 1, b, 1, out, 1, L(n));
 }
 
+// Deliberately not vDSP_vdiv / vDSP_vdivD, neither of which is correctly
+// rounded across supported macOS releases (LCD-541).  On macOS 26 ``vDSP_vdiv``
+// is 1–2 ulp off on 40.3% of 1e6 gaussian float32 pairs and flips the sign of
+// zero / infinity on subnormal and signed-zero divisors, just as ``vDSP_vdivD``
+// is 1–2 ulp off on 41% of float64 pairs (``1 / 0.001`` came out
+// 999.9999999999999, ``0 / 5e-324`` gave NaN, and ``1 / 5e-324`` gave -inf).
+//
+// Plain loops compile to NEON ``fdiv``, which IEEE 754 requires to be
+// correctly rounded at both widths.
 void vdiv_f32(const float* a, const float* b, float* out, std::size_t n) {
-    vDSP_vdiv(b, 1, a, 1, out, 1, L(n));
+    for (std::size_t i = 0; i < n; ++i)
+        out[i] = a[i] / b[i];
 }
 
 void vadd_f64(const double* a, const double* b, double* out, std::size_t n) {
@@ -60,20 +70,6 @@ void vmul_f64(const double* a, const double* b, double* out, std::size_t n) {
     vDSP_vmulD(a, 1, b, 1, out, 1, L(n));
 }
 
-// Deliberately not vDSP_vdivD, which is not correctly rounded.  On 1e6
-// gaussian pairs 41% of its quotients were 1–2 ulp off the IEEE quotient
-// (``1 / 0.001`` came out 999.9999999999999).  A subnormal divisor broke it
-// outright: ``0 / 5e-324`` gave NaN and ``1 / 5e-324`` an infinity of the
-// wrong sign.  The reference divides exactly, so every float64 quotient on
-// the CPU disagreed with it in the last bits.
-//
-// This loop compiles to NEON ``fdiv``, which IEEE 754 requires to be
-// correctly rounded, and it is faster than vDSP_vdivD (0.38 ms against
-// 0.46 ms on 1e6 elements).  vForce's ``vvdiv`` was exact in the same
-// measurement, but nothing documents that it is, and vDSP_vdivD shows that
-// this library will give up the last bit for speed.  ``vDSP_vdiv`` was exact
-// on the same pairs, so the float path stays on it.  The tests pin both
-// widths, so a change in Accelerate shows up as a failure.
 void vdiv_f64(const double* a, const double* b, double* out, std::size_t n) {
     for (std::size_t i = 0; i < n; ++i)
         out[i] = a[i] / b[i];

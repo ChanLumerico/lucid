@@ -2,13 +2,15 @@
 
 IEEE 754 requires ``a / b``, ``sqrt(x)`` and ``1 / x`` to return the
 representable value nearest the exact one, and the reference does that.
-Three Accelerate entries do not. ``vDSP_vdivD`` (float64 division) was 1–2
-ulp off on 41% of gaussian pairs: ``1 / 0.001`` gave 999.9999999999999, and
-a subnormal divisor gave NaN or an infinity of the wrong sign. ``vvsqrtf``
-was 1–2 ulp off on 41% of values, and ``vvrecf`` 1 ulp off on 34%.  The CPU
-now computes those three with plain loops that compile to the exact NEON
-instructions.  It keeps the vDSP / vForce entries that measured exact
-(float32 ``vDSP_vdiv``, ``vvsqrt``, ``vvrec``).
+Four Accelerate entries do not across supported macOS releases. ``vDSP_vdivD``
+(float64 division) was 1–2 ulp off on 41% of gaussian pairs: ``1 / 0.001``
+gave 999.9999999999999, and a subnormal divisor gave NaN or an infinity of the
+wrong sign. On macOS 26 ``vDSP_vdiv`` (float32 division) was likewise 1–2 ulp
+off on 40.3% of gaussian pairs and flipped signs on subnormal and signed-zero
+divisors (LCD-541). ``vvsqrtf`` was 1–2 ulp off on 41% of values, and ``vvrecf``
+1 ulp off on 34%.  The CPU now computes those four with plain loops that
+compile to the exact NEON instructions.  It keeps the vForce entries that
+measured exact (float64 ``vvsqrt``, ``vvrec``).
 
 The oracle is NumPy's arithmetic, which runs on the same IEEE hardware
 instructions.  Python's own float division checks the float64 quotient a
