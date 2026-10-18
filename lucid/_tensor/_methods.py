@@ -21,7 +21,7 @@ called the engine kernel without the promotion ``clamp`` does, so
 Called once at module import time by ``tensor.py``.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, cast
 
 from lucid import _promotion
@@ -265,6 +265,68 @@ def _take_along_dim(self: Tensor, indices: Tensor, dim: int | None = None) -> Te
     from lucid._ops.composite.shape import take_along_dim as _tad
 
     return _tad(self, indices, dim=dim)
+
+
+def _median(
+    self: Tensor, dim: int | None = None, keepdim: bool = False
+) -> Tensor | tuple[Tensor, Tensor]:
+    """Median of ``self`` along ``dim`` (or over the whole tensor when ``None``)."""
+    from lucid._ops.composite.reductions import median as _med
+
+    return _med(self, dim=dim, keepdim=keepdim)
+
+
+def _nanmedian(
+    self: Tensor, dim: int | None = None, keepdim: bool = False
+) -> Tensor | tuple[Tensor, Tensor]:
+    """Median of ``self``, ignoring NaN entries."""
+    from lucid._ops.composite.reductions import nanmedian as _nanmed
+
+    return _nanmed(self, dim=dim, keepdim=keepdim)
+
+
+def _mode(
+    self: Tensor, dim: int = -1, keepdim: bool = False
+) -> tuple[Tensor, Tensor]:
+    """Modal value and index of each slice of ``self`` along ``dim``."""
+    from lucid._ops.composite.reductions import mode as _md
+
+    return _md(self, dim=dim, keepdim=keepdim)
+
+
+def _quantile(
+    self: Tensor,
+    q: float | Sequence[float] | Tensor,
+    dim: int | None = None,
+    keepdim: bool = False,
+    *,
+    interpolation: str = "linear",
+) -> Tensor:
+    """Compute the ``q``-th quantile of ``self``."""
+    from lucid._ops.composite.statistics import quantile as _qt
+
+    return _qt(self, q, dim=dim, keepdim=keepdim, interpolation=interpolation)
+
+
+def _nanquantile(
+    self: Tensor,
+    q: float | Sequence[float] | Tensor,
+    dim: int | None = None,
+    keepdim: bool = False,
+    *,
+    interpolation: str = "linear",
+) -> Tensor:
+    """Compute the NaN-ignoring ``q``-th quantile of ``self``."""
+    from lucid._ops.composite.statistics import nanquantile as _nqt
+
+    return _nqt(self, q, dim=dim, keepdim=keepdim, interpolation=interpolation)
+
+
+def _msort(self: Tensor) -> Tensor:
+    """Sort ``self`` along its first dimension in ascending order."""
+    from lucid._ops.composite.reductions import msort as _ms
+
+    return _ms(self)
 
 
 # ── in-place forms with no engine kernel ─────────────────────────────────────
@@ -695,6 +757,12 @@ _EXTRA_METHODS = (
     ("masked_scatter_", _masked_scatter_),
     ("bincount", _bincount),
     ("take_along_dim", _take_along_dim),
+    ("median", _median),
+    ("nanmedian", _nanmedian),
+    ("mode", _mode),
+    ("quantile", _quantile),
+    ("nanquantile", _nanquantile),
+    ("msort", _msort),
     ("bitwise_and_", _bitwise_and_),
     ("bitwise_or_", _bitwise_or_),
     ("bitwise_xor_", _bitwise_xor_),

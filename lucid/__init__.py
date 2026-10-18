@@ -206,7 +206,7 @@ __all__ = [
     "expm1", "sinc", "heaviside", "xlogy", "logit", "signbit",
     "float_power", "fmax", "fmin",
     # ── extras: nan-safe reductions ───────────────────────────────────────
-    "nansum", "nanmean", "nanmedian",
+    "nansum", "nanmean", "median", "nanmedian", "mode", "msort", "quantile", "nanquantile",
     # ── extras: BLAS variants ─────────────────────────────────────────────
     "addmm", "addbmm", "baddbmm", "addmv", "addr", "addcmul", "addcdiv",
     "mv", "ger", "vdot", "block_diag",

@@ -6,7 +6,7 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._ops._dims import _wrap_dim
-from lucid._ops._reduce import _reduction_axes, _run_with_dtype
+from lucid._ops._reduce import _ValuesIndices, _reduction_axes, _run_with_dtype
 from lucid._types import DTypeLike
 
 if TYPE_CHECKING:
@@ -162,6 +162,41 @@ def nanmean(
     )
 
 
+def median(
+    input: Tensor,
+    dim: int | None = None,
+    keepdim: bool = False,
+) -> Tensor | tuple[Tensor, Tensor]:
+    r"""Median of a tensor along ``dim`` (or over the whole tensor when ``None``).
+
+    Unlike :func:`nanmedian`, a ``NaN`` entry in a reduced slice propagates
+    to the slice's median and its index names the first ``NaN`` in input
+    order, matching the reference framework.
+
+    Parameters
+    ----------
+    input : Tensor
+        Real-valued input tensor (floating-point or integer).
+    dim : int | None, optional
+        Axis along which to take the median, or ``None`` for all elements.
+    keepdim : bool, optional
+        Whether the reduced dimension is kept with size ``1`` (default ``False``).
+
+    Returns
+    -------
+    Tensor or tuple of Tensor
+        With ``dim is None``, the scalar median.  With ``dim`` given,
+        a ``(values, indices)`` named tuple.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.median(lucid.tensor([1.0, 5.0, 3.0, 2.0]))
+    tensor(2.)
+    """
+    return _run_median(input, dim, keepdim, ignore_nan=False, op="median")
+
+
 def nanmedian(
     input: Tensor,
     dim: int | None = None,
@@ -172,7 +207,7 @@ def nanmedian(
     Computes the median over the requested axis (or the entire tensor
     when ``dim`` is ``None``), treating NaN entries as missing data
     rather than propagating them.  This is the NaN-safe counterpart of
-    a regular ``median`` reduction.
+    :func:`median`.
 
     Parameters
     ----------
@@ -197,7 +232,7 @@ def nanmedian(
     Raises
     ------
     NotImplementedError
-        For a ``bool`` input.
+        For a ``bool`` or complex input.
     IndexError
         When ``dim`` is out of range, or the reduced axis has length 0.
 
@@ -230,31 +265,40 @@ def nanmedian(
     >>> indices
     tensor([0, 1], dtype=lucid.int64)
     """
-    if input.dtype == lucid.bool_:
-        # As the reference does: a median of booleans is not defined here,
-        # and the sort underneath accepts bool, so it has to be said.
+    return _run_median(input, dim, keepdim, ignore_nan=True, op="nanmedian")
+
+
+def _run_median(
+    input: Tensor, dim: int | None, keepdim: bool, *, ignore_nan: bool, op: str
+) -> Tensor | tuple[Tensor, Tensor]:
+    if input.dtype == lucid.bool_ or lucid.is_complex(input):
         raise NotImplementedError(
-            "nanmedian does not accept bool — cast to an integer dtype"
+            f"{op} does not accept {input.dtype} — cast to an integer or floating dtype"
         )
     if dim is None:
-        return _nanmedian_all(input)
-    return _nanmedian_along(input, dim, keepdim)
+        return _median_all(input, ignore_nan=ignore_nan, op=op)
+    return _median_along(input, dim, keepdim, ignore_nan=ignore_nan, op=op)
 
 
-def _nanmedian_along(x: Tensor, dim: int, keepdim: bool) -> tuple[Tensor, Tensor]:
-    """``(values, indices)`` of the NaN-skipping median of every slice.
+def _pack_values_indices(
+    values: Tensor, indices: Tensor, d: int, keepdim: bool
+) -> _ValuesIndices[Tensor]:
+    if not keepdim:
+        return _ValuesIndices((values.squeeze(d), indices.squeeze(d)))
+    return _ValuesIndices((values, indices))
 
-    The position is read per slice from that slice's own non-NaN count —
-    a tensor, so nothing leaves the device and no slice borrows another's
-    count.
-    """
-    d = _wrap_dim(dim, x.ndim, "nanmedian")
+
+def _median_along(
+    x: Tensor, dim: int, keepdim: bool, *, ignore_nan: bool, op: str
+) -> _ValuesIndices[Tensor]:
+    """``(values, indices)`` of the median of every slice along ``dim``."""
+    d = _wrap_dim(dim, x.ndim, op)
     if x.ndim == 0:
-        return _nanmedian_along(x.reshape(1), 0, False)
+        return _median_along(x.reshape(1), 0, False, ignore_nan=ignore_nan, op=op)
     n = x.shape[d]
     if n == 0:
         raise IndexError(
-            f"nanmedian: the reduced dim {dim} has length 0 — there is no "
+            f"{op}: the reduced dim {dim} has length 0 — there is no "
             "median of nothing"
         )
     # The engine's sort puts NaN after every number, ``+inf`` included,
@@ -262,24 +306,25 @@ def _nanmedian_along(x: Tensor, dim: int, keepdim: bool) -> tuple[Tensor, Tensor
     order = lucid.argsort(x, d)
     if lucid.is_floating_point(x):
         count = lucid.sum(~lucid.isnan(x), d, True)
-        pos = lucid.clamp((count - 1) // 2, min=0)
+        if ignore_nan:
+            pos = lucid.clamp((count - 1) // 2, min=0)
+        else:
+            pos = lucid.where(count < n, count, lucid.full_like(count, (n - 1) // 2))
     else:
         pos = lucid.full_like(order.narrow(d, 0, 1), (n - 1) // 2)
     indices = lucid.take_along_dim(order, pos, d)
     values = lucid.take_along_dim(x, indices, d)
-    if not keepdim:
-        return values.squeeze(d), indices.squeeze(d)
-    return values, indices
+    return _pack_values_indices(values, indices, d, keepdim)
 
 
-def _nanmedian_all(x: Tensor) -> Tensor:
-    """The NaN-skipping median of every entry of ``x``."""
+def _median_all(x: Tensor, *, ignore_nan: bool, op: str) -> Tensor:
+    """The whole-tensor median of ``x``."""
     flat = x.reshape(-1)
     if flat.shape[0] == 0:
         # There is no entry, so the answer is NaN.  A fresh constant would
         # cut the autograd edge; the mean of no entries is NaN as well.
         return lucid.mean(flat)
-    value, _ = _nanmedian_along(flat, 0, False)
+    value, _ = _median_along(flat, 0, False, ignore_nan=ignore_nan, op=op)
     if not x.requires_grad:
         return value
     # The reference hands every entry equal to the median an even share of
@@ -295,6 +340,87 @@ def _nanmedian_all(x: Tensor) -> Tensor:
     exact = picked + lucid.sum(ties - ties.detach()) * share
     spread = lucid.sum(ties) * share
     return lucid.where(lucid.isfinite(picked), exact, spread)
+
+
+def mode(
+    input: Tensor,
+    dim: int = -1,
+    keepdim: bool = False,
+) -> tuple[Tensor, Tensor]:
+    r"""Return a ``(values, indices)`` pair of the modal value of each slice along ``dim``.
+
+    Parameters
+    ----------
+    input : Tensor
+        Input tensor of a real or boolean dtype.
+    dim : int, optional
+        Dimension to reduce.  Defaults to ``-1``.
+    keepdim : bool, optional
+        Whether the output tensors have ``dim`` retained with size 1.
+        Defaults to ``False``.
+
+    Returns
+    -------
+    tuple of Tensor
+        ``(values, indices)`` named tuple of modal values and their ``int64``
+        indices along ``dim``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> v, idx = lucid.mode(lucid.tensor([[1, 2, 2], [3, 1, 3]]))
+    >>> v
+    tensor([2, 3], dtype=lucid.int64)
+    """
+    if lucid.is_complex(input):
+        raise NotImplementedError(f"mode does not accept {input.dtype}")
+    d = _wrap_dim(dim, input.ndim, "mode")
+    if input.ndim == 0:
+        return _ValuesIndices(
+            (input.clone(), lucid.zeros((), dtype=lucid.int64, device=input.device))
+        )
+    n = input.shape[d]
+    if n == 0:
+        raise IndexError(f"mode(): Expected reduction dim {d} to have non-zero size.")
+    if input.numel() == 0:
+        values = input.narrow(d, 0, 1)
+        indices = lucid.zeros(values.shape, dtype=lucid.int64, device=input.device)
+        return _pack_values_indices(values, indices, d, keepdim)
+    moved = lucid.movedim(input, d, -1)
+    order = lucid.argsort(moved, -1)
+    s = lucid.take_along_dim(moved, order, -1)
+    eq = s.unsqueeze(-1) == s.unsqueeze(-2)
+    if lucid.is_floating_point(input):
+        s_nan = lucid.isnan(s)
+        eq = eq | (s_nan.unsqueeze(-1) & s_nan.unsqueeze(-2))
+    tri = lucid.triu(lucid.ones((n, n), dtype=lucid.bool_, device=input.device))
+    counts = lucid.sum(eq & tri, dim=-2)
+    best_pos = lucid.argmax(counts, dim=-1, keepdim=True)
+    indices = lucid.movedim(lucid.take_along_dim(order, best_pos, -1), -1, d)
+    values = lucid.take_along_dim(input, indices, d)
+    return _pack_values_indices(values, indices, d, keepdim)
+
+
+def msort(input: Tensor) -> Tensor:
+    r"""Sort the elements of ``input`` along its first dimension in ascending order.
+
+    Parameters
+    ----------
+    input : Tensor
+        Input tensor.
+
+    Returns
+    -------
+    Tensor
+        Tensor of the same shape and dtype as ``input`` sorted along ``dim=0``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.msort(lucid.tensor([[3.0, 1.0], [2.0, 0.0]]))
+    tensor([[2., 0.], [3., 1.]])
+    """
+    return lucid.sort(input, dim=0)
 
 
 def count_nonzero(
@@ -407,7 +533,17 @@ def amin(
     return lucid.min(input, _dim, keepdim)
 
 
-__all__ = ["nansum", "nanmean", "nanmedian", "count_nonzero", "amax", "amin"]
+__all__ = [
+    "nansum",
+    "nanmean",
+    "median",
+    "nanmedian",
+    "mode",
+    "msort",
+    "count_nonzero",
+    "amax",
+    "amin",
+]
 
 # Bound at runtime, not only for type checking: PEP 649 evaluates a
 # function's annotations in its own module globals when something asks

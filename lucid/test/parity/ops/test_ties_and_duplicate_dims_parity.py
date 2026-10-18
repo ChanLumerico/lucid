@@ -90,7 +90,7 @@ class TestOrderedSelections:
         x = lucid.tensor(rows, device=device)
         n = len(rows[0])
         for k in sorted({1, n // 2 + 1, n}):
-            got = lucid.kthvalue(x, k).to("cpu").tolist()
+            got = lucid.kthvalue(x, k).values.to("cpu").tolist()
             want = ref.kthvalue(ref.tensor(rows), k).values.tolist()
             assert np.array_equal(np.asarray(got), np.asarray(want), equal_nan=True)
 

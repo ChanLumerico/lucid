@@ -218,9 +218,21 @@ def quantile(
             lucid.where(nans == 0, r, lucid.full_like(r, math.nan)) for r in results
         ]
 
-    if scalar_q:
-        return results[0]
-    return lucid.stack(results)
+    return _pack_quantile_results(results, scalar_q, input.ndim, dim, keepdim)
+
+
+def _pack_quantile_results(
+    results: list[Tensor],
+    scalar_q: bool,
+    ndim: int,
+    dim: int | None,
+    keepdim: bool,
+) -> Tensor:
+    """Stack quantile slices and restore ``(1,) * ndim`` when ``dim=None, keepdim=True``."""
+    if dim is None and keepdim and ndim > 0:
+        ones = (1,) * ndim
+        results = [r.reshape(ones) for r in results]
+    return results[0] if scalar_q else lucid.stack(results)
 
 
 def nanquantile(
@@ -291,9 +303,7 @@ def nanquantile(
         interpolation,
     )
 
-    if scalar_q:
-        return results[0]
-    return lucid.stack(results)
+    return _pack_quantile_results(results, scalar_q, input.ndim, dim, keepdim)
 
 
 # ── covariance & correlation ──────────────────────────────────────────────────

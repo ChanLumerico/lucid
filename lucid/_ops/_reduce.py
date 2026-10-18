@@ -35,6 +35,18 @@ from lucid._types import DTypeLike
 _Impl = _C_engine.TensorImpl
 
 
+class _ValuesIndices[T](tuple[T, T]):
+    """``(values, indices)`` pair returned by order-statistics reductions."""
+
+    @property
+    def values(self) -> T:
+        return self[0]
+
+    @property
+    def indices(self) -> T:
+        return self[1]
+
+
 # ── Axes ─────────────────────────────────────────────────────────────────────
 
 

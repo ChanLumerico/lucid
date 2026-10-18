@@ -46,7 +46,7 @@ from lucid._ops._dims import (
     _wrap_dim,
     _wrap_dims,
 )
-from lucid._ops._reduce import _reduction_axes
+from lucid._ops._reduce import _ValuesIndices, _reduction_axes
 from lucid._types import Scalar, TensorOrScalar
 
 if TYPE_CHECKING:
@@ -392,7 +392,7 @@ def _argsort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> 
 
 def _topk_adapter(
     a_impl: _Impl, k: int, dim: int = -1, largest: bool = True
-) -> tuple[_Impl, _Impl]:
+) -> _ValuesIndices[_Impl]:
     """topk(a, k, dim=-1, largest=True) — ``(values, indices)``, best first.
 
     The smallest ``k`` are the head of the stable ascending order, so equal
@@ -404,9 +404,9 @@ def _topk_adapter(
     # ``narrow`` below has no real axis to cut.
     if largest or not a_impl.shape:
         values, indices = _C_engine.topk(a_impl, int(k), d)
-        return values, indices
+        return _ValuesIndices((values, indices))
     order = _C_engine.narrow(_C_engine.argsort(a_impl, d), d, 0, int(k))
-    return _C_engine.gather(a_impl, order, d), order
+    return _ValuesIndices((_C_engine.gather(a_impl, order, d), order))
 
 
 def _chunk_adapter(a_impl: _Impl, chunks: int, dim: int = 0) -> list[_Impl]:
@@ -442,9 +442,17 @@ def _kthvalue_adapter(
     k: int,
     dim: int = -1,
     keepdim: bool = False,
-) -> _Impl:
-    """kthvalue(a, k, dim=-1, keepdim=False)."""
-    return _C_engine.kthvalue(a_impl, int(k), int(dim), bool(keepdim))
+) -> _ValuesIndices[_Impl]:
+    """kthvalue(a, k, dim=-1, keepdim=False) — ``(values, indices)``."""
+    values = _C_engine.kthvalue(a_impl, int(k), int(dim), bool(keepdim))
+    if not a_impl.shape:
+        indices = _C_engine.zeros([], _C_engine.I64, a_impl.device)
+    else:
+        d = _wrap_dim(int(dim), len(a_impl.shape), "kthvalue")
+        indices = _C_engine.narrow(_C_engine.argsort(a_impl, d), d, int(k) - 1, 1)
+        if not keepdim:
+            indices = _C_engine.squeeze(indices, d)
+    return _ValuesIndices((values, indices))
 
 
 def _narrow_adapter(a_impl: _Impl, dim: int, start: int, length: int) -> _Impl:
