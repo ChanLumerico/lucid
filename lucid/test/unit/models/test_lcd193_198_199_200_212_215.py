@@ -65,6 +65,22 @@ def test_lcd193_check_numpy_h4_ast_gate(tmp_path: Path) -> None:
     hits = h4._scan_file(bad_file)
     assert len(hits) == 1
     assert ".numpy()" in hits[0].statement
+    assert "compile/_optim/compiler.py" not in h4.SANCTIONED
+
+    compiler_rel = Path("compile/_optim/compiler.py")
+    compiler_file = tmp_path / "compiler.py"
+    compiler_file.write_text(
+        "class _CompiledOptimizer:\n"
+        "    def state_dict(self):\n"
+        "        return self.buf.numpy()\n"
+        "    def _step_entry(self, i):\n"
+        "        return self.step.numpy()\n"
+        "    def _update(self, p):\n"
+        "        return p.numpy()\n",
+        encoding="utf-8",
+    )
+    scoped_hits = h4._scan_file(compiler_file, rel_path=compiler_rel)
+    assert [v.lineno for v in scoped_hits] == [7]
     assert h4.scan(h4.LUCID_ROOT) == []
 
 
