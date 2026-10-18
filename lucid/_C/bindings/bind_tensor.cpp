@@ -85,6 +85,80 @@ pending_arrays(const std::vector<std::shared_ptr<lucid::TensorImpl>>& tensors) {
             arrays.push_back(*arr);
     return arrays;
 }
+
+// The storage's base address plus the view's byte offset, so two tensors at
+// the same place in one buffer compare equal.  A GPU array is evaluated
+// first: its buffer may not exist yet.  A phantom has no buffer, so no
+// address: the storage-sharing plans that compare these would otherwise take
+// every phantom for one buffer.
+std::uintptr_t data_address(const lucid::TensorImpl& t) {
+    const std::size_t off = t.storage_offset();
+    const lucid::Storage& s = t.raw_storage();
+    if (lucid::storage_is_phantom(s))
+        lucid::refuse_phantom_read("data_ptr");
+    if (lucid::storage_is_cpu(s))
+        return reinterpret_cast<std::uintptr_t>(lucid::storage_cpu(s).ptr.get()) + off;
+    if (lucid::storage_is_gpu(s)) {
+        const auto& g = lucid::storage_gpu(s);
+        if (!g.arr)
+            return 0;
+        g.arr->eval();
+        lucid::MemoryTracker::track_host_sync(g.nbytes);
+        return reinterpret_cast<std::uintptr_t>(g.arr->data<std::uint8_t>()) + off;
+    }
+    return reinterpret_cast<std::uintptr_t>(lucid::storage_metal_shared(s).cpu_ptr) + off;
+}
+
+// A zero-filled CPU tensor in MTLResourceStorageModeShared memory — under
+// phantom mode, a factory like any other: a phantom, and no Metal buffer.
+std::shared_ptr<lucid::TensorImpl>
+make_shared_tensor(const std::vector<std::int64_t>& shape, lucid::Dtype dtype, bool requires_grad) {
+    if (lucid::PhantomMode::is_enabled())
+        return std::make_shared<lucid::TensorImpl>(
+            lucid::phantom_storage(lucid::Shape(shape), dtype, lucid::Device::CPU),
+            lucid::Shape(shape), dtype, lucid::Device::CPU, requires_grad);
+    std::size_t n = 1;
+    for (auto d : shape)
+        n *= static_cast<std::size_t>(d);
+    const std::size_t nbytes = n * lucid::dtype_size(dtype);
+    if (nbytes == 0) {
+        // Empty tensor: fall back to ordinary CPU zeros.
+        auto& be = lucid::backend::Dispatcher::for_device(lucid::Device::CPU);
+        lucid::Storage s = be.zeros(lucid::Shape(shape), dtype);
+        return std::make_shared<lucid::TensorImpl>(std::move(s), lucid::Shape(shape), dtype,
+                                                   lucid::Device::CPU, requires_grad);
+    }
+    auto owned = lucid::gpu::make_metal_shared(nbytes);
+    if (!owned.buf.cpu_ptr)
+        throw std::runtime_error("make_shared_tensor: MTLBuffer allocation failed — "
+                                 "Metal may not be available on this device");
+    // macOS guarantees MTLResourceStorageModeShared buffers are
+    // zero-initialized; no explicit memset needed.
+    lucid::SharedStorage ss;
+    ss.cpu_ptr = owned.buf.cpu_ptr;
+    ss.mtl_handle = owned.buf.mtl_handle;
+    ss.nbytes = nbytes;
+    ss.dtype = dtype;
+    ss.owner = std::move(owned.owner);
+    return std::make_shared<lucid::TensorImpl>(lucid::Storage{std::move(ss)}, lucid::Shape(shape),
+                                               dtype, lucid::Device::CPU, requires_grad);
+}
+
+// Puts g's buffer in self's gradient slot, replacing any gradient there;
+// refused, with the slot as it was, unless g has self's dtype, device and
+// shape (assignable_grad).  Backs ``Tensor.grad = g``; clip_grad and
+// GradScaler write their results back through it too.  A phantom's slot is
+// the phantom assignable_grad gives, never g's graph.
+void set_gradient(lucid::TensorImpl& self, const std::shared_ptr<lucid::TensorImpl>& g) {
+    if (!g)
+        lucid::ErrorBuilder("Tensor.grad")
+            .invalid_argument("expected a tensor; zero_grad() clears a gradient");
+    lucid::Storage slot = lucid::assignable_grad(self, *g);
+    if (!lucid::storage_is_phantom(slot) && (g->requires_grad() || g->grad_fn()))
+        self.set_grad_impl(g);
+    else
+        self.set_grad_storage(std::move(slot));
+}
 }  // namespace
 
 namespace lucid::bindings {
@@ -164,83 +238,6 @@ void register_core(py::module_& m) {
     // which MLX's allocator peak does not see) — for compiled-step footprint.
     m.def("metal_device_allocated_bytes", &lucid::gpu::mps::metal_device_allocated_bytes);
 }
-
-namespace {
-
-// The storage's base address plus the view's byte offset, so two tensors at
-// the same place in one buffer compare equal.  A GPU array is evaluated
-// first: its buffer may not exist yet.  A phantom has no buffer, so no
-// address: the storage-sharing plans that compare these would otherwise take
-// every phantom for one buffer.
-std::uintptr_t data_address(const TensorImpl& t) {
-    const std::size_t off = t.storage_offset();
-    const Storage& s = t.raw_storage();
-    if (storage_is_phantom(s))
-        refuse_phantom_read("data_ptr");
-    if (storage_is_cpu(s))
-        return reinterpret_cast<std::uintptr_t>(storage_cpu(s).ptr.get()) + off;
-    if (storage_is_gpu(s)) {
-        const auto& g = storage_gpu(s);
-        if (!g.arr)
-            return 0;
-        g.arr->eval();
-        MemoryTracker::track_host_sync(g.nbytes);
-        return reinterpret_cast<std::uintptr_t>(g.arr->data<std::uint8_t>()) + off;
-    }
-    return reinterpret_cast<std::uintptr_t>(storage_metal_shared(s).cpu_ptr) + off;
-}
-
-// A zero-filled CPU tensor in MTLResourceStorageModeShared memory — under
-// phantom mode, a factory like any other: a phantom, and no Metal buffer.
-std::shared_ptr<TensorImpl>
-make_shared_tensor(const std::vector<std::int64_t>& shape, Dtype dtype, bool requires_grad) {
-    if (PhantomMode::is_enabled())
-        return std::make_shared<TensorImpl>(phantom_storage(Shape(shape), dtype, Device::CPU),
-                                            Shape(shape), dtype, Device::CPU, requires_grad);
-    std::size_t n = 1;
-    for (auto d : shape)
-        n *= static_cast<std::size_t>(d);
-    const std::size_t nbytes = n * dtype_size(dtype);
-    if (nbytes == 0) {
-        // Empty tensor: fall back to ordinary CPU zeros.
-        auto& be = backend::Dispatcher::for_device(Device::CPU);
-        Storage s = be.zeros(Shape(shape), dtype);
-        return std::make_shared<TensorImpl>(std::move(s), Shape(shape), dtype, Device::CPU,
-                                            requires_grad);
-    }
-    auto owned = gpu::make_metal_shared(nbytes);
-    if (!owned.buf.cpu_ptr)
-        throw std::runtime_error("make_shared_tensor: MTLBuffer allocation failed — "
-                                 "Metal may not be available on this device");
-    // macOS guarantees MTLResourceStorageModeShared buffers are
-    // zero-initialized; no explicit memset needed.
-    SharedStorage ss;
-    ss.cpu_ptr = owned.buf.cpu_ptr;
-    ss.mtl_handle = owned.buf.mtl_handle;
-    ss.nbytes = nbytes;
-    ss.dtype = dtype;
-    ss.owner = std::move(owned.owner);
-    return std::make_shared<TensorImpl>(Storage{std::move(ss)}, Shape(shape), dtype, Device::CPU,
-                                        requires_grad);
-}
-
-// Puts g's buffer in self's gradient slot, replacing any gradient there;
-// refused, with the slot as it was, unless g has self's dtype, device and
-// shape (assignable_grad).  Backs ``Tensor.grad = g``; clip_grad and
-// GradScaler write their results back through it too.  A phantom's slot is
-// the phantom assignable_grad gives, never g's graph.
-void set_gradient(TensorImpl& self, const std::shared_ptr<TensorImpl>& g) {
-    if (!g)
-        ErrorBuilder("Tensor.grad")
-            .invalid_argument("expected a tensor; zero_grad() clears a gradient");
-    Storage slot = lucid::assignable_grad(self, *g);
-    if (!storage_is_phantom(slot) && (g->requires_grad() || g->grad_fn()))
-        self.set_grad_impl(g);
-    else
-        self.set_grad_storage(std::move(slot));
-}
-
-}  // namespace
 
 // Registers TensorImpl as the Python-visible `TensorImpl` type and the
 // standalone to_shared_storage() utility.
