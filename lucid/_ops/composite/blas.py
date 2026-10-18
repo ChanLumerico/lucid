@@ -313,7 +313,7 @@ def addcmul(
     tensor1: Tensor,
     tensor2: Tensor,
     *,
-    value: float = 1.0,
+    value: float = 1,
 ) -> Tensor:
     r"""Element-wise fused multiply-add with a scalar weight.
 
@@ -335,7 +335,7 @@ def addcmul(
         ``input`` and ``tensor1``.
     value : float, optional
         Scalar multiplier applied to the product ``t1 * t2`` before
-        addition.  Defaults to ``1.0`` (plain multiply-and-add).
+        addition.  Defaults to ``1`` (plain multiply-and-add).
 
     Returns
     -------
@@ -373,7 +373,7 @@ def addcdiv(
     tensor1: Tensor,
     tensor2: Tensor,
     *,
-    value: float = 1.0,
+    value: float = 1,
 ) -> Tensor:
     r"""Element-wise fused divide-add.
 
@@ -390,7 +390,7 @@ def addcdiv(
     tensor2 : Tensor
         Denominator. Must broadcast with ``input`` and ``tensor1``.
     value : float, optional
-        Scalar multiplier on the quotient. Defaults to ``1.0``.
+        Scalar multiplier on the quotient. Defaults to ``1``.
 
     Returns
     -------
@@ -418,6 +418,16 @@ def addcdiv(
     >>> lucid.addcdiv(a, t1, t2, value=0.5)
     tensor([2., 3.5])
     """
+    from lucid import _promotion
+    from lucid._dispatch import _unwrap
+
+    if _promotion.is_integral(_unwrap(tensor1).dtype) and _promotion.is_integral(
+        _unwrap(tensor2).dtype
+    ):
+        raise RuntimeError(
+            "Integer division with addcdiv is no longer supported; "
+            "use floor_divide instead."
+        )
     return input + (tensor1 / tensor2) * value
 
 

@@ -134,19 +134,27 @@ def _round_to_half(x: float, dt: _C_engine.Dtype) -> float:
     return float(struct.unpack("<f", struct.pack("<I", bits & 0xFFFFFFFF))[0])
 
 
-def _refuse_bool_subtraction(a: _C_engine.TensorImpl, b: _C_engine.TensorImpl) -> None:
-    """Refuse ``bool - bool``, as the reference framework refuses it.
+def _is_bool_operand(x: object) -> bool:
+    if isinstance(x, bool):
+        return True
+    impl = x if isinstance(x, _C_engine.TensorImpl) else getattr(x, "_impl", None)
+    return getattr(impl, "dtype", None) == _C_engine.Bool
 
-    Two bools have no difference; the engine's kernels answer with XOR,
-    which is not subtraction, and ``-`` used to return it without a word.
-    The engine's own composites still subtract bool masks internally
-    (``scatter`` does), so the refusal lives at the public entry points —
-    ``-``, ``-=``, ``sub`` and ``sub_`` — rather than in the op.
-    """
-    if a.dtype == _C_engine.Bool and b.dtype == _C_engine.Bool:
+
+def _refuse_bool_subtraction(a: object, b: object) -> None:
+    """Refuse subtraction involving a ``bool`` or ``Bool`` tensor, as the reference does."""
+    a_bool = _is_bool_operand(a)
+    b_bool = _is_bool_operand(b)
+    if a_bool and b_bool:
         raise _C_engine.LucidError(
             "subtraction, the `-` operator, with two bool tensors is not "
             "supported; use `^` or logical_xor() instead"
+        )
+    if a_bool or b_bool:
+        raise _C_engine.LucidError(
+            "subtraction, the `-` operator, with a bool tensor is not "
+            "supported; if you are trying to invert a mask, use the `~` "
+            "or logical_not() operator instead"
         )
 
 

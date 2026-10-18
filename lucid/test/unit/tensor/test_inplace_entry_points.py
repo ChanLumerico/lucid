@@ -336,10 +336,8 @@ def test_an_integer_self_refuses_a_float_result_before_writing(
 
 
 def test_lerp_into_an_integer_self_is_refused_as_lerp_refuses_it(device: str) -> None:
-    # lerp does not promote: it refuses a non-float tensor outright, with the
-    # TypeError it documents (the reference raises a RuntimeError there).
     a = lucid.tensor([0, 1]).to(device)
-    with pytest.raises(TypeError, match="floating-point"):
+    with pytest.raises(NotImplementedError, match="floating-point"):
         a.lerp_(lucid.tensor([1.0, 2.0]).to(device), 0.5)
     assert a.tolist() == [0, 1]
 

@@ -440,7 +440,7 @@ _REGISTRY: list[OpEntry] = [
     # ── linear-algebra compositions ─────────────────────────────────────────
     OpEntry("mm",   _R.mm,   2, method_name="mm",   free_fn_name="mm"),
     OpEntry("bmm",  _R.bmm,  2, method_name="bmm",  free_fn_name="bmm"),
-    OpEntry("kron", _R.kron, 2, method_name="kron", free_fn_name="kron"),
+    OpEntry("kron", A._kron_adapter, 2, method_name="kron", free_fn_name="kron"),
 
     # ── logical compositions ────────────────────────────────────────────────
     OpEntry("logical_and", A._make_arith_adapter(_R.logical_and), 2,

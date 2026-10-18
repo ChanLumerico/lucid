@@ -154,9 +154,9 @@ def _make_arith_adapter(
             scalar = _scalar_power(input, other)
             if scalar is not None:
                 return scalar
-        a, b = _binary_operands(input, other, opmath=opmath, inplace=inplace)
         if subtracts:
-            _refuse_bool_subtraction(a, b)
+            _refuse_bool_subtraction(input, other)
+        a, b = _binary_operands(input, other, opmath=opmath, inplace=inplace)
         return engine_fn(a, b)
 
     # The adapter's own ``(input, other)`` is the op's signature — not the
@@ -983,6 +983,18 @@ def _outer_adapter(a_impl: _Impl, b_impl: _Impl) -> _Impl:
 _keep_engine_signature(_outer_adapter, _C_engine.outer)
 
 
+def _kron_adapter(a_impl: _Impl, b_impl: _Impl) -> _Impl:
+    """kron(a, b) — the two tensors at their common dtype."""
+    for operand in (a_impl, b_impl):
+        if isinstance(operand, (bool, int, float, complex)):
+            raise TypeError(f"kron: expected a tensor, got {type(operand).__name__}")
+    a_impl, b_impl = _promote_impls([a_impl, b_impl])
+    return _C_engine.kron(a_impl, b_impl)
+
+
+_keep_engine_signature(_kron_adapter, _C_engine.kron)
+
+
 def _meshgrid_adapter(*tensors: Tensor, indexing: str = "ij") -> list[_Impl]:
     """meshgrid(*tensors, indexing='ij') — variadic input; ``indexing`` kwarg
     selects between matrix ('ij') and Cartesian ('xy') ordering."""
@@ -1064,7 +1076,12 @@ def _clip_scalar_bounds(
         lo_f = -math.inf if min is None else float(min)
         hi_f = math.inf if max is None else float(max)
         return clip(x_impl, lo_f, hi_f)
-    if min is not None and max is not None:
+    if (
+        min is not None
+        and max is not None
+        and abs(min) <= (1 << 53)
+        and abs(max) <= (1 << 53)
+    ):
         return clip(x_impl, float(min), float(max))
     return None
 

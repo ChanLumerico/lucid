@@ -787,7 +787,7 @@ EAGER_REJECTS: dict[tuple[str, str], Refusal] = {
     # used to subtract bool masks inside the engine; it overwrites now
     # (CHA-158).
     ("sub", "bool"): _both(_C_engine.LucidError, "subtracting bools; use ^"),
-    **_each("lerp", _INT, _both(TypeError, "lerp takes floating tensors only")),
+    **_each("lerp", _INT, _both(_NOT_IMPL, "lerp takes floating tensors only")),
     **_each(
         "nextafter",
         _NON_FLOAT,

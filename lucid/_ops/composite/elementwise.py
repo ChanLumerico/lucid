@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, cast
 
 import lucid
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap, _unwrap_or_scalar, _wrap
+from lucid._dispatch import _binary_operands, _float_input, _unwrap, _wrap
 from lucid._ops.composite import _bessel
 from lucid._ops.composite._gamma import _lgamma, _polygamma
 from lucid._ops.composite._opmath import _in_float32, _real
@@ -454,6 +454,7 @@ def arccosh(input: Tensor) -> Tensor:
     >>> lucid.arccosh(x)
     tensor([0., 1.317, 2.993])
     """
+    input = _float_input(input)
     return lucid.log(input + lucid.sqrt(input * input - 1.0))
 
 
@@ -532,6 +533,7 @@ def arcsinh(input: Tensor) -> Tensor:
     >>> lucid.arcsinh(x)
     tensor([-0.8814, 0., 0.8814])
     """
+    input = _float_input(input)
     return lucid.log(input + lucid.sqrt(input * input + 1.0))
 
 
@@ -611,6 +613,7 @@ def arctanh(input: Tensor) -> Tensor:
     >>> lucid.arctanh(x)
     tensor([-0.5493, 0., 0.5493])
     """
+    input = _float_input(input)
     return lucid.log((1.0 + input) / (1.0 - input)) * 0.5
 
 
@@ -861,18 +864,7 @@ def _x_times_log(
     Tensor
         ``x * log(y)`` with the ``x == 0`` convention.
     """
-    if not _is_tensor(x) and not _is_tensor(y):
-        x = lucid.tensor(float(cast(float, x)))
-    # A scalar becomes a constant on the tensor operand's device: built on
-    # its own it landed on the CPU and a Metal partner raised DeviceMismatch.
-    x, y = _promote_pair(x, y)
-    # Integer and bool inputs are taken in the default float dtype, as the
-    # reference framework takes them — the log of an integer is not one.
-    default = lucid.get_default_dtype()
-    if not (x.is_floating_point() or x.is_complex()):
-        x = x.to(dtype=default)
-    if not (y.is_floating_point() or y.is_complex()):
-        y = y.to(dtype=default)
+    x, y = _promote_pair(x, y, float_valued=True)
     degenerate = (x == 0.0) & ((y <= pole) | lucid.isinf(y))
     return x * log(lucid.where(degenerate, root, y))
 
@@ -982,6 +974,7 @@ def logit(input: Tensor, eps: float | None = None) -> Tensor:
     >>> lucid.logit(x)
     tensor([-2.197, 0., 2.197])
     """
+    input = _float_input(input)
     if eps is not None:
         input = lucid.clamp(input, eps, 1.0 - eps)
     return lucid.log(input / (1.0 - input))
@@ -1083,19 +1076,19 @@ def float_power(input: Tensor | Scalar, exponent: Tensor | Scalar) -> Tensor:
     return lucid.pow(cast("Tensor", input), cast("Tensor", exponent))
 
 
-def _promote_pair(a: TensorOrScalar, b: TensorOrScalar) -> tuple[Tensor, Tensor]:
-    """Make both operands tensors, promoting whichever one is a scalar.
+def _promote_pair(
+    a: TensorOrScalar, b: TensorOrScalar, *, float_valued: bool = False
+) -> tuple[Tensor, Tensor]:
+    """Bring ``a`` and ``b`` to their common tensor dtype through :func:`_binary_operands`.
 
-    Composites built on primitives that only take tensors — ``isnan``
-    here — cannot simply forward a Python scalar the way a wrapped
-    binary op does.  Routing through the same coercion the wrapped ops
-    use keeps ``f(x, 0.5)`` meaning exactly what ``f(x, full_like(x,
-    0.5))`` means, weak-scalar promotion included.
+    ``float_valued=True`` lifts an integral or bool pair to the default float
+    dtype, as ``true_divide``, ``xlogy``, and ``copysign`` do.
     """
-    if _is_tensor(a) and _is_tensor(b):
-        return a, b
-    ref = _unwrap(a) if _is_tensor(a) else _unwrap(cast("Tensor", b))
-    return _wrap(_unwrap_or_scalar(a, ref)), _wrap(_unwrap_or_scalar(b, ref))
+    ai, bi = _binary_operands(a, b, true_div=float_valued)
+    return (
+        a if _is_tensor(a) and a._impl is ai else _wrap(ai),
+        b if _is_tensor(b) and b._impl is bi else _wrap(bi),
+    )
 
 
 def fmax(input: TensorOrScalar, other: TensorOrScalar) -> Tensor:
@@ -1270,7 +1263,7 @@ def _erfc_double(x: Tensor) -> Tensor:
     return lucid.where(x >= 0.0, value, 2.0 - value)
 
 
-def copysign(input: Tensor, other: Tensor) -> Tensor:
+def copysign(input: Tensor, other: TensorOrScalar) -> Tensor:
     """Element-wise sign transplant: magnitudes from ``input``, signs from ``other``.
 
     Useful for sign-preserving operations that need to preserve a sign
@@ -1280,16 +1273,18 @@ def copysign(input: Tensor, other: Tensor) -> Tensor:
     ----------
     input : Tensor
         Magnitude source; result has ``|x|`` element-wise.
-    other : Tensor
+    other : Tensor or Scalar
         Sign source; result is positive where ``y >= 0``, negative
         where ``y < 0`` (broadcastable to the shape of ``input``).
 
     Returns
     -------
     Tensor
-        Broadcast shape of ``input`` and ``other``.
+        Broadcast shape of ``input`` and ``other`` at their common floating dtype.
     """
-    return lucid.where(other < 0.0, -lucid.abs(input), lucid.abs(input))
+    x, y = _promote_pair(input, other, float_valued=True)
+    mag = lucid.abs(x)
+    return lucid.where(y < 0.0, -mag, mag)
 
 
 def _pow2(k: Tensor) -> Tensor:

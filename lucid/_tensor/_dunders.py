@@ -205,8 +205,8 @@ def _inject_dunders(cls: type) -> None:
         >>> a - 1
         tensor([9., 19., 29.])
         """
+        _refuse_bool_subtraction(self, other)
         a, b = _binary_operands(self, other)
-        _refuse_bool_subtraction(a, b)
         return _wrap(_C_engine.sub(a, b))
 
     def __rsub__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -243,8 +243,8 @@ def _inject_dunders(cls: type) -> None:
         >>> 10 - a
         tensor([9., 8., 7.])
         """
+        _refuse_bool_subtraction(other, self)
         a, b = _binary_operands(other, self)
-        _refuse_bool_subtraction(a, b)
         return _wrap(_C_engine.sub(a, b))
 
     def __isub__(self: Tensor, other: TensorOrScalar) -> Tensor:
@@ -282,8 +282,8 @@ def _inject_dunders(cls: type) -> None:
         >>> a
         tensor([5., 15., 25.])
         """
+        _refuse_bool_subtraction(self, other)
         a, b = _binary_operands(self, other, inplace=True)
-        _refuse_bool_subtraction(a, b)
         return _adopt_inplace(self, _C_engine.sub_(a, b), "-=")
 
     def __mul__(self: Tensor, other: TensorOrScalar) -> Tensor:

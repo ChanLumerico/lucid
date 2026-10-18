@@ -3878,7 +3878,7 @@ class Tensor:
 
         Raises
         ------
-        TypeError
+        NotImplementedError
             If ``self`` or ``end`` is not floating point.  The weight is a
             fraction, and building it in an integer dtype truncated it to
             zero, so an integer ``lerp`` used to return ``self`` unchanged.
@@ -3899,7 +3899,7 @@ class Tensor:
         [5.0, 10.0, 15.0]
         """
         if not (self.is_floating_point() and end.is_floating_point()):
-            raise TypeError(
+            raise _C_engine.NotImplementedError(
                 f"lerp expects floating-point tensors, got {self.dtype} and "
                 f"{end.dtype} — cast them first"
             )
