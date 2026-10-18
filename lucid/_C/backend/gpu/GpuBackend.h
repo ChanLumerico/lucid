@@ -2693,30 +2693,16 @@ public:
         return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(result), dt)};
     }
 
-    // Moore-Penrose pseudo-inverse through MLX's SVD.
-    //
-    // A non-finite matrix never reaches the SVD, which aborts the process on
-    // one (see ``gpu_nonfinite_matrices``): NaN produces an all-NaN inverse,
-    // while an infinity without NaN stays zero (1/inf = 0), matching the
-    // reference.
+    // Moore-Penrose pseudo-inverse: the CPU backend's ``gesdd`` SVD, uploaded.
+    // Delegating keeps ``CpuBackend::pinv_one`` the one owner of the SVD driver
+    // and non-finite policy (NaN vs single/multiple infinities).
     Storage linalg_pinv(const Storage& a, const Shape& shape, Dtype dt) override {
-        const auto& ga = std::get<GpuStorage>(a);
-        if (ga.arr->size() == 0) {
-            // A batch of none: MLX's pinv reduces over the empty singular
-            // values and raises.  The answer is the transposed empty shape.
-            Shape out_shape(shape.begin(), shape.end() - 2);
-            out_shape.push_back(shape[shape.size() - 1]);
-            out_shape.push_back(shape[shape.size() - 2]);
-            return Storage{gpu::wrap_mlx_array(
-                ::mlx::core::zeros(gpu::to_mlx_shape(out_shape), ga.arr->dtype()), dt)};
-        }
-        auto bad = gpu_nonfinite_matrices(*ga.arr);
-        auto clean = gpu_zero_where(bad, *ga.arr);
-        auto has_nan =
-            ::mlx::core::any(::mlx::core::isnan(*ga.arr, k_linalg_stream), std::vector<int>{-2, -1},
-                             /*keepdims=*/true, k_linalg_stream);
-        auto out = gpu_nan_where(has_nan, ::mlx::core::linalg::pinv(clean, k_linalg_stream));
-        return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(out), dt)};
+        Storage a_cpu{gpu::download_gpu_to_cpu(std::get<GpuStorage>(a), shape)};
+        Storage out_cpu = Dispatcher::for_device(Device::CPU).linalg_pinv(a_cpu, shape, dt);
+        Shape out_shape(shape.begin(), shape.end() - 2);
+        out_shape.push_back(shape[shape.size() - 1]);
+        out_shape.push_back(shape[shape.size() - 2]);
+        return Storage{gpu::upload_cpu_to_gpu(std::get<CpuStorage>(out_cpu), out_shape)};
     }
 
     Storage linalg_det(const Storage& a, const Shape& shape, Dtype dt) override {

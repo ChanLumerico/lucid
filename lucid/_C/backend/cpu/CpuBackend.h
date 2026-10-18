@@ -11258,9 +11258,9 @@ private:
 
     template <typename T>
     static void pinv_one(const T* a, int m, int n, T* aplus) {
-        // A NaN or an infinity makes the pseudo-inverse all NaN, as it does
-        // the SVD it is built from (see ``linalg_svd``).
-        if (!all_finite(a, static_cast<std::size_t>(m) * n)) {
+        // A NaN makes gesdd report an illegal argument; infinities go through.
+        if (std::any_of(a, a + static_cast<std::size_t>(m) * n,
+                        [](T v) { return std::isnan(v); })) {
             fill_nan(aplus, static_cast<std::size_t>(n) * m);
             return;
         }

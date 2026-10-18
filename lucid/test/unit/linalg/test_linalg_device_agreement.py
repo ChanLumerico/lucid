@@ -273,3 +273,21 @@ def test_a_batch_refusal_names_the_failing_matrix(failing: int, device: str) -> 
         LA.LinAlgError, match=rf"\(Batch element {failing}\): D\[2,2\] is zero"
     ):
         LA.ldl_factor(lucid.tensor(batch, dtype=lucid.float32, device=device))
+
+
+@pytest.mark.parametrize(
+    ("device", "dtype"), device_dtype_params([lucid.float32, lucid.float64])
+)
+def test_pinv_all_inf_is_nan_while_single_inf_is_zero(
+    device: str, dtype: lucid.dtype
+) -> None:
+    """``pinv([[inf, inf], [inf, inf]])`` is all-NaN while a single leading
+    ``inf`` gives zeros, matching LAPACK ``gesdd`` on both devices."""
+    batch = lucid.tensor(
+        [[[_INF, _INF], [_INF, _INF]], [[_INF, 2.0], [3.0, 4.0]]],
+        dtype=dtype,
+        device=device,
+    )
+    out = LA.pinv(batch).to("cpu").numpy()
+    assert np.isnan(out[0]).all()
+    np.testing.assert_array_equal(out[1], np.zeros((2, 2), dtype=out.dtype))
