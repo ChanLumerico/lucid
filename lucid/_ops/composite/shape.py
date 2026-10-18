@@ -1308,6 +1308,43 @@ def diag_embed(
     return out if (rows, cols) == last else lucid.movedim(out, last, (rows, cols))
 
 
+def select(input: Tensor, dim: int, index: int) -> Tensor:
+    r"""Slice ``input`` along ``dim`` at ``index``, removing that dimension.
+
+    Parameters
+    ----------
+    input : Tensor
+        Input tensor with at least 1 dimension.
+    dim : int
+        Dimension to slice.
+    index : int
+        Index to select along ``dim``. Negative indices count from the end.
+
+    Returns
+    -------
+    Tensor
+        View of ``input`` with dimension ``dim`` removed.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.arange(6).reshape(2, 3)
+    >>> lucid.select(x, 1, -1)
+    tensor([2, 5], dtype=lucid.int64)
+    """
+    if input.ndim == 0:
+        raise IndexError("select() cannot be applied to a 0-dim tensor.")
+    d = _wrap_dim(dim, input.ndim, "select")
+    idx = operator.index(index)
+    size = int(input.shape[d])
+    if idx < -size or idx >= size:
+        raise IndexError(
+            f"select(): index {idx} out of range for tensor of size "
+            f"{list(input.shape)} at dimension {d}"
+        )
+    return input[(slice(None),) * d + (idx,)]
+
+
 __all__ = [
     "broadcast_shapes",
     "broadcast_tensors",
@@ -1332,6 +1369,7 @@ __all__ = [
     "triu_indices",
     "combinations",
     "rot90",
+    "select",
 ]
 
 # Bound at runtime, not only for type checking: PEP 649 evaluates a

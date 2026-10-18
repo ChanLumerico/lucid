@@ -6,7 +6,7 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._ops._dims import _wrap_dim
-from lucid._ops._reduce import _ValuesIndices, _reduction_axes, _run_with_dtype
+from lucid._ops._reduce import _MinMax, _ValuesIndices, _reduction_axes, _run_with_dtype
 from lucid._types import DTypeLike
 
 if TYPE_CHECKING:
@@ -533,6 +533,283 @@ def amin(
     return lucid.min(input, _dim, keepdim)
 
 
+def aminmax(
+    input: Tensor,
+    *,
+    dim: int | None = None,
+    keepdim: bool = False,
+) -> _MinMax[Tensor]:
+    r"""Compute the minimum and maximum of ``input``.
+
+    Parameters
+    ----------
+    input : Tensor
+        Input tensor.
+    dim : int or None, optional
+        Dimension along which to compute minimum and maximum. When ``None``
+        (default), reduces over the entire tensor.
+    keepdim : bool, optional
+        If ``True``, retains the reduced dimensions with size 1.
+
+    Returns
+    -------
+    tuple[Tensor, Tensor]
+        Named pair ``(min, max)`` with ``.min`` and ``.max`` attributes.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> out = lucid.aminmax(lucid.tensor([3.0, -1.0, 4.0]))
+    >>> (out.min.item(), out.max.item())
+    (-1.0, 4.0)
+    """
+    if dim is not None and (isinstance(dim, bool) or not isinstance(dim, int)):
+        raise TypeError(f"aminmax(): argument 'dim' must be int, not {type(dim).__name__}")
+    if dim is None:
+        lo = lucid.min(input)
+        hi = lucid.max(input)
+        if keepdim and input.ndim > 0:
+            ones = (1,) * input.ndim
+            lo = lo.reshape(ones)
+            hi = hi.reshape(ones)
+        return _MinMax((lo, hi))
+    axes = _reduction_axes(input._impl, dim, "aminmax")
+    return _MinMax((lucid.min(input, axes, keepdim), lucid.max(input, axes, keepdim)))
+
+
+def _logaddexp_pair(a: Tensor, b: Tensor) -> Tensor:
+    m_raw = lucid.maximum(a, b)
+    m = lucid.where(lucid.isinf(m_raw), lucid.zeros_like(m_raw), m_raw)
+    return m + lucid.log(lucid.exp(a - m) + lucid.exp(b - m))
+
+
+def logcumsumexp(input: Tensor, dim: int) -> Tensor:
+    r"""Return the logarithm of the cumulative sum of exponentials of ``input`` along ``dim``.
+
+    Parameters
+    ----------
+    input : Tensor
+        Floating-point input tensor.
+    dim : int
+        Dimension along which to compute the scan.
+
+    Returns
+    -------
+    Tensor
+        Tensor of the same shape and dtype as ``input``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.logcumsumexp(lucid.tensor([0.0, 0.0]), dim=0)
+    tensor([0., 0.6931])
+    """
+    if not lucid.is_floating_point(input):
+        raise _C_engine.NotImplementedError(
+            f"logcumsumexp is not implemented for {input.dtype}"
+        )
+    d = _wrap_dim(dim, input.ndim, "logcumsumexp")
+    if input.ndim == 0 or input.shape[d] <= 1:
+        return input.clone()
+    n = int(input.shape[d])
+    work_dt = (
+        lucid.float32
+        if input.dtype in (lucid.float16, lucid.bfloat16)
+        else input.dtype
+    )
+    acc = input.to(work_dt) if work_dt != input.dtype else input
+    step = 1
+    while step < n:
+        head = acc.narrow(d, 0, step)
+        pair = _logaddexp_pair(
+            acc.narrow(d, 0, n - step), acc.narrow(d, step, n - step)
+        )
+        acc = lucid.cat([head, pair], dim=d)
+        step <<= 1
+    return acc.to(input.dtype) if work_dt != input.dtype else acc
+
+
+def renorm(input: Tensor, p: float, dim: int, maxnorm: float) -> Tensor:
+    r"""Rescale each sub-tensor along ``dim`` whose ``p``-norm exceeds ``maxnorm``.
+
+    Parameters
+    ----------
+    input : Tensor
+        Floating-point or complex tensor with at least 2 dimensions.
+    p : float
+        Power for the norm calculation (must be positive).
+    dim : int
+        Dimension to slice over in order to obtain the sub-tensors.
+    maxnorm : float
+        Maximum allowed norm for each sub-tensor (must be non-negative).
+
+    Returns
+    -------
+    Tensor
+        Renormalized tensor of the same shape and dtype as ``input``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.tensor([[3.0, 4.0], [0.3, 0.4]])
+    >>> lucid.renorm(x, p=2.0, dim=0, maxnorm=1.0)
+    tensor([[0.6, 0.8], [0.3, 0.4]])
+    """
+    if p <= 0:
+        raise RuntimeError("renorm: non-positive-norm not supported")
+    if maxnorm < 0:
+        raise RuntimeError(f"renorm: expected maxnorm to be >= 0 but got {maxnorm}")
+    if input.ndim < 2:
+        raise RuntimeError(
+            f"renorm: input needs at least 2 dimensions, got {input.ndim} dimensions"
+        )
+    d = _wrap_dim(dim, input.ndim, "renorm")
+    if input.numel() == 0:
+        return input.clone()
+    is_half = input.dtype in (lucid.float16, lucid.bfloat16)
+    work = input.to(lucid.float32) if is_half else input
+    rdims = [i for i in range(input.ndim) if i != d]
+    norm = lucid.linalg.vector_norm(work, ord=p, dim=rdims, keepdim=True)
+    scale = lucid.where(norm > maxnorm, maxnorm / (norm + 1e-7), lucid.ones_like(norm))
+    out = work * scale
+    return out.to(input.dtype) if is_half else out
+
+
+def _align_trapezoid_x(name: str, yw: Tensor, x: Tensor, d: int) -> tuple[Tensor, Tensor]:
+    if x.dtype == lucid.bool:
+        raise RuntimeError(
+            f"{name}: received a bool input for `x`, but bool is not supported"
+        )
+    target_dt = lucid.result_type(yw, x)
+    yw = yw.to(target_dt) if yw.dtype != target_dt else yw
+    xw = x.to(target_dt) if x.dtype != target_dt else x
+    if xw.ndim == 1 and xw.shape[0] == yw.shape[d]:
+        shape = [int(xw.shape[0]) if i == d else 1 for i in range(yw.ndim)]
+        return yw, xw.reshape(shape)
+    if xw.ndim == yw.ndim and xw.shape[d] == yw.shape[d]:
+        return yw, xw
+    raise RuntimeError(f"{name}: There must be one `x` value for each sample point")
+
+
+def _trapezoid_operands(
+    name: str,
+    y: Tensor,
+    x: Tensor | None,
+    dx: float | None,
+    dim: int,
+) -> tuple[Tensor, Tensor | None, int]:
+    if y.dtype == lucid.bool:
+        raise RuntimeError(
+            f"{name}: received a bool input for `y`, but bool is not supported"
+        )
+    if x is not None and dx is not None:
+        raise TypeError(
+            f"{name}() received an invalid combination of arguments - "
+            "cannot specify both `x` and `dx`"
+        )
+    if y.ndim == 0:
+        msg = (
+            f"Dimension specified as {dim} but tensor has no dimensions"
+            if name == "trapezoid"
+            else "slice() cannot be applied to a 0-dim tensor."
+        )
+        raise IndexError(msg)
+    d = _wrap_dim(dim, y.ndim, name)
+    is_inexact = lucid.is_floating_point(y) or lucid.is_complex(y)
+    yw = y if is_inexact else y.to(lucid.get_default_dtype())
+    if x is None:
+        return yw, None, d
+    yw, xw = _align_trapezoid_x(name, yw, x, d)
+    return yw, xw, d
+
+
+def _trapezoid_areas(
+    name: str,
+    y: Tensor,
+    x: Tensor | None,
+    dx: float | None,
+    dim: int,
+) -> tuple[Tensor, int]:
+    yw, xw, d = _trapezoid_operands(name, y, x, dx, dim)
+    n = int(yw.shape[d])
+    if n < 2:
+        return yw.narrow(d, 0, 0), d
+    avg = (yw.narrow(d, 0, n - 1) + yw.narrow(d, 1, n - 1)) * 0.5
+    if xw is not None:
+        return (xw.narrow(d, 1, n - 1) - xw.narrow(d, 0, n - 1)) * avg, d
+    return avg * (1.0 if dx is None else dx), d
+
+
+def trapezoid(
+    y: Tensor,
+    x: Tensor | None = None,
+    *,
+    dx: float | None = None,
+    dim: int = -1,
+) -> Tensor:
+    r"""Integrate ``y`` along ``dim`` using the composite trapezoidal rule.
+
+    Parameters
+    ----------
+    y : Tensor
+        Function values sampled along ``dim``.
+    x : Tensor or None, optional
+        Abscissa coordinates matching ``y`` along ``dim``.
+    dx : float or None, optional
+        Uniform step width used when ``x`` is ``None`` (defaults to ``1.0``).
+    dim : int, optional
+        Integration axis (default ``-1``).
+
+    Returns
+    -------
+    Tensor
+        Definite trapezoidal integral with ``dim`` reduced.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.trapezoid(lucid.tensor([1.0, 2.0, 4.0]))
+    tensor(4.5)
+    """
+    areas, d = _trapezoid_areas("trapezoid", y, x, dx, dim)
+    return lucid.sum(areas, dim=d)
+
+
+def cumulative_trapezoid(
+    y: Tensor,
+    x: Tensor | None = None,
+    *,
+    dx: float | None = None,
+    dim: int = -1,
+) -> Tensor:
+    r"""Compute the running trapezoidal integral of ``y`` along ``dim``.
+
+    Parameters
+    ----------
+    y : Tensor
+        Samples to integrate cumulatively.
+    x : Tensor or None, optional
+        Grid coordinates along ``dim``; mutually exclusive with ``dx``.
+    dx : float or None, optional
+        Constant grid spacing when ``x`` is omitted.
+    dim : int, optional
+        Axis of cumulative integration (default ``-1``).
+
+    Returns
+    -------
+    Tensor
+        Running integral whose ``dim`` extent is ``y.shape[dim] - 1``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.cumulative_trapezoid(lucid.tensor([1.0, 2.0, 4.0]))
+    tensor([1.5, 4.5])
+    """
+    areas, d = _trapezoid_areas("cumulative_trapezoid", y, x, dx, dim)
+    return lucid.cumsum(areas, dim=d)
+
+
 __all__ = [
     "nansum",
     "nanmean",
@@ -543,6 +820,11 @@ __all__ = [
     "count_nonzero",
     "amax",
     "amin",
+    "aminmax",
+    "logcumsumexp",
+    "renorm",
+    "trapezoid",
+    "cumulative_trapezoid",
 ]
 
 # Bound at runtime, not only for type checking: PEP 649 evaluates a

@@ -457,8 +457,13 @@ def _kthvalue_adapter(
 
 def _narrow_adapter(a_impl: _Impl, dim: int, start: int, length: int) -> _Impl:
     """narrow(a, dim, start, length)."""
+    d = int(dim)
+    s = int(start)
+    ndim = len(a_impl.shape)
+    if s < 0 and -ndim <= d < ndim:
+        s += a_impl.shape[d]
     return _own_impl(
-        _C_engine.narrow(a_impl, int(dim), int(start), int(length)), a_impl
+        _C_engine.narrow(a_impl, d, s, int(length)), a_impl
     )
 
 
@@ -1129,6 +1134,20 @@ def _clip_adapter(
         )
     assert lo_impl is not None and hi_impl is not None
     return _clip_both_impls(x_impl, lo_impl, hi_impl, is_float)
+
+
+def _clamp_min_adapter(x_impl: _Impl, min: TensorOrScalar) -> _Impl:
+    """clamp_min(x, min) — raise elements below ``min`` to ``min``."""
+    if min is None:
+        raise TypeError("clamp_min(): argument 'min' must not be None")
+    return _clip_adapter(x_impl, min, None)
+
+
+def _clamp_max_adapter(x_impl: _Impl, max: TensorOrScalar) -> _Impl:
+    """clamp_max(x, max) — lower elements above ``max`` to ``max``."""
+    if max is None:
+        raise TypeError("clamp_max(): argument 'max' must not be None")
+    return _clip_adapter(x_impl, None, max)
 
 
 def _where_adapter(

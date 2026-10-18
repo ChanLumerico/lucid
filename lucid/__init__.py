@@ -138,7 +138,7 @@ __all__ = [
     "Tensor",
     # ── factory — deterministic ───────────────────────────────────────────
     "tensor", "as_tensor", "from_numpy", "from_dlpack", "to_dlpack",
-    "zeros", "ones", "empty", "full", "eye", "arange", "linspace", "logspace",
+    "zeros", "ones", "empty", "empty_strided", "full", "eye", "arange", "linspace", "logspace",
     "zeros_like", "ones_like", "empty_like", "full_like",
     # ── factory — random ──────────────────────────────────────────────────
     "rand", "randn", "randint", "bernoulli", "normal",
@@ -153,7 +153,7 @@ __all__ = [
     "asin", "acos", "atan",
     "sinh", "cosh", "tanh",
     "relu", "sigmoid", "selu", "softmax", "log_softmax",
-    "clip", "clamp",
+    "clip", "clamp", "clamp_min", "clamp_max",
     "isinf", "isnan", "isfinite", "nan_to_num",
     # ── ops — binary ──────────────────────────────────────────────────────
     "add", "sub", "mul", "div",
@@ -169,10 +169,10 @@ __all__ = [
     "mean", "prod",
     "argmax", "argmin", "cumsum", "cumprod",
     "std", "var", "trace",
-    "logsumexp",
+    "logsumexp", "logcumsumexp", "aminmax", "renorm", "trapezoid", "cumulative_trapezoid",
     # ── tensor manipulation ───────────────────────────────────────────────
     "reshape", "view", "permute", "transpose", "unsqueeze", "squeeze", "flatten",
-    "unflatten", "narrow", "movedim",
+    "unflatten", "narrow", "select", "movedim",
     "expand", "broadcast_to", "as_strided", "repeat", "repeat_interleave", "tile",
     "cat", "concat", "stack", "hstack", "vstack",
     "split", "chunk", "unbind",
@@ -245,7 +245,7 @@ __all__ = [
 _FACTORY_NAMES: frozenset[str] = frozenset([
     # ── deterministic ─────────────────────────────────────────────────────
     "tensor", "as_tensor", "from_numpy", "from_dlpack", "to_dlpack",
-    "zeros", "ones", "empty", "full", "eye", "arange", "linspace", "logspace",
+    "zeros", "ones", "empty", "empty_strided", "full", "eye", "arange", "linspace", "logspace",
     "zeros_like", "ones_like", "empty_like", "full_like",
     # ── random ────────────────────────────────────────────────────────────
     "rand", "randn", "randint", "bernoulli", "normal",
@@ -264,7 +264,7 @@ _OPS_NAMES: frozenset[str] = frozenset([
     "sin", "cos", "tan", "arcsin", "arccos", "arctan", "asin", "acos", "atan",
     "sinh", "cosh", "tanh",
     "relu", "sigmoid", "selu", "softmax", "log_softmax",
-    "clip", "clamp",
+    "clip", "clamp", "clamp_min", "clamp_max",
     "isinf", "isnan", "isfinite", "nan_to_num",
     "erf", "erfinv",
     # ── binary math ───────────────────────────────────────────────────────

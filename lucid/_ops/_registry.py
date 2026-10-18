@@ -417,6 +417,10 @@ _REGISTRY: list[OpEntry] = [
     # clamp is an alias for clip (same signature, same engine op).
     OpEntry("clamp",       A._clip_adapter, 1, method_name="clamp",  free_fn_name="clamp",
             extra_kwargs=["min", "max"]),
+    OpEntry("clamp_min",   A._clamp_min_adapter, 1, method_name="clamp_min", free_fn_name="clamp_min",
+            extra_kwargs=["min"]),
+    OpEntry("clamp_max",   A._clamp_max_adapter, 1, method_name="clamp_max", free_fn_name="clamp_max",
+            extra_kwargs=["max"]),
     # scatter_add: arg order differs — adapter reorders before calling engine.
     # Python:  scatter_add(x, dim, index, src)
     # Engine:  scatter_add(base, indices, src, dim)

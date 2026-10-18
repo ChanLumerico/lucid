@@ -329,6 +329,110 @@ def _msort(self: Tensor) -> Tensor:
     return _ms(self)
 
 
+def _select(self: Tensor, dim: int, index: int) -> Tensor:
+    """Slice ``self`` along ``dim`` at ``index``, removing that dimension."""
+    from lucid._ops.composite.shape import select as _sel
+
+    return _sel(self, dim=dim, index=index)
+
+
+def _tensor_split(
+    self: Tensor, indices_or_sections: int | Sequence[int], dim: int = 0
+) -> list[Tensor]:
+    """Split ``self`` along ``dim`` into sections or at cut indices."""
+    from lucid._ops.composite.shape import tensor_split as _ts
+
+    return _ts(self, indices_or_sections, dim=dim)
+
+
+def _vsplit(self: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
+    """Split ``self`` vertically along dimension 0."""
+    from lucid._ops.composite.shape import vsplit as _vs
+
+    return _vs(self, indices_or_sections)
+
+
+def _hsplit(self: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
+    """Split ``self`` horizontally along dimension 1 (or 0 for 1-D)."""
+    from lucid._ops.composite.shape import hsplit as _hs
+
+    return _hs(self, indices_or_sections)
+
+
+def _dsplit(self: Tensor, indices_or_sections: int | Sequence[int]) -> list[Tensor]:
+    """Split ``self`` along dimension 2."""
+    from lucid._ops.composite.shape import dsplit as _ds
+
+    return _ds(self, indices_or_sections)
+
+
+def _aminmax(
+    self: Tensor, *, dim: int | None = None, keepdim: bool = False
+) -> tuple[Tensor, Tensor]:
+    """Compute the minimum and maximum of ``self``."""
+    from lucid._ops.composite.reductions import aminmax as _amm
+
+    return _amm(self, dim=dim, keepdim=keepdim)
+
+
+def _renorm(self: Tensor, p: float, dim: int, maxnorm: float) -> Tensor:
+    """Rescale sub-tensors of ``self`` along ``dim`` whose ``p``-norm exceeds ``maxnorm``."""
+    from lucid._ops.composite.reductions import renorm as _rn
+
+    return _rn(self, p=p, dim=dim, maxnorm=maxnorm)
+
+
+def _logcumsumexp(self: Tensor, dim: int) -> Tensor:
+    """Logarithm of the cumulative sum of exponentials of ``self`` along ``dim``."""
+    from lucid._ops.composite.reductions import logcumsumexp as _lce
+
+    return _lce(self, dim=dim)
+
+
+def _addcmul(
+    self: Tensor, tensor1: Tensor, tensor2: Tensor, *, value: float = 1
+) -> Tensor:
+    """Element-wise ``self + value * tensor1 * tensor2``."""
+    from lucid._ops.composite.blas import addcmul as _acm
+
+    return _acm(self, tensor1, tensor2, value=value)
+
+
+def _addcdiv(
+    self: Tensor, tensor1: Tensor, tensor2: Tensor, *, value: float = 1
+) -> Tensor:
+    """Element-wise ``self + value * tensor1 / tensor2``."""
+    from lucid._ops.composite.blas import addcdiv as _acd
+
+    return _acd(self, tensor1, tensor2, value=value)
+
+
+def _is_set_to(self: Tensor, tensor: Tensor) -> bool:
+    """Return ``True`` when ``self`` and ``tensor`` share the same storage, offset, shape, and stride."""
+    from lucid._ops.composite._shared import _is_tensor
+    from lucid._tensor._metal_views import _frames, _on_metal
+
+    if not _is_tensor(tensor):
+        raise TypeError(
+            f"is_set_to(): argument 'tensor' (position 1) must be Tensor, not {type(tensor).__name__}"
+        )
+    if (
+        self.device != tensor.device
+        or self.dtype != tensor.dtype
+        or self.shape != tensor.shape
+        or self.stride() != tensor.stride()
+        or self.storage_offset() != tensor.storage_offset()
+    ):
+        return False
+    if _on_metal(self):
+        return _frames(self)[0][-1]._impl is _frames(tensor)[0][-1]._impl
+    ptr_a = self.data_ptr()
+    ptr_b = tensor.data_ptr()
+    if ptr_a == 0 or ptr_b == 0:
+        return self._impl is tensor._impl
+    return ptr_a == ptr_b
+
+
 # ── in-place forms with no engine kernel ─────────────────────────────────────
 
 
@@ -763,6 +867,17 @@ _EXTRA_METHODS = (
     ("quantile", _quantile),
     ("nanquantile", _nanquantile),
     ("msort", _msort),
+    ("select", _select),
+    ("tensor_split", _tensor_split),
+    ("vsplit", _vsplit),
+    ("hsplit", _hsplit),
+    ("dsplit", _dsplit),
+    ("aminmax", _aminmax),
+    ("renorm", _renorm),
+    ("logcumsumexp", _logcumsumexp),
+    ("addcmul", _addcmul),
+    ("addcdiv", _addcdiv),
+    ("is_set_to", _is_set_to),
     ("bitwise_and_", _bitwise_and_),
     ("bitwise_or_", _bitwise_or_),
     ("bitwise_xor_", _bitwise_xor_),

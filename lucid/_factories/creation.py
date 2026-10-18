@@ -3,6 +3,7 @@ Tensor creation functions: zeros, ones, empty, full, eye, arange, linspace, *_li
 """
 
 import struct
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, SupportsFloat
 from lucid._C import engine as _C_engine
 from lucid._dispatch import (
@@ -240,6 +241,74 @@ def empty(
     shape = _size_to_list(*size)
     impl = _C_engine.empty(shape, _dt, _dev)
     return _wrap(_leaf(impl, _rg))
+
+
+def empty_strided(
+    size: Sequence[int],
+    stride: Sequence[int],
+    *,
+    dtype: DTypeLike = None,
+    device: DeviceLike = None,
+    requires_grad: bool = False,
+) -> Tensor:
+    r"""Create an uninitialised tensor with the specified ``size`` and ``stride``.
+
+    Parameters
+    ----------
+    size : Sequence[int]
+        Shape of the output tensor.
+    stride : Sequence[int]
+        Stride of the output tensor (in elements).
+    dtype : lucid.dtype, optional
+        Scalar data type. Defaults to the global default dtype.
+    device : str or lucid.device, optional
+        Target device — ``"cpu"`` or ``"metal"``.
+    requires_grad : bool, optional
+        If ``True``, downstream operations are tracked by autograd.
+
+    Returns
+    -------
+    Tensor
+        Uninitialised tensor with shape ``size`` and stride ``stride``.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> t = lucid.empty_strided((2, 3), (3, 1))
+    >>> (t.shape, t.stride())
+    ((2, 3), (3, 1))
+    """
+    from lucid._tensor._metal_views import _ATTR, _integers
+
+    sz = _integers("size", size)
+    st = _integers("stride", stride)
+    if len(sz) != len(st):
+        raise RuntimeError(
+            f"dimensionality of sizes ({len(sz)}) must match dimensionality of strides ({len(st)})"
+        )
+    for n in sz:
+        if n < 0:
+            raise RuntimeError(
+                f"Trying to create tensor with negative dimension {n}: {list(sz)}"
+            )
+    for s in st:
+        if s < 0:
+            raise RuntimeError(
+                f"Storage size calculation overflowed with sizes={list(sz)} and strides={list(st)}"
+            )
+    needed = (
+        0
+        if 0 in sz
+        else 1 + sum((n - 1) * s for n, s in zip(sz, st, strict=True))
+    )
+    base = empty((needed,), dtype=dtype, device=device, requires_grad=False)
+    out = base.as_strided(sz, st, 0)
+    link = out.__dict__.get(_ATTR)
+    if link is not None:
+        link._base = base
+    if requires_grad:
+        out.requires_grad_(True)
+    return out
 
 
 def full(

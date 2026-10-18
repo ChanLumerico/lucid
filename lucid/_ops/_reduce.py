@@ -47,6 +47,18 @@ class _ValuesIndices[T](tuple[T, T]):
         return self[1]
 
 
+class _MinMax[T](tuple[T, T]):
+    """``(min, max)`` pair returned by :func:`lucid.aminmax`."""
+
+    @property
+    def min(self) -> T:
+        return self[0]
+
+    @property
+    def max(self) -> T:
+        return self[1]
+
+
 # ── Axes ─────────────────────────────────────────────────────────────────────
 
 
