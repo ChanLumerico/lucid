@@ -94,7 +94,8 @@ EXPORT_SMOKE=$COREML_TESTS/test_family_export_smoke.py
 
 part_core() {
     echo "==> Python fast tier (non-models)"
-    "$PYTHON_BIN" -m pytest lucid/test/ "${FAST_TIER_IGNORES[@]}" --ignore="$COREML_TESTS" -x -q
+    "$PYTHON_BIN" -m pytest lucid/test/ "${FAST_TIER_IGNORES[@]}" --ignore="$COREML_TESTS" \
+        --maxfail=50 --continue-on-collection-errors -q
 }
 
 part_coreml() {
@@ -104,6 +105,21 @@ part_coreml() {
 }
 
 part_checks() {
+    local failed_stages=()
+    stage() {
+        local name="$1"
+        shift
+        echo "==> $name"
+        set +e
+        "$@"
+        local rc=$?
+        set -e
+        if [ "$rc" -ne 0 ]; then
+            echo "  [FAIL] $name (exit $rc)" >&2
+            failed_stages+=("$name")
+        fi
+    }
+
     # ── 3. Parity tier (requires reference framework; auto-skips when missing) ──
     #
     # The two outcomes this used to fold together are not the same thing.  A
@@ -113,7 +129,6 @@ part_checks() {
     # meant that when the oracle *was* installed, five real defects passed the
     # gate — se_resnet computing a different function than its own published
     # weights among them.
-    echo "==> Parity tier (vs reference framework)"
     if ! "$PYTHON_BIN" -c "
 import sys
 sys.path.insert(0, '.')
@@ -123,11 +138,11 @@ sys.exit(0 if ref_module() and zoo_module() else 1)
         echo "  [WARN] the reference framework or the model-zoo oracle is not"
         echo "         installed — the parity tier will skip, not verify."
     fi
-    "$PYTHON_BIN" -m pytest lucid/test/parity/ --tb=short -q -rs
+    stage "Parity tier (vs reference framework)" \
+        "$PYTHON_BIN" -m pytest lucid/test/parity/ --tb=short -q -rs
 
     # ── 4. Integration tier ──────────────────────────────────────────────────
-    echo "==> Integration tier"
-    "$PYTHON_BIN" -m pytest lucid/test/integration/ --tb=short -q
+    stage "Integration tier" "$PYTHON_BIN" -m pytest lucid/test/integration/ --tb=short -q
 
     # ── 4b. Perf tier (opt-in; uses pytest-benchmark when installed) ────────
     echo "==> Perf tier"
@@ -135,35 +150,16 @@ sys.exit(0 if ref_module() and zoo_module() else 1)
         echo "[WARN] Perf tier failed — continuing."
 
     # ── 5. Validator tools ───────────────────────────────────────────────────
-    echo "==> Layer dependency check"
-    "$PYTHON_BIN" tools/check_layers.py
-
-    echo "==> Op API check"
-    "$PYTHON_BIN" tools/check_op_api.py
-
-    echo "==> Phase 1 foundation check"
-    "$PYTHON_BIN" tools/check_phase1.py
-
-    echo "==> Doxygen coverage"
-    "$PYTHON_BIN" tools/check_doxygen.py --threshold 70
-
-    echo "==> Op template conformance"
-    "$PYTHON_BIN" tools/check_op_template.py
-
-    echo "==> Kernel template coverage"
-    "$PYTHON_BIN" tools/check_kernel_template.py
-
-    echo "==> Storage API compliance"
-    "$PYTHON_BIN" tools/check_storage_api.py
-
-    echo "==> Dtype dispatch refusals"
-    "$PYTHON_BIN" tools/check_dtype_dispatch.py
-
-    echo "==> Dead model-config fields"
-    "$PYTHON_BIN" tools/check_dead_config_fields.py
-
-    echo "==> H4 numpy guard (sanctioned bridge files only)"
-    "$PYTHON_BIN" tools/check_numpy_h4.py
+    stage "Layer dependency check" "$PYTHON_BIN" tools/check_layers.py
+    stage "Op API check" "$PYTHON_BIN" tools/check_op_api.py
+    stage "Phase 1 foundation check" "$PYTHON_BIN" tools/check_phase1.py
+    stage "Doxygen coverage" "$PYTHON_BIN" tools/check_doxygen.py --threshold 70
+    stage "Op template conformance" "$PYTHON_BIN" tools/check_op_template.py
+    stage "Kernel template coverage" "$PYTHON_BIN" tools/check_kernel_template.py
+    stage "Storage API compliance" "$PYTHON_BIN" tools/check_storage_api.py
+    stage "Dtype dispatch refusals" "$PYTHON_BIN" tools/check_dtype_dispatch.py
+    stage "Dead model-config fields" "$PYTHON_BIN" tools/check_dead_config_fields.py
+    stage "H4 numpy guard (sanctioned bridge files only)" "$PYTHON_BIN" tools/check_numpy_h4.py
 
     # ── The symbol x axis sweep ──────────────────────────────────────────────
     #
@@ -189,7 +185,8 @@ sys.exit(0 if ref_module() and zoo_module() else 1)
         echo "  [ERROR] the audit harness itself failed — the sweep proved nothing"
         exit 2
     elif [ "$audit_status" -ne 0 ]; then
-        exit 1
+        echo "  [FAIL] Symbol x axis audit (exit $audit_status)" >&2
+        failed_stages+=("Symbol x axis audit")
     fi
 
     # Docstring examples, each module against its recorded failure count in
@@ -207,7 +204,8 @@ sys.exit(0 if ref_module() and zoo_module() else 1)
         echo "  [ERROR] the doctest harness itself failed — the examples proved nothing"
         exit 2
     elif [ "$doctest_status" -ne 0 ]; then
-        exit 1
+        echo "  [FAIL] Docstring examples (against the doctest floor) (exit $doctest_status)" >&2
+        failed_stages+=("Docstring examples (against the doctest floor)")
     fi
 
     # Model-zoo family contract — verifies the 5-slot structure and Protocol
@@ -221,15 +219,14 @@ sys.exit(0 if ref_module() and zoo_module() else 1)
     # itself were enforced only on whoever remembered to run them locally —
     # "every family takes a training step" among them, which is how a family
     # reached a release branch untrained.
-    echo "==> Model-zoo contract tests"
-    "$PYTHON_BIN" -m pytest -q -p no:randomly \
+    stage "Model-zoo contract tests" \
+        "$PYTHON_BIN" -m pytest -q -p no:randomly \
         lucid/test/unit/models/test_family_contract.py \
         lucid/test/unit/models/test_models_train_step.py \
         lucid/test/unit/models/test_models_eval_determinism.py \
         lucid/test/unit/models/test_video_preprocessing.py
 
-    echo "==> Model-zoo family contract"
-    "$PYTHON_BIN" -m tools.validate_model_zoo --runtime
+    stage "Model-zoo family contract" "$PYTHON_BIN" -m tools.validate_model_zoo --runtime
 
     # Published checkpoints — that each one still fits the factory offering it.
     # `validate_model_zoo` checks the shape of the *code* (a factory takes
@@ -253,7 +250,8 @@ sys.exit(0 if ref_module() and zoo_module() else 1)
     weight_fit_status=$?
     set -e
     if [ "$weight_fit_status" -eq 1 ]; then
-        exit 1
+        echo "  [FAIL] Published checkpoint fit (exit 1)" >&2
+        failed_stages+=("Published checkpoint fit")
     elif [ "$weight_fit_status" -ne 0 ]; then
         echo "  [WARN] some checkpoints were unreachable — fit unverified for those"
     fi
@@ -279,25 +277,29 @@ sys.exit(0 if ref_module() and zoo_module() else 1)
     # Both files are diffed.  _summaries.json catches a stale tree; the
     # sidecar catches a fingerprint that disagrees with the source it claims
     # to describe, which is the one way a hand-edited cache could hide one.
+    set +e
     "$PYTHON_BIN" -m tools.build_model_summaries >/dev/null
+    summary_status=$?
+    set -e
     local _summary_files=(
         web/public/api-data/_summaries.json
         web/public/api-data/_summaries.meta.json
     )
-    if ! git diff --quiet -- "${_summary_files[@]}"; then
+    if [ "$summary_status" -ne 0 ]; then
+        echo "  [FAIL] Model summaries (docs layer trees) (exit $summary_status)" >&2
+        failed_stages+=("Model summaries (docs layer trees)")
+    elif ! git diff --quiet -- "${_summary_files[@]}"; then
         echo "  ✗ model summaries are stale — regenerated output differs from the commit." >&2
         echo "    Run: python -m tools.build_model_summaries  and commit the result." >&2
         git --no-pager diff --stat -- "${_summary_files[@]}" >&2
-        exit 1
+        failed_stages+=("Model summaries (docs layer trees)")
+    else
+        echo "  ✓ summaries match the current factories"
     fi
-    echo "  ✓ summaries match the current factories"
 
     # ── 6. Build tools ───────────────────────────────────────────────────────
-    echo "==> Compile commands"
-    ./scripts/build_compile_commands.sh
-
-    echo "==> Format + clang-tidy"
-    tools/check_format.sh --tidy
+    stage "Compile commands" ./scripts/build_compile_commands.sh
+    stage "Format + clang-tidy" tools/check_format.sh --tidy
 
     # ── 7. Publish gate ──────────────────────────────────────────────────────
     # Builds its own wheel into dist/ and installs it into a fresh venv, so it
@@ -305,8 +307,23 @@ sys.exit(0 if ref_module() and zoo_module() else 1)
     if [ "${LUCID_CI_SKIP_PUBLISH:-0}" = "1" ]; then
         echo "==> Publish gate — skipped (LUCID_CI_SKIP_PUBLISH=1)"
     else
-        echo "==> Publish gate"
-        ./scripts/ci_publish.sh
+        stage "Publish gate" ./scripts/ci_publish.sh
+    fi
+
+    if [ "${#failed_stages[@]}" -ne 0 ]; then
+        echo "==> part_checks: ${#failed_stages[@]} stage(s) failed:" >&2
+        for s in "${failed_stages[@]}"; do
+            echo "  - $s" >&2
+        done
+        if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            {
+                echo "### \`checks\` failed stages (${#failed_stages[@]})"
+                for s in "${failed_stages[@]}"; do
+                    echo "- \`$s\`"
+                done
+            } >> "$GITHUB_STEP_SUMMARY"
+        fi
+        exit 1
     fi
 }
 
