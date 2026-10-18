@@ -166,7 +166,11 @@ def test_an_integer_self_refuses_a_float_result_as_the_reference_does(
 
     theirs = _refusal(write(ref, None))
     a = _base(lucid, "int64").to(device)
-    other = lucid.tensor([1.5, 2.5, 3.5, 4.5]).to(device) if operand == "tensor" else operand
+    other = (
+        lucid.tensor([1.5, 2.5, 3.5, 4.5]).to(device)
+        if operand == "tensor"
+        else operand
+    )
     ours = _refusal(lambda: _augment(a, symbol, other))
     assert isinstance(ours, type(theirs))
     assert _CANNOT_CAST.search(str(theirs))
@@ -183,7 +187,9 @@ def _floats(lib: ModuleType, values: list[float]) -> object:
 
 #: Each in-place method with its ``self`` and its arguments, built for
 #: either library.  ``self`` holds four elements.
-METHODS: dict[str, tuple[Callable[[ModuleType], object], Callable[[ModuleType], tuple]]] = {
+METHODS: dict[
+    str, tuple[Callable[[ModuleType], object], Callable[[ModuleType], tuple]]
+] = {
     "add_": (lambda lib: _floats(lib, [1, 2, 3, 4]), lambda lib: (2.5,)),
     "sub_": (lambda lib: _floats(lib, [1, 2, 3, 4]), lambda lib: (2.5,)),
     "mul_": (lambda lib: _floats(lib, [1, 2, 3, 4]), lambda lib: (2.5,)),
@@ -252,7 +258,10 @@ KIND_DOWN: dict[str, Callable[[ModuleType], tuple]] = {
     "clip_": lambda lib: (0.5, 1.5),
     "clamp_min_": lambda lib: (0.5,),
     "clamp_max_": lambda lib: (1.5,),
-    "clamp_ tensor bounds": lambda lib: (_floats(lib, [0, 0, 0, 0]), _floats(lib, [1, 1, 1, 1])),
+    "clamp_ tensor bounds": lambda lib: (
+        _floats(lib, [0, 0, 0, 0]),
+        _floats(lib, [1, 1, 1, 1]),
+    ),
 }
 
 
@@ -261,7 +270,9 @@ def _on(device: str, args: tuple) -> tuple:
 
 
 @pytest.mark.parametrize("name", list(METHODS))
-def test_lucid_has_every_in_place_method_the_table_names(ref: ModuleType, name: str) -> None:
+def test_lucid_has_every_in_place_method_the_table_names(
+    ref: ModuleType, name: str
+) -> None:
     assert hasattr(ref.Tensor, name)
     assert hasattr(lucid.Tensor, name)
 
@@ -285,7 +296,9 @@ def test_the_method_writes_into_self_as_the_reference_does(
 
 
 @pytest.mark.parametrize("name", list(METHODS))
-def test_the_method_on_a_view_writes_through_to_its_base(device: str, name: str) -> None:
+def test_the_method_on_a_view_writes_through_to_its_base(
+    device: str, name: str
+) -> None:
     make, args = METHODS[name]
     whole = getattr(make(lucid), name)(*args(lucid)).tolist()
     a = make(lucid).to(device)
@@ -311,7 +324,9 @@ def test_an_integer_self_refuses_a_float_result_before_writing(
     ref: ModuleType, device: str, name: str
 ) -> None:
     method = name.split()[0]
-    theirs = _refusal(lambda: getattr(ref.tensor([0, 1, 2, 3]), method)(*KIND_DOWN[name](ref)))
+    theirs = _refusal(
+        lambda: getattr(ref.tensor([0, 1, 2, 3]), method)(*KIND_DOWN[name](ref))
+    )
     a = lucid.tensor([0, 1, 2, 3]).to(device)
     ours = _refusal(lambda: getattr(a, method)(*_on(device, KIND_DOWN[name](lucid))))
     assert isinstance(ours, type(theirs))
