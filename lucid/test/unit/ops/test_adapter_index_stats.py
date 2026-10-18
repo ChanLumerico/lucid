@@ -306,3 +306,75 @@ def test_an_index_written_after_forward_is_refused_in_backward(
     index.add_(2)
     with pytest.raises(_C_engine.VersionMismatch):
         out.sum().backward()
+
+
+@pytest.mark.parametrize("dtype_name", ["float16", "bfloat16"])
+def test_half_data_dependent_ops_match_reference(
+    ref: ModuleType, device: str, dtype_name: str
+) -> None:
+    dt = getattr(lucid, dtype_name)
+    ref_dt = getattr(ref, dtype_name)
+    vals = [0.5, 1.5, 2.5, 0.0, -0.0, 1.5]
+    x = lucid.tensor(vals, dtype=dt, device=device)
+    rx = ref.tensor(vals, dtype=ref_dt)
+
+    # histc: explicit range, auto-range, and direct _C_engine.histc auto-range
+    _same(lucid.histc(x, bins=4, min=0.0, max=3.0), ref.histc(rx, bins=4, min=0.0, max=3.0))
+    _same(lucid.histc(x, bins=4), ref.histc(rx, bins=4))
+    _same(
+        lucid._dispatch._wrap(_C_engine.histc(x._impl, 4, 0.0, 0.0)),
+        ref.histc(rx, bins=4),
+    )
+
+    # nonzero (2-D matrix + as_tuple=True) and argwhere
+    mat = x.reshape(2, 3)
+    rmat = rx.reshape(2, 3)
+    _same(lucid.nonzero(mat), ref.nonzero(rmat))
+    _same(lucid.nonzero(mat, as_tuple=True), ref.nonzero(rmat, as_tuple=True))
+    _same(lucid.argwhere(mat), ref.argwhere(rmat))
+
+    # unique, masked_select, bincount(weights=half), searchsorted, bucketize, sort/topk
+    _same(
+        lucid.unique(x, return_inverse=True, return_counts=True),
+        ref.unique(rx, return_inverse=True, return_counts=True),
+    )
+    mask = lucid.tensor([True, False, True, False, False, True], device=device)
+    rmask = ref.tensor([True, False, True, False, False, True])
+    _same(lucid.masked_select(x, mask), ref.masked_select(rx, rmask))
+
+    bins_idx = lucid.tensor([0, 1, 1, 2, 0, 3], dtype=lucid.int64, device=device)
+    rbins_idx = ref.tensor([0, 1, 1, 2, 0, 3], dtype=ref.int64)
+    if device == "cpu":
+        _same(lucid.bincount(bins_idx, weights=x), ref.bincount(rbins_idx, weights=rx))
+    else:
+        got_bc = lucid.bincount(bins_idx, weights=x)
+        assert got_bc.device.type == "metal"
+        assert got_bc.tolist() == pytest.approx(
+            ref.bincount(rbins_idx, weights=rx).tolist()
+        )
+
+    grid = lucid.tensor([0.0, 1.0, 2.0, 3.0], dtype=dt, device=device)
+    rgrid = ref.tensor([0.0, 1.0, 2.0, 3.0], dtype=ref_dt)
+    _same(lucid.searchsorted(grid, x), ref.searchsorted(rgrid, rx))
+    _same(lucid.bucketize(x, grid), ref.bucketize(rx, rgrid))
+    _same(lucid.sort(x), ref.sort(rx)[0])
+    _same(lucid.topk(x, 3), ref.topk(rx, 3))
+
+    # histogram2d and histogramdd on half
+    h2d, _, _ = lucid.histogram2d(x[:4], x[2:], bins=2)
+    assert h2d.sum().item() == 4.0
+    hdd, _ = lucid.histogramdd(mat, bins=2)
+    assert hdd.sum().item() == 2.0
+
+
+@pytest.mark.parametrize("dtype_name", ["int8", "int16", "complex64"])
+def test_nonzero_supports_narrow_int_and_complex(
+    ref: ModuleType, device: str, dtype_name: str
+) -> None:
+    dt = getattr(lucid, dtype_name)
+    ref_dt = getattr(ref, dtype_name)
+    vals = [0, 1, 0, -2]
+    x = lucid.tensor(vals, dtype=dt, device=device).reshape(2, 2)
+    rx = ref.tensor(vals, dtype=ref_dt).reshape(2, 2)
+    _same(lucid.nonzero(x), ref.nonzero(rx))
+

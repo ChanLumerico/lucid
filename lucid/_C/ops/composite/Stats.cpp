@@ -31,8 +31,9 @@ namespace {
 // Materialise a 0-D reduction result as a host double.  The reduce kernel
 // always produces a CPU- or GPU-backed scalar; ``to_cpu`` brings it home.
 double scalar_to_double(const TensorImplPtr& s) {
-    auto host = backend::Dispatcher::for_device(s->device()).to_cpu(s->storage(), s->shape());
-    if (s->dtype() == Dtype::F32) {
+    auto s_f = is_half_float(s->dtype()) ? astype_op(s, Dtype::F32) : s;
+    auto host = backend::Dispatcher::for_device(s_f->device()).to_cpu(s_f->storage(), s_f->shape());
+    if (s_f->dtype() == Dtype::F32) {
         float v = 0.0f;
         std::memcpy(&v, host.ptr.get(), sizeof(float));
         return static_cast<double>(v);

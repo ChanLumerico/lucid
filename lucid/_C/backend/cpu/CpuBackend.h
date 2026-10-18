@@ -13114,6 +13114,12 @@ private:
                               double hi,
                               std::int64_t bins,
                               bool density) override {
+        if (detail::is_half_like(input_dtype))
+            return histogram_forward(detail::as_f32(input), input_shape, Dtype::F32, lo, hi, bins,
+                                     density);
+        if (detail::is_narrow_int(input_dtype))
+            return histogram_forward(detail::as_i64(input), input_shape, Dtype::I64, lo, hi, bins,
+                                     density);
         const auto& cs = std::get<CpuStorage>(input);
         const std::size_t n = shape_numel(input_shape);
         const double step = (hi - lo) / static_cast<double>(bins);
@@ -13126,13 +13132,10 @@ private:
                 return static_cast<double>(reinterpret_cast<const float*>(cs.ptr.get())[i]);
             case Dtype::F64:
                 return reinterpret_cast<const double*>(cs.ptr.get())[i];
-            case Dtype::I32:
-                return static_cast<double>(reinterpret_cast<const std::int32_t*>(cs.ptr.get())[i]);
             case Dtype::I64:
                 return static_cast<double>(reinterpret_cast<const std::int64_t*>(cs.ptr.get())[i]);
             default:
                 ErrorBuilder("cpu::histogram_forward").not_implemented("dtype");
-                return 0.0;
             }
         };
         for (std::size_t i = 0; i < n; ++i) {
@@ -13155,60 +13158,46 @@ private:
                                const Shape& input_shape,
                                Dtype input_dtype,
                                std::size_t& numel_out) override {
+        if (detail::is_half_like(input_dtype))
+            return nonzero_forward(detail::as_f32(input), input_shape, Dtype::F32, numel_out);
+        if (detail::is_narrow_int(input_dtype))
+            return nonzero_forward(detail::as_i64(input), input_shape, Dtype::I64, numel_out);
         const auto& cs = std::get<CpuStorage>(input);
         const std::size_t n = shape_numel(input_shape);
         const std::size_t ndim = input_shape.size();
-        std::vector<bool> mask(n, false);
+        std::vector<std::size_t> hits;
         auto check_nonzero = [&](const auto* p) {
+            using T = std::remove_cv_t<std::remove_pointer_t<decltype(p)>>;
             for (std::size_t i = 0; i < n; ++i)
-                mask[i] = static_cast<double>(p[i]) != 0.0;
+                if (p[i] != T{0})
+                    hits.push_back(i);
         };
-        switch (input_dtype) {
-        case Dtype::F32:
+        if (input_dtype == Dtype::F32)
             check_nonzero(reinterpret_cast<const float*>(cs.ptr.get()));
-            break;
-        case Dtype::F64:
+        else if (input_dtype == Dtype::F64)
             check_nonzero(reinterpret_cast<const double*>(cs.ptr.get()));
-            break;
-        case Dtype::I32:
-            check_nonzero(reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
-            break;
-        case Dtype::I64:
+        else if (input_dtype == Dtype::I64)
             check_nonzero(reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
-            break;
-        case Dtype::Bool:
-            check_nonzero(reinterpret_cast<const std::uint8_t*>(cs.ptr.get()));
-            break;
-        default:
+        else if (input_dtype == Dtype::C64)
+            check_nonzero(reinterpret_cast<const std::complex<float>*>(cs.ptr.get()));
+        else if (input_dtype == Dtype::C128)
+            check_nonzero(reinterpret_cast<const std::complex<double>*>(cs.ptr.get()));
+        else
             ErrorBuilder("cpu::nonzero_forward").not_implemented("dtype not supported");
-        }
-        std::size_t count = 0;
-        for (auto m : mask)
-            if (m)
-                ++count;
-        numel_out = count;
-        Shape out_shape{static_cast<std::int64_t>(count), static_cast<std::int64_t>(ndim)};
-        CpuStorage out = alloc_cpu(count * ndim, Dtype::I64);
+        numel_out = hits.size();
+        CpuStorage out = alloc_cpu(numel_out * ndim, Dtype::I64);
         auto* dst = reinterpret_cast<std::int64_t*>(out.ptr.get());
-        Stride stride(ndim);
-        if (ndim > 0) {
-            stride.back() = 1;
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d)
-                stride[static_cast<std::size_t>(d)] = stride[static_cast<std::size_t>(d) + 1] *
-                                                      input_shape[static_cast<std::size_t>(d) + 1];
-        }
-        std::size_t row = 0;
-        for (std::size_t flat = 0; flat < n; ++flat) {
-            if (!mask[flat])
-                continue;
-            std::size_t rem = flat;
+        Stride stride(ndim, 1);
+        for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d)
+            stride[static_cast<std::size_t>(d)] = stride[static_cast<std::size_t>(d) + 1] *
+                                                  input_shape[static_cast<std::size_t>(d) + 1];
+        for (std::size_t row = 0; row < numel_out; ++row) {
+            std::size_t rem = hits[row];
             for (std::size_t d = 0; d < ndim; ++d) {
-                const std::int64_t coord =
+                dst[row * ndim + d] =
                     static_cast<std::int64_t>(rem / static_cast<std::size_t>(stride[d]));
                 rem %= static_cast<std::size_t>(stride[d]);
-                dst[row * ndim + d] = coord;
             }
-            ++row;
         }
         return out;
     }

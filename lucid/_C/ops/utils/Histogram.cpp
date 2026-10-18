@@ -22,6 +22,7 @@
 #include "../../core/Allocator.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
+#include "../../core/Half.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
@@ -63,10 +64,20 @@ Device pick_out_device(Device requested, Dtype dt) {
 // of the input tensor's dtype.
 double read_double(const CpuStorage& s, std::size_t i, Dtype dt) {
     switch (dt) {
+    case Dtype::F16:
+        return backend::detail::half_bits_to_float(
+            reinterpret_cast<const std::uint16_t*>(s.ptr.get())[i]);
+    case Dtype::BF16:
+        return backend::detail::bfloat16_bits_to_float(
+            reinterpret_cast<const std::uint16_t*>(s.ptr.get())[i]);
     case Dtype::F32:
         return reinterpret_cast<const float*>(s.ptr.get())[i];
     case Dtype::F64:
         return reinterpret_cast<const double*>(s.ptr.get())[i];
+    case Dtype::I8:
+        return reinterpret_cast<const std::int8_t*>(s.ptr.get())[i];
+    case Dtype::I16:
+        return reinterpret_cast<const std::int16_t*>(s.ptr.get())[i];
     case Dtype::I32:
         return reinterpret_cast<const std::int32_t*>(s.ptr.get())[i];
     case Dtype::I64:
