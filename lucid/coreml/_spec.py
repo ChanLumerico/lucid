@@ -688,6 +688,7 @@ _DTYPES: dict[object, tuple[int, int]] = {
 }
 
 INT8 = _C_engine.coreml.DTYPE_INT8
+UINT8 = _C_engine.coreml.MIL_SUBBYTE["8"]
 BLOB_INT8 = _C_engine.coreml.BLOB_INT8
 BLOB_UINT8 = _C_engine.coreml.BLOB_UINT8
 INT32 = _C_engine.coreml.DTYPE_INT32

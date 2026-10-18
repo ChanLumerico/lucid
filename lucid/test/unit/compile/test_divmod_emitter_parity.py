@@ -207,8 +207,19 @@ def test_coreml_float_divmod_matches_eager_bit_for_bit(
 def test_coreml_int32_divmod_matches_eager_exactly(
     op_name: str, tmp_path: object
 ) -> None:
-    """Core ML ``int32`` ``floordiv``, ``remainder``, and ``fmod`` match eager across _int_operands(32)."""
+    """Core ML ``int32`` ``floordiv``, ``remainder``, and ``fmod`` match eager across _int_operands(32) and 2^24..2^31."""
     nums, dens = _int_operands(32)
+    extra_nums = [-100_000_001, 100_000_003, -100_000_003] + [
+        sign * ((1 << k) + delta)
+        for k in range(24, 31)
+        for delta in (-3, -1, 1, 3)
+        for sign in (1, -1)
+    ]
+    extra_dens = [1, -1, 2, -2, 3, -3, 7, -7, 10, -10]
+    for n in extra_nums:
+        for d in extra_dens:
+            nums.append(n)
+            dens.append(d)
     inp = lucid.tensor([nums, dens], dtype=lucid.int32, device="cpu")
     model = _BinaryMod(_OPS[op_name]).eval()
     want = model(inp)

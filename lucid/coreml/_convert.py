@@ -27,6 +27,7 @@ __all__ = [
 
 _MIL_BOOL = _spec.BOOL
 _MIL_INT32 = _spec.INT32
+_MIL_UINT8 = _spec.UINT8
 
 #: MIL's spelling of each element type a conversion can land on — the
 #: ``out_dtype`` :func:`emit_cast` takes.
@@ -319,16 +320,54 @@ def _emit_float_divmod(
     return fdiv_res
 
 
+def _bnns_zero(b: Builder) -> str:
+    """Emit a scalar int32 zero via uint8 gather so EirValidator rejects classic_cpu.
+
+    Core ML's legacy Espresso CPU backend (``classic_cpu``) executes ``floor_div``
+    and ``mod`` in float32, losing precision on ``int32`` operands above ``2^24``.
+    On virtualized ``universal`` platforms (where decision-tree cost models are
+    absent and ``classic_cpu`` ties ``bnns`` on op cost), ``EirValidator``
+    explicitly rejects ``gather`` with ``uint8`` output and ``int32`` indices,
+    causing the segmenter to keep the connected ``int32`` divmod subgraph on
+    native 32-bit ``BNNSGraph`` (``main_bnns``) to avoid backend transfer cost.
+    """
+    c0 = b.const_int(0)
+    table = b.emit(
+        "cast",
+        [("x", b.const_ints([0])), ("dtype", b.const_str("uint8"))],
+        [1],
+        dtype=_MIL_UINT8,
+    )
+    gathered = b.emit(
+        "gather",
+        [
+            ("x", table),
+            ("indices", c0),
+            ("axis", c0),
+            ("validate_indices", b.const_bool(False)),
+        ],
+        [],
+        dtype=_MIL_UINT8,
+    )
+    return b.emit(
+        "cast",
+        [("x", gathered), ("dtype", b.const_str("int32"))],
+        [],
+        dtype=_MIL_INT32,
+    )
+
+
 def _emit_int_divmod(b: Builder, op: TracedOp, lhs: str, rhs: str) -> EmitResult:
     """Emit integer ``floordiv``, ``remainder``, or ``fmod`` in int32."""
     x, y = b.agree_on_dtype([lhs, rhs], _MIL_INT32)
-    if op.name == "floordiv":
-        return "floor_div", [("x", x), ("y", y)]
-    if op.name == "fmod":
-        return "mod", [("x", x), ("y", y)]
     dims = b.result_dims(op)
-    zero = b.const_int(0)
+    zero = _bnns_zero(b)
+    if op.name == "floordiv":
+        q = b.emit("floor_div", [("x", x), ("y", y)], dims, dtype=_MIL_INT32)
+        return "add", [("x", q), ("y", zero)]
     r = b.emit("mod", [("x", x), ("y", y)], dims, dtype=_MIL_INT32)
+    if op.name == "fmod":
+        return "add", [("x", r), ("y", zero)]
     r_plus_y = b.emit("add", [("x", r), ("y", y)], dims, dtype=_MIL_INT32)
     r_nz = b.emit("not_equal", [("x", r), ("y", zero)], dims, dtype=_MIL_BOOL)
     r_neg = b.emit("less", [("x", r), ("y", zero)], dims, dtype=_MIL_BOOL)
