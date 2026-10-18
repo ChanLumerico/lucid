@@ -1219,7 +1219,8 @@ public:
         // — neg, exp, ones, add, reciprocal — wrote three full-size
         // temporaries and ran on one core, 2.4 times the reference.  Each
         // element still takes the same operations in the same order (vForce
-        // exp of -x, plus one, vForce reciprocal), so the bits are unchanged.
+        // exp of -x, plus one, the correctly rounded reciprocal
+        // cpu::vrec_f32/f64), so the bits are unchanged.
         const auto& ca = std::get<CpuStorage>(a);
         const std::size_t n = shape_numel(shape);
         const std::size_t nb = n * dtype_size(dt);
@@ -11897,6 +11898,7 @@ private:
 
         Storage cur = a;
         Shape cur_shape = in_shape;
+        std::size_t total_rd = 1;
 
         for (int axis : axes) {
             const auto& cs = std::get<CpuStorage>(cur);
@@ -11909,6 +11911,7 @@ private:
                 return o;
             }();
             const std::size_t rd = static_cast<std::size_t>(cur_shape[ax]);
+            total_rd *= rd;
             const std::size_t inner = [&] {
                 std::size_t ii = 1;
                 for (int i = ax + 1; i < ndim; ++i)
@@ -11935,11 +11938,6 @@ private:
                     cpu::max_axis_f32(ip, outp, outer, rd, inner);
                 else
                     cpu::min_axis_f32(ip, outp, outer, rd, inner);
-                if (op == ReduceOp::Mean) {
-                    float factor = 1.f / static_cast<float>(rd);
-                    for (std::size_t i = 0; i < out_n; ++i)
-                        outp[i] *= factor;
-                }
             } else if (dt == Dtype::F64) {
                 const double* ip = reinterpret_cast<const double*>(cs.ptr.get());
                 double* outp = reinterpret_cast<double*>(ptr.get());
@@ -11949,11 +11947,6 @@ private:
                     cpu::max_axis_f64(ip, outp, outer, rd, inner);
                 else
                     cpu::min_axis_f64(ip, outp, outer, rd, inner);
-                if (op == ReduceOp::Mean) {
-                    double factor = 1.0 / static_cast<double>(rd);
-                    for (std::size_t i = 0; i < out_n; ++i)
-                        outp[i] *= factor;
-                }
             } else if (dt == Dtype::I64) {
                 // Native int64 reduce — no Accelerate primitive, but the
                 // outer × inner × reduce_dim loop is straightforward.
@@ -11991,17 +11984,6 @@ private:
                         outp[o * inner + i] = acc;
                     }
                 }
-                // Integer Mean: divide by rd and truncate toward zero.
-                // This matches the reference framework's
-                // ``int_tensor.mean()`` which historically raises
-                // (deprecated in 2.x).  We instead floor-divide for
-                // compatibility; callers wanting float mean should
-                // promote their input to F32/F64 explicitly.
-                if (op == ReduceOp::Mean) {
-                    const std::int64_t divisor = static_cast<std::int64_t>(rd);
-                    for (std::size_t i = 0; i < out_n; ++i)
-                        outp[i] /= divisor;
-                }
             } else {
                 ErrorBuilder("cpu_backend::reduce").not_implemented("dtype not supported");
             }
@@ -12009,10 +11991,19 @@ private:
             cur_shape = out_shape;
         }
 
-        if (opts.keepdims) {
-            Shape kept = in_shape;
-            for (int ax : axes)
-                kept[(ax < 0) ? ax + static_cast<int>(in_shape.size()) : ax] = 1;
+        if (op == ReduceOp::Mean) {
+            auto& cs = std::get<CpuStorage>(cur);
+            const std::size_t out_n = cs.nbytes / dtype_size(dt);
+            if (dt == Dtype::F32)
+                for (std::size_t i = 0; i < out_n; ++i)
+                    reinterpret_cast<float*>(cs.ptr.get())[i] /= static_cast<float>(total_rd);
+            else if (dt == Dtype::F64)
+                for (std::size_t i = 0; i < out_n; ++i)
+                    reinterpret_cast<double*>(cs.ptr.get())[i] /= static_cast<double>(total_rd);
+            else if (dt == Dtype::I64 && total_rd > 0)
+                for (std::size_t i = 0; i < out_n; ++i)
+                    reinterpret_cast<std::int64_t*>(cs.ptr.get())[i] /=
+                        static_cast<std::int64_t>(total_rd);
         }
         return cur;
     }

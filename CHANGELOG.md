@@ -1006,6 +1006,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - use IEEE-754 loop for vdiv_f32 instead of vDSP_vdiv
 
+- divide by count in mean forward and backward
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

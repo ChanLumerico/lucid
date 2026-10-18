@@ -323,14 +323,16 @@ TensorImplPtr share_among_ties_graph(const TensorImplPtr& mask,
 }
 }  // namespace
 
-// dL/dx = broadcast(dL/dy) / N  where N is the number of reduced elements.
+// dL/dx = broadcast(dL/dy / N)  where N is the number of reduced elements.
 Storage MeanBackward::grad_formula(const Storage& grad_out) {
-    Storage broadcasted =
-        broadcast_back_for_reduce(grad_out, this->out_shape_, this->full_input_shape_,
-                                  this->reduce_axes_, this->keepdims_, this->dtype_, this->device_);
     const double n = reduced_count(this->full_input_shape_, this->reduce_axes_);
-    return mul_scalar_storage(broadcasted, 1.0 / n, shape_numel(this->full_input_shape_),
-                              this->dtype_, this->device_);
+    const std::size_t out_n = shape_numel(this->out_shape_);
+    auto& be = backend::Dispatcher::for_device(this->device_);
+    Storage denom = be.full(this->out_shape_, this->dtype_, n);
+    Storage scaled = divide_storages(grad_out, denom, out_n, this->dtype_, this->device_);
+    return broadcast_back_for_reduce(scaled, this->out_shape_, this->full_input_shape_,
+                                     this->reduce_axes_, this->keepdims_, this->dtype_,
+                                     this->device_);
 }
 
 // Graph-mode mean backward: divide the broadcast-expanded gradient by n_reduced.

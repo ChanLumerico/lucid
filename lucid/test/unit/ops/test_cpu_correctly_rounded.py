@@ -236,3 +236,40 @@ def test_every_float16_value(op: Op, ref: Ref) -> None:
     with np.errstate(all="ignore"):
         want = ref(x.astype(np.float32)).astype(np.float16)
     _assert_bits(op(_t(x)).numpy(), want)
+
+
+@pytest.mark.parametrize("dtype", [np.float64, np.float32])
+def test_mean_matches_sum_divided_by_n_and_backward(dtype: type) -> None:
+    rng = np.random.default_rng(11)
+    ldt = _LUCID[dtype]
+    for _ in range(200):
+        n = int(rng.integers(3, 12))
+        v = float(rng.standard_normal())
+        c = lucid.full((n,), v, dtype=ldt)
+        _assert_bits(c.mean().numpy(), (c.sum() / n).numpy())
+        r = _t(rng.standard_normal(n).astype(dtype))
+        _assert_bits(r.mean().numpy(), (r.sum() / n).numpy())
+        m = int(rng.integers(3, 12))
+        r2 = _t(rng.standard_normal((m, n)).astype(dtype))
+        _assert_bits(r2.mean().numpy(), (r2.sum() / (m * n)).numpy())
+        _assert_bits(r2.mean(dim=0).numpy(), (r2.sum(dim=0) / m).numpy())
+        _assert_bits(r2.mean(dim=1).numpy(), (r2.sum(dim=1) / n).numpy())
+        xr = lucid.ones((n,), dtype=ldt, requires_grad=True)
+        g = lucid.full((), v, dtype=ldt)
+        xr.mean().backward(g)
+        assert xr.grad is not None
+        _assert_bits(xr.grad.numpy(), (lucid.full((n,), v, dtype=ldt) / n).numpy())
+    for dev in ("cpu", "metal") if dtype is np.float32 else ("cpu",):
+        x2 = lucid.ones((3, 5), dtype=ldt, device=dev, requires_grad=True)
+        g2 = lucid.full((3, 1), 0.3, dtype=ldt, device=dev)
+        x2.mean(dim=1, keepdim=True).backward(g2)
+        assert x2.grad is not None
+        want2 = (g2 / 5).expand((3, 5)).cpu().numpy()
+        _assert_bits(x2.grad.cpu().numpy(), want2)
+        x3 = lucid.ones((2, 3, 7), dtype=ldt, device=dev, requires_grad=True)
+        g3 = lucid.full((2, 3), -0.7, dtype=ldt, device=dev)
+        x3.mean(dim=-1).backward(g3)
+        assert x3.grad is not None
+        want3 = (g3 / 7).unsqueeze(-1).expand((2, 3, 7)).cpu().numpy()
+        _assert_bits(x3.grad.cpu().numpy(), want3)
+
