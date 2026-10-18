@@ -443,8 +443,11 @@ def _fold_instance_stats(
             raise
     # Metal: schedule the new values now, or each step's update keeps the
     # previous one's lazy graph — the activations it was computed from
-    # included — and the chain grows until it runs out of memory.
-    _C_engine.eval_tensors_async([running_mean._impl, running_var._impl])
+    # included — and the chain grows until it runs out of memory.  Under a
+    # tracer the buffers are restored as soon as the trace closes and the
+    # compiled executable (or eager fallback) owns the real write.
+    if _C_engine.compile.current_tracer() is None:
+        _C_engine.eval_tensors_async([running_mean._impl, running_var._impl])
 
 
 def _check_instance_norm_input(x: Tensor, use_input_stats: bool) -> None:
@@ -550,7 +553,7 @@ def instance_norm(
             use_input_stats
             and running_mean is not None
             and running_var is not None
-            and _C_engine.compile.current_tracer() is None
+            and momentum != 0.0
         ):
             _fold_instance_stats(x, running_mean, running_var, momentum)
     else:

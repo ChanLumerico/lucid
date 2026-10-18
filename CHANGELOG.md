@@ -998,6 +998,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - keep Core ML int32 divmod on native 32-bit BNNSGraph CPU path
 
+- fold InstanceNorm running stats under a tracer (LCD-529)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
