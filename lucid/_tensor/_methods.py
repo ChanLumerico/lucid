@@ -39,7 +39,7 @@ from lucid._ops._registry import _REGISTRY, OpEntry, _bind_leading
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
-    from lucid._types import TensorOrScalar
+    from lucid._types import DTypeLike, TensorOrScalar
 
 _Impl = _C_engine.TensorImpl
 
@@ -285,9 +285,7 @@ def _nanmedian(
     return _nanmed(self, dim=dim, keepdim=keepdim)
 
 
-def _mode(
-    self: Tensor, dim: int = -1, keepdim: bool = False
-) -> tuple[Tensor, Tensor]:
+def _mode(self: Tensor, dim: int = -1, keepdim: bool = False) -> tuple[Tensor, Tensor]:
     """Modal value and index of each slice of ``self`` along ``dim``."""
     from lucid._ops.composite.reductions import mode as _md
 
@@ -760,6 +758,323 @@ def _clip_(
     return _clamp_inplace(self, min, max, "clip_")
 
 
+# ── table-driven in-place twins (LCD-525) ───────────────────────────────────
+
+_UNARY_INPLACE_TWINS: tuple[str, ...] = (
+    "absolute_",
+    "acos_",
+    "acosh_",
+    "arccosh_",
+    "arcsinh_",
+    "arctanh_",
+    "asin_",
+    "asinh_",
+    "atan_",
+    "atanh_",
+    "conj_physical_",
+    "digamma_",
+    "erf_",
+    "erfc_",
+    "erfinv_",
+    "exp2_",
+    "expm1_",
+    "frac_",
+    "i0_",
+    "lgamma_",
+    "log10_",
+    "log1p_",
+    "negative_",
+    "rsqrt_",
+    "sinc_",
+    "trunc_",
+)
+
+_BINARY_INPLACE_TWINS: tuple[str, ...] = (
+    "arctan2_",
+    "atan2_",
+    "copysign_",
+    "eq_",
+    "gcd_",
+    "ge_",
+    "greater_",
+    "greater_equal_",
+    "gt_",
+    "hypot_",
+    "lcm_",
+    "ldexp_",
+    "le_",
+    "less_",
+    "less_equal_",
+    "lt_",
+    "multiply_",
+    "ne_",
+    "nextafter_",
+    "not_equal_",
+    "true_divide_",
+    "xlogy_",
+)
+
+_SCAN_INPLACE_TWINS: tuple[str, ...] = ("cumsum_", "cumprod_")
+_TRI_INPLACE_TWINS: tuple[str, ...] = ("tril_", "triu_")
+_BMM_INPLACE_TWINS: tuple[str, ...] = ("addbmm_", "baddbmm_")
+
+
+def _make_unary_inplace(name: str) -> Callable[[Tensor], Tensor]:
+    op_name = name[:-1]
+
+    def method(self: Tensor) -> Tensor:
+        """Write the unary op result into ``self`` in place."""
+        import lucid
+
+        fn = getattr(lucid, op_name)
+        return _write(self, name, fn)
+
+    method.__name__ = name
+    return method
+
+
+def _make_binary_inplace(name: str) -> Callable[[Tensor, TensorOrScalar], Tensor]:
+    op_name = name[:-1]
+
+    def method(self: Tensor, other: TensorOrScalar) -> Tensor:
+        """Write the binary op result into ``self`` in place."""
+        import lucid
+
+        fn = getattr(lucid, op_name)
+        return _write(self, name, lambda base: fn(base, other), other)
+
+    method.__name__ = name
+    return method
+
+
+def _make_scan_inplace(name: str) -> Callable[..., Tensor]:
+    op_name = name[:-1]
+
+    def method(
+        self: Tensor, dim: int = -1, *, dtype: DTypeLike | None = None
+    ) -> Tensor:
+        """Write the cumulative scan along ``dim`` into ``self`` in place."""
+        import lucid
+        from lucid._dtype import to_engine_dtype
+
+        if self.dtype == lucid.bool:
+            raise _C_engine.NotImplementedError(
+                f"{name} is not implemented for {self.dtype}"
+            )
+        if dtype is not None:
+            target = to_engine_dtype(dtype)
+            if target != self._impl.dtype:
+                raise RuntimeError(
+                    f"Bad in-place call: input tensor dtype {self.dtype} and "
+                    f"output tensor dtype {dtype} should match"
+                )
+        fn = getattr(lucid, op_name)
+        return _write(self, name, lambda base: fn(base, dim, dtype=base.dtype))
+
+    method.__name__ = name
+    return method
+
+
+def _make_tri_inplace(name: str) -> Callable[..., Tensor]:
+    op_name = name[:-1]
+
+    def method(self: Tensor, diagonal: int = 0) -> Tensor:
+        """Write the triangular mask result into ``self`` in place."""
+        import lucid
+
+        fn = getattr(lucid, op_name)
+        return _write(self, name, lambda base: fn(base, diagonal=diagonal))
+
+    method.__name__ = name
+    return method
+
+
+def _make_bmm_inplace(name: str) -> Callable[..., Tensor]:
+    op_name = name[:-1]
+
+    def method(
+        self: Tensor,
+        batch1: Tensor,
+        batch2: Tensor,
+        *,
+        beta: float = 1.0,
+        alpha: float = 1.0,
+    ) -> Tensor:
+        """Write the batched matrix-multiply accumulate into ``self`` in place."""
+        import lucid
+
+        fn = getattr(lucid, op_name)
+        return _write(
+            self,
+            name,
+            lambda base: fn(base, batch1, batch2, beta=beta, alpha=alpha),
+            batch1,
+            batch2,
+        )
+
+    method.__name__ = name
+    return method
+
+
+def _float_power_(self: Tensor, exponent: TensorOrScalar) -> Tensor:
+    """Write ``lucid.float_power(self, exponent)`` into ``self`` in place."""
+    import lucid
+
+    if self._impl.dtype not in (_C_engine.Dtype.F64, _C_engine.Dtype.C128):
+        raise RuntimeError(
+            f"the base given to float_power_ has dtype {self.dtype} but the "
+            "operation's result requires dtype lucid.float64"
+        )
+    return _write(
+        self, "float_power_", lambda base: lucid.float_power(base, exponent), exponent
+    )
+
+
+def _heaviside_(self: Tensor, values: TensorOrScalar) -> Tensor:
+    """Write ``lucid.heaviside(self, values)`` into ``self`` in place."""
+    import lucid
+
+    return _write(
+        self, "heaviside_", lambda base: lucid.heaviside(base, values), values
+    )
+
+
+def _divide_(
+    self: Tensor, other: TensorOrScalar, *, rounding_mode: str | None = None
+) -> Tensor:
+    """Write ``lucid.divide(self, other, rounding_mode=rounding_mode)`` in place."""
+    import lucid
+
+    return _write(
+        self,
+        "divide_",
+        lambda base: lucid.divide(base, other, rounding_mode=rounding_mode),
+        other,
+    )
+
+
+def _subtract_(
+    self: Tensor, other: TensorOrScalar, *, alpha: float = 1.0
+) -> Tensor:
+    """Write ``lucid.subtract(self, other, alpha=alpha)`` into ``self`` in place."""
+    import lucid
+
+    return _write(
+        self, "subtract_", lambda base: lucid.subtract(base, other, alpha=alpha), other
+    )
+
+
+def _logit_(self: Tensor, eps: float | None = None) -> Tensor:
+    """Write ``lucid.logit(self, eps=eps)`` into ``self`` in place."""
+    import lucid
+
+    return _write(self, "logit_", lambda base: lucid.logit(base, eps=eps))
+
+
+def _nan_to_num_(
+    self: Tensor,
+    nan: float | None = None,
+    posinf: float | None = None,
+    neginf: float | None = None,
+) -> Tensor:
+    """Write ``lucid.nan_to_num(self, nan, posinf, neginf)`` into ``self`` in place."""
+    import lucid
+
+    return _write(
+        self,
+        "nan_to_num_",
+        lambda base: lucid.nan_to_num(base, nan=nan, posinf=posinf, neginf=neginf),
+    )
+
+
+def _renorm_(self: Tensor, p: float, dim: int, maxnorm: float) -> Tensor:
+    """Write ``lucid.renorm(self, p, dim, maxnorm)`` into ``self`` in place."""
+    import lucid
+
+    return _write(
+        self, "renorm_", lambda base: lucid.renorm(base, p=p, dim=dim, maxnorm=maxnorm)
+    )
+
+
+def _addmm_(
+    self: Tensor,
+    mat1: Tensor,
+    mat2: Tensor,
+    *,
+    beta: float = 1.0,
+    alpha: float = 1.0,
+) -> Tensor:
+    """Write ``lucid.addmm(self, mat1, mat2, beta=beta, alpha=alpha)`` in place."""
+    import lucid
+
+    return _write(
+        self,
+        "addmm_",
+        lambda base: lucid.addmm(base, mat1, mat2, beta=beta, alpha=alpha),
+        mat1,
+        mat2,
+    )
+
+
+def _addmv_(
+    self: Tensor,
+    mat: Tensor,
+    vec: Tensor,
+    *,
+    beta: float = 1.0,
+    alpha: float = 1.0,
+) -> Tensor:
+    """Write ``lucid.addmv(self, mat, vec, beta=beta, alpha=alpha)`` in place."""
+    import lucid
+
+    return _write(
+        self,
+        "addmv_",
+        lambda base: lucid.addmv(base, mat, vec, beta=beta, alpha=alpha),
+        mat,
+        vec,
+    )
+
+
+def _addr_(
+    self: Tensor,
+    vec1: Tensor,
+    vec2: Tensor,
+    *,
+    beta: float = 1.0,
+    alpha: float = 1.0,
+) -> Tensor:
+    """Write ``lucid.addr(self, vec1, vec2, beta=beta, alpha=alpha)`` in place."""
+    import lucid
+
+    return _write(
+        self,
+        "addr_",
+        lambda base: lucid.addr(base, vec1, vec2, beta=beta, alpha=alpha),
+        vec1,
+        vec2,
+    )
+
+
+_GENERATED_INPLACE_TWINS: tuple[tuple[str, Callable[..., Tensor]], ...] = (
+    *((n, _make_unary_inplace(n)) for n in _UNARY_INPLACE_TWINS),
+    *((n, _make_binary_inplace(n)) for n in _BINARY_INPLACE_TWINS),
+    *((n, _make_scan_inplace(n)) for n in _SCAN_INPLACE_TWINS),
+    *((n, _make_tri_inplace(n)) for n in _TRI_INPLACE_TWINS),
+    *((n, _make_bmm_inplace(n)) for n in _BMM_INPLACE_TWINS),
+    ("float_power_", _float_power_),
+    ("heaviside_", _heaviside_),
+    ("divide_", _divide_),
+    ("subtract_", _subtract_),
+    ("logit_", _logit_),
+    ("nan_to_num_", _nan_to_num_),
+    ("renorm_", _renorm_),
+    ("addmm_", _addmm_),
+    ("addmv_", _addmv_),
+    ("addr_", _addr_),
+)
+
+
 # ── augmented assignment, through the methods above ─────────────────────────
 # Each calls its method by attribute, not directly: on Metal the method is
 # wrapped to carry the write back into the tensor a view was taken from
@@ -895,6 +1210,7 @@ _EXTRA_METHODS = (
     ("addcmul_", _addcmul_),
     ("addcdiv_", _addcdiv_),
     ("clip_", _clip_),
+    *_GENERATED_INPLACE_TWINS,
     ("__iand__", __iand__),
     ("__ior__", __ior__),
     ("__ixor__", __ixor__),

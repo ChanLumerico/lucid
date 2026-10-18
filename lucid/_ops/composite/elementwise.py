@@ -699,26 +699,25 @@ def expm1(input: Tensor) -> Tensor:
     # of u against the same rounding in log(u), so it keeps full relative
     # precision near 0.  The guards take u == 1 (x underflowed), u == 0 and
     # u == inf, where the ratio is 0/0 or inf/inf.
-    xd = input.detach()
-    u = lucid.exp(xd)
-    accurate = lucid.where(u == 1.0, xd, (u - 1.0) * xd / lucid.log(u))
-    # Kahan's second guard: once u - 1 rounds to -1, -1 is the answer.  The
-    # ratio would take log(u) of a subnormal u, whose rounding is no longer
-    # relative — expm1(-100) in float32 came out -1.000169.
-    accurate = lucid.where(u - 1.0 == -1.0, u - 1.0, accurate)
-    accurate = lucid.where((u == 0.0) | ~lucid.isfinite(u), u - 1.0, accurate)
+    with lucid.no_grad():
+        u = lucid.exp(input)
+        accurate = lucid.where(u == 1.0, input, (u - 1.0) * input / lucid.log(u))
+        # Kahan's second guard: once u - 1 rounds to -1, -1 is the answer.  The
+        # ratio would take log(u) of a subnormal u, whose rounding is no longer
+        # relative — expm1(-100) in float32 came out -1.000169.
+        accurate = lucid.where(u - 1.0 == -1.0, u - 1.0, accurate)
+        accurate = lucid.where((u == 0.0) | ~lucid.isfinite(u), u - 1.0, accurate)
     # The value is the accurate one; the gradient is exp(x)'s, carried by the
     # naive form under it, so the guards' 0/0 branches never reach backward.
     naive = lucid.exp(input) - 1.0
-    correction = lucid.where(
-        lucid.isfinite(naive.detach()),
-        accurate - naive.detach(),
-        lucid.zeros_like(accurate),
-    )
+    with lucid.no_grad():
+        correction = lucid.where(
+            lucid.isfinite(naive), accurate - naive, lucid.zeros_like(accurate)
+        )
     # Where exp(x) rounds to 1, x itself is the answer and its gradient is
     # exp(x) to within an ulp; taking it directly also keeps expm1(-0) = -0,
     # which ``0 + (-0)`` would turn into +0.
-    return lucid.where(u == 1.0, input, naive + correction.detach())
+    return lucid.where(u == 1.0, input, naive + correction)
 
 
 def sinc(input: Tensor) -> Tensor:
@@ -1313,11 +1312,9 @@ def ldexp(input: Tensor, other: Tensor | Scalar) -> Tensor:
     --------
     frexp : inverse decomposition into mantissa / exponent.
     """
-    orig_dtype = input.dtype
-    work_dtype = (
-        orig_dtype if orig_dtype in (lucid.float32, lucid.float64) else lucid.float32
-    )
-    work = input if orig_dtype == work_dtype else input.to(dtype=work_dtype)
+    orig = (input := _float_input(input)).dtype
+    work_dtype = orig if orig in (lucid.float32, lucid.float64) else lucid.float32
+    work = input if orig == work_dtype else input.to(dtype=work_dtype)
     exp_t: Tensor = (
         other.to(dtype=work_dtype)
         if _is_tensor(other)
@@ -1329,7 +1326,7 @@ def ldexp(input: Tensor, other: Tensor | Scalar) -> Tensor:
     k2 = lucid.trunc((k - k1) * 0.5)
     k3 = lucid.where(lucid.abs(exp_t) > limit, k - k1 - k2, exp_t - k1 - k2)
     out = ((work * _pow2(k1)) * _pow2(k2)) * _pow2(k3)
-    return out.to(dtype=orig_dtype) if orig_dtype != work_dtype else out
+    return out.to(dtype=orig) if orig != work_dtype else out
 
 
 def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
@@ -1368,7 +1365,7 @@ def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
 
 def _per_element(fn: Callable[[int, int], int], input: Tensor, other: Tensor) -> Tensor:
     """``fn`` of each pair of same-shape integer elements, through Python."""
-    a, b = input.reshape(-1), other.reshape(-1)
+    a, b = input.clone().reshape(-1), other.clone().reshape(-1)
     result = [fn(int(a[i].item()), int(b[i].item())) for i in range(int(a.shape[0]))]
     return lucid.tensor(result, dtype=input.dtype, device=input.device).reshape(
         input.shape

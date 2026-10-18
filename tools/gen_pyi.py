@@ -1097,6 +1097,43 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def unbind(self, dim: _int = 0) -> list[Tensor]: ...",
         "    def rsqrt(self) -> Tensor: ...",
     ]
+    from lucid._tensor._methods import (
+        _BINARY_INPLACE_TWINS,
+        _BMM_INPLACE_TWINS,
+        _SCAN_INPLACE_TWINS,
+        _TRI_INPLACE_TWINS,
+        _UNARY_INPLACE_TWINS,
+    )
+
+    python_only.extend(f"    def {m}(self) -> Self: ..." for m in _UNARY_INPLACE_TWINS)
+    python_only.extend(
+        f"    def {m}(self, other: TensorOrScalar) -> Self: ..." for m in _BINARY_INPLACE_TWINS
+    )
+    python_only.extend(
+        f"    def {m}(self, dim: _int = -1, *, dtype: DTypeLike | None = None) -> Self: ..."
+        for m in _SCAN_INPLACE_TWINS
+    )
+    python_only.extend(
+        f"    def {m}(self, diagonal: _int = 0) -> Self: ..." for m in _TRI_INPLACE_TWINS
+    )
+    python_only.extend(
+        f"    def {m}(self, batch1: Tensor, batch2: Tensor, *, beta: _float = 1.0, alpha: _float = 1.0) -> Self: ..."
+        for m in _BMM_INPLACE_TWINS
+    )
+    python_only.extend(
+        [
+            "    def float_power_(self, exponent: TensorOrScalar) -> Self: ...",
+            "    def heaviside_(self, values: TensorOrScalar) -> Self: ...",
+            "    def divide_(self, other: TensorOrScalar, *, rounding_mode: str | None = None) -> Self: ...",
+            "    def subtract_(self, other: TensorOrScalar, *, alpha: _float = 1.0) -> Self: ...",
+            "    def logit_(self, eps: _float | None = None) -> Self: ...",
+            "    def nan_to_num_(self, nan: _float | None = None, posinf: _float | None = None, neginf: _float | None = None) -> Self: ...",
+            "    def renorm_(self, p: _float, dim: _int, maxnorm: _float) -> Self: ...",
+            "    def addmm_(self, mat1: Tensor, mat2: Tensor, *, beta: _float = 1.0, alpha: _float = 1.0) -> Self: ...",
+            "    def addmv_(self, mat: Tensor, vec: Tensor, *, beta: _float = 1.0, alpha: _float = 1.0) -> Self: ...",
+            "    def addr_(self, vec1: Tensor, vec2: Tensor, *, beta: _float = 1.0, alpha: _float = 1.0) -> Self: ...",
+        ]
+    )
 
     # A registry method with a stub already written out — in the header or
     # ``python_only`` — is not emitted again: derived from what is written,

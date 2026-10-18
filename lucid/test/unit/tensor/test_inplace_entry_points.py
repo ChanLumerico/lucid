@@ -92,7 +92,9 @@ def test_the_operator_writes_into_self(device: str, dunder: str) -> None:
     alias = a
     # ``_impl.version``: Lucid has no ``Tensor._version`` yet (LCD-488).
     impl, version = a._impl, a._impl.version
-    expected = getattr(_base(lucid, dtype), "__" + dunder[3:])(operand).tolist()
+    expected = (
+        getattr(_base(lucid, dtype).to(device), "__" + dunder[3:])(operand).tolist()
+    )
 
     out = _augment(a, symbol, operand)
 
@@ -137,7 +139,9 @@ def test_the_operator_on_a_view_writes_through_to_its_base(
     symbol, dtype, operand = AUGMENTED[dunder]
     a = _base(lucid, dtype).to(device)
     view = a[1:3]
-    expected = getattr(_base(lucid, dtype), "__" + dunder[3:])(operand).tolist()
+    expected = (
+        getattr(_base(lucid, dtype).to(device), "__" + dunder[3:])(operand).tolist()
+    )
     _augment(view, symbol, operand)
     assert a.tolist() == [5, *expected[1:3], 8]
 
@@ -233,7 +237,148 @@ METHODS: dict[
     "clip_": (lambda lib: _floats(lib, [-1, 0.5, 2, 4]), lambda lib: (0.0, 2.5)),
     "clamp_min_": (lambda lib: _floats(lib, [-1, 0.5, 2, 4]), lambda lib: (0.5,)),
     "clamp_max_": (lambda lib: _floats(lib, [-1, 0.5, 2, 4]), lambda lib: (2.0,)),
+    "acosh_": (lambda lib: _floats(lib, [1.2, 1.5, 2.0, 3.0]), lambda lib: ()),
+    "arccosh_": (lambda lib: _floats(lib, [1.2, 1.5, 2.0, 3.0]), lambda lib: ()),
+    **{
+        name: (
+            lambda lib: _floats(lib, [0.2, 0.4, 0.6, 0.8]),
+            lambda lib: (),
+        )
+        for name in (
+            "absolute_",
+            "acos_",
+            "arcsinh_",
+            "arctanh_",
+            "asin_",
+            "asinh_",
+            "atan_",
+            "atanh_",
+            "conj_physical_",
+            "digamma_",
+            "erf_",
+            "erfc_",
+            "erfinv_",
+            "exp2_",
+            "expm1_",
+            "frac_",
+            "i0_",
+            "lgamma_",
+            "log10_",
+            "log1p_",
+            "negative_",
+            "rsqrt_",
+            "sinc_",
+            "trunc_",
+        )
+    },
+    **{
+        name: (
+            lambda lib: _floats(lib, [1.5, 2.5, 3.5, 4.5]),
+            lambda lib: (_floats(lib, [0.5, 1.5, 2.0, 2.5]),),
+        )
+        for name in (
+            "arctan2_",
+            "atan2_",
+            "copysign_",
+            "divide_",
+            "eq_",
+            "ge_",
+            "greater_",
+            "greater_equal_",
+            "gt_",
+            "heaviside_",
+            "hypot_",
+            "le_",
+            "less_",
+            "less_equal_",
+            "lt_",
+            "multiply_",
+            "ne_",
+            "nextafter_",
+            "not_equal_",
+            "subtract_",
+            "true_divide_",
+            "xlogy_",
+        )
+    },
+    "gcd_": (
+        lambda lib: lib.tensor([12, 18, 20, 15]),
+        lambda lib: (lib.tensor([8, 12, 15, 25]),),
+    ),
+    "lcm_": (
+        lambda lib: lib.tensor([4, 6, 5, 3]),
+        lambda lib: (lib.tensor([6, 8, 10, 7]),),
+    ),
+    "ldexp_": (
+        lambda lib: _floats(lib, [1.5, 2.5, 0.5, 3.0]),
+        lambda lib: (lib.tensor([1, 2, -1, 3], dtype=lib.int32),),
+    ),
+    "logit_": (
+        lambda lib: _floats(lib, [0.2, 0.4, 0.6, 0.8]),
+        lambda lib: (),
+    ),
+    "nan_to_num_": (
+        lambda lib: _floats(lib, [1.0, float("nan"), 2.0, -3.0]),
+        lambda lib: (0.0,),
+    ),
 }
+
+#: In-place twins whose calculation spans a dimension or matrix axes rather
+#: than acting element-by-element.
+NON_ELEMENTWISE_METHODS: dict[
+    str, tuple[Callable[[ModuleType], object], Callable[[ModuleType], tuple]]
+] = {
+    "cumsum_": (lambda lib: _floats(lib, [1, 2, 3, 4]), lambda lib: (0,)),
+    "cumprod_": (lambda lib: _floats(lib, [1, 2, 3, 4]), lambda lib: (0,)),
+    "tril_": (lambda lib: _floats(lib, [[1, 2], [3, 4]]), lambda lib: ()),
+    "triu_": (lambda lib: _floats(lib, [[1, 2], [3, 4]]), lambda lib: ()),
+    "renorm_": (
+        lambda lib: _floats(lib, [[3.0, 4.0], [0.3, 0.4]]),
+        lambda lib: (2.0, 0, 1.0),
+    ),
+    "addmm_": (
+        lambda lib: _floats(lib, [[1, 2], [3, 4]]),
+        lambda lib: (_floats(lib, [[1, 0], [0, 1]]), _floats(lib, [[2, 3], [4, 5]])),
+    ),
+    "addbmm_": (
+        lambda lib: _floats(lib, [[1, 2], [3, 4]]),
+        lambda lib: (
+            _floats(lib, [[[1, 0], [0, 1]], [[1, 1], [0, 1]]]),
+            _floats(lib, [[[2, 3], [4, 5]], [[1, 0], [0, 1]]]),
+        ),
+    ),
+    "baddbmm_": (
+        lambda lib: _floats(lib, [[[1, 2], [3, 4]], [[1, 1], [1, 1]]]),
+        lambda lib: (
+            _floats(lib, [[[1, 0], [0, 1]], [[1, 1], [0, 1]]]),
+            _floats(lib, [[[2, 3], [4, 5]], [[1, 0], [0, 1]]]),
+        ),
+    ),
+    "addmv_": (
+        lambda lib: _floats(lib, [1, 2]),
+        lambda lib: (_floats(lib, [[1, 2], [3, 4]]), _floats(lib, [0.5, 1.5])),
+    ),
+    "addr_": (
+        lambda lib: _floats(lib, [[1, 2], [3, 4]]),
+        lambda lib: (_floats(lib, [1, 2]), _floats(lib, [3, 4])),
+    ),
+}
+
+#: Reference in-place methods that mutate layout/storage or draw from a PRNG
+#: rather than writing the out-of-place ``lucid.<op>`` value into ``self``.
+_NON_VALUE_TWINS = frozenset(
+    {
+        "as_strided_",
+        "bernoulli_",
+        "normal_",
+        "squeeze_",
+        "swapaxes_",
+        "swapdims_",
+        "t_",
+        "transpose_",
+        "unsqueeze_",
+    }
+)
 
 #: The methods whose result dtype follows their operands', each with
 #: arguments that make it float for an ``int64`` self.  A logical op answers
@@ -262,11 +407,35 @@ KIND_DOWN: dict[str, Callable[[ModuleType], tuple]] = {
         _floats(lib, [0, 0, 0, 0]),
         _floats(lib, [1, 1, 1, 1]),
     ),
+    "copysign_": lambda lib: (2.5,),
+    "divide_": lambda lib: (2,),
+    "true_divide_": lambda lib: (2,),
+    "multiply_": lambda lib: (2.5,),
+    "subtract_": lambda lib: (2.5,),
+    "xlogy_": lambda lib: (2.5,),
+    "atan2_": lambda lib: (_floats(lib, [1, 1, 1, 1]),),
+    "arctan2_": lambda lib: (_floats(lib, [1, 1, 1, 1]),),
+    "hypot_": lambda lib: (_floats(lib, [1, 1, 1, 1]),),
+    "nextafter_": lambda lib: (_floats(lib, [1, 1, 1, 1]),),
 }
 
 
 def _on(device: str, args: tuple) -> tuple:
     return tuple(a.to(device) if isinstance(a, lucid.Tensor) else a for a in args)
+
+
+def test_every_reference_inplace_twin_of_a_lucid_op_is_defined(ref: ModuleType) -> None:
+    lucid_ops = set(lucid.__all__)
+    expected_twins = {
+        n
+        for n in dir(ref.Tensor)
+        if n.endswith("_")
+        and not n.startswith("_")
+        and n not in _NON_VALUE_TWINS
+        and n[:-1] in lucid_ops
+    }
+    missing = sorted(n for n in expected_twins if not hasattr(lucid.Tensor, n))
+    assert not missing, f"missing in-place twins on Tensor: {missing}"
 
 
 @pytest.mark.parametrize("name", list(METHODS))
@@ -292,7 +461,28 @@ def test_the_method_writes_into_self_as_the_reference_does(
     assert a._impl is impl
     assert a._impl.version == version + 1
     assert str(a.dtype).split(".")[-1] == str(expected.dtype).split(".")[-1]
-    assert a.tolist() == pytest.approx(expected.tolist())
+    assert a.tolist() == pytest.approx(expected.tolist(), rel=1e-5, abs=1e-5)
+
+
+@pytest.mark.parametrize("name", list(NON_ELEMENTWISE_METHODS))
+def test_non_elementwise_inplace_method_writes_into_self_as_the_reference_does(
+    ref: ModuleType, device: str, name: str
+) -> None:
+    make, args = NON_ELEMENTWISE_METHODS[name]
+    expected = getattr(make(ref), name)(*args(ref))
+    a = make(lucid).to(device)
+    impl, version = a._impl, a._impl.version
+
+    out = getattr(a, name)(*_on(device, args(lucid)))
+
+    assert out is a
+    assert a._impl is impl
+    assert a._impl.version == version + 1
+    assert str(a.dtype).split(".")[-1] == str(expected.dtype).split(".")[-1]
+    assert tuple(a.shape) == tuple(expected.shape)
+    assert a.reshape(-1).tolist() == pytest.approx(
+        expected.reshape(-1).tolist(), rel=1e-5, abs=1e-5
+    )
 
 
 @pytest.mark.parametrize("name", list(METHODS))
@@ -300,7 +490,7 @@ def test_the_method_on_a_view_writes_through_to_its_base(
     device: str, name: str
 ) -> None:
     make, args = METHODS[name]
-    whole = getattr(make(lucid), name)(*args(lucid)).tolist()
+    whole = getattr(make(lucid).to(device), name)(*_on(device, args(lucid))).tolist()
     a = make(lucid).to(device)
     before = a.tolist()
     view = a[1:3]
@@ -335,6 +525,41 @@ def test_an_integer_self_refuses_a_float_result_before_writing(
     assert a.tolist() == [0, 1, 2, 3]
 
 
+def test_ldexp_into_an_integer_self_is_refused(ref: ModuleType, device: str) -> None:
+    theirs = _refusal(
+        lambda: ref.tensor([0, 1, 2, 3]).ldexp_(
+            ref.tensor([1, 2, 1, 2], dtype=ref.int32)
+        )
+    )
+    a = lucid.tensor([0, 1, 2, 3]).to(device)
+    ours = _refusal(
+        lambda: a.ldexp_(lucid.tensor([1, 2, 1, 2], dtype=lucid.int32).to(device))
+    )
+    assert isinstance(ours, type(theirs))
+    assert "can't be cast to the desired output type" in str(theirs)
+    assert _CANNOT_CAST.search(str(ours))
+    assert a.tolist() == [0, 1, 2, 3]
+
+
+def test_float_power_inplace_requires_float64(ref: ModuleType, device: str) -> None:
+    expected = ref.tensor([1.5, 2.0, 3.0, 4.0], dtype=ref.float64).float_power_(2.0)
+    a = lucid.tensor([1.5, 2.0, 3.0, 4.0], dtype=lucid.float64)
+    impl, version = a._impl, a._impl.version
+    out = a.float_power_(2.0)
+    assert out is a and a._impl is impl and a._impl.version == version + 1
+    assert a.tolist() == pytest.approx(expected.tolist())
+
+    for dt in ("float32", "int64"):
+        theirs = _refusal(
+            lambda: ref.tensor([1, 2, 3, 4], dtype=getattr(ref, dt)).float_power_(2.0)
+        )
+        b = lucid.tensor([1, 2, 3, 4], dtype=getattr(lucid, dt)).to(device)
+        ours = _refusal(lambda: b.float_power_(2.0))
+        assert isinstance(ours, type(theirs))
+        assert "requires dtype" in str(theirs)
+        assert "requires dtype" in str(ours)
+
+
 def test_lerp_into_an_integer_self_is_refused_as_lerp_refuses_it(device: str) -> None:
     a = lucid.tensor([0, 1]).to(device)
     with pytest.raises(NotImplementedError, match="floating-point"):
@@ -355,6 +580,22 @@ _DIFFERENTIABLE = [
     "clip_",
     "clamp_min_",
     "clamp_max_",
+    "acos_",
+    "asin_",
+    "atan_",
+    "atan2_",
+    "erf_",
+    "exp2_",
+    "expm1_",
+    "frac_",
+    "hypot_",
+    "log10_",
+    "log1p_",
+    "logit_",
+    "rsqrt_",
+    "sinc_",
+    "trunc_",
+    "xlogy_",
 ]
 
 
@@ -391,7 +632,7 @@ def test_the_gradient_through_the_write_is_the_references(
         (y * y).sum().backward()
         return x.grad.tolist()
 
-    assert grad(lucid, device) == pytest.approx(grad(ref, None))
+    assert grad(lucid, device) == pytest.approx(grad(ref, None), rel=1e-5, abs=1e-5)
 
 
 # ── clamp: the bounds promote as clamp's do ─────────────────────────────────

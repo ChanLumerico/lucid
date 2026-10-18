@@ -112,6 +112,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add logcumsumexp, aminmax, renorm, trapezoid, select, clamp_min/max, empty_strided
 
+- add table-driven in-place Tensor.*_ twins
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster
