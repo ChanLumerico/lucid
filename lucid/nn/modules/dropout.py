@@ -111,7 +111,7 @@ class Dropout(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply dropout to the input tensor.
 
         Parameters
@@ -125,7 +125,7 @@ class Dropout(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        return dropout(x, self.p, self.training, self.inplace)
+        return dropout(input, self.p, self.training, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -213,7 +213,7 @@ class Dropout1d(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply dropout to the input tensor.
 
         Parameters
@@ -227,7 +227,7 @@ class Dropout1d(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        return dropout1d(x, self.p, self.training, self.inplace)
+        return dropout1d(input, self.p, self.training, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -316,7 +316,7 @@ class Dropout2d(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply dropout to the input tensor.
 
         Parameters
@@ -330,7 +330,7 @@ class Dropout2d(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        return dropout2d(x, self.p, self.training, self.inplace)
+        return dropout2d(input, self.p, self.training, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -433,7 +433,7 @@ class AlphaDropout(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply dropout to the input tensor.
 
         Parameters
@@ -447,7 +447,7 @@ class AlphaDropout(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        return alpha_dropout(x, self.p, self.training, self.inplace)
+        return alpha_dropout(input, self.p, self.training, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -533,7 +533,7 @@ class Dropout3d(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply dropout to the input tensor.
 
         Parameters
@@ -547,7 +547,7 @@ class Dropout3d(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        return dropout3d(x, self.p, self.training, self.inplace)
+        return dropout3d(input, self.p, self.training, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -651,7 +651,7 @@ class FeatureAlphaDropout(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply dropout to the input tensor.
 
         Parameters
@@ -665,7 +665,7 @@ class FeatureAlphaDropout(Module):
             Output tensor of the same shape as ``input``; in eval mode this is
             the identity.
         """
-        return feature_alpha_dropout(x, self.p, self.training, self.inplace)
+        return feature_alpha_dropout(input, self.p, self.training, self.inplace)
 
     @override
     def extra_repr(self) -> str:

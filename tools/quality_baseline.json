@@ -266,9 +266,9 @@
     "lucid/nn/functional/pooling.py": 39,
     "lucid/nn/modules/activation.py": 722,
     "lucid/nn/modules/loss.py": 1088,
-    "lucid/nn/modules/normalization.py": 577,
+    "lucid/nn/modules/normalization.py": 571,
     "lucid/nn/modules/pooling.py": 808,
-    "lucid/nn/modules/rnn.py": 80,
+    "lucid/nn/modules/rnn.py": 58,
     "lucid/optim/lr_scheduler.py": 408,
     "lucid/special/__init__.py": 886,
     "lucid/utils/transforms/_color.py": 274
@@ -789,9 +789,9 @@
     "lucid/nn/modules/conv_transpose.py": 23,
     "lucid/nn/modules/dropout.py": 8,
     "lucid/nn/modules/flatten.py": 4,
-    "lucid/nn/modules/linear.py": 5,
+    "lucid/nn/modules/linear.py": 4,
     "lucid/nn/modules/loss.py": 24,
-    "lucid/nn/modules/normalization.py": 39,
+    "lucid/nn/modules/normalization.py": 37,
     "lucid/nn/modules/padding.py": 24,
     "lucid/nn/modules/pooling.py": 25,
     "lucid/nn/modules/positional.py": 1,
@@ -1711,7 +1711,7 @@
    },
    "RET501": {
     "lucid/compile/_optim/compiler.py": 3,
-    "lucid/nn/modules/rnn.py": 3,
+    "lucid/nn/modules/rnn.py": 2,
     "lucid/utils/rollout/_driver.py": 1
    },
    "RET504": {

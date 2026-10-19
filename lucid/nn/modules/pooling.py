@@ -144,7 +144,7 @@ class MaxPool1d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -160,7 +160,7 @@ class MaxPool1d(Module):
             was built with ``return_indices=True``.
         """
         return max_pool1d(
-            x,
+            input,
             self.kernel_size,
             self.stride,
             self.padding,
@@ -283,7 +283,7 @@ class MaxPool2d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -299,7 +299,7 @@ class MaxPool2d(Module):
             was built with ``return_indices=True``.
         """
         return max_pool2d(
-            x,
+            input,
             self.kernel_size,
             self.stride,
             self.padding,
@@ -416,7 +416,7 @@ class AvgPool1d(Module):
         self.count_include_pad = count_include_pad
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -431,7 +431,7 @@ class AvgPool1d(Module):
             Pooled output tensor.
         """
         return avg_pool1d(
-            x,
+            input,
             self.kernel_size,
             self.stride,
             self.padding,
@@ -549,7 +549,7 @@ class AvgPool2d(Module):
         self.divisor_override = divisor_override
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -564,7 +564,7 @@ class AvgPool2d(Module):
             Pooled output tensor.
         """
         return avg_pool2d(
-            x,
+            input,
             self.kernel_size,
             self.stride,
             self.padding,
@@ -645,7 +645,7 @@ class AdaptiveAvgPool1d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -659,7 +659,7 @@ class AdaptiveAvgPool1d(Module):
         Tensor
             Pooled output tensor.
         """
-        return adaptive_avg_pool1d(x, self.output_size)
+        return adaptive_avg_pool1d(input, self.output_size)
 
     @override
     def extra_repr(self) -> str:
@@ -736,7 +736,7 @@ class AdaptiveAvgPool2d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -750,7 +750,7 @@ class AdaptiveAvgPool2d(Module):
         Tensor
             Pooled output tensor.
         """
-        return adaptive_avg_pool2d(x, self.output_size)
+        return adaptive_avg_pool2d(input, self.output_size)
 
     @override
     def extra_repr(self) -> str:
@@ -824,7 +824,7 @@ class AdaptiveMaxPool2d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -839,7 +839,7 @@ class AdaptiveMaxPool2d(Module):
             Pooled output tensor, or ``(output, indices)`` when the layer
             was built with ``return_indices=True``.
         """
-        return adaptive_max_pool2d(x, self.output_size, self.return_indices)
+        return adaptive_max_pool2d(input, self.output_size, self.return_indices)
 
     @override
     def extra_repr(self) -> str:
@@ -955,7 +955,7 @@ class MaxPool3d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -971,7 +971,7 @@ class MaxPool3d(Module):
             was built with ``return_indices=True``.
         """
         return max_pool3d(
-            x,
+            input,
             self.kernel_size,
             self.stride,
             self.padding,
@@ -1086,7 +1086,7 @@ class AvgPool3d(Module):
         self.divisor_override = divisor_override
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1101,7 +1101,7 @@ class AvgPool3d(Module):
             Pooled output tensor.
         """
         return avg_pool3d(
-            x,
+            input,
             self.kernel_size,
             self.stride,
             self.padding,
@@ -1187,7 +1187,7 @@ class AdaptiveAvgPool3d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1201,7 +1201,7 @@ class AdaptiveAvgPool3d(Module):
         Tensor
             Pooled output tensor.
         """
-        return adaptive_avg_pool3d(x, self.output_size)
+        return adaptive_avg_pool3d(input, self.output_size)
 
     @override
     def extra_repr(self) -> str:
@@ -1279,7 +1279,7 @@ class AdaptiveMaxPool1d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1294,7 +1294,7 @@ class AdaptiveMaxPool1d(Module):
             Pooled output tensor, or ``(output, indices)`` when the layer
             was built with ``return_indices=True``.
         """
-        return adaptive_max_pool1d(x, self.output_size, self.return_indices)
+        return adaptive_max_pool1d(input, self.output_size, self.return_indices)
 
     @override
     def extra_repr(self) -> str:
@@ -1371,7 +1371,7 @@ class AdaptiveMaxPool3d(Module):
         self.output_size = output_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1386,7 +1386,7 @@ class AdaptiveMaxPool3d(Module):
             Pooled output tensor, or ``(output, indices)`` when the layer
             was built with ``return_indices=True``.
         """
-        return adaptive_max_pool3d(x, self.output_size, self.return_indices)
+        return adaptive_max_pool3d(input, self.output_size, self.return_indices)
 
     @override
     def extra_repr(self) -> str:
@@ -1485,7 +1485,7 @@ class LPPool1d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1500,7 +1500,7 @@ class LPPool1d(Module):
             Pooled output tensor.
         """
         return lp_pool1d(
-            x, self.norm_type, self.kernel_size, self.stride, self.ceil_mode
+            input, self.norm_type, self.kernel_size, self.stride, self.ceil_mode
         )
 
     @override
@@ -1601,7 +1601,7 @@ class LPPool2d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1616,7 +1616,7 @@ class LPPool2d(Module):
             Pooled output tensor.
         """
         return lp_pool2d(
-            x,
+            input,
             self.norm_type,
             (self.kh, self.kw),
             (self.sh, self.sw),
@@ -1718,7 +1718,7 @@ class LPPool3d(Module):
         self.ceil_mode = ceil_mode
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the pooling operation to the input tensor.
 
         Parameters
@@ -1733,7 +1733,7 @@ class LPPool3d(Module):
             Pooled output tensor.
         """
         return lp_pool3d(
-            x,
+            input,
             norm_type=self.norm_type,
             kernel_size=self.kernel_size,
             stride=self.stride,
@@ -1864,7 +1864,7 @@ class MaxUnpool1d(_MaxUnpoolNd):
     @override
     def forward(
         self,
-        x: Tensor,
+        input: Tensor,
         indices: Tensor,
         output_size: tuple[int, ...] | None = None,
     ) -> Tensor:
@@ -1882,7 +1882,7 @@ class MaxUnpool1d(_MaxUnpoolNd):
             Pooled output tensor.
         """
         return max_unpool1d(
-            x,
+            input,
             indices,
             kernel_size=self.kernel_size,  # type: ignore[arg-type]
             stride=self.stride,  # type: ignore[arg-type]
@@ -1969,7 +1969,7 @@ class MaxUnpool2d(_MaxUnpoolNd):
     @override
     def forward(
         self,
-        x: Tensor,
+        input: Tensor,
         indices: Tensor,
         output_size: tuple[int, ...] | None = None,
     ) -> Tensor:
@@ -1987,7 +1987,7 @@ class MaxUnpool2d(_MaxUnpoolNd):
             Pooled output tensor.
         """
         return max_unpool2d(
-            x,
+            input,
             indices,
             kernel_size=self.kernel_size,  # type: ignore[arg-type]
             stride=self.stride,  # type: ignore[arg-type]
@@ -2060,7 +2060,7 @@ class MaxUnpool3d(_MaxUnpoolNd):
     @override
     def forward(
         self,
-        x: Tensor,
+        input: Tensor,
         indices: Tensor,
         output_size: tuple[int, ...] | None = None,
     ) -> Tensor:
@@ -2078,7 +2078,7 @@ class MaxUnpool3d(_MaxUnpoolNd):
             Pooled output tensor.
         """
         return max_unpool3d(
-            x,
+            input,
             indices,
             kernel_size=self.kernel_size,  # type: ignore[arg-type]
             stride=self.stride,  # type: ignore[arg-type]
@@ -2187,14 +2187,14 @@ class FractionalMaxPool2d(Module):
         self.return_indices = return_indices
 
     @override
-    def forward(self, x: Tensor) -> Tensor | tuple[Tensor, Tensor]:
-        """Pool ``x`` of shape ``(N, C, H, W)``, or unbatched.
+    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+        """Pool ``input`` of shape ``(N, C, H, W)``, or unbatched.
 
         Returns the pooled tensor, and with ``return_indices`` also each
         window maximum's flat position in the input.
         """
         return fractional_max_pool2d(
-            x,
+            input,
             kernel_size=self.kernel_size,
             output_size=self.output_size,
             output_ratio=self.output_ratio,
@@ -2293,14 +2293,14 @@ class FractionalMaxPool3d(Module):
         self.return_indices = return_indices
 
     @override
-    def forward(self, x: Tensor) -> Tensor | tuple[Tensor, Tensor]:
-        """Pool ``x`` of shape ``(N, C, D, H, W)``, or unbatched.
+    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+        """Pool ``input`` of shape ``(N, C, D, H, W)``, or unbatched.
 
         Returns the pooled tensor, and with ``return_indices`` also each
         window maximum's flat position in the input.
         """
         return fractional_max_pool3d(
-            x,
+            input,
             kernel_size=self.kernel_size,
             output_size=self.output_size,
             output_ratio=self.output_ratio,

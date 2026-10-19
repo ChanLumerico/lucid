@@ -167,14 +167,14 @@ class LSTM(_DynamicRecurrent[nn.LSTM]):
     @override
     def forward(
         self,
-        x: Tensor | PackedSequence,
+        input: Tensor | PackedSequence,
         hx: tuple[Tensor, Tensor] | None = None,
     ) -> tuple[Tensor | PackedSequence, tuple[Tensor, Tensor]]:
         """Inject dequantized weights into the shell and run it.
 
         Packed input passes straight through — the shell is a real
         :class:`~lucid.nn.LSTM`, so it handles it."""
-        return self._loaded().forward(x, hx)
+        return self._loaded().forward(input, hx)
 
 
 class GRU(_DynamicRecurrent[nn.GRU]):
@@ -197,10 +197,10 @@ class GRU(_DynamicRecurrent[nn.GRU]):
 
     @override
     def forward(
-        self, x: Tensor | PackedSequence, hx: Tensor | None = None
+        self, input: Tensor | PackedSequence, hx: Tensor | None = None
     ) -> tuple[Tensor | PackedSequence, Tensor]:
         """Inject dequantized weights into the shell and run it."""
-        return self._loaded().forward(x, hx)
+        return self._loaded().forward(input, hx)
 
 
 class LSTMCell(_DynamicRecurrent[nn.LSTMCell]):
@@ -221,10 +221,10 @@ class LSTMCell(_DynamicRecurrent[nn.LSTMCell]):
 
     @override
     def forward(
-        self, x: Tensor, hx: tuple[Tensor, Tensor] | None = None
+        self, input: Tensor, hx: tuple[Tensor, Tensor] | None = None
     ) -> tuple[Tensor, Tensor]:
         """Inject dequantized weights into the shell and run one step."""
-        return self._loaded().forward(x, hx)
+        return self._loaded().forward(input, hx)
 
 
 class GRUCell(_DynamicRecurrent[nn.GRUCell]):
@@ -242,9 +242,9 @@ class GRUCell(_DynamicRecurrent[nn.GRUCell]):
     _FLOAT = nn.GRUCell
 
     @override
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:
+    def forward(self, input: Tensor, hx: Tensor | None = None) -> Tensor:
         """Inject dequantized weights into the shell and run one step."""
-        return self._loaded().forward(x, hx)
+        return self._loaded().forward(input, hx)
 
 
 class RNNCell(_DynamicRecurrent[nn.RNNCell]):
@@ -263,6 +263,6 @@ class RNNCell(_DynamicRecurrent[nn.RNNCell]):
     _FLOAT = nn.RNNCell
 
     @override
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:
+    def forward(self, input: Tensor, hx: Tensor | None = None) -> Tensor:
         """Inject dequantized weights into the shell and run one step."""
-        return self._loaded().forward(x, hx)
+        return self._loaded().forward(input, hx)

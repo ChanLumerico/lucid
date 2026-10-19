@@ -149,7 +149,7 @@ class LayerNorm(Module):
             self.bias = None
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -163,7 +163,7 @@ class LayerNorm(Module):
             Normalised tensor of the same shape as ``input``.
         """
         return layer_norm(
-            x, list(self.normalized_shape), self.weight, self.bias, self.eps
+            input, list(self.normalized_shape), self.weight, self.bias, self.eps
         )
 
     @override
@@ -280,13 +280,13 @@ class RMSNorm(Module):
 
         Parameters
         ----------
-        input : Tensor
+        x : Tensor
             Input tensor whose shape is documented in the class docstring.
 
         Returns
         -------
         Tensor
-            Normalised tensor of the same shape as ``input``.
+            Normalised tensor of the same shape as ``x``.
         """
         return rms_norm(x, list(self.normalized_shape), self.weight, self.eps)
 
@@ -418,7 +418,7 @@ class GroupNorm(Module):
             self.bias = None
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -431,7 +431,7 @@ class GroupNorm(Module):
         Tensor
             Normalised tensor of the same shape as ``input``.
         """
-        return group_norm(x, self.num_groups, self.weight, self.bias, self.eps)
+        return group_norm(input, self.num_groups, self.weight, self.bias, self.eps)
 
     @override
     def extra_repr(self) -> str:
@@ -451,14 +451,19 @@ class _NormBase(Module):
     _version: ClassVar[int] = 2
     weight: Parameter | None
     bias: Parameter | None
-    running_mean: Tensor | None
-    running_var: Tensor | None
     num_batches_tracked: Tensor | None
 
     def __init__(
-        self, num_features: int, eps: float, momentum: float | None,
-        affine: bool, track_running_stats: bool, device: DeviceLike,
-        dtype: DTypeLike, *, bias: bool = True,
+        self,
+        num_features: int,
+        eps: float,
+        momentum: float | None,
+        affine: bool,
+        track_running_stats: bool,
+        device: DeviceLike,
+        dtype: DTypeLike,
+        *,
+        bias: bool = True,
     ) -> None:
         """Initialise the shared state.  See the subclasses for the parameters."""
         self._init_norm_attrs(
@@ -467,8 +472,13 @@ class _NormBase(Module):
         self._make_state(num_features, device, dtype)
 
     def _init_norm_attrs(
-        self, num_features: int | None, eps: float, momentum: float | None,
-        affine: bool, track_running_stats: bool, bias: bool,
+        self,
+        num_features: int | None,
+        eps: float,
+        momentum: float | None,
+        affine: bool,
+        track_running_stats: bool,
+        bias: bool,
     ) -> None:
         Module.__init__(self)
         self.num_features: int = num_features  # type: ignore[assignment]
@@ -729,7 +739,7 @@ class _BatchNormBase(_NormBase):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -742,7 +752,7 @@ class _BatchNormBase(_NormBase):
         Tensor
             Normalised tensor of the same shape as ``input``.
         """
-        _check_batch_norm_sample_count(x, self.training)
+        _check_batch_norm_sample_count(input, self.training)
         # The running statistics are written by the training forward itself,
         # in the C++ kernel: it folds the batch mean and variance it
         # normalises with into the buffers, into their own elements wherever
@@ -768,7 +778,7 @@ class _BatchNormBase(_NormBase):
         use_running = not self.training and self.track_running_stats
         wants_buffers = use_running or update
         out = batch_norm(
-            x,
+            input,
             self._buffers.get("running_mean") if wants_buffers else None,
             self._buffers.get("running_var") if wants_buffers else None,
             self.weight,
@@ -1181,7 +1191,7 @@ class _InstanceNormBase(_NormBase):
             )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -1194,8 +1204,8 @@ class _InstanceNormBase(_NormBase):
         Tensor
             Normalised tensor of the same shape as ``input``.
         """
-        self._check_input_dim(x)
-        x, unbatched = _add_batch_axis(x, self._expected_dim - 2)
+        self._check_input_dim(input)
+        x, unbatched = _add_batch_axis(input, self._expected_dim - 2)
         # The buffers go to the functional, as the reference hands them: in
         # training it folds the batch into them in place, in eval with
         # tracking it normalises with them.  The module used to compute the
@@ -1564,20 +1574,20 @@ class LocalResponseNorm(Module):
         self.k = k
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor whose shape is documented in the class docstring.
 
         Returns
         -------
         Tensor
-            Normalised tensor of the same shape as ``x``.
+            Normalised tensor of the same shape as ``input``.
         """
-        return local_response_norm(x, self.size, self.alpha, self.beta, self.k)
+        return local_response_norm(input, self.size, self.alpha, self.beta, self.k)
 
     @override
     def extra_repr(self) -> str:
@@ -1596,7 +1606,24 @@ class LocalResponseNorm(Module):
 # from ``_BatchNormBase``.
 
 
-class _LazyBatchNormMixin(_LazyModule, _BatchNormBase):
+class _LazyNormMixin(_LazyModule, _NormBase):
+    def __init__(
+        self,
+        eps: float = 1e-5,
+        momentum: float | None = 0.1,
+        affine: bool = True,
+        track_running_stats: bool = True,
+        device: DeviceLike = None,
+        dtype: DTypeLike = None,
+        *,
+        bias: bool = True,
+    ) -> None:
+        self._init_lazy_state(
+            eps, momentum, affine, track_running_stats, device, dtype, bias
+        )
+
+
+class _LazyBatchNormMixin(_LazyNormMixin, _BatchNormBase):
     r"""Shared lazy-init logic for LazyBatchNorm{1,2,3}d and LazyInstanceNorm*.
 
     Defers the allocation of all ``num_features``-sized parameters and
@@ -1642,25 +1669,8 @@ class _LazyBatchNormMixin(_LazyModule, _BatchNormBase):
 
     _lazy_label: str = "_LazyBatchNormBase"
 
-    def __init__(
-        self,
-        eps: float = 1e-5,
-        momentum: float | None = 0.1,
-        affine: bool = True,
-        track_running_stats: bool = True,
-        device: DeviceLike = None,
-        dtype: DTypeLike = None,
-        *,
-        bias: bool = True,
-    ) -> None:
-        # Skip _BatchNormBase.__init__ — we don't have num_features yet.
-        """Initialise the _LazyBatchNormMixin module. See the class docstring for parameter semantics."""
-        self._init_lazy_state(
-            eps, momentum, affine, track_running_stats, device, dtype, bias
-        )
-
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply normalisation to the input tensor.
 
         Parameters
@@ -1674,8 +1684,8 @@ class _LazyBatchNormMixin(_LazyModule, _BatchNormBase):
             Normalised tensor of the same shape as ``input``.
         """
         if self.num_features is None:
-            self._initialize(int(x.shape[1]))
-        return _BatchNormBase.forward(self, x)
+            self._initialize(int(input.shape[1]))
+        return _BatchNormBase.forward(self, input)
 
     @override
     def extra_repr(self) -> str:
@@ -1846,7 +1856,7 @@ class LazyBatchNorm3d(_LazyBatchNormMixin):
     _lazy_label: str = "LazyBatchNorm3d"
 
 
-class _LazyInstanceNormMixin(_LazyModule, _InstanceNormBase):
+class _LazyInstanceNormMixin(_LazyNormMixin, _InstanceNormBase):
     r"""Lazy ``num_features`` inference for InstanceNorm{1,2,3}d.
 
     Mirrors :class:`_LazyBatchNormMixin` but defers to
@@ -1888,41 +1898,25 @@ class _LazyInstanceNormMixin(_LazyModule, _InstanceNormBase):
       or 5) for input-rank validation.
     """
 
-    def __init__(
-        self,
-        eps: float = 1e-5,
-        momentum: float | None = 0.1,
-        affine: bool = True,
-        track_running_stats: bool = True,
-        device: DeviceLike = None,
-        dtype: DTypeLike = None,
-        *,
-        bias: bool = True,
-    ) -> None:
-        """Initialise the _LazyInstanceNormMixin module. See the class docstring for parameter semantics."""
-        self._init_lazy_state(
-            eps, momentum, affine, track_running_stats, device, dtype, bias
-        )
-
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        r"""Normalise ``x``, sizing the layer from it on the first call.
+    def forward(self, input: Tensor) -> Tensor:
+        r"""Normalise ``input``, sizing the layer from it on the first call.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             ``(N, C, *spatial)``, or unbatched ``(C, *spatial)``; its ``C``
             sets ``num_features`` the first time.
 
         Returns
         -------
         Tensor
-            Normalised tensor of the same shape as ``x``.
+            Normalised tensor of the same shape as ``input``.
         """
         if self.num_features is None:
-            unbatched = x.ndim == self._expected_dim - 1
-            self._initialize(int(x.shape[0 if unbatched else 1]))
-        return _InstanceNormBase.forward(self, x)
+            unbatched = input.ndim == self._expected_dim - 1
+            self._initialize(int(input.shape[0 if unbatched else 1]))
+        return _InstanceNormBase.forward(self, input)
 
 
 class LazyInstanceNorm1d(_LazyInstanceNormMixin):

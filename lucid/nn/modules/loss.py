@@ -110,12 +110,12 @@ class MSELoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -125,7 +125,7 @@ class MSELoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return mse_loss(x, target, self.reduction)
+        return mse_loss(input, target, self.reduction)
 
     @override
     def extra_repr(self) -> str:
@@ -205,12 +205,12 @@ class L1Loss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -220,7 +220,7 @@ class L1Loss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return l1_loss(x, target, self.reduction)
+        return l1_loss(input, target, self.reduction)
 
     @override
     def extra_repr(self) -> str:
@@ -397,12 +397,12 @@ class CrossEntropyLoss(_WeightedLoss):
         self.label_smoothing = label_smoothing
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -413,7 +413,7 @@ class CrossEntropyLoss(_WeightedLoss):
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
         return cross_entropy(
-            x,
+            input,
             target,
             self.weight,
             self.ignore_index,
@@ -524,12 +524,12 @@ class NLLLoss(_WeightedLoss):
         self.reduction: Reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -539,7 +539,7 @@ class NLLLoss(_WeightedLoss):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return nll_loss(x, target, self.weight, self.ignore_index, self.reduction)
+        return nll_loss(input, target, self.weight, self.ignore_index, self.reduction)
 
     @override
     def extra_repr(self) -> str:
@@ -631,12 +631,12 @@ class BCELoss(_WeightedLoss):
         self.reduction: Reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -647,7 +647,7 @@ class BCELoss(_WeightedLoss):
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
         return binary_cross_entropy(
-            x, target, weight=self.weight, reduction=self.reduction
+            input, target, weight=self.weight, reduction=self.reduction
         )
 
     @override
@@ -763,12 +763,12 @@ class BCEWithLogitsLoss(_WeightedLoss):
         self.register_buffer("pos_weight", pos_weight)
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -779,7 +779,7 @@ class BCEWithLogitsLoss(_WeightedLoss):
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
         return binary_cross_entropy_with_logits(
-            x,
+            input,
             target,
             weight=self.weight,
             pos_weight=self.pos_weight,
@@ -875,12 +875,12 @@ class HuberLoss(Module):
         self.delta = delta
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -890,7 +890,7 @@ class HuberLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return huber_loss(x, target, reduction=self.reduction, delta=self.delta)
+        return huber_loss(input, target, reduction=self.reduction, delta=self.delta)
 
     @override
     def extra_repr(self) -> str:
@@ -977,12 +977,12 @@ class SmoothL1Loss(Module):
         self.beta = beta
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -992,7 +992,7 @@ class SmoothL1Loss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return smooth_l1_loss(x, target, beta=self.beta, reduction=self.reduction)
+        return smooth_l1_loss(input, target, beta=self.beta, reduction=self.reduction)
 
     @override
     def extra_repr(self) -> str:
@@ -1090,12 +1090,12 @@ class KLDivLoss(Module):
         self.log_target = log_target
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -1105,7 +1105,7 @@ class KLDivLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return kl_div(x, target, reduction=self.reduction, log_target=self.log_target)
+        return kl_div(input, target, reduction=self.reduction, log_target=self.log_target)
 
     @override
     def extra_repr(self) -> str:
@@ -1338,16 +1338,16 @@ class CosineEmbeddingLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:
+    def forward(self, input1: Tensor, input2: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x1 : Tensor
+        input1 : Tensor
             Input tensor.
-        x2 : Tensor
+        input2 : Tensor
             Input tensor.
-        y : Tensor
+        target : Tensor
             Input tensor.
 
         Returns
@@ -1356,7 +1356,7 @@ class CosineEmbeddingLoss(Module):
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
         return cosine_embedding_loss(
-            x1, x2, y, margin=self.margin, reduction=self.reduction
+            input1, input2, target, margin=self.margin, reduction=self.reduction
         )
 
     @override
@@ -1441,16 +1441,16 @@ class MarginRankingLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x1: Tensor, x2: Tensor, y: Tensor) -> Tensor:
+    def forward(self, input1: Tensor, input2: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x1 : Tensor
+        input1 : Tensor
             Input tensor.
-        x2 : Tensor
+        input2 : Tensor
             Input tensor.
-        y : Tensor
+        target : Tensor
             Input tensor.
 
         Returns
@@ -1459,7 +1459,7 @@ class MarginRankingLoss(Module):
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
         return margin_ranking_loss(
-            x1, x2, y, margin=self.margin, reduction=self.reduction
+            input1, input2, target, margin=self.margin, reduction=self.reduction
         )
 
     @override
@@ -1547,14 +1547,14 @@ class HingeEmbeddingLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, y: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
-        y : Tensor
+        target : Tensor
             Input tensor.
 
         Returns
@@ -1562,7 +1562,7 @@ class HingeEmbeddingLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return hinge_embedding_loss(x, y, margin=self.margin, reduction=self.reduction)
+        return hinge_embedding_loss(input, target, self.margin, reduction=self.reduction)
 
     @override
     def extra_repr(self) -> str:
@@ -1672,12 +1672,12 @@ class PoissonNLLLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, log_input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        log_input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -1688,7 +1688,7 @@ class PoissonNLLLoss(Module):
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
         return poisson_nll_loss(
-            x, target, self.log_input, self.full, self.eps, self.reduction
+            log_input, target, self.log_input, self.full, self.eps, self.reduction
         )
 
     @override
@@ -1788,12 +1788,12 @@ class GaussianNLLLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor, var: Tensor | float) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor, var: Tensor | float) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -1806,7 +1806,7 @@ class GaussianNLLLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return gaussian_nll_loss(x, target, var, self.full, self.eps, self.reduction)
+        return gaussian_nll_loss(input, target, var, self.full, self.eps, self.reduction)
 
     @override
     def extra_repr(self) -> str:
@@ -2054,12 +2054,12 @@ class MultiMarginLoss(_WeightedLoss):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -2070,7 +2070,7 @@ class MultiMarginLoss(_WeightedLoss):
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
         return multi_margin_loss(
-            x,
+            input,
             target,
             p=self.p,
             margin=self.margin,
@@ -2156,12 +2156,12 @@ class MultilabelMarginLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -2171,7 +2171,7 @@ class MultilabelMarginLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return multilabel_margin_loss(x, target, reduction=self.reduction)
+        return multilabel_margin_loss(input, target, reduction=self.reduction)
 
     @override
     def extra_repr(self) -> str:
@@ -2301,12 +2301,12 @@ class SoftMarginLoss(Module):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -2316,7 +2316,7 @@ class SoftMarginLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return soft_margin_loss(x, target, reduction=self.reduction)
+        return soft_margin_loss(input, target, reduction=self.reduction)
 
     @override
     def extra_repr(self) -> str:
@@ -2410,12 +2410,12 @@ class MultiLabelSoftMarginLoss(_WeightedLoss):
         self.reduction = reduction
 
     @override
-    def forward(self, x: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: Tensor, target: Tensor) -> Tensor:
         """Compute the loss between predictions and targets.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
         target : Tensor
             Input tensor.
@@ -2426,7 +2426,7 @@ class MultiLabelSoftMarginLoss(_WeightedLoss):
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
         return multilabel_soft_margin_loss(
-            x, target, weight=self.weight, reduction=self.reduction
+            input, target, weight=self.weight, reduction=self.reduction
         )
 
     @override

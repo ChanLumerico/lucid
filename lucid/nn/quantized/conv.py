@@ -125,7 +125,7 @@ class _QuantizedConvNd(nn.Module):
         return y
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         """Dequantize the kernel, convolve, fake-quantize the output."""
         weight = dequantize(
             self.weight_int8,
@@ -133,7 +133,7 @@ class _QuantizedConvNd(nn.Module):
             self.weight_zero_point,
             ch_axis=self.weight_ch_axis,
         )
-        y = self._activation(self._conv_forward(x, weight))
+        y = self._activation(self._conv_forward(input, weight))
         return fake_quantize(
             y,
             self.scale,

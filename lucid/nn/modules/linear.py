@@ -150,7 +150,7 @@ class Linear(Module):
             init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the linear transformation to the input tensor.
 
         Parameters
@@ -163,7 +163,7 @@ class Linear(Module):
         Tensor
             Output tensor of shape :math:`(*, \text{out\_features})`.
         """
-        return linear(x, self.weight, self.bias)
+        return linear(input, self.weight, self.bias)
 
     @override
     def extra_repr(self) -> str:
@@ -235,20 +235,20 @@ class Identity(Module):
         super().__init__()
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Return the input unchanged.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input of any shape.
 
         Returns
         -------
         Tensor
-            ``x`` itself.
+            ``input`` itself.
         """
-        return x
+        return input
 
 
 class FusedLinear(Module):
@@ -537,20 +537,22 @@ class Bilinear(Module):
             init.uniform_(self.bias, -bound, bound)
 
     @override
-    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:
+    def forward(self, input1: Tensor, input2: Tensor) -> Tensor:
         r"""Apply the linear transformation to the input tensor.
 
         Parameters
         ----------
-        input : Tensor
-            Input tensor of shape :math:`(*, \text{in\_features})`.
+        input1 : Tensor
+            First input tensor of shape :math:`(*, \text{in1\_features})`.
+        input2 : Tensor
+            Second input tensor of shape :math:`(*, \text{in2\_features})`.
 
         Returns
         -------
         Tensor
             Output tensor of shape :math:`(*, \text{out\_features})`.
         """
-        return bilinear(x1, x2, self.weight, self.bias)
+        return bilinear(input1, input2, self.weight, self.bias)
 
     @override
     def extra_repr(self) -> str:
@@ -757,7 +759,7 @@ class LazyLinear(_LazyModule):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the linear transformation to the input tensor.
 
         Parameters
@@ -774,8 +776,8 @@ class LazyLinear(_LazyModule):
         # placeholder object from construction, so its absence no longer
         # signals "not yet built".  The recorded input size does.
         if self.in_features is None:
-            self._initialize(x.shape[-1])
-        return linear(x, self.weight, self.bias)
+            self._initialize(input.shape[-1])
+        return linear(input, self.weight, self.bias)
 
     @override
     def extra_repr(self) -> str:

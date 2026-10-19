@@ -272,16 +272,16 @@ class Quantize(nn.Module):
         self.qdtype = qdtype
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        """Quantize ``x`` to the calibrated activation grid (float-carried).
+    def forward(self, X: Tensor) -> Tensor:
+        """Quantize ``X`` to the calibrated activation grid (float-carried).
 
         Integer inputs (e.g. token indices) are passed through unchanged —
         only real-valued activations are quantized.
         """
-        if not lucid.is_floating_point(x):
-            return x
+        if not lucid.is_floating_point(X):
+            return X
         return fake_quantize(
-            x, self.scale, self.zero_point, self.qdtype.quant_min, self.qdtype.quant_max
+            X, self.scale, self.zero_point, self.qdtype.quant_min, self.qdtype.quant_max
         )
 
     @classmethod
@@ -338,9 +338,9 @@ class DeQuantize(nn.Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, Xq: Tensor) -> Tensor:
         """Identity (activations are already float-carried)."""
-        return x
+        return Xq
 
     @classmethod
     def from_float(cls, stub: nn.Module) -> DeQuantize:

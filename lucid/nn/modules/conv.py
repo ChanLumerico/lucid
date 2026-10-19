@@ -75,7 +75,7 @@ class _ConvNd(Module):
     bias: Parameter | None
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the convolution to the input tensor.
 
         Parameters
@@ -93,7 +93,9 @@ class _ConvNd(Module):
         args = _ConvArgs(
             self.stride, self._padding_str or self.padding, self.dilation, self.groups
         )
-        return _convnd(x, self.weight, self.bias, args, self._rank, self.padding_mode)
+        return _convnd(
+            input, self.weight, self.bias, args, self._rank, self.padding_mode
+        )
 
     @override
     def extra_repr(self) -> str:
@@ -780,10 +782,10 @@ class LazyConv1d(_LazyConvMixin, Conv1d):
         return (self.kernel_size,)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        """The eager layer's forward; the first call sizes ``in_channels`` from ``x``."""
-        self._materialize_from(x)
-        return Conv1d.forward(self, x)
+    def forward(self, input: Tensor) -> Tensor:
+        """The eager layer's forward; the first call sizes ``in_channels`` from ``input``."""
+        self._materialize_from(input)
+        return Conv1d.forward(self, input)
 
 
 class LazyConv2d(_LazyConvMixin, Conv2d):
@@ -910,10 +912,10 @@ class LazyConv2d(_LazyConvMixin, Conv2d):
         return self.kernel_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        """The eager layer's forward; the first call sizes ``in_channels`` from ``x``."""
-        self._materialize_from(x)
-        return Conv2d.forward(self, x)
+    def forward(self, input: Tensor) -> Tensor:
+        """The eager layer's forward; the first call sizes ``in_channels`` from ``input``."""
+        self._materialize_from(input)
+        return Conv2d.forward(self, input)
 
 
 class LazyConv3d(_LazyConvMixin, Conv3d):
@@ -1036,7 +1038,7 @@ class LazyConv3d(_LazyConvMixin, Conv3d):
         return self.kernel_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        """The eager layer's forward; the first call sizes ``in_channels`` from ``x``."""
-        self._materialize_from(x)
-        return Conv3d.forward(self, x)
+    def forward(self, input: Tensor) -> Tensor:
+        """The eager layer's forward; the first call sizes ``in_channels`` from ``input``."""
+        self._materialize_from(input)
+        return Conv3d.forward(self, input)

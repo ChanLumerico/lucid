@@ -97,7 +97,7 @@ class Flatten(Module):
         self.end_dim = end_dim
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         """Flatten (or unflatten) the specified dimensions of the input.
 
         Parameters
@@ -110,7 +110,7 @@ class Flatten(Module):
         Tensor
             Tensor with the configured dimensions flattened or unflattened.
         """
-        return _wrap(_C_engine.flatten(_unwrap(x), self.start_dim, self.end_dim))
+        return _wrap(_C_engine.flatten(_unwrap(input), self.start_dim, self.end_dim))
 
     @override
     def extra_repr(self) -> str:
@@ -197,7 +197,7 @@ class Unflatten(Module):
         self.unflattened_size = unflattened_size
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         """Flatten (or unflatten) the specified dimensions of the input.
 
         Parameters
@@ -210,11 +210,11 @@ class Unflatten(Module):
         Tensor
             Tensor with the configured dimensions flattened or unflattened.
         """
-        shape = list(x.shape)
+        shape = list(input.shape)
         new_shape = (
             shape[: self.dim] + list(self.unflattened_size) + shape[self.dim + 1 :]
         )
-        return _wrap(_C_engine.reshape(_unwrap(x), new_shape))
+        return _wrap(_C_engine.reshape(_unwrap(input), new_shape))
 
     @override
     def extra_repr(self) -> str:
@@ -325,7 +325,7 @@ class Unfold(Module):
         self.stride = stride
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         """Flatten (or unflatten) the specified dimensions of the input.
 
         Parameters
@@ -340,7 +340,9 @@ class Unfold(Module):
         """
         from lucid.nn.functional.sampling import unfold as _unfold
 
-        return _unfold(x, self.kernel_size, self.dilation, self.padding, self.stride)
+        return _unfold(
+            input, self.kernel_size, self.dilation, self.padding, self.stride
+        )
 
     @override
     def extra_repr(self) -> str:
@@ -487,7 +489,7 @@ class Fold(Module):
         self.stride = stride if isinstance(stride, tuple) else (stride, stride)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         """Flatten (or unflatten) the specified dimensions of the input.
 
         Parameters
@@ -508,7 +510,12 @@ class Fold(Module):
         pH, pW = self.padding
         sH, sW = self.stride
         return _fold(
-            x, (oH, oW), (kH, kW), dilation=(dH, dW), padding=(pH, pW), stride=(sH, sW)
+            input,
+            (oH, oW),
+            (kH, kW),
+            dilation=(dH, dW),
+            padding=(pH, pW),
+            stride=(sH, sW),
         )
 
     @override

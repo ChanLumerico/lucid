@@ -232,14 +232,16 @@ class ConvTranspose1d(_ConvTransposeNd):
         )
 
     @override
-    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
-        """Upsample ``x`` of shape ``(N, C_in, L)``, or unbatched.
+    def forward(
+        self, input: Tensor, output_size: Sequence[int] | None = None
+    ) -> Tensor:
+        """Upsample ``input`` of shape ``(N, C_in, L)``, or unbatched.
 
         ``output_size`` picks one of the ``stride`` sizes the layer can
         produce, in place of ``output_padding``: the output's length,
         optionally after its batch and channel sizes.
         """
-        return self._transpose(x, output_size)
+        return self._transpose(input, output_size)
 
 
 class ConvTranspose2d(_ConvTransposeNd):
@@ -391,14 +393,16 @@ class ConvTranspose2d(_ConvTransposeNd):
         )
 
     @override
-    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
-        """Upsample ``x`` of shape ``(N, C_in, H, W)``, or unbatched.
+    def forward(
+        self, input: Tensor, output_size: Sequence[int] | None = None
+    ) -> Tensor:
+        """Upsample ``input`` of shape ``(N, C_in, H, W)``, or unbatched.
 
         ``output_size`` picks one of the ``stride`` sizes the layer can
         produce, in place of ``output_padding``: the output's height and width,
         optionally after its batch and channel sizes.
         """
-        return self._transpose(x, output_size)
+        return self._transpose(input, output_size)
 
 
 class ConvTranspose3d(_ConvTransposeNd):
@@ -541,14 +545,16 @@ class ConvTranspose3d(_ConvTransposeNd):
         )
 
     @override
-    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
-        """Upsample ``x`` of shape ``(N, C_in, D, H, W)``, or unbatched.
+    def forward(
+        self, input: Tensor, output_size: Sequence[int] | None = None
+    ) -> Tensor:
+        """Upsample ``input`` of shape ``(N, C_in, D, H, W)``, or unbatched.
 
         ``output_size`` picks one of the ``stride`` sizes the layer can
         produce, in place of ``output_padding``: the output's depth, height and width,
         optionally after its batch and channel sizes.
         """
-        return self._transpose(x, output_size)
+        return self._transpose(input, output_size)
 
 
 # ── Lazy ConvTranspose ────────────────────────────────────────────────────────
@@ -680,10 +686,12 @@ class LazyConvTranspose1d(_LazyConvMixin, ConvTranspose1d):
         return (self.kernel_size,)
 
     @override
-    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
-        """The eager layer's forward; the first call sizes ``in_channels`` from ``x``."""
-        self._materialize_from(x)
-        return ConvTranspose1d.forward(self, x, output_size)
+    def forward(
+        self, input: Tensor, output_size: Sequence[int] | None = None
+    ) -> Tensor:
+        """The eager layer's forward; the first call sizes ``in_channels`` from ``input``."""
+        self._materialize_from(input)
+        return ConvTranspose1d.forward(self, input, output_size)
 
 
 class LazyConvTranspose2d(_LazyConvMixin, ConvTranspose2d):
@@ -812,10 +820,12 @@ class LazyConvTranspose2d(_LazyConvMixin, ConvTranspose2d):
         return self.kernel_size
 
     @override
-    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
-        """The eager layer's forward; the first call sizes ``in_channels`` from ``x``."""
-        self._materialize_from(x)
-        return ConvTranspose2d.forward(self, x, output_size)
+    def forward(
+        self, input: Tensor, output_size: Sequence[int] | None = None
+    ) -> Tensor:
+        """The eager layer's forward; the first call sizes ``in_channels`` from ``input``."""
+        self._materialize_from(input)
+        return ConvTranspose2d.forward(self, input, output_size)
 
 
 class LazyConvTranspose3d(_LazyConvMixin, ConvTranspose3d):
@@ -948,7 +958,9 @@ class LazyConvTranspose3d(_LazyConvMixin, ConvTranspose3d):
         return self.kernel_size
 
     @override
-    def forward(self, x: Tensor, output_size: Sequence[int] | None = None) -> Tensor:
-        """The eager layer's forward; the first call sizes ``in_channels`` from ``x``."""
-        self._materialize_from(x)
-        return ConvTranspose3d.forward(self, x, output_size)
+    def forward(
+        self, input: Tensor, output_size: Sequence[int] | None = None
+    ) -> Tensor:
+        """The eager layer's forward; the first call sizes ``in_channels`` from ``input``."""
+        self._materialize_from(input)
+        return ConvTranspose3d.forward(self, input, output_size)

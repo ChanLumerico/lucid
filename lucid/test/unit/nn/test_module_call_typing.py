@@ -99,7 +99,7 @@ def test_compile_keeps_the_forward_signature(mypy_report: tuple[str, int]) -> No
     revealed = _at(stdout, _REVEAL_LINE)
     assert len(revealed) == 1, stdout
     tensor = "lucid._tensor.tensor.Tensor"
-    assert f"CompiledModule[[x: {tensor}], {tensor}]" in revealed[0], revealed[0]
+    assert f"CompiledModule[[input: {tensor}], {tensor}]" in revealed[0], revealed[0]
 
 
 def test_a_wrong_argument_is_caught(mypy_report: tuple[str, int]) -> None:

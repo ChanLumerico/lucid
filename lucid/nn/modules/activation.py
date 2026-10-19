@@ -96,7 +96,7 @@ class ReLU(_InplaceActivation):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -109,7 +109,7 @@ class ReLU(_InplaceActivation):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return relu(x, self.inplace)
+        return relu(input, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -170,7 +170,7 @@ class LeakyReLU(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -183,7 +183,7 @@ class LeakyReLU(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return leaky_relu(x, self.negative_slope, self.inplace)
+        return leaky_relu(input, self.negative_slope, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -245,7 +245,7 @@ class ELU(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -258,7 +258,7 @@ class ELU(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return elu(x, self.alpha, self.inplace)
+        return elu(input, self.alpha, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -322,7 +322,7 @@ class SELU(_InplaceActivation):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -335,7 +335,7 @@ class SELU(_InplaceActivation):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return selu(x, self.inplace)
+        return selu(input, self.inplace)
 
 
 class GELU(Module):
@@ -407,7 +407,7 @@ class GELU(Module):
         self.approximate = approximate
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -420,7 +420,7 @@ class GELU(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return gelu(x, approximate=self.approximate)
+        return gelu(input, approximate=self.approximate)
 
     @override
     def extra_repr(self) -> str:
@@ -476,7 +476,7 @@ class SiLU(_InplaceActivation):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -489,7 +489,7 @@ class SiLU(_InplaceActivation):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return silu(x, self.inplace)
+        return silu(input, self.inplace)
 
 
 class Mish(_InplaceActivation):
@@ -535,7 +535,7 @@ class Mish(_InplaceActivation):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -548,7 +548,7 @@ class Mish(_InplaceActivation):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return mish(x, inplace=self.inplace)
+        return mish(input, inplace=self.inplace)
 
 
 class Softplus(Module):
@@ -611,7 +611,7 @@ class Softplus(Module):
         self.threshold = threshold
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -624,7 +624,7 @@ class Softplus(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return softplus(x, self.beta, self.threshold)
+        return softplus(input, self.beta, self.threshold)
 
     @override
     def extra_repr(self) -> str:
@@ -681,7 +681,7 @@ class Hardswish(_InplaceActivation):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -694,7 +694,7 @@ class Hardswish(_InplaceActivation):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return hardswish(x, self.inplace)
+        return hardswish(input, self.inplace)
 
 
 class Hardsigmoid(_InplaceActivation):
@@ -733,7 +733,7 @@ class Hardsigmoid(_InplaceActivation):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -746,7 +746,7 @@ class Hardsigmoid(_InplaceActivation):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return hardsigmoid(x, self.inplace)
+        return hardsigmoid(input, self.inplace)
 
 
 class Sigmoid(Module):
@@ -789,7 +789,7 @@ class Sigmoid(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -802,7 +802,7 @@ class Sigmoid(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return sigmoid(x)
+        return sigmoid(input)
 
 
 class Tanh(Module):
@@ -846,7 +846,7 @@ class Tanh(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -859,7 +859,7 @@ class Tanh(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return tanh(x)
+        return tanh(input)
 
 
 class Softmax(Module):
@@ -916,7 +916,7 @@ class Softmax(Module):
         self.dim = dim
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -929,7 +929,7 @@ class Softmax(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return softmax(x, self.dim, _stacklevel=5)
+        return softmax(input, self.dim, _stacklevel=5)
 
     @override
     def extra_repr(self) -> str:
@@ -988,7 +988,7 @@ class LogSoftmax(Module):
         self.dim = dim
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1001,7 +1001,7 @@ class LogSoftmax(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return log_softmax(x, self.dim, _stacklevel=5)
+        return log_softmax(input, self.dim, _stacklevel=5)
 
     @override
     def extra_repr(self) -> str:
@@ -1051,7 +1051,7 @@ class Softmax2d(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1064,11 +1064,11 @@ class Softmax2d(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        if x.ndim != 4:
+        if input.ndim != 4:
             raise ValueError(
-                f"Softmax2d: expected 4-D input (N, C, H, W), got ndim={x.ndim}"
+                f"Softmax2d: expected 4-D input (N, C, H, W), got ndim={input.ndim}"
             )
-        return softmax(x, -3, _stacklevel=5)
+        return softmax(input, -3, _stacklevel=5)
 
 
 class RReLU(Module):
@@ -1140,7 +1140,7 @@ class RReLU(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1154,7 +1154,7 @@ class RReLU(Module):
             Output tensor of the same shape as ``input``.
         """
         return rrelu(
-            x, self.lower, self.upper, training=self.training, inplace=self.inplace
+            input, self.lower, self.upper, training=self.training, inplace=self.inplace
         )
 
     @override
@@ -1205,7 +1205,7 @@ class ReLU6(_InplaceActivation):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1218,7 +1218,7 @@ class ReLU6(_InplaceActivation):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return relu6(x, self.inplace)
+        return relu6(input, self.inplace)
 
 
 class PReLU(Module):
@@ -1303,7 +1303,7 @@ class PReLU(Module):
         )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1316,7 +1316,7 @@ class PReLU(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return prelu(x, self.weight)
+        return prelu(input, self.weight)
 
     @override
     def extra_repr(self) -> str:
@@ -1381,7 +1381,7 @@ class Threshold(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1394,7 +1394,7 @@ class Threshold(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return threshold(x, self.threshold, self.value, self.inplace)
+        return threshold(input, self.threshold, self.value, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -1477,7 +1477,7 @@ class Hardtanh(Module):
             )
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1490,7 +1490,7 @@ class Hardtanh(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return hardtanh(x, self.min_val, self.max_val, self.inplace)
+        return hardtanh(input, self.min_val, self.max_val, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -1542,7 +1542,7 @@ class LogSigmoid(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1555,7 +1555,7 @@ class LogSigmoid(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return _wrap(_C_engine.log(_C_engine.sigmoid(_unwrap(x))))
+        return _wrap(_C_engine.log(_C_engine.sigmoid(_unwrap(input))))
 
 
 class Softsign(Module):
@@ -1600,7 +1600,7 @@ class Softsign(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1613,7 +1613,7 @@ class Softsign(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        impl = _unwrap(x)
+        impl = _unwrap(input)
         denom = _C_engine.add(
             _C_engine.full(impl.shape, 1.0, impl.dtype, impl.device),
             _C_engine.abs(impl),
@@ -1668,7 +1668,7 @@ class Softmin(Module):
         self.dim = dim
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1681,7 +1681,7 @@ class Softmin(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return softmin(x, self.dim, _stacklevel=5)
+        return softmin(input, self.dim, _stacklevel=5)
 
     @override
     def extra_repr(self) -> str:
@@ -1747,7 +1747,7 @@ class GLU(Module):
         self.dim = dim
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1760,7 +1760,7 @@ class GLU(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return glu(x, self.dim)
+        return glu(input, self.dim)
 
     @override
     def extra_repr(self) -> str:
@@ -1822,7 +1822,7 @@ class CELU(Module):
         self.inplace = inplace
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1835,7 +1835,7 @@ class CELU(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return celu(x, self.alpha, self.inplace)
+        return celu(input, self.alpha, self.inplace)
 
     @override
     def extra_repr(self) -> str:
@@ -1894,7 +1894,7 @@ class Hardshrink(Module):
         self.lambd = lambd
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1907,7 +1907,7 @@ class Hardshrink(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return hardshrink(x, self.lambd)
+        return hardshrink(input, self.lambd)
 
     @override
     def extra_repr(self) -> str:
@@ -1957,7 +1957,7 @@ class Tanhshrink(Module):
     """
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -1970,7 +1970,7 @@ class Tanhshrink(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return tanhshrink(x)
+        return tanhshrink(input)
 
 
 class Softshrink(Module):
@@ -2031,7 +2031,7 @@ class Softshrink(Module):
         self.lambd = lambd
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
 
         Parameters
@@ -2044,7 +2044,7 @@ class Softshrink(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return softshrink(x, self.lambd)
+        return softshrink(input, self.lambd)
 
     @override
     def extra_repr(self) -> str:

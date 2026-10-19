@@ -138,12 +138,12 @@ class Embedding(nn.Module):
         self.register_buffer("weight_zero_point", lucid.zeros(num_embeddings))
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        """Dequantize the table and look up ``x``."""
+    def forward(self, indices: Tensor) -> Tensor:
+        """Dequantize the table and look up ``indices``."""
         weight = dequantize(
             self.weight_int8, self.weight_scale, self.weight_zero_point, ch_axis=0
         )
-        return F.embedding(x, weight, self.padding_idx)
+        return F.embedding(indices, weight, self.padding_idx)
 
     @classmethod
     def from_float(cls, mod: nn.Module) -> Embedding:
@@ -289,13 +289,28 @@ class EmbeddingBag(nn.Module):
         self.register_buffer("weight_zero_point", lucid.zeros(num_embeddings))
 
     @override
-    def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:
+    def forward(
+        self,
+        indices: Tensor,
+        offsets: Tensor | None = None,
+        per_sample_weights: Tensor | None = None,
+        compressed_indices_mapping: Tensor | None = None,
+    ) -> Tensor:
         """Dequantize the table and run the pooled bag lookup."""
+        if compressed_indices_mapping is not None:
+            raise NotImplementedError(
+                "quantized.EmbeddingBag: compressed_indices_mapping is not supported"
+            )
         weight = dequantize(
             self.weight_int8, self.weight_scale, self.weight_zero_point, ch_axis=0
         )
         return F.embedding_bag(
-            x, weight, offsets, mode=self.mode, padding_idx=self.padding_idx
+            indices,
+            weight,
+            offsets,
+            mode=self.mode,
+            per_sample_weights=per_sample_weights,
+            padding_idx=self.padding_idx,
         )
 
     @classmethod

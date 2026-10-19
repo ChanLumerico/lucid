@@ -151,7 +151,7 @@ class Upsample(Module):
         self.recompute_scale_factor = recompute_scale_factor
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Upsample the input tensor.
 
         Parameters
@@ -165,7 +165,7 @@ class Upsample(Module):
             Upsampled output tensor.
         """
         return interpolate(
-            x,
+            input,
             size=self.size,
             scale_factor=self.scale_factor,
             mode=self.mode,
@@ -409,7 +409,7 @@ class PixelShuffle(Module):
         self.upscale_factor = upscale_factor
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Upsample the input tensor.
 
         Parameters
@@ -423,9 +423,9 @@ class PixelShuffle(Module):
             Upsampled output tensor.
         """
         r = self.upscale_factor
-        n, c_r2, h, w = x.shape
+        n, c_r2, h, w = input.shape
         c = c_r2 // (r * r)
-        impl = _unwrap(x)
+        impl = _unwrap(input)
         t = _C_engine.reshape(impl, [n, c, r, r, h, w])
         t = _C_engine.permute(t, [0, 1, 4, 2, 5, 3])
         return _wrap(_C_engine.reshape(t, [n, c, h * r, w * r]))
@@ -504,7 +504,7 @@ class PixelUnshuffle(Module):
         self.downscale_factor = downscale_factor
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Upsample the input tensor.
 
         Parameters
@@ -518,9 +518,9 @@ class PixelUnshuffle(Module):
             Upsampled output tensor.
         """
         r = self.downscale_factor
-        n, c, h_r, w_r = x.shape
+        n, c, h_r, w_r = input.shape
         h, w = h_r // r, w_r // r
-        impl = _unwrap(x)
+        impl = _unwrap(input)
         t = _C_engine.reshape(impl, [n, c, h, r, w, r])
         t = _C_engine.permute(t, [0, 1, 3, 5, 2, 4])
         return _wrap(_C_engine.reshape(t, [n, c * r * r, h, w]))
@@ -631,7 +631,7 @@ class ChannelShuffle(Module):
         self.groups = groups
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         r"""Upsample the input tensor.
 
         Parameters
@@ -644,7 +644,7 @@ class ChannelShuffle(Module):
         Tensor
             Upsampled output tensor.
         """
-        return channel_shuffle(x, groups=self.groups)
+        return channel_shuffle(input, groups=self.groups)
 
     @override
     def extra_repr(self) -> str:

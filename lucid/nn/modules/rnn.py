@@ -242,6 +242,32 @@ class _FlatRecurrent(Module):
         out, (h_n_tensor,) = _restore_layout(layout, inp, [stack(h_n, 0)])
         return out, h_n_tensor
 
+    def flatten_parameters(self) -> None:
+        """No-op for API compatibility (see :meth:`LSTM.flatten_parameters`)."""
+        return None
+
+    @override
+    def forward(
+        self,
+        input: Tensor | PackedSequence,
+        hx: Tensor | None = None,
+    ) -> tuple[Tensor | PackedSequence, Tensor]:
+        """Run the recurrent forward pass.
+
+        Parameters
+        ----------
+        input : Tensor
+            See the class docstring.
+        hx : Tensor
+            See the class docstring.
+
+        Returns
+        -------
+        Tensor or tuple of Tensor
+            Output and (optionally) the new hidden state; see the class docstring.
+        """
+        return self._run(type(self).__name__, input, hx)
+
 
 # ── LSTM ──────────────────────────────────────────────────────────────────────
 
@@ -652,7 +678,7 @@ class LSTM(Module):
     @override
     def forward(
         self,
-        x: Tensor | PackedSequence,
+        input: Tensor | PackedSequence,
         hx: tuple[Tensor, Tensor] | None = None,
     ) -> tuple[Tensor | PackedSequence, tuple[Tensor, Tensor]]:
         """Multi-layer × bidirectional forward.
@@ -670,7 +696,7 @@ class LSTM(Module):
         # A dense input is one segment: one engine call per layer and direction.
         layout, (h0_full, c0_full) = _sequence_major(
             "LSTM",
-            x,
+            input,
             self.batch_first,
             (("h0", h_in, rec_size), ("c0", c_in, self.hidden_size)),
             L * num_dirs,
@@ -856,12 +882,12 @@ class RNNCell(Module):
             init.uniform_(p, -stdv, stdv)
 
     @override
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:
+    def forward(self, input: Tensor, hx: Tensor | None = None) -> Tensor:
         """Run the recurrent forward pass.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             See the class docstring.
         hx : Tensor
             See the class docstring.
@@ -871,7 +897,9 @@ class RNNCell(Module):
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        unbatched, x, (h0,) = _cell_batch("RNNCell", x, (("hx", hx),), self.hidden_size)
+        unbatched, x, (h0,) = _cell_batch(
+            "RNNCell", input, (("hx", hx),), self.hidden_size
+        )
         w = (self.weight_ih, self.weight_hh, self.bias_ih, self.bias_hh)
         return _cell_unbatch(unbatched, _rnn_step(x, h0, w, self.nonlinearity))
 
@@ -1021,14 +1049,14 @@ class LSTMCell(Module):
     @override
     def forward(
         self,
-        x: Tensor,
+        input: Tensor,
         hx: tuple[Tensor, Tensor] | None = None,
     ) -> tuple[Tensor, Tensor]:
         """Run the recurrent forward pass.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             See the class docstring.
         hx : Tensor
             See the class docstring.
@@ -1040,7 +1068,7 @@ class LSTMCell(Module):
         """
         h_in, c_in = (None, None) if hx is None else hx
         unbatched, x, (h0, c0) = _cell_batch(
-            "LSTMCell", x, (("hx", h_in), ("cx", c_in)), self.hidden_size
+            "LSTMCell", input, (("hx", h_in), ("cx", c_in)), self.hidden_size
         )
         w = (self.weight_ih, self.weight_hh, self.bias_ih, self.bias_hh)
         h1, c1 = _lstm_cell_step(x, (h0, c0), w)
@@ -1191,12 +1219,12 @@ class GRUCell(Module):
             init.uniform_(p, -stdv, stdv)
 
     @override
-    def forward(self, x: Tensor, hx: Tensor | None = None) -> Tensor:
+    def forward(self, input: Tensor, hx: Tensor | None = None) -> Tensor:
         """Run the recurrent forward pass.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             See the class docstring.
         hx : Tensor
             See the class docstring.
@@ -1206,7 +1234,9 @@ class GRUCell(Module):
         Tensor or tuple of Tensor
             Output and (optionally) the new hidden state; see the class docstring.
         """
-        unbatched, x, (h0,) = _cell_batch("GRUCell", x, (("hx", hx),), self.hidden_size)
+        unbatched, x, (h0,) = _cell_batch(
+            "GRUCell", input, (("hx", hx),), self.hidden_size
+        )
         w = (self.weight_ih, self.weight_hh, self.bias_ih, self.bias_hh)
         return _cell_unbatch(unbatched, _gru_step(x, h0, w))
 
@@ -1355,32 +1385,6 @@ class GRU(_FlatRecurrent):
     @override
     def _step(self, x: Tensor, h: Tensor, w: _Weights) -> Tensor:
         return _gru_step(x, h, w)
-
-    def flatten_parameters(self) -> None:
-        """No-op for API compatibility (see :meth:`LSTM.flatten_parameters`)."""
-        return None
-
-    @override
-    def forward(
-        self,
-        x: Tensor | PackedSequence,
-        hx: Tensor | None = None,
-    ) -> tuple[Tensor | PackedSequence, Tensor]:
-        """Run the recurrent forward pass.
-
-        Parameters
-        ----------
-        x : Tensor
-            See the class docstring.
-        hx : Tensor
-            See the class docstring.
-
-        Returns
-        -------
-        Tensor or tuple of Tensor
-            Output and (optionally) the new hidden state; see the class docstring.
-        """
-        return self._run("GRU", x, hx)
 
     @override
     def extra_repr(self) -> str:
@@ -1543,32 +1547,6 @@ class RNN(_FlatRecurrent):
     @override
     def _step(self, x: Tensor, h: Tensor, w: _Weights) -> Tensor:
         return _rnn_step(x, h, w, self.nonlinearity)
-
-    def flatten_parameters(self) -> None:
-        """No-op for API compatibility (see :meth:`LSTM.flatten_parameters`)."""
-        return None
-
-    @override
-    def forward(
-        self,
-        x: Tensor | PackedSequence,
-        hx: Tensor | None = None,
-    ) -> tuple[Tensor | PackedSequence, Tensor]:
-        """Run the recurrent forward pass.
-
-        Parameters
-        ----------
-        x : Tensor
-            See the class docstring.
-        hx : Tensor
-            See the class docstring.
-
-        Returns
-        -------
-        Tensor or tuple of Tensor
-            Output and (optionally) the new hidden state; see the class docstring.
-        """
-        return self._run("RNN", x, hx)
 
     @override
     def extra_repr(self) -> str:

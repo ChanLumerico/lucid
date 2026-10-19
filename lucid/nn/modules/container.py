@@ -132,12 +132,12 @@ class Sequential(Module):
                 self.add_module(str(idx), module)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         """Apply the contained modules to the input.
 
         Parameters
         ----------
-        x : Tensor
+        input : Tensor
             Input tensor.
 
         Returns
@@ -147,8 +147,8 @@ class Sequential(Module):
         """
         for m in self._modules.values():
             assert m is not None
-            x = cast(Tensor, m(x))
-        return x
+            input = cast(Tensor, m(input))
+        return input
 
     def __getitem__(self, idx: int | slice) -> Module:
         """Return the child module(s) at the given index or slice."""

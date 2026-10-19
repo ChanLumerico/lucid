@@ -880,7 +880,7 @@ def test_lcd412_optim_autograd_and_amp_keywords_match_reference() -> None:
 
     x = lucid.tensor([2.0, 3.0], requires_grad=True)
     y = lucid.tensor([5.0], requires_grad=True)
-    (gx, gy) = lucid.autograd.grad(
+    gx, gy = lucid.autograd.grad(
         (x**2).sum(),
         (x, y),
         allow_unused=True,
@@ -898,7 +898,10 @@ def test_lcd412_optim_autograd_and_amp_keywords_match_reference() -> None:
     assert bg.tolist() == [[2.0, 0.0], [0.0, 3.0]]
 
     j = lucid.autograd.jacobian(
-        lambda t: t**2, lucid.tensor([2.0, 3.0]), strategy="forward-mode", vectorize=True
+        lambda t: t**2,
+        lucid.tensor([2.0, 3.0]),
+        strategy="forward-mode",
+        vectorize=True,
     )
     assert j.tolist() == [[4.0, 0.0], [0.0, 6.0]]
     h = lucid.autograd.hessian(
@@ -951,3 +954,40 @@ def test_lcd412_optim_autograd_and_amp_keywords_match_reference() -> None:
     radam.step()
     assert pr.tolist() == pytest.approx([1.71])
 
+
+def test_nn_module_forward_parameter_names_match_reference(ref: ModuleType) -> None:
+    import lucid.nn.quantized.dynamic as qdynamic
+
+    mismatches: list[str] = []
+    suites = [
+        ("nn", lucid.nn, ref.nn),
+        ("nn.quantized", lucid.nn.quantized, ref.ao.nn.quantized),
+        ("nn.quantized.dynamic", qdynamic, ref.ao.nn.quantized.dynamic),
+    ]
+    for label, mod, rmod in suites:
+        for name in getattr(mod, "__all__", ()):
+            cls = getattr(mod, name, None)
+            rcls = getattr(rmod, name, None)
+            if (
+                not isinstance(cls, type)
+                or not issubclass(cls, lucid.nn.Module)
+                or not isinstance(rcls, type)
+            ):
+                continue
+            if (
+                cls.forward is lucid.nn.Module.forward
+                or rcls.forward is ref.nn.Module.forward
+            ):
+                continue
+            lsig = _signature(cls.forward)
+            rsig = _signature(rcls.forward)
+            lp = [p for p in lsig.parameters.values() if p.name != "self"]
+            rp = [p for p in rsig.parameters.values() if p.name != "self"]
+            if any(p.kind is inspect.Parameter.VAR_POSITIONAL for p in lp + rp):
+                continue
+            k = min(len(lp), len(rp))
+            lnames = [p.name for p in lp[:k]]
+            rnames = [p.name for p in rp[:k]]
+            if lnames != rnames:
+                mismatches.append(f"{label}.{name}.forward: {lnames} != {rnames}")
+    assert not mismatches, "\n".join(mismatches)

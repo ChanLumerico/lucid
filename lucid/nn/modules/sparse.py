@@ -192,7 +192,7 @@ class Embedding(Module):
         init._fill_from_impl(self.weight, zeroed._impl)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         """Look up embeddings for the given indices.
 
         Parameters
@@ -206,7 +206,7 @@ class Embedding(Module):
             Tensor of embedding vectors of shape ``(*input.shape, embedding_dim)``.
         """
         return embedding(
-            x,
+            input,
             self.weight,
             self.padding_idx,
             self.max_norm,
@@ -381,7 +381,7 @@ class EmbeddingBag(Module):
     @override
     def forward(
         self,
-        x: Tensor,
+        input: Tensor,
         offsets: Tensor | None = None,
         per_sample_weights: Tensor | None = None,
     ) -> Tensor:
@@ -400,7 +400,7 @@ class EmbeddingBag(Module):
         from lucid.nn.functional.sampling import embedding_bag as _eb
 
         return _eb(
-            x,
+            input,
             self.weight,
             offsets,
             self.max_norm,
