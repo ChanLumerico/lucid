@@ -107,6 +107,7 @@ class autocast:
         device_type: str = "metal",
         dtype: dtype | None = None,
         enabled: bool = True,
+        cache_enabled: bool | None = None,
     ) -> None:
         """Configure the autocast context.
 
@@ -121,6 +122,9 @@ class autocast:
         enabled : bool, default=True
             When ``False`` autocast is disabled on ``device_type`` inside
             the scope (useful for ablation or nested full-precision blocks).
+        cache_enabled : bool or None, default=None
+            Whether weight-cast caching is enabled inside the autocast scope.
+            Defaults to ``True`` when ``None``.
 
         Raises
         ------
@@ -131,11 +135,17 @@ class autocast:
         self._device_type = device_type
         self._dtype = float16 if dtype is None else dtype
         self._enabled = enabled
+        self._cache_enabled = True if cache_enabled is None else bool(cache_enabled)
         # One stack of live engine guards per thread: the AMP state the
         # guards change is thread-local, so a guard must be released on the
         # thread that made it.  A stack (not a single slot) lets the same
         # object be entered again while it is already active.
         self._local = threading.local()
+
+    @property
+    def cache_enabled(self) -> bool:
+        """Whether weight-cast caching is enabled inside this autocast scope."""
+        return self._cache_enabled
 
     def _guards(self) -> list[_C_engine.AutocastGuard]:
         """Return this thread's stack of guards opened by this object."""

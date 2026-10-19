@@ -104,16 +104,27 @@ class SGD(Optimizer):
         dampening: float = 0,
         weight_decay: float = 0,
         nesterov: bool = False,
+        *,
+        maximize: bool = False,
+        foreach: bool | None = None,
+        differentiable: bool = False,
+        fused: bool | None = None,
     ) -> None:
         """Initialise the SGD.  See the class docstring for parameter semantics."""
-        defaults: dict[str, object] = dict(
-            lr=lr,
-            momentum=momentum,
-            dampening=dampening,
-            weight_decay=weight_decay,
-            nesterov=nesterov,
+        super().__init__(
+            params,
+            {
+                "lr": lr,
+                "momentum": momentum,
+                "dampening": dampening,
+                "weight_decay": weight_decay,
+                "nesterov": nesterov,
+                "maximize": maximize,
+                "foreach": foreach,
+                "differentiable": differentiable,
+                "fused": fused,
+            },
         )
-        super().__init__(params, defaults)
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
@@ -131,7 +142,4 @@ class SGD(Optimizer):
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single SGD step."""
-        loss: Tensor | None = closure() if closure is not None else None
-        for optim in self._engine_optims:
-            optim.step()
-        return loss
+        return self._step_engines(closure)

@@ -246,7 +246,7 @@
     "lucid/utils/transforms/_presets.py": 1
    },
    "file-loc-over-cap": {
-    "lucid/_C/backend/cpu/CpuBackend.h": 10420,
+    "lucid/_C/backend/cpu/CpuBackend.h": 10399,
     "lucid/_C/backend/gpu/GpuBackend.h": 4498,
     "lucid/_ops/composite/elementwise.py": 75,
     "lucid/_tensor/_dunders.py": 249,
@@ -269,7 +269,7 @@
     "lucid/nn/modules/normalization.py": 614,
     "lucid/nn/modules/pooling.py": 808,
     "lucid/nn/modules/rnn.py": 80,
-    "lucid/optim/lr_scheduler.py": 446,
+    "lucid/optim/lr_scheduler.py": 412,
     "lucid/special/__init__.py": 886,
     "lucid/utils/transforms/_color.py": 274
    },
@@ -813,9 +813,9 @@
     "lucid/nn/quantized/sparse.py": 3,
     "lucid/nn/utils/fusion.py": 1,
     "lucid/nn/utils/prune.py": 1,
-    "lucid/optim/adam.py": 13,
+    "lucid/optim/adam.py": 12,
     "lucid/optim/lbfgs.py": 2,
-    "lucid/optim/lr_scheduler.py": 27,
+    "lucid/optim/lr_scheduler.py": 26,
     "lucid/optim/others.py": 14,
     "lucid/optim/sgd.py": 2,
     "lucid/quantization/_functional.py": 1,
@@ -978,7 +978,7 @@
    "function-ccn-excess": {
     "lucid/_C/autograd/CustomFunction.cpp": 1,
     "lucid/_C/autograd/FusionPass.cpp": 4,
-    "lucid/_C/backend/cpu/CpuBackend.h": 267,
+    "lucid/_C/backend/cpu/CpuBackend.h": 266,
     "lucid/_C/backend/cpu/Pool.cpp": 4,
     "lucid/_C/backend/gpu/AxisIndex.h": 3,
     "lucid/_C/backend/gpu/GpuBackend.h": 14,
@@ -1026,7 +1026,7 @@
     "lucid/_C/nn/ConvNd.cpp": 3,
     "lucid/_C/nn/ConvTransposeNd.cpp": 3,
     "lucid/_C/nn/Embedding.cpp": 13,
-    "lucid/_C/nn/LSTM.cpp": 10,
+    "lucid/_C/nn/LSTM.cpp": 5,
     "lucid/_C/ops/bfunc/Inner.cpp": 1,
     "lucid/_C/ops/bfunc/Tensordot.cpp": 17,
     "lucid/_C/ops/composite/Indexing.cpp": 5,
@@ -1230,7 +1230,7 @@
    },
    "function-length-excess": {
     "lucid/_C/autograd/CustomFunction.cpp": 27,
-    "lucid/_C/backend/cpu/CpuBackend.h": 516,
+    "lucid/_C/backend/cpu/CpuBackend.h": 505,
     "lucid/_C/backend/gpu/GpuBackend.h": 370,
     "lucid/_C/bindings/bind.cpp": 57,
     "lucid/_C/bindings/bind_compile.cpp": 644,
@@ -1262,7 +1262,7 @@
     "lucid/_C/nn/ConvNd.cpp": 41,
     "lucid/_C/nn/ConvTransposeNd.cpp": 24,
     "lucid/_C/nn/Embedding.cpp": 16,
-    "lucid/_C/nn/LSTM.cpp": 62,
+    "lucid/_C/nn/LSTM.cpp": 53,
     "lucid/_C/nn/Spatial.cpp": 37,
     "lucid/_C/ops/bfunc/Tensordot.cpp": 62,
     "lucid/_C/ops/diffeq/RkErrorNorm.cpp": 1,
@@ -1280,7 +1280,7 @@
     "lucid/_tensor/_indexing.py": 130,
     "lucid/_tensor/_to.py": 313,
     "lucid/_tensor/tensor.py": 32,
-    "lucid/autograd/_backward.py": 89,
+    "lucid/autograd/_backward.py": 86,
     "lucid/autograd/checkpoint.py": 39,
     "lucid/autograd/gradcheck.py": 35,
     "lucid/benchmarks/bench_ops.py": 2,
@@ -1419,7 +1419,6 @@
     "lucid/__init__.py": 1,
     "lucid/_ops/composite/predicates.py": 3,
     "lucid/autograd/_backward.py": 1,
-    "lucid/autograd/_functional.py": 2,
     "lucid/autograd/function.py": 1,
     "lucid/compile/_entry/segmented_step.py": 1,
     "lucid/coreml/_emit.py": 40,
@@ -1974,7 +1973,6 @@
     "lucid/_ctx.py": 1,
     "lucid/_dtype.py": 1,
     "lucid/_tensor/tensor.py": 1,
-    "lucid/_types.py": 1,
     "lucid/autograd/_backward.py": 1,
     "lucid/coreml/_spec.py": 1,
     "lucid/models/generative/planet/_config.py": 1,
@@ -1982,7 +1980,6 @@
     "lucid/models/vision/efficientnet/_model.py": 1,
     "lucid/models/vision/mobilenet_v3/_model.py": 1,
     "lucid/nn/functional/loss.py": 1,
-    "lucid/nn/utils/clip_grad.py": 1,
     "lucid/profiler/__init__.py": 1
    }
   }

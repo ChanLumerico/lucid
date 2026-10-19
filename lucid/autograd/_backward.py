@@ -103,24 +103,7 @@ def _make_seeds(
     ShapeMismatch, DtypeMismatch, DeviceMismatch
         A seed does not fit its output.
     """
-    from lucid._tensor.tensor import Tensor
-
-    seeds: list[object]
-    if grads is None:
-        seeds = [None] * len(outputs)
-    elif isinstance(grads, Tensor):
-        seeds = [grads]
-    elif isinstance(grads, (list, tuple)):
-        seeds = list(grads)
-    else:
-        raise TypeError(
-            f"{where}(): gradients must be a Tensor, a sequence of Tensors "
-            f"or None, got {type(grads).__name__}"
-        )
-    if len(seeds) != len(outputs):
-        raise RuntimeError(
-            f"{where}(): got {len(outputs)} tensors and {len(seeds)} gradients"
-        )
+    seeds = _raw_grad_list(where, outputs, grads)
     return [
         _check_seed(where, i, out, seed)
         for i, (out, seed) in enumerate(zip(outputs, seeds, strict=True))
@@ -371,6 +354,132 @@ def _backward_into(
                 current.add_(g)
 
 
+def _raw_grad_list(
+    where: str,
+    outs: Sequence[Tensor],
+    grads: Tensor | Sequence[Tensor | None] | None,
+) -> list[object]:
+    """Normalize ``grads`` into a list matching ``len(outs)``."""
+    from lucid._tensor.tensor import Tensor
+
+    if grads is None:
+        raw: list[object] = [None] * len(outs)
+    elif isinstance(grads, Tensor):
+        raw = [grads]
+    elif isinstance(grads, (list, tuple)):
+        raw = list(grads)
+    else:
+        raise TypeError(
+            f"{where}(): gradients must be a Tensor, a sequence of Tensors "
+            f"or None, got {type(grads).__name__}"
+        )
+    if len(raw) != len(outs):
+        raise RuntimeError(
+            f"{where}(): got {len(outs)} tensors and {len(raw)} gradients"
+        )
+    return raw
+
+
+def _check_batched_seeds(
+    outs: list[Tensor],
+    grad_outputs: Tensor | Sequence[Tensor | None] | None,
+) -> tuple[list[Tensor], int]:
+    """Validate batched ``grad_outputs`` and return ``(batched_seeds, batch_size)``."""
+    from lucid._tensor.tensor import Tensor
+
+    raw = _raw_grad_list("grad", outs, grad_outputs)
+    batched_seeds: list[Tensor] = []
+    batch_size: int | None = None
+    for i, (out, s) in enumerate(zip(outs, raw, strict=True)):
+        if not isinstance(s, Tensor) or s.ndim == 0:
+            raise ValueError(
+                "grad(): expected each grad_output to be a batched Tensor with "
+                "at least 1 dimension when is_grads_batched=True"
+            )
+        if tuple(s.shape[1:]) != tuple(out.shape):
+            raise RuntimeError(
+                "If `is_grads_batched=True`, we interpret the first dimension of "
+                "each grad_output as the batch dimension. The sizes of the "
+                "remaining dimensions are expected to match the shape of "
+                f"corresponding output, but a mismatch was detected: grad_output[{i}] "
+                f"has a shape of {tuple(s.shape[1:])} and output[{i}] has a shape of "
+                f"{tuple(out.shape)}."
+            )
+        b = int(s.shape[0])
+        if batch_size is not None and b != batch_size:
+            raise RuntimeError(
+                "grad(): all batched grad_outputs must share the same batch size "
+                f"in dimension 0, got {batch_size} and {b}"
+            )
+        batch_size = b
+        batched_seeds.append(s)
+    assert batch_size is not None
+    return batched_seeds, batch_size
+
+
+def _batched_grad(
+    outs: list[Tensor],
+    ins: list[Tensor],
+    grad_outputs: Tensor | Sequence[Tensor | None] | None,
+    retain_graph: bool,
+    create_graph: bool,
+) -> tuple[list[Tensor | None], int]:
+    """Run one engine grad pass per batch element when ``is_grads_batched=True``."""
+    import lucid as _lucid
+
+    batched_seeds, batch_size = _check_batched_seeds(outs, grad_outputs)
+    rows: list[list[Tensor | None]] = []
+    for b in range(batch_size):
+        slice_seeds = _make_seeds("grad", outs, [s[b] for s in batched_seeds])
+        partials = _C_engine.engine_grad(
+            [_unwrap(out) for out in outs],
+            [_unwrap(inp) for inp in ins],
+            _engine_seeds(slice_seeds, keep_seed_graph=create_graph),
+            retain_graph if b == batch_size - 1 else True,
+            create_graph,
+        )
+        rows.append([None if impl is None else _wrap(impl) for impl in partials])
+
+    totals: list[Tensor | None] = []
+    for j in range(len(ins)):
+        col = [g for row in rows if (g := row[j]) is not None]
+        totals.append(
+            _lucid.stack(col, dim=0) if len(col) == batch_size else None
+        )
+    return totals, batch_size
+
+
+def _finalize_grads(
+    totals: list[Tensor | None],
+    ins: list[Tensor],
+    allow_unused: bool,
+    materialize_grads: bool,
+    batch_size: int | None,
+) -> tuple[Tensor | None, ...]:
+    """Check unused inputs and optionally materialize zero gradients."""
+    if not allow_unused and any(g is None for g in totals):
+        raise RuntimeError(
+            "One of the differentiated tensors does not require grad "
+            "and is not reachable from outputs. "
+            "Set allow_unused=True to suppress this error."
+        )
+    if not materialize_grads:
+        return tuple(totals)
+    import lucid as _lucid
+
+    if batch_size is not None:
+        return tuple(
+            _lucid.zeros((batch_size, *inp.shape), dtype=inp.dtype, device=inp.device)
+            if g is None
+            else g
+            for g, inp in zip(totals, ins, strict=True)
+        )
+    return tuple(
+        _lucid.zeros_like(inp) if g is None else g
+        for g, inp in zip(totals, ins, strict=True)
+    )
+
+
 def grad(
     outputs: Tensor | Sequence[Tensor],
     inputs: Tensor | Sequence[Tensor],
@@ -379,6 +488,8 @@ def grad(
     create_graph: bool = False,
     only_inputs: bool = True,
     allow_unused: bool | None = None,
+    is_grads_batched: bool = False,
+    materialize_grads: bool = False,
 ) -> tuple[Tensor | None, ...]:
     r"""Compute gradients of outputs w.r.t. inputs, returning them as a tuple.
 
@@ -416,14 +527,24 @@ def grad(
         always restricted to the requested ``inputs``.
     allow_unused : bool, optional
         If ``True``, return ``None`` for any ``inputs`` entry that lies
-        outside the computation graph of ``outputs``.  Otherwise raise.
+        outside the computation graph of ``outputs``.  Defaults to
+        ``materialize_grads``.
+    is_grads_batched : bool, optional
+        If ``True``, interpret the leading dimension of each tensor in
+        ``grad_outputs`` as a batch dimension and compute a batch of
+        vector-Jacobian products.  Defaults to ``False``.
+    materialize_grads : bool, optional
+        If ``True``, replace ``None`` gradients for unused inputs with
+        zero-filled tensors matching each input's shape, dtype, and device.
+        Defaults to ``False``.
 
     Returns
     -------
     tuple[Tensor or None, ...]
         One gradient per element of ``inputs``, in the same order.
-        Entries are ``None`` only when ``allow_unused=True`` and the
-        input is disconnected from ``outputs``.
+        Entries are ``None`` only when ``allow_unused=True`` (and
+        ``materialize_grads=False``) and the input is disconnected from
+        ``outputs``.
 
     Raises
     ------
@@ -431,6 +552,8 @@ def grad(
         The number of ``grad_outputs`` differs from the number of
         outputs, a non-scalar output has no seed, or (without
         ``allow_unused``) an input is unreachable from ``outputs``.
+    ValueError
+        If ``allow_unused=False`` and ``materialize_grads=True``.
     TypeError
         A seed is neither a tensor nor ``None``.
     ShapeMismatch, DtypeMismatch, DeviceMismatch
@@ -478,34 +601,38 @@ def grad(
     >>> gg
     tensor([6., 12., 18.])
     """
-    outs = _as_tensors(outputs)
-    ins = _as_tensors(inputs)
-    seeds = _make_seeds("grad", outs, grad_outputs)
-
+    if allow_unused is False and materialize_grads:
+        raise ValueError(
+            "Expected allow_unused to be True or not passed when "
+            "materialize_grads=True, but got: allow_unused=False."
+        )
+    _allow = bool(materialize_grads) if allow_unused is None else bool(allow_unused)
+    outs, ins = _as_tensors(outputs), _as_tensors(inputs)
     _retain = retain_graph if retain_graph is not None else create_graph
-
-    # One engine pass from every output, which sums their contributions.  The
-    # engine returns the gradients rather than accumulating them, so no
-    # tensor's ``.grad`` is read or written — not the requested inputs', and
-    # not any other leaf's.  Under ``create_graph`` a seed stays attached:
-    # the returned gradient is ``J^T seed``, and a seed computed from
-    # something upstream (the double-backward form of a JVP, a learned
-    # weighting) must be differentiable through it.
     _refuse_trace()
+    if is_grads_batched:
+        totals, bsz = _batched_grad(outs, ins, grad_outputs, _retain, create_graph)
+        return _finalize_grads(totals, ins, _allow, materialize_grads, bsz)
+    totals = _single_grad(outs, ins, grad_outputs, _retain, create_graph)
+    return _finalize_grads(totals, ins, _allow, materialize_grads, None)
+
+
+def _single_grad(
+    outs: list[Tensor],
+    ins: list[Tensor],
+    grad_outputs: Tensor | Sequence[Tensor | None] | None,
+    retain_graph: bool,
+    create_graph: bool,
+) -> list[Tensor | None]:
+    """Run one unbatched engine grad pass."""
+    seeds = _make_seeds("grad", outs, grad_outputs)
     partials = _C_engine.engine_grad(
         [_unwrap(out) for out in outs],
         [_unwrap(inp) for inp in ins],
         _engine_seeds(seeds, keep_seed_graph=create_graph),
-        _retain,
+        retain_graph,
         create_graph,
     )
-    totals = [None if impl is None else _wrap(impl) for impl in partials]
+    return [None if impl is None else _wrap(impl) for impl in partials]
 
-    if not allow_unused and any(g is None for g in totals):
-        raise RuntimeError(
-            "One of the differentiated tensors does not require grad "
-            "and is not reachable from outputs. "
-            "Set allow_unused=True to suppress this error."
-        )
 
-    return tuple(totals)

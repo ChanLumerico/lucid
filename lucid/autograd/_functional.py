@@ -278,12 +278,35 @@ def _refuse_independent_rows(
             )
 
 
+def _check_jacobian_strategy(strategy: str, strict: bool, vectorize: bool) -> None:
+    """Validate the ``strategy`` / ``outer_jacobian_strategy`` argument."""
+    if strategy not in ("forward-mode", "reverse-mode"):
+        raise AssertionError(
+            'Expected strategy to be either "forward-mode" or "reverse-mode". '
+            "Hint: If your function has more outputs than inputs, "
+            '"forward-mode" tends to be more performant. Otherwise, '
+            'prefer to use "reverse-mode".'
+        )
+    if strategy == "forward-mode":
+        if strict:
+            raise NotImplementedError(
+                "Computing Jacobian using forward-AD or forward-over-reverse "
+                "Hessian is not supported together with `strict=True`."
+            )
+        if not vectorize:
+            raise NotImplementedError(
+                "Computing Jacobian using forward-AD or forward-over-reverse "
+                "Hessian isonly implemented for `vectorize=True`."
+            )
+
+
 def jacobian(
     func: Callable[..., Tensor | tuple[Tensor, ...]],
     inputs: Tensor | tuple[Tensor, ...],
     create_graph: bool = False,
     strict: bool = False,
     vectorize: bool = False,
+    strategy: str = "reverse-mode",
 ) -> Tensor | tuple[Tensor | tuple[Tensor, ...], ...]:
     r"""Compute the Jacobian matrix of ``func`` with respect to each input.
 
@@ -322,8 +345,11 @@ def jacobian(
         block of zeros — and, under ``create_graph``, a block that is a
         constant.  Defaults to ``False``.
     vectorize : bool, optional
-        Reserved for a future vmap-based implementation. Currently
-        unused.
+        Reserved for a future vmap-based implementation. Defaults to
+        ``False``.
+    strategy : str, default='reverse-mode'
+        Differentiation strategy (``'reverse-mode'`` or ``'forward-mode'``).
+        ``'forward-mode'`` requires ``vectorize=True`` and ``strict=False``.
 
     Returns
     -------
@@ -352,6 +378,7 @@ def jacobian(
     >>> jacobian(f, x)
     tensor([[2., 0., 0.], [0., 4., 0.], [0., 0., 6.]])
     """
+    _check_jacobian_strategy(strategy, strict, vectorize)
     inputs_t, one_input = _as_tuple(inputs, "inputs", "jacobian")
     _require_differentiable(inputs_t, "jacobian")
     xs = _differentiable_inputs(inputs_t, create_graph)
@@ -384,6 +411,7 @@ def hessian(
     create_graph: bool = False,
     strict: bool = False,
     vectorize: bool = False,
+    outer_jacobian_strategy: str = "reverse-mode",
 ) -> Tensor | tuple[tuple[Tensor, ...], ...]:
     r"""Compute the Hessian matrix of a scalar-valued ``func``.
 
@@ -419,8 +447,12 @@ def hessian(
         input the gradient does not depend on, instead of filling them
         with zeros.  Defaults to ``False``.
     vectorize : bool, optional
-        Reserved for a future vmap-based implementation. Currently
-        unused.
+        Reserved for a future vmap-based implementation. Defaults to
+        ``False``.
+    outer_jacobian_strategy : str, default='reverse-mode'
+        Strategy for computing the outer Jacobian (``'reverse-mode'`` or
+        ``'forward-mode'``).  ``'forward-mode'`` requires ``vectorize=True``
+        and ``strict=False``.
 
     Returns
     -------
@@ -454,6 +486,7 @@ def hessian(
     >>> hessian(f, x).tolist()
     [[6.0, 0.0], [0.0, 12.0]]
     """
+    _check_jacobian_strategy(outer_jacobian_strategy, strict, vectorize)
     inputs_t, one_input = _as_tuple(inputs, "inputs", "hessian")
     _require_differentiable(inputs_t, "hessian")
     xs = _differentiable_inputs(inputs_t, create_graph)

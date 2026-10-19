@@ -502,7 +502,6 @@ _NAMESPACES: list[tuple[str, list[str], str, str | None]] = [
     ),
 ]
 
-_LCD_412 = "LCD-412: the reference's argument is not implemented"
 _LCD_430 = "LCD-430: nn.functional / nn module signatures follow in a follow-up"
 _LCD_431 = "LCD-431: linalg / fft / special signatures follow in a follow-up"
 _EXPORT = "export-owned (lucid.compile / lucid.serialization), filed from LCD-410"
@@ -510,10 +509,6 @@ _EXPORT = "export-owned (lucid.compile / lucid.serialization), filed from LCD-41
 #: Signatures that still differ from the reference — strict, so a fix flips
 #: its case to XPASS and the entry leaves with it.
 _SIGNATURE_GAPS: dict[str, str] = {
-    "amp.autocast.__init__": _LCD_412,
-    "autograd.functional.hessian": _LCD_412,
-    "autograd.functional.jacobian": _LCD_412,
-    "autograd.grad": _LCD_412,
     "linalg.cholesky": _LCD_431,
     "linalg.cholesky_ex": _LCD_431,
     "linalg.cond": _LCD_431,
@@ -646,19 +641,6 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "nn.functional.threshold_": _LCD_430,
     "nn.functional.triplet_margin_with_distance_loss": _LCD_430,
     "nn.functional.unfold": _LCD_430,
-    "optim.ASGD.__init__": _LCD_412,
-    "optim.Adadelta.__init__": _LCD_412,
-    "optim.Adagrad.__init__": _LCD_412,
-    "optim.Adam.__init__": _LCD_412,
-    "optim.AdamW.__init__": _LCD_412,
-    "optim.Adamax.__init__": _LCD_412,
-    "optim.NAdam.__init__": _LCD_412,
-    "optim.RAdam.__init__": _LCD_412,
-    "optim.RMSprop.__init__": _LCD_412,
-    "optim.Rprop.__init__": _LCD_412,
-    "optim.SGD.__init__": _LCD_412,
-    "optim.lr_scheduler.CyclicLR.__init__": _LCD_412,
-    "optim.lr_scheduler.OneCycleLR.__init__": _LCD_412,
     "special.bessel_j0": _LCD_431,
     "special.bessel_j1": _LCD_431,
     "special.bessel_y0": _LCD_431,
@@ -990,3 +972,82 @@ def test_lcd412_ops_and_tensor_keywords_match_reference(
     )
     dl = lucid.from_dlpack(lucid.tensor([1.0, 2.0]), device=device, copy=True)
     assert dl.device.type == device and dl.tolist() == [1.0, 2.0]
+
+
+def test_lcd412_optim_autograd_and_amp_keywords_match_reference() -> None:
+    ctx = lucid.amp.autocast("cpu", dtype=lucid.bfloat16, cache_enabled=False)
+    assert ctx.cache_enabled is False
+
+    x = lucid.tensor([2.0, 3.0], requires_grad=True)
+    y = lucid.tensor([5.0], requires_grad=True)
+    (gx, gy) = lucid.autograd.grad(
+        (x**2).sum(),
+        (x, y),
+        allow_unused=True,
+        materialize_grads=True,
+    )
+    assert gx.tolist() == [4.0, 6.0] and gy.tolist() == [0.0]
+
+    v = lucid.tensor([[1.0, 0.0], [0.0, 1.0]])
+    (bg,) = lucid.autograd.grad(
+        x * lucid.tensor([2.0, 3.0]),
+        x,
+        grad_outputs=v,
+        is_grads_batched=True,
+    )
+    assert bg.tolist() == [[2.0, 0.0], [0.0, 3.0]]
+
+    j = lucid.autograd.jacobian(
+        lambda t: t**2, lucid.tensor([2.0, 3.0]), strategy="forward-mode", vectorize=True
+    )
+    assert j.tolist() == [[4.0, 0.0], [0.0, 6.0]]
+    h = lucid.autograd.hessian(
+        lambda t: (t**3).sum(),
+        lucid.tensor([1.0, 2.0]),
+        outer_jacobian_strategy="reverse-mode",
+    )
+    assert h.tolist() == [[6.0, 0.0], [0.0, 12.0]]
+
+    p = lucid.nn.Parameter(lucid.tensor([1.0, -2.0]))
+    opt = lucid.optim.SGD([p], lr=0.1, momentum=0.8, maximize=True)
+    p.grad = lucid.tensor([0.5, -1.0])
+    opt.step()
+    assert p.tolist() == pytest.approx([1.05, -2.1])
+
+    cyc = lucid.optim.lr_scheduler.CyclicLR(
+        opt,
+        base_lr=0.01,
+        max_lr=0.1,
+        step_size_up=2,
+        step_size_down=4,
+        cycle_momentum=True,
+        base_momentum=0.7,
+        max_momentum=0.9,
+    )
+    cyc.step()
+    assert opt.param_groups[0]["lr"] == pytest.approx(0.055)
+    assert opt.param_groups[0]["momentum"] == pytest.approx(0.8)
+
+    one = lucid.optim.lr_scheduler.OneCycleLR(
+        opt,
+        max_lr=0.1,
+        epochs=2,
+        steps_per_epoch=5,
+        three_phase=True,
+        cycle_momentum=True,
+    )
+    one.step()
+    assert 0.004 < opt.param_groups[0]["lr"] < 0.1
+
+    pr = lucid.nn.Parameter(lucid.tensor([2.0]))
+    radam = lucid.optim.RAdam(
+        [pr], lr=0.1, weight_decay=0.5, decoupled_weight_decay=True
+    )
+    pr.grad = lucid.tensor([0.0])
+    radam.step()
+    assert pr.tolist() == pytest.approx([1.9])
+    radam.param_groups[0]["lr"] = 0.2
+    pr.grad = lucid.tensor([0.0])
+    radam.step()
+    assert pr.tolist() == pytest.approx([1.71])
+

@@ -87,23 +87,32 @@ class Adam(Optimizer):
         eps: float = 1e-8,
         weight_decay: float = 0,
         amsgrad: bool = False,
+        *,
+        foreach: bool | None = None,
+        maximize: bool = False,
+        capturable: bool = False,
+        differentiable: bool = False,
+        fused: bool | None = None,
+        decoupled_weight_decay: bool = False,
     ) -> None:
         """Initialise the Adam.  See the class docstring for parameter semantics."""
-        b1, b2 = betas
-        defaults: dict[str, object] = dict(
-            lr=lr,
-            betas=(b1, b2),
-            beta1=b1,
-            beta2=b2,
-            eps=eps,
-            weight_decay=weight_decay,
+        self._init_adam_family(
+            params,
+            (lr, betas, eps, weight_decay),
+            (foreach, maximize, capturable, differentiable),
             amsgrad=amsgrad,
+            fused=fused,
+            decoupled_weight_decay=decoupled_weight_decay,
         )
-        super().__init__(params, defaults)
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
-        self._engines.append(self._build_engine(_C_engine.Adam, group))
+        cls = (
+            _C_engine.AdamW
+            if group.get("decoupled_weight_decay", False)
+            else _C_engine.Adam
+        )
+        self._engines.append(self._build_engine(cls, group))
 
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
@@ -137,10 +146,7 @@ class Adam(Optimizer):
         >>> loss.backward()
         >>> optimizer.step()
         """
-        loss: Tensor | None = closure() if closure is not None else None
-        for optim in self._engine_optims:
-            optim.step()
-        return loss
+        return self._step_engines(closure)
 
 
 class AdamW(Optimizer):
@@ -226,19 +232,21 @@ class AdamW(Optimizer):
         eps: float = 1e-8,
         weight_decay: float = 1e-2,
         amsgrad: bool = False,
+        *,
+        maximize: bool = False,
+        foreach: bool | None = None,
+        capturable: bool = False,
+        differentiable: bool = False,
+        fused: bool | None = None,
     ) -> None:
         """Initialise the AdamW.  See the class docstring for parameter semantics."""
-        b1, b2 = betas
-        defaults: dict[str, object] = dict(
-            lr=lr,
-            betas=(b1, b2),
-            beta1=b1,
-            beta2=b2,
-            eps=eps,
-            weight_decay=weight_decay,
+        self._init_adam_family(
+            params,
+            (lr, betas, eps, weight_decay),
+            (foreach, maximize, capturable, differentiable),
             amsgrad=amsgrad,
+            fused=fused,
         )
-        super().__init__(params, defaults)
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
@@ -277,7 +285,4 @@ class AdamW(Optimizer):
         >>> loss.backward()
         >>> optimizer.step()
         """
-        loss: Tensor | None = closure() if closure is not None else None
-        for optim in self._engine_optims:
-            optim.step()
-        return loss
+        return self._step_engines(closure)

@@ -17,7 +17,6 @@ from lucid.optim.optimizer import (
     Optimizer,
     _follow,
     _from_host,
-    _group_float,
     _group_params,
     _host_copy,
 )
@@ -112,6 +111,10 @@ class RMSprop(Optimizer):
         weight_decay: float = 0,
         momentum: float = 0,
         centered: bool = False,
+        capturable: bool = False,
+        foreach: bool | None = None,
+        maximize: bool = False,
+        differentiable: bool = False,
     ) -> None:
         """Initialise the RMSprop.  See the class docstring for parameter semantics."""
         defaults: dict[str, object] = dict(
@@ -121,6 +124,10 @@ class RMSprop(Optimizer):
             weight_decay=weight_decay,
             momentum=momentum,
             centered=centered,
+            capturable=capturable,
+            foreach=foreach,
+            maximize=maximize,
+            differentiable=differentiable,
         )
         super().__init__(params, defaults)
 
@@ -131,10 +138,7 @@ class RMSprop(Optimizer):
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single RMSprop step."""
-        loss: Tensor | None = closure() if closure is not None else None
-        for optim in self._engine_optims:
-            optim.step()
-        return loss
+        return self._step_engines(closure)
 
 
 class Adagrad(Optimizer):
@@ -225,6 +229,11 @@ class Adagrad(Optimizer):
         weight_decay: float = 0,
         initial_accumulator_value: float = 0,
         eps: float = 1e-10,
+        foreach: bool | None = None,
+        *,
+        maximize: bool = False,
+        differentiable: bool = False,
+        fused: bool | None = None,
     ) -> None:
         """Initialise the Adagrad.  See the class docstring for parameter semantics."""
         defaults: dict[str, object] = dict(
@@ -233,6 +242,10 @@ class Adagrad(Optimizer):
             weight_decay=weight_decay,
             initial_accumulator_value=initial_accumulator_value,
             eps=eps,
+            foreach=foreach,
+            maximize=maximize,
+            differentiable=differentiable,
+            fused=fused,
         )
         super().__init__(params, defaults)
 
@@ -243,10 +256,7 @@ class Adagrad(Optimizer):
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Adagrad step."""
-        loss: Tensor | None = closure() if closure is not None else None
-        for optim in self._engine_optims:
-            optim.step()
-        return loss
+        return self._step_engines(closure)
 
 
 class Adadelta(Optimizer):
@@ -323,10 +333,22 @@ class Adadelta(Optimizer):
         rho: float = 0.9,
         eps: float = 1e-6,
         weight_decay: float = 0,
+        foreach: bool | None = None,
+        *,
+        capturable: bool = False,
+        maximize: bool = False,
+        differentiable: bool = False,
     ) -> None:
         """Initialise the Adadelta.  See the class docstring for parameter semantics."""
         defaults: dict[str, object] = dict(
-            lr=lr, rho=rho, eps=eps, weight_decay=weight_decay
+            lr=lr,
+            rho=rho,
+            eps=eps,
+            weight_decay=weight_decay,
+            foreach=foreach,
+            capturable=capturable,
+            maximize=maximize,
+            differentiable=differentiable,
         )
         super().__init__(params, defaults)
 
@@ -337,10 +359,7 @@ class Adadelta(Optimizer):
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Adadelta step."""
-        loss: Tensor | None = closure() if closure is not None else None
-        for optim in self._engine_optims:
-            optim.step()
-        return loss
+        return self._step_engines(closure)
 
 
 class Adamax(Optimizer):
@@ -416,18 +435,18 @@ class Adamax(Optimizer):
         betas: tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-8,
         weight_decay: float = 0,
+        foreach: bool | None = None,
+        *,
+        maximize: bool = False,
+        differentiable: bool = False,
+        capturable: bool = False,
     ) -> None:
         """Initialise the Adamax.  See the class docstring for parameter semantics."""
-        b1, b2 = betas
-        defaults: dict[str, object] = dict(
-            lr=lr,
-            betas=(b1, b2),
-            beta1=b1,
-            beta2=b2,
-            eps=eps,
-            weight_decay=weight_decay,
+        self._init_adam_family(
+            params,
+            (lr, betas, eps, weight_decay),
+            (foreach, maximize, capturable, differentiable),
         )
-        super().__init__(params, defaults)
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
@@ -436,10 +455,7 @@ class Adamax(Optimizer):
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Adamax step."""
-        loss: Tensor | None = closure() if closure is not None else None
-        for optim in self._engine_optims:
-            optim.step()
-        return loss
+        return self._step_engines(closure)
 
 
 class RAdam(Optimizer):
@@ -523,6 +539,7 @@ class RAdam(Optimizer):
     _HYPERPARAMS = ("lr", "beta1", "beta2", "eps", "weight_decay")
     _PAIR_KEYS = {"betas": ("beta1", "beta2")}
     _ENGINE_RULES = _C_engine.RAdam
+    _PYTHON_DECOUPLED_WD = True
 
     def __init__(
         self,
@@ -531,18 +548,20 @@ class RAdam(Optimizer):
         betas: tuple[float, float] = (0.9, 0.999),
         eps: float = 1e-8,
         weight_decay: float = 0,
+        decoupled_weight_decay: bool = False,
+        *,
+        foreach: bool | None = None,
+        maximize: bool = False,
+        capturable: bool = False,
+        differentiable: bool = False,
     ) -> None:
         """Initialise the RAdam.  See the class docstring for parameter semantics."""
-        b1, b2 = betas
-        defaults: dict[str, object] = dict(
-            lr=lr,
-            betas=(b1, b2),
-            beta1=b1,
-            beta2=b2,
-            eps=eps,
-            weight_decay=weight_decay,
+        self._init_adam_family(
+            params,
+            (lr, betas, eps, weight_decay),
+            (foreach, maximize, capturable, differentiable),
+            decoupled_weight_decay=decoupled_weight_decay,
         )
-        super().__init__(params, defaults)
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
@@ -551,10 +570,7 @@ class RAdam(Optimizer):
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single RAdam step."""
-        loss: Tensor | None = closure() if closure is not None else None
-        for optim in self._engine_optims:
-            optim.step()
-        return loss
+        return self._step_engines(closure)
 
 
 class NAdam(Optimizer):
@@ -634,6 +650,7 @@ class NAdam(Optimizer):
     )
     _PAIR_KEYS = {"betas": ("beta1", "beta2")}
     _ENGINE_RULES = _C_engine.NAdam
+    _PYTHON_DECOUPLED_WD = True
 
     def __init__(
         self,
@@ -644,20 +661,20 @@ class NAdam(Optimizer):
         weight_decay: float = 0,
         momentum_decay: float = 4e-3,
         decoupled_weight_decay: bool = False,
+        *,
+        foreach: bool | None = None,
+        maximize: bool = False,
+        capturable: bool = False,
+        differentiable: bool = False,
     ) -> None:
         """Initialise the NAdam.  See the class docstring for parameter semantics."""
-        b1, b2 = betas
-        defaults: dict[str, object] = dict(
-            lr=lr,
-            betas=(b1, b2),
-            beta1=b1,
-            beta2=b2,
-            eps=eps,
-            weight_decay=weight_decay,
+        self._init_adam_family(
+            params,
+            (lr, betas, eps, weight_decay),
+            (foreach, maximize, capturable, differentiable),
             momentum_decay=momentum_decay,
             decoupled_weight_decay=decoupled_weight_decay,
         )
-        super().__init__(params, defaults)
 
     @override
     @classmethod
@@ -722,20 +739,7 @@ class NAdam(Optimizer):
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single NAdam step."""
-        loss: Tensor | None = closure() if closure is not None else None
-        optims = self._engine_optims
-        for group, optim in zip(self.param_groups, optims, strict=True):
-            if group.get("decoupled_weight_decay", False):
-                wd = _group_float(group, "weight_decay")
-                if wd != 0.0:
-                    lr = _group_float(group, "lr")
-                    factor = 1.0 - lr * wd
-                    with lucid.no_grad():
-                        for p in _group_params(group):
-                            if p.grad is not None and p.grad.numel() > 0:
-                                p._impl.copy_from((p * factor)._impl)
-            optim.step()
-        return loss
+        return self._step_engines(closure)
 
 
 class ASGD(Optimizer):
@@ -832,10 +836,22 @@ class ASGD(Optimizer):
         alpha: float = 0.75,
         t0: float = 1e6,
         weight_decay: float = 0,
+        foreach: bool | None = None,
+        maximize: bool = False,
+        differentiable: bool = False,
+        capturable: bool = False,
     ) -> None:
         """Initialise the ASGD.  See the class docstring for parameter semantics."""
         defaults: dict[str, object] = dict(
-            lr=lr, lambd=lambd, alpha=alpha, t0=t0, weight_decay=weight_decay
+            lr=lr,
+            lambd=lambd,
+            alpha=alpha,
+            t0=t0,
+            weight_decay=weight_decay,
+            foreach=foreach,
+            maximize=maximize,
+            differentiable=differentiable,
+            capturable=capturable,
         )
         super().__init__(params, defaults)
 
@@ -846,10 +862,7 @@ class ASGD(Optimizer):
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single ASGD step."""
-        loss: Tensor | None = closure() if closure is not None else None
-        for optim in self._engine_optims:
-            optim.step()
-        return loss
+        return self._step_engines(closure)
 
 
 class Rprop(Optimizer):
@@ -933,20 +946,25 @@ class Rprop(Optimizer):
         lr: float = 1e-2,
         etas: tuple[float, float] = (0.5, 1.2),
         step_sizes: tuple[float, float] = (1e-6, 50),
+        *,
+        capturable: bool = False,
+        foreach: bool | None = None,
+        maximize: bool = False,
+        differentiable: bool = False,
     ) -> None:
         """Initialise the Rprop.  See the class docstring for parameter semantics."""
-        eta_minus, eta_plus = float(etas[0]), float(etas[1])
-        step_min, step_max = float(step_sizes[0]), float(step_sizes[1])
-        defaults: dict[str, object] = dict(
-            lr=lr,
-            etas=(eta_minus, eta_plus),
-            eta_minus=eta_minus,
-            eta_plus=eta_plus,
-            step_sizes=(step_min, step_max),
-            step_min=step_min,
-            step_max=step_max,
+        super().__init__(
+            params,
+            {
+                "lr": lr,
+                "etas": (float(etas[0]), float(etas[1])),
+                "step_sizes": (float(step_sizes[0]), float(step_sizes[1])),
+                "capturable": capturable,
+                "foreach": foreach,
+                "maximize": maximize,
+                "differentiable": differentiable,
+            },
         )
-        super().__init__(params, defaults)
 
     @override
     def _append_engine_optim(self, group: dict[str, object]) -> None:
@@ -955,10 +973,7 @@ class Rprop(Optimizer):
     @override
     def step(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Perform a single Rprop step."""
-        loss: Tensor | None = closure() if closure is not None else None
-        for optim in self._engine_optims:
-            optim.step()
-        return loss
+        return self._step_engines(closure)
 
 
 def _moment_like(src: _C_engine.TensorImpl, param: Parameter) -> Tensor | None:

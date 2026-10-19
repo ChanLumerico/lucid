@@ -1081,6 +1081,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `can_cast` allows narrowing within a category (`float64 → float32`). Ordering comparisons on complex tensors raise NotImplementedError. `diff`, `sort`, `linalg.cross` and `nanquantile` raise IndexError for an out-of-range dim (LCD-343, LCD-424).
   - `F.softmax`, `F.log_softmax` and `F.softmin` rename their first parameter from `x` to `input`, take `(input, dim=None, _stacklevel=3, dtype=None)`, and emit a `UserWarning` when `dim=None` (choosing axis 0 for 0/1/3-D inputs and axis 1 otherwise, as the reference does; LCD-510).
   - `lucid.kthvalue` and `Tensor.kthvalue` now return a `(values, indices)` named tuple (matching `median`, `nanmedian`, `mode`, `topk` and the reference) instead of values alone (LCD-379).
+  - `optim.lr_scheduler.CyclicLR` and `OneCycleLR` match the reference positional order and drop the removed `verbose` parameter (`CyclicLR` adds `step_size_down`, `scale_fn`, `scale_mode`, `cycle_momentum`, `base_momentum`, `max_momentum`; `OneCycleLR` makes `total_steps` optional alongside `epochs`/`steps_per_epoch` and adds `cycle_momentum`, `base_momentum`, `max_momentum`, `three_phase`; LCD-412).
   - Same input, different numbers:
     - maximum/minimum gradients at ties are split (LCD-436), and clamp/fmax/fmin gradients follow the reference at the bound and at NaN (LCD-441);
     - complex `vdot` conjugates its first argument (LCD-207);

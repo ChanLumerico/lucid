@@ -5,7 +5,16 @@ Learning rate schedulers.
 from collections.abc import Callable
 import math
 from typing import override
-from lucid.optim.optimizer import Optimizer, _group_float
+from lucid.optim.optimizer import (
+    Optimizer,
+    _CyclicLike,
+    _OneCycleLike,
+    _cyclic_get_lr,
+    _group_float,
+    _init_cyclic,
+    _init_one_cycle,
+    _one_cycle_get_lr,
+)
 
 
 def _holds_a_callable(value: object) -> bool:
@@ -651,7 +660,7 @@ class LambdaLR(_LRScheduler):
         ]
 
 
-class CyclicLR(_LRScheduler):
+class CyclicLR(_LRScheduler, _CyclicLike):
     r"""Cycle the learning rate between ``base_lr`` and ``max_lr``.
 
     Implements the triangular, triangular2, and exp_range cyclic policies.
@@ -703,10 +712,10 @@ class CyclicLR(_LRScheduler):
 
     Attributes
     ----------
-    base_lr_val : float
-        Lower bound of the cycle.
-    max_lr_val : float
-        Upper bound of the cycle.
+    base_lrs : list of float
+        Lower bounds of the cycle per parameter group.
+    max_lrs : list of float
+        Upper bounds of the cycle per parameter group.
     step_size_up : int
         Half-cycle length in steps.
     mode : str
@@ -734,41 +743,32 @@ class CyclicLR(_LRScheduler):
     def __init__(
         self,
         optimizer: Optimizer,
-        base_lr: float,
-        max_lr: float,
+        base_lr: float | list[float],
+        max_lr: float | list[float],
         step_size_up: int = 2000,
+        step_size_down: int | None = None,
         mode: str = "triangular",
         gamma: float = 1.0,
+        scale_fn: Callable[[float], float] | None = None,
+        scale_mode: str = "cycle",
+        cycle_momentum: bool = True,
+        base_momentum: float | list[float] = 0.8,
+        max_momentum: float | list[float] = 0.9,
         last_epoch: int = -1,
-        verbose: bool = False,
     ) -> None:
         """Initialise the CyclicLR.  See the class docstring for parameter semantics."""
-        self.base_lr_val = base_lr
-        self.max_lr_val = max_lr
-        self.step_size_up = step_size_up
-        self.mode = mode
-        self.gamma = gamma
-        super().__init__(optimizer, last_epoch, verbose)
+        cfg = (
+            base_lr, max_lr, step_size_up, step_size_down, mode, gamma,
+            scale_fn, scale_mode, cycle_momentum, base_momentum, max_momentum, last_epoch,
+        )
+        base_lrs = _init_cyclic(self, optimizer, cfg)
+        super().__init__(optimizer, last_epoch)
+        self.base_lrs = base_lrs
 
     @override
     def get_lr(self) -> list[float]:
-        """Compute the learning rate for each parameter group at the current step.
-
-        Returns
-        -------
-        list[float]
-            One learning rate per param group, derived from the schedule formula
-            documented in the class docstring.
-        """
-        cycle = math.floor(1 + self.last_epoch / (2 * self.step_size_up))
-        x = abs(self.last_epoch / self.step_size_up - 2 * cycle + 1)
-        scale = max(0.0, 1.0 - x)
-        if self.mode == "triangular2":
-            scale /= 2 ** (cycle - 1)
-        elif self.mode == "exp_range":
-            scale *= self.gamma**self.last_epoch
-        lr = self.base_lr_val + (self.max_lr_val - self.base_lr_val) * scale
-        return [lr] * len(self.optimizer.param_groups)
+        """Compute the learning rate for each parameter group at the current step."""
+        return _cyclic_get_lr(self, math.floor(1 + self.last_epoch / self.total_size))
 
 
 class ReduceLROnPlateau:
@@ -1494,7 +1494,7 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
         ]
 
 
-class OneCycleLR(_LRScheduler):
+class OneCycleLR(_LRScheduler, _OneCycleLike):
     r"""1Cycle learning rate policy.
 
     Implements the 1cycle policy: the learning rate first rises from an
@@ -1576,67 +1576,33 @@ class OneCycleLR(_LRScheduler):
     def __init__(
         self,
         optimizer: Optimizer,
-        max_lr: float,
-        total_steps: int,
+        max_lr: float | list[float],
+        total_steps: int | None = None,
+        epochs: int | None = None,
+        steps_per_epoch: int | None = None,
         pct_start: float = 0.3,
         anneal_strategy: str = "cos",
+        cycle_momentum: bool = True,
+        base_momentum: float | list[float] = 0.85,
+        max_momentum: float | list[float] = 0.95,
         div_factor: float = 25.0,
         final_div_factor: float = 1e4,
+        three_phase: bool = False,
         last_epoch: int = -1,
-        verbose: bool = False,
     ) -> None:
         """Initialise the OneCycleLR.  See the class docstring for parameter semantics."""
-        self.max_lr = max_lr
-        self.total_steps = total_steps
-        self.pct_start = pct_start
-        self.anneal_strategy = anneal_strategy
-        self.div_factor = div_factor
-        self.final_div_factor = final_div_factor
-        super().__init__(optimizer, last_epoch, verbose)
-
-    def _annealing_cos(self, start: float, end: float, pct: float) -> float:
-        return end + (start - end) / 2 * (math.cos(math.pi * pct) + 1)
-
-    def _annealing_linear(self, start: float, end: float, pct: float) -> float:
-        return start + pct * (end - start)
+        cfg = (
+            max_lr, total_steps, epochs, steps_per_epoch, pct_start, anneal_strategy,
+            cycle_momentum, base_momentum, max_momentum, div_factor, final_div_factor,
+            three_phase, last_epoch,
+        )
+        _init_one_cycle(self, optimizer, cfg)
+        super().__init__(optimizer, last_epoch)
 
     @override
     def get_lr(self) -> list[float]:
-        """Compute the learning rate for each parameter group at the current step.
-
-        Returns
-        -------
-        list[float]
-            One learning rate per param group, derived from the schedule formula
-            documented in the class docstring.
-        """
-        anneal = (
-            self._annealing_cos
-            if self.anneal_strategy == "cos"
-            else self._annealing_linear
-        )
-        t = self.last_epoch
-        T = self.total_steps
-        # Past the end the schedule has no rate to give; carrying on returned
-        # the cosine's continuation, a rate the schedule never had.
-        if t > T:
-            raise ValueError(
-                f"Tried to step {t} times. The specified number of total steps is {T}"
-            )
-        warmup_end = T * self.pct_start - 1.0  # end step of warmup phase (inclusive)
-        cooldown_end = float(T - 1)
-        init_lr = self.max_lr / self.div_factor
-        min_lr = init_lr / self.final_div_factor
-        results = []
-        for _ in self.base_lrs:
-            if t <= warmup_end:
-                pct = t / max(1.0, warmup_end)
-                lr = anneal(init_lr, self.max_lr, pct)
-            else:
-                pct = (t - warmup_end) / max(1.0, cooldown_end - warmup_end)
-                lr = anneal(self.max_lr, min_lr, pct)
-            results.append(lr)
-        return results
+        """Compute the learning rate for each parameter group at the current step."""
+        return _one_cycle_get_lr(self)
 
 
 class SequentialLR:
