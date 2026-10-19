@@ -237,15 +237,20 @@ def _unwrap_or_scalar(
     raise TypeError(f"Cannot convert {type(x).__name__} to TensorImpl")
 
 
-def _is_opmath_operand(impl: _C_engine.TensorImpl) -> bool:
+def _is_opmath_operand(
+    impl: _C_engine.TensorImpl, peer_device: _C_engine.Device
+) -> bool:
     """Whether a tensor operand may reach a half op-math op uncast.
 
     The engine's mul/div/floordiv read a 0-d float32 (float64 on the CPU)
-    operand at its own width beside a half tensor.  One that requires grad
-    is refused there — its gradient would be a reduction nothing sends yet
-    — so it is rounded to the half dtype instead, as before.
+    operand at its own width beside a half tensor on the same device (or a
+    0-d CPU scalar beside a Metal half tensor).  One that requires grad is
+    refused there — its gradient would be a reduction nothing sends yet — so
+    it is rounded to the half dtype instead, as before.
     """
     if impl.shape or impl.requires_grad:
+        return False
+    if impl.device != peer_device and impl.device != _C_engine.Device.CPU:
         return False
     dt = impl.dtype
     return dt == _C_engine.Dtype.F32 or (
@@ -309,9 +314,10 @@ def _cast(
     current: _C_engine.Dtype,
     dt: _C_engine.Dtype,
     opmath: bool,
+    peer_device: _C_engine.Device,
 ) -> _C_engine.TensorImpl:
     """``impl`` (of dtype ``current``) at ``dt`` — or uncast, for op-math."""
-    if current == dt or (opmath and _is_opmath_operand(impl)):
+    if current == dt or (opmath and _is_opmath_operand(impl, peer_device)):
         return impl
     return _C_engine.astype(impl, dt)
 
@@ -366,7 +372,10 @@ def _tensor_pair(
     if inplace and not _promotion.can_cast(dt, da):
         raise _cannot_cast_inplace(dt, da)
     wide = opmath and _promotion.is_half(dt)
-    return _cast(ai, da, dt, wide), _cast(bi, db, dt, wide)
+    return (
+        _cast(ai, da, dt, wide, bi.device),
+        _cast(bi, db, dt, wide, ai.device),
+    )
 
 
 def _number_pair(

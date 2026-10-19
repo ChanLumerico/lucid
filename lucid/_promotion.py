@@ -290,11 +290,9 @@ def _lifts(kh: int, kl: int) -> bool:
 
     The lower tier can lift the category only: a complex lower makes a real
     higher complex; a floating lower meets an integral higher on the
-    lattice, as does anything beside a bool higher.
+    lattice, as does any non-bool beside a bool higher.
     """
-    if kl == COMPLEX:
-        return kh != COMPLEX
-    return kh == BOOL or (kh == INTEGER and kl == FLOATING)
+    return kl > kh
 
 
 def _join(higher: int, lower: int) -> int:

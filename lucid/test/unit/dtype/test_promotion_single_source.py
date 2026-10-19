@@ -461,3 +461,42 @@ def test_the_owner_still_holds_its_table() -> None:
     root = Path(lucid.__file__).resolve().parent.parent
     tree = ast.parse((root / _OWNER).read_text(encoding="utf-8"))
     assert sum(_is_promotion_table(n) for n in ast.walk(tree)) == 1
+
+
+def test_bool_beside_python_bool_skips_astype_copy(device: str) -> None:
+    from lucid import _dispatch, _promotion
+
+    assert not _promotion._lifts(_promotion.BOOL, _promotion.BOOL)
+    t = lucid.tensor([True, False], device=device)
+    d = t._impl.dtype
+    dt = _promotion.beside_number(t._impl, d, True)
+    assert dt is d
+    for opmath in (False, True):
+        lhs, _ = _dispatch._binary_operands(t, True, opmath=opmath)
+        assert lhs is t._impl
+        _, rhs = _dispatch._binary_operands(False, t, opmath=opmath)
+        assert rhs is t._impl
+    assert (t & True).tolist() == [True, False]
+    assert (t | False).tolist() == [True, False]
+    assert (t + True).tolist() == [True, True]
+
+
+def test_mixed_device_zero_dim_opmath_raises_device_mismatch(
+    device_gpu_only: str,
+) -> None:
+    from lucid._C import engine as _C_engine
+
+    for half_dt in (lucid.float16, lucid.bfloat16):
+        half_c = lucid.tensor([1.5, 2.5], dtype=half_dt, device="cpu")
+        scalar_m = lucid.tensor(2.0, dtype=lucid.float32, device=device_gpu_only)
+        for fn in (operator.mul, operator.truediv, operator.floordiv):
+            with pytest.raises(_C_engine.DeviceMismatch):
+                fn(half_c, scalar_m)
+            with pytest.raises(_C_engine.DeviceMismatch):
+                fn(scalar_m, half_c)
+    half_m = lucid.tensor([1e4], dtype=lucid.float16, device=device_gpu_only)
+    tiny_c = lucid.tensor(1e-5, dtype=lucid.float32, device="cpu")
+    assert (half_m * tiny_c).item() == pytest.approx(0.1, rel=1e-2)
+
+
+
