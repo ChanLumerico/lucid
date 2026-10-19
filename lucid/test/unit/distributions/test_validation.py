@@ -297,3 +297,25 @@ def test_geometric_and_negative_binomial_have_a_mode(device: str) -> None:
     # floor((r - 1) · p / (1 - p)) = floor(2 · 0.7 / 0.3) = 4
     assert D.NegativeBinomial(_t(3.0, device), _t(0.7, device)).mode.item() == 4.0
     assert D.NegativeBinomial(_t(3.0, device), _t(0.3, device)).mode.item() == 0.0
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_positive_definite_checks_every_matrix_in_mixed_batch(device: str) -> None:
+    batch = _t(
+        [
+            [[1.0, 0.0], [0.0, -1.0]],  # symmetric, indefinite -> False
+            [[1.0, 2.0], [3.0, 4.0]],  # non-symmetric -> False
+            [[1.0, 2.0], [0.0, 1.0]],  # non-symmetric with SPD lower triangle -> False
+            [[2.0, 0.5], [0.5, 1.0]],  # symmetric positive-definite -> True
+        ],
+        device,
+    )
+    got = D.constraints.positive_definite.check(batch)
+    per_matrix = [
+        bool(D.constraints.positive_definite.check(batch[i]).item())
+        for i in range(batch.shape[0])
+    ]
+    assert got.device == device
+    assert got.dtype == lucid.bool
+    assert got.tolist() == per_matrix == [False, False, False, True]
+

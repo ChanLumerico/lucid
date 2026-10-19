@@ -412,10 +412,8 @@ class _PositiveDefinite(Constraint):
                 tuple(value.shape[:-2]), dtype=lucid.bool, device=value.device
             )
         symmetric = _all_trailing(lucid.isclose(value, value.mT, atol=1e-6), 2)
-        if not bool(symmetric.all().item()):
-            return symmetric
         _, info = lucid.linalg.cholesky_ex(value)
-        return info == 0
+        return symmetric & (info == 0)
 
 
 @final
