@@ -1168,6 +1168,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - register autograd nodes and passes in helpers
 - F.pad is the one pad; lucid.pad, Tensor.pad go (LCD-473)
 - move bind_tensor.cpp helpers above register_core
+- share exact 0-d scalar builder and promotion helpers
 
 ---
 

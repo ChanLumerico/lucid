@@ -272,6 +272,12 @@ def _number_kind(x: bool | int | float | complex) -> int:
     return FLOATING if isinstance(x, float) else COMPLEX
 
 
+def _number_code_for_default(kind: int, float_code: int) -> int:
+    if kind <= INTEGER:
+        return _BOOL_C if kind == BOOL else _I64_C
+    return float_code if kind == FLOATING else _complex_code(float_code)
+
+
 def _number_code(kind: int, holder: _C_engine.TensorImpl | None) -> int:
     """The code of a number of ``kind`` beside ``holder`` (a tensor or None).
 
@@ -282,7 +288,38 @@ def _number_code(kind: int, holder: _C_engine.TensorImpl | None) -> int:
     c = get_default_dtype()._engine.value
     if c == _F64_C and holder is not None and holder.device != _CPU:
         c = _F32_C
-    return c if kind == FLOATING else _complex_code(c)
+    return _number_code_for_default(kind, c)
+
+
+def number_dtype(
+    x: bool | int | float | complex, default_float_dtype: _C_engine.Dtype
+) -> _C_engine.Dtype:
+    """The engine dtype a Python number ``x`` asks for under ``default_float_dtype``.
+
+    Parameters
+    ----------
+    x : bool or int or float or complex
+        The Python scalar value.
+    default_float_dtype : lucid._C.engine.Dtype
+        Current default floating dtype (``F32`` or ``F64``).
+    """
+    return _DTYPE[_number_code_for_default(_number_kind(x), default_float_dtype.value)]
+
+
+def literal_types_dtype(
+    types: set[type] | frozenset[type], default_float_dtype: _C_engine.Dtype
+) -> _C_engine.Dtype:
+    """The engine dtype for a non-empty set of builtin Python number ``types``.
+
+    Parameters
+    ----------
+    types : set of type or frozenset of type
+        Builtin Python scalar types (``bool``, ``int``, ``float``, ``complex``).
+    default_float_dtype : lucid._C.engine.Dtype
+        Current default floating dtype (``F32`` or ``F64``).
+    """
+    kind = max(_NUMBER_KIND[t] for t in types)
+    return _DTYPE[_number_code_for_default(kind, default_float_dtype.value)]
 
 
 def _lifts(kh: int, kl: int) -> bool:

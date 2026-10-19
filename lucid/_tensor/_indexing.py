@@ -50,6 +50,7 @@ from typing import Sequence, SupportsIndex, TYPE_CHECKING, cast
 from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
+from lucid._factories._build import _fill
 from lucid._factories.converters import _to_impl
 
 if TYPE_CHECKING:
@@ -156,7 +157,6 @@ def _select_slice(
 _BOOL = _C_engine.Dtype.Bool
 _I64 = _C_engine.Dtype.I64
 _CPU = _C_engine.Device.CPU
-_COMPLEX = frozenset({_C_engine.Dtype.C64, _C_engine.Dtype.C128})
 
 
 class _Key:
@@ -867,40 +867,6 @@ def _broadcast_shape(shapes: list[list[int]]) -> list[int]:
 # ── value normalisation ───────────────────────────────────────────────────────
 
 
-def _scalar_impl(
-    value: bool | int | float | complex,
-    dtype: _C_engine.Dtype,
-    device: _C_engine.Device,
-) -> _C_engine.TensorImpl:
-    """A Python number as a 0-d tensor of ``dtype``, with nothing lost on the way.
-
-    A float carries every real value a float can hold.  An int written into
-    an integer tensor does not go through one — ``2**60 + 1`` would round —
-    and neither does a complex number, whose imaginary part ``float()``
-    refused outright.
-
-    Raises
-    ------
-    TypeError
-        A complex value for a tensor that is not complex.
-    OverflowError
-        An int outside the range of an integer ``dtype``.
-    """
-    if isinstance(value, complex) and dtype not in _COMPLEX:
-        raise TypeError(
-            f"cannot write the complex value {value!r} into a {dtype} tensor"
-        )
-    exact = dtype in _COMPLEX or (
-        type(value) is int and _promotion.is_integer(dtype)  # not bool, not float
-    )
-    if not exact:
-        return _C_engine.full([], float(value.real), dtype, device)
-    bits = _promotion.bit_width(dtype) if _promotion.is_integer(dtype) else None
-    if bits is not None and not -(2 ** (bits - 1)) <= int(value.real) < 2 ** (bits - 1):
-        raise OverflowError(f"{value} is out of range for a {dtype} tensor")
-    return _to_impl(value, dtype=dtype, device=device)
-
-
 def _normalize_value(
     value: object, dst: _C_engine.TensorImpl, shape: list[int]
 ) -> _C_engine.TensorImpl:
@@ -909,7 +875,7 @@ def _normalize_value(
     In ``dst``'s dtype, on ``dst``'s device — moved there, as the reference
     moves it, and differentiably — and broadcast to ``shape``; size-1 dims
     in front of the value's shape are dropped as the reference drops them.
-    A Python number keeps its kind and precision (:func:`_scalar_impl`);
+    A Python number keeps its kind and precision (:func:`_fill`);
     anything else that is not a tensor is converted as ``lucid.tensor``
     would convert it.
     """
@@ -917,9 +883,8 @@ def _normalize_value(
     if not isinstance(impl, _C_engine.TensorImpl):
         value = _promotion.as_number(value)
         if isinstance(value, _promotion.NUMBER):
-            impl = _scalar_impl(value, dst.dtype, dst.device)
-        else:
-            impl = _to_impl(value, device=dst.device)
+            return _fill(shape, value, dst.dtype, dst.device)
+        impl = _to_impl(value, device=dst.device)
     if impl.device != dst.device:
         impl = _C_engine.to_device(impl, dst.device)
     if impl.dtype != dst.dtype:

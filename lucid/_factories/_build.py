@@ -24,7 +24,7 @@ from collections.abc import Sequence, Set
 
 from lucid import _promotion
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _default_dtype_enum_cached, _impl_with_grad
+from lucid._dispatch import _default_dtype_enum_cached, _impl_with_grad, _scalar_impl
 from lucid._dtype import _ENGINE_TO_DTYPE
 
 _D = _C_engine.Dtype
@@ -46,7 +46,6 @@ _STRUCT_CODE: dict[_C_engine.Dtype, str] = {
     _D.C128: "d",
 }
 _COMPLEX = (_D.C64, _D.C128)
-_INT_BITS: dict[_C_engine.Dtype, int] = {_D.I8: 8, _D.I16: 16, _D.I32: 32, _D.I64: 64}
 
 # NumPy scalar dtype names → engine dtype.  Unsigned types widen to the
 # next signed type, as unsigned arrays do (Lucid has no unsigned dtype).
@@ -124,10 +123,6 @@ def _python_scalar(value: object) -> PyScalar:
     )
 
 
-def _default_complex(default_float: _C_engine.Dtype) -> _C_engine.Dtype:
-    return _D.C128 if default_float == _D.F64 else _D.C64
-
-
 def _scalar_dtype(value: object, default_float: _C_engine.Dtype) -> _C_engine.Dtype:
     r"""The dtype a literal element asks for on its own."""
     impl: object = getattr(value, "_impl", None)
@@ -135,23 +130,7 @@ def _scalar_dtype(value: object, default_float: _C_engine.Dtype) -> _C_engine.Dt
         return impl.dtype
     if _is_numpy_scalar(value):
         return _NUMPY_SCALAR_DTYPE[str(getattr(value, "dtype", ""))]
-    if isinstance(value, bool):
-        return _D.Bool
-    if isinstance(value, int):
-        return _D.I64
-    if isinstance(value, complex):
-        return _default_complex(default_float)
-    return default_float
-
-
-def _python_literal_dtype(
-    types: Set[type], default_float: _C_engine.Dtype
-) -> _C_engine.Dtype:
-    if complex in types:
-        return _default_complex(default_float)
-    if float in types:
-        return default_float
-    return _D.I64 if int in types else _D.Bool
+    return _promotion.number_dtype(_python_scalar(value), default_float)
 
 
 def _infer_dtype(flat: Sequence[object]) -> _C_engine.Dtype:
@@ -168,7 +147,7 @@ def _infer_dtype(flat: Sequence[object]) -> _C_engine.Dtype:
         return default_float
     types = {type(v) for v in flat}
     if types <= _PY_SCALAR_SET:  # the common literal: plain Python numbers
-        return _python_literal_dtype(types, default_float)
+        return _promotion.literal_types_dtype(types, default_float)
     dtypes = sorted(
         {_scalar_dtype(v, default_float) for v in flat}, key=lambda d: d.value
     )
@@ -204,9 +183,9 @@ def _coerce(value: object, dtype: _C_engine.Dtype) -> PyScalar:
         )
     if dtype == _D.Bool:
         return bool(v)
-    bits = _INT_BITS.get(dtype)
-    if bits is None:
+    if not _promotion.is_integer(dtype):
         return float(v)
+    bits = _promotion.bit_width(dtype)
     if isinstance(v, float):
         if not math.isfinite(v):
             raise ValueError(
@@ -252,7 +231,7 @@ def _pack(flat: Sequence[object], dtype: _C_engine.Dtype) -> bytes:
         return b""
     code = _STRUCT_CODE[dtype]
     types = {type(v) for v in flat}
-    if dtype in _INT_BITS and types <= _PY_INT_SET:
+    if _promotion.is_integer(dtype) and types <= _PY_INT_SET:
         try:
             return struct.pack(f"={len(flat)}{code}", *flat)
         except struct.error:
@@ -298,17 +277,18 @@ def _fill(
     r"""``shape`` filled with ``value``, exact in ``dtype``.
 
     The engine fill takes a ``double``; a value it cannot carry — a
-    complex, or an integer past :math:`2^{53}` — is packed into a 0-d
-    tensor of the target dtype and broadcast instead.
+    complex, or an integer past :math:`2^{53}` — is built as a 0-d
+    tensor of the target dtype via :func:`lucid._dispatch._scalar_impl`
+    and broadcast instead.
     """
     value = _promotion.as_number(value)
     if dtype in _FLOATING and isinstance(value, (bool, int, float)):
         return _C_engine.full(shape, float(value), dtype, device)
     v = _coerce(value, dtype)
-    if isinstance(v, complex) or (
+    if not shape or isinstance(v, complex) or (
         isinstance(v, int) and not isinstance(v, bool) and abs(v) > _EXACT_IN_DOUBLE
     ):
-        scalar = _from_values([v], [], dtype, device)
+        scalar = _scalar_impl(v, dtype, device)
         return (
             scalar
             if not shape

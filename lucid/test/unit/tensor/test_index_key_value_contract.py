@@ -218,10 +218,15 @@ def test_python_scalars_keep_their_kind(device: str) -> None:
     i = lucid.zeros(3, dtype=lucid.int64, device=device)
     i[1] = 2**60 + 1
     assert i[1].item() == 2**60 + 1
+    i[2] = -2.7
+    assert i[2].item() == -2
     with pytest.raises(TypeError):
         lucid.zeros(3, device=device)[0] = 1j
     with pytest.raises(OverflowError):
         lucid.zeros(3, dtype=lucid.int32, device=device)[0] = 2**40
+    for non_finite in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValueError):
+            lucid.zeros(3, dtype=lucid.int64, device=device)[0] = non_finite
 
 
 def test_a_value_moves_to_the_destination(device: str) -> None:
