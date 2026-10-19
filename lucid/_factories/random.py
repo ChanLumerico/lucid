@@ -636,7 +636,8 @@ def bernoulli(
     from lucid import _promotion
 
     _check_random()
-    if not hasattr(input, "_impl"):
+    impl = _promotion.try_unwrap(input)
+    if impl is None:
         raise TypeError(
             f"bernoulli(): argument 'input' (position 1) must be Tensor, "
             f"not {type(input).__name__}"
@@ -645,7 +646,7 @@ def bernoulli(
         raise _C_engine.NotImplementedError(
             f'"bernoulli" not implemented for {input.dtype}'
         )
-    dt, dev, gen = input._impl.dtype, input._impl.device, _get_gen(generator)
+    dt, dev, gen = impl.dtype, impl.device, _get_gen(generator)
     if p is not None:
         p_num = _promotion.as_number(p)
         if isinstance(p_num, bool) or not isinstance(p_num, (int, float)):

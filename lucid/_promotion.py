@@ -163,15 +163,20 @@ def as_number(x: object) -> object:
     return x
 
 
-_COMPARABLE = (*NUMBER, _C_engine.TensorImpl)
+_IMPL = _C_engine.TensorImpl
+
+
+def try_unwrap(x: object) -> _C_engine.TensorImpl | None:
+    """Return the underlying ``TensorImpl`` from a ``Tensor`` or ``TensorImpl``, or ``None``."""
+    if type(x) is _IMPL or isinstance(x, _IMPL):
+        return x
+    impl: object = getattr(x, "_impl", None)
+    return impl if type(impl) is _IMPL or isinstance(impl, _IMPL) else None
 
 
 def is_comparable(other: object) -> bool:
     """Whether ``other`` is a Tensor or a number that ``==`` / ``!=`` compares element-wise."""
-    return (
-        isinstance(as_number(other), _COMPARABLE)
-        or getattr(other, "_impl", None) is not None
-    )
+    return isinstance(as_number(other), NUMBER) or try_unwrap(other) is not None
 
 
 def check_pow_scalar(d: _C_engine.Dtype, exponent: object) -> None:

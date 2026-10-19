@@ -87,8 +87,8 @@ def _to_engine_target(
         If the call has no ``.to`` shape, or a keyword names no device / dtype.
     """
     other, device, dtype, copy = _to_operands(args, kwargs, tensor_cls)
-    impl = getattr(other, "_impl", None)
-    if isinstance(impl, _C_engine.TensorImpl):
+    impl = _promotion.try_unwrap(other)
+    if impl is not None:
         return impl.device, impl.dtype, copy
     if not (device is None or isinstance(device, (str, _C_engine.Device, _device_cls))):
         raise TypeError(f"to() takes a device as device=, got {device!r}")

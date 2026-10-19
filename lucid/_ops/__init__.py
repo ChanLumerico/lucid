@@ -25,6 +25,7 @@ import re
 import sys
 from typing import TYPE_CHECKING
 
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._registry import OpEntry, _REGISTRY, _bind_leading
@@ -332,10 +333,8 @@ def _make_free_fn(name: str) -> object:
             args, kwargs = _bind_leading(fn_name, leading, args, kwargs)
         proc: list[object] = []
         for i, a in enumerate(args):
-            if i < e.n_tensor_args and hasattr(a, "_impl"):
-                proc.append(_unwrap(a))  # type: ignore[arg-type]
-            else:
-                proc.append(a)
+            impl = _promotion.try_unwrap(a) if i < e.n_tensor_args else None
+            proc.append(a if impl is None else impl)
         result = e.engine_fn(*proc, **kwargs)
         if e.returns_tensor:
             if isinstance(result, (list, tuple)):

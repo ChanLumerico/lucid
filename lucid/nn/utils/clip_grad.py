@@ -5,6 +5,7 @@ All computation goes through the C++ engine — no numpy.
 
 from typing import Iterable, TYPE_CHECKING, cast
 import math
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._factories.creation import zeros
@@ -300,7 +301,9 @@ def get_total_norm(
     True
     """
     items: list[Tensor | None] = (
-        [cast("Tensor", tensors)] if hasattr(tensors, "_impl") else list(tensors)
+        [cast("Tensor", tensors)]
+        if _promotion.try_unwrap(tensors) is not None
+        else list(tensors)
     )
     impls = [_unwrap(t) for t in items if t is not None]
     if not impls:

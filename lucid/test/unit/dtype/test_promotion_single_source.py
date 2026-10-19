@@ -499,4 +499,49 @@ def test_mixed_device_zero_dim_opmath_raises_device_mismatch(
     assert (half_m * tiny_c).item() == pytest.approx(0.1, rel=1e-2)
 
 
+def test_try_unwrap_and_unique_models_all() -> None:
+    from lucid import _promotion
+    import lucid.models as models
 
+    t = lucid.tensor([1.0, 2.0])
+    p = lucid.nn.Parameter(lucid.tensor([1.0]))
+    assert _promotion.try_unwrap(t) is t._impl
+    assert _promotion.try_unwrap(p) is p._impl
+    assert _promotion.try_unwrap(t._impl) is t._impl
+    assert _promotion.try_unwrap(42) is None
+
+    class _BogusImpl:
+        _impl = "not-a-tensor-impl"
+
+    assert _promotion.try_unwrap(_BogusImpl()) is None
+    assert len(models.__all__) == len(set(models.__all__))
+
+
+def test_wrap_axis_errors_name_the_calling_op() -> None:
+    from lucid._C import engine as _C_engine
+
+    x1 = lucid.tensor([1.0, 2.0])._impl
+    x2 = lucid.tensor([[1.0, 2.0], [3.0, 4.0]])._impl
+    idx1 = lucid.tensor([0])._impl
+    scalar = lucid.tensor(1.0)._impl
+
+    calls: list[tuple[str, Callable[[], object]]] = [
+        ("sort", lambda: _C_engine.sort(x1, 5)),
+        ("argsort", lambda: _C_engine.argsort(x1, 5)),
+        ("argmax", lambda: _C_engine.argmax(x1, 5, False)),
+        ("argmin", lambda: _C_engine.argmin(x1, 5, False)),
+        ("topk", lambda: _C_engine.topk(x1, 1, 5)),
+        ("repeat", lambda: _C_engine.repeat(x1, 2, 5)),
+        ("repeat", lambda: _C_engine.repeat(scalar, 2, 0)),
+        ("concatenate", lambda: _C_engine.concatenate([x1, x1], 5)),
+        ("split", lambda: _C_engine.split(x1, 1, 5)),
+        ("split_at", lambda: _C_engine.split_at(x1, [1], 5)),
+        ("unbind", lambda: _C_engine.unbind(x1, 5)),
+        ("roll", lambda: _C_engine.roll(x1, [1], [5])),
+        ("gather", lambda: _C_engine.gather(x1, idx1, 5)),
+        ("diagonal", lambda: _C_engine.diagonal(x2, 0, 5, 1)),
+        ("diagonal", lambda: _C_engine.diagonal(x2, 0, 0, 5)),
+    ]
+    for op_name, call in calls:
+        with pytest.raises(IndexError, match=rf"^{op_name}: "):
+            call()

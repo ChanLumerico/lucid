@@ -1116,11 +1116,13 @@ def _phantom_operand(x: object) -> PhantomImpl | None:
 
 
 def _install_unwrap_stand_ins() -> None:
-    """Pass phantoms through every module's ``_unwrap`` / ``_unwrap_or_scalar``."""
+    """Pass phantoms through every module's ``_unwrap`` / ``_unwrap_or_scalar`` / ``try_unwrap``."""
     from lucid import _dispatch as _disp
+    from lucid import _promotion as _promo
 
     orig_unwrap = _disp._unwrap
     orig_uos = _disp._unwrap_or_scalar
+    orig_try = _promo.try_unwrap
 
     def unwrap(t: Any) -> Any:
         phantom = _phantom_operand(t)
@@ -1130,11 +1132,18 @@ def _install_unwrap_stand_ins() -> None:
         phantom = _phantom_operand(x)
         return orig_uos(x, ref_impl) if phantom is None else phantom
 
+    def try_unwrap(x: object) -> object:
+        phantom = _phantom_operand(x)
+        return orig_try(x) if phantom is None else phantom
+
+    stand_in_try = _gated(orig_try, try_unwrap)
     stand_ins = {
         "_unwrap": (orig_unwrap, _gated(orig_unwrap, unwrap)),
         "_unwrap_or_scalar": (orig_uos, _gated(orig_uos, unwrap_or_scalar)),
+        "try_unwrap": (orig_try, stand_in_try),
+        "_try_unwrap": (orig_try, stand_in_try),
     }
-    for ns in _module_namespaces():
+    for ns in (vars(_promo), *_module_namespaces()):
         for name, (orig, stand_in) in stand_ins.items():
             if ns.get(name) is orig:
                 ns[name] = stand_in
@@ -1164,12 +1173,13 @@ def _uninstall() -> None:
     imported inside a block — which bound a stand-in — is restored too.
     """
     from lucid import _dispatch as _disp
+    from lucid import _promotion as _promo
 
     original_of = {key: orig for key, (_stand_in, orig) in _INSTALLED.items()}
     ids = original_of.keys()
-    # The two source modules go first: an import racing this then binds an
+    # The source modules go first: an import racing this then binds an
     # original.
-    for ns in (vars(_C_engine), vars(_disp), *_module_namespaces()):
+    for ns in (vars(_C_engine), vars(_disp), vars(_promo), *_module_namespaces()):
         if ids.isdisjoint(map(id, list(ns.values()))):
             continue
         for name, value in list(ns.items()):

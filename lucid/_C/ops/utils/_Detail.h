@@ -108,10 +108,10 @@ inline void check_dtype_device_match(const std::vector<TensorImplPtr>& xs, const
 // ------
 // IndexError
 //     ``ndim`` is 0, or ``axis`` falls outside ``[-ndim, ndim)``.
-inline int wrap_axis(int axis, int ndim) {
+inline int wrap_axis(int axis, int ndim, const char* op) {
     if (ndim == 0)
-        ErrorBuilder("axis").index_error("out of range: the op needs a tensor of rank >= 1");
-    return wrap_dim(axis, ndim, "axis");
+        ErrorBuilder(op).index_error("out of range: the op needs a tensor of rank >= 1");
+    return wrap_dim(axis, ndim, op);
 }
 
 }  // namespace lucid::utils_detail

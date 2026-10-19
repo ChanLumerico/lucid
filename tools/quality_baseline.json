@@ -8,7 +8,7 @@
   "lizard": "1.24.0",
   "mypy": "2.3.0",
   "ruff": "0.16.0",
-  "semgrep": "none",
+  "semgrep": "1.179.0",
   "vulture": "2.16"
  },
  "thresholds": {
@@ -76,6 +76,11 @@
   {
    "date": "2026-10-18",
    "reason": "LCD-466 c2 (2a432415c) added phantom_mode/set_phantom_mode; landed with --allow-slop because LCD-466 card 3 (nn/_shadow.py switch) consumes them; engine unbound 37->39 until card 3 lands",
+   "by": "chanlee"
+  },
+  {
+   "date": "2026-10-20",
+   "reason": "LCD-524: add semgrep rule lucid-impl-unwrap",
    "by": "chanlee"
   }
  ],
@@ -256,7 +261,7 @@
     "lucid/coreml/_emit.py": 1184,
     "lucid/distributions/transforms.py": 279,
     "lucid/fft/__init__.py": 379,
-    "lucid/linalg/__init__.py": 2254,
+    "lucid/linalg/__init__.py": 2253,
     "lucid/models/_utils/_detection.py": 1340,
     "lucid/models/generative/diamond/_model.py": 730,
     "lucid/models/generative/rectified_flow/_model.py": 289,
@@ -327,7 +332,6 @@
    "type-ignore[arg-type]": {
     "lucid/__init__.py": 3,
     "lucid/_factories/creation.py": 1,
-    "lucid/_ops/__init__.py": 1,
     "lucid/_ops/_adapters.py": 1,
     "lucid/_tensor/_metal_views.py": 1,
     "lucid/_tensor/_methods.py": 1,
@@ -340,7 +344,7 @@
     "lucid/distributions/discrete.py": 2,
     "lucid/distributions/extra.py": 1,
     "lucid/distributions/relaxed.py": 2,
-    "lucid/linalg/__init__.py": 21,
+    "lucid/linalg/__init__.py": 19,
     "lucid/metal/__init__.py": 4,
     "lucid/models/_output.py": 3,
     "lucid/models/generative/rectified_flow/_model.py": 9,
@@ -1930,6 +1934,12 @@
    },
    "UP047": {
     "lucid/nn/init.py": 1
+   }
+  },
+  "semgrep": {
+   "lucid-impl-unwrap": {
+    "lucid/_promotion.py": 1,
+    "lucid/nn/_shadow.py": 1
    }
   },
   "vulture": {

@@ -683,7 +683,6 @@ __all__ = [    # ── Infrastructure ─────────────�
     "cspresnet_50", "cspresnet_50_cls",
     "cspresnext_50", "cspresnext_50_cls",
     "cspdarknet_53", "cspdarknet_53_cls",
-    "cspresnet_50", "cspresnet_50_cls",
     # ── Vision (2020) ResNeSt ────────────────────────────────────────────────
     "ResNeStConfig", "ResNeSt", "ResNeStForImageClassification",
     "resnest_14", "resnest_14_cls", "resnest_26", "resnest_26_cls",

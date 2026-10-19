@@ -1,0 +1,11 @@
+rules:
+  - id: lucid.impl.lucid-impl-unwrap
+    message: >-
+      Duck-typed _impl unwrapping belongs in lucid._promotion.try_unwrap (or
+      lucid._dispatch._unwrap when non-tensors must raise TypeError).
+    severity: WARNING
+    languages: [python]
+    pattern-either:
+      - pattern: getattr($X, "_impl", None)
+      - pattern: getattr($X, "_impl")
+      - pattern: hasattr($X, "_impl")

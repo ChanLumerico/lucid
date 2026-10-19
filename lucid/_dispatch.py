@@ -60,13 +60,8 @@ def _invalidate_default_device_cache() -> None:
 
 def _unwrap(t: _C_engine.TensorImpl | Tensor) -> _C_engine.TensorImpl:
     """Return the underlying TensorImpl from a Tensor or TensorImpl."""
-    if isinstance(t, _C_engine.TensorImpl):
-        return t
-    # ``getattr(..., default)`` is typed ``Any``; annotate ``object`` so the
-    # isinstance guard below narrows reliably across mypy versions (1.19 left
-    # the post-isinstance ``Any`` un-narrowed → no-any-return).
-    impl: object = getattr(t, "_impl", None)
-    if impl is not None and isinstance(impl, _C_engine.TensorImpl):
+    impl = _promotion.try_unwrap(t)
+    if impl is not None:
         return impl
     raise TypeError(f"Expected Tensor or TensorImpl, got {type(t).__name__}")
 
@@ -111,8 +106,8 @@ def _scalar_power(
 def _is_bool_operand(x: object) -> bool:
     if isinstance(_promotion.as_number(x), bool):
         return True
-    impl = x if isinstance(x, _C_engine.TensorImpl) else getattr(x, "_impl", None)
-    return getattr(impl, "dtype", None) == _C_engine.Bool
+    impl = _promotion.try_unwrap(x)
+    return impl is not None and impl.dtype == _C_engine.Bool
 
 
 def _refuse_bool_subtraction(a: object, b: object) -> None:
@@ -222,11 +217,9 @@ def _unwrap_or_scalar(
     reach the same rule through :func:`_binary_operands`, which builds its
     scalar operands with the same :func:`_scalar_impl`.
     """
-    impl: object = getattr(x, "_impl", None)
-    if impl is not None and isinstance(impl, _C_engine.TensorImpl):
+    impl = _promotion.try_unwrap(x)
+    if impl is not None:
         return impl
-    if isinstance(x, _C_engine.TensorImpl):
-        return x
 
     x = _promotion.as_number(x)
     if isinstance(x, _promotion.NUMBER):
@@ -295,8 +288,8 @@ def _float_input(x: Tensor) -> Tensor:
     Returns ``x`` itself when it needs no cast, so the common floating call
     allocates nothing; anything without an engine tensor is returned as is.
     """
-    impl: object = getattr(x, "_impl", None)
-    if type(impl) is not _IMPL:
+    impl = _promotion.try_unwrap(x)
+    if impl is None:
         return x
     out = _float_operand(impl)
     return x if out is impl else _wrap(out)
@@ -438,12 +431,12 @@ def _binary_operands(
     """
     # A Tensor's impl is one attribute away and a bare impl is itself; a
     # number, or a phantom under shadow allocation, takes the general route.
-    ai = a if type(a) is _IMPL else getattr(a, "_impl", None)
-    if type(ai) is not _IMPL:
+    ai = _promotion.try_unwrap(a)
+    if ai is None:
         a = _promotion.as_number(a)
         ai = _tensor_operand(a)
-    bi = b if type(b) is _IMPL else getattr(b, "_impl", None)
-    if type(bi) is not _IMPL:
+    bi = _promotion.try_unwrap(b)
+    if bi is None:
         b = _promotion.as_number(b)
         bi = _tensor_operand(b)
     if ai is not None and bi is not None:

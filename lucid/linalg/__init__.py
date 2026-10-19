@@ -12,6 +12,7 @@ from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
 from lucid._ops._adapters import _outer_adapter
 from lucid._ops._dims import _wrap_dim
 from lucid._ops._reduce import _p_norm, _reduction_axes, _require_normable
+from lucid._promotion import try_unwrap as _try_unwrap
 from lucid._tensor._indexing import broadcast_shapes as _broadcast_batch
 from lucid._tensor.tensor import Tensor
 
@@ -40,13 +41,11 @@ def _linalg_op[R](fn: Callable[..., R]) -> Callable[..., R]:
     @functools.wraps(fn)
     def wrapper(*args: object, **kwargs: object) -> R:
         """Decorator-generated wrapper that applies the surrounding behaviour to the wrapped callable."""
-        ua = tuple(_unwrap(a) if hasattr(a, "_impl") else a for a in args)  # type: ignore[arg-type]
-        uk = {k: _unwrap(v) if hasattr(v, "_impl") else v for k, v in kwargs.items()}  # type: ignore[arg-type]
+        ua = tuple(_try_unwrap(a) or a for a in args)
+        uk = {k: _try_unwrap(v) or v for k, v in kwargs.items()}
         out: object = fn(*ua, **uk)
         if isinstance(out, tuple):
-            out = tuple(
-                _wrap(o) if isinstance(o, _C_engine.TensorImpl) else o for o in out
-            )
+            out = tuple(_wrap(o) if isinstance(o, _C_engine.TensorImpl) else o for o in out)
         elif isinstance(out, _C_engine.TensorImpl):
             out = _wrap(out)
         # ``fn`` is annotated with what the caller gets once it is re-wrapped,

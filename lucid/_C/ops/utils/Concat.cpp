@@ -402,7 +402,7 @@ TensorImplPtr concatenate_op(const std::vector<TensorImplPtr>& xs, int axis) {
     const Device device = xs[0]->device();
     OpScopeFull scope{"concatenate", device, dt, Shape{}};
     const auto ndim = xs[0]->shape().size();
-    int ax = wrap_axis(axis, static_cast<int>(ndim));
+    int ax = wrap_axis(axis, static_cast<int>(ndim), "concatenate");
     // 3.5 Phase 1.2: report axis for the compile-path Concat emitter.
     scope.set_attr("dim", static_cast<std::int64_t>(ax));
 
@@ -499,7 +499,7 @@ std::vector<TensorImplPtr> split_op(const TensorImplPtr& a, std::int64_t num_spl
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"split", device, dt, a->shape()};
-    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()), "split");
     if (num_splits <= 0)
         ErrorBuilder("split").invalid_argument("num_splits must be positive");
     if (a->shape()[ax] % num_splits != 0)
@@ -558,7 +558,7 @@ split_at_op(const TensorImplPtr& a, std::vector<std::int64_t> indices, int axis)
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"split_at", device, dt, a->shape()};
-    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()), "split_at");
     // ``split_op`` above validates its divisor; this overload validated
     // nothing, and the cut points index the buffer directly.  Splitting an
     // *empty* axis at 2 sliced a region that does not exist and took the
@@ -642,7 +642,7 @@ std::vector<TensorImplPtr> chunk_op(const TensorImplPtr& a, std::int64_t chunks,
 // size-1 slab shape) before scattering the gradient back.
 std::vector<TensorImplPtr> unbind_op(const TensorImplPtr& a, int axis) {
     Validator::input(a, "unbind.a").non_null();
-    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()), "unbind");
     // OpScopeFull anchors the trace so the compile-path UnbindEmitter
     // can see this as a single multi-output op (was previously missing,
     // making pieces appear as external feeds — wasted MPSGraph slicing

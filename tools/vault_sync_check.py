@@ -30,7 +30,6 @@ MAPPING: list[tuple[str, list[str]]] = [
     ("lucid/_C/engine.pyi",    ["obsidian/api/api-cpp-tree.md"]),
     ("lucid/_C/registry/**",   ["obsidian/api/api-cpp-tree.md"]),
     ("lucid/_C/core/**",       ["obsidian/api/api-cpp-tree.md"]),
-    ("lucid/_C/tensor/**",     ["obsidian/api/api-cpp-tree.md"]),
 
     # ── Top-level Python ──────────────────────────────────────────────────
     ("lucid/__init__.py",      ["obsidian/api/api-python-toplevel.md"]),

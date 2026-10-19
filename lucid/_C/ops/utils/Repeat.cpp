@@ -158,7 +158,7 @@ TensorImplPtr repeat_op(const TensorImplPtr& a, std::int64_t repeats, int axis) 
     if (repeats < 0)
         ErrorBuilder("repeat").invalid_argument("Repeats must be non-negative, got " +
                                                 std::to_string(repeats));
-    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()), "repeat");
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
     scope.set_attr("repeats", static_cast<std::int64_t>(repeats));
     Shape out_shape = a->shape();

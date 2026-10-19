@@ -125,8 +125,8 @@ def _python_scalar(value: object) -> PyScalar:
 
 def _scalar_dtype(value: object, default_float: _C_engine.Dtype) -> _C_engine.Dtype:
     r"""The dtype a literal element asks for on its own."""
-    impl: object = getattr(value, "_impl", None)
-    if isinstance(impl, _C_engine.TensorImpl):
+    impl = _promotion.try_unwrap(value)
+    if impl is not None:
         return impl.dtype
     if _is_numpy_scalar(value):
         return _NUMPY_SCALAR_DTYPE[str(getattr(value, "dtype", ""))]

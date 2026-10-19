@@ -195,8 +195,8 @@ def _token(part: object) -> object:
     or a ``TensorImpl`` — an integer index or a bool mask."""
     if isinstance(part, (type(None), type(Ellipsis), bool, int, slice)):
         return part
-    impl = getattr(part, "_impl", None)
-    if not isinstance(impl, _C_engine.TensorImpl):
+    impl = _promotion.try_unwrap(part)
+    if impl is None:
         if isinstance(part, SupportsIndex) and getattr(part, "ndim", 0) == 0:
             try:
                 return operator.index(part)  # a NumPy integer
@@ -838,7 +838,7 @@ def broadcast_tensors(*tensors: Tensor) -> tuple[Tensor, ...]:
     ((3, 2), (3, 2))
     """
     for i, t in enumerate(tensors):
-        if not hasattr(t, "_impl") or not hasattr(t, "broadcast_to"):
+        if _promotion.try_unwrap(t) is None or not hasattr(t, "broadcast_to"):
             raise TypeError(
                 f"broadcast_tensors(): expected Tensor at position {i}, "
                 f"got {type(t).__name__}"
@@ -879,8 +879,8 @@ def _normalize_value(
     anything else that is not a tensor is converted as ``lucid.tensor``
     would convert it.
     """
-    impl = getattr(value, "_impl", None)
-    if not isinstance(impl, _C_engine.TensorImpl):
+    impl = _promotion.try_unwrap(value)
+    if impl is None:
         value = _promotion.as_number(value)
         if isinstance(value, _promotion.NUMBER):
             return _fill(shape, value, dst.dtype, dst.device)

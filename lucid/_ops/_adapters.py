@@ -258,8 +258,8 @@ def _scatter_add_adapter(
 
 def _as_dim(value: object) -> int:
     """``value`` as a ``gather`` dim: an int, or a 0-d integer tensor."""
-    impl = getattr(value, "_impl", None)
-    if isinstance(impl, _Impl):
+    impl = _promotion.try_unwrap(value)
+    if impl is not None:
         if not impl.shape and _promotion.is_integer(impl.dtype):
             return int(cast(int, impl.item()))
         raise TypeError(
@@ -285,10 +285,11 @@ def _gather_adapter(
         raise _C_engine.NotImplementedError(
             "gather(): sparse_grad=True is not supported"
         )
-    if not hasattr(index, "_impl"):
+    index_impl = _promotion.try_unwrap(index)
+    if index_impl is None:
         raise TypeError(f"gather(): index must be a Tensor, got {type(index).__name__}")
     d = dim if type(dim) is int else _as_dim(dim)
-    return _C_engine.gather(_unwrap(input), _unwrap(index), d)
+    return _C_engine.gather(_unwrap(input), index_impl, d)
 
 
 # ── Composite indexing adapters ──────────────────────────────────────────────

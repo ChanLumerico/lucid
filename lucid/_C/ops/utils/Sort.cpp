@@ -157,7 +157,7 @@ TensorImplPtr sort_op(const TensorImplPtr& a, int axis) {
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"sort", device, dt, a->shape()};
-    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()), "sort");
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
     Shape out_shape = a->shape();
     // sort_select(topk=false) returns all elements in sorted order.
@@ -176,7 +176,7 @@ TensorImplPtr argsort_op(const TensorImplPtr& a, int axis) {
         return on_scalar_axis(a, axis, "argsort", argsort_op);
     const Device device = a->device();
     OpScopeFull scope{"argsort", device, a->dtype(), a->shape()};
-    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()), "argsort");
     scope.set_attr("axis", static_cast<std::int64_t>(ax));
     Storage out =
         backend::Dispatcher::for_device(device).argsort(a->storage(), a->shape(), ax, a->dtype());
@@ -200,7 +200,7 @@ argext_dispatch(const TensorImplPtr& a, int axis, bool keepdims, bool is_min, co
         });
     const Device device = a->device();
     OpScopeFull scope{name, device, a->dtype(), a->shape()};
-    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()), name);
     // An empty axis has no extreme to point at.  The CPU read index 0 of an
     // empty row and answered with it; Metal raised MLX's message.
     if (a->shape()[static_cast<std::size_t>(ax)] == 0)
@@ -408,7 +408,7 @@ std::vector<TensorImplPtr> topk_op(const TensorImplPtr& a, std::int64_t k, int a
                               [](const TensorImplPtr& v, int ax) { return topk_op(v, 1, ax); });
     }
     OpScopeFull scope{"topk", device, dt, a->shape()};
-    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()));
+    int ax = wrap_axis(axis, static_cast<int>(a->shape().size()), "topk");
     // k = 0 is an empty selection, not an error: the values still carry a
     // grad_fn, whose backward is a zero gradient.
     const std::int64_t size = a->shape()[static_cast<std::size_t>(ax)];

@@ -568,7 +568,7 @@ roll_op(const TensorImplPtr& a, std::vector<std::int64_t> shifts, std::vector<in
         ErrorBuilder("roll").fail("shifts and axes must have equal length");
     const std::size_t ndim = a->shape().size();
     for (std::size_t i = 0; i < axes.size(); ++i)
-        axes[i] = wrap_axis(axes[i], static_cast<int>(ndim));
+        axes[i] = wrap_axis(axes[i], static_cast<int>(ndim), "roll");
     {
         std::vector<std::int64_t> axes_attr(axes.begin(), axes.end());
         scope.set_attr("shifts", shifts);
@@ -640,7 +640,7 @@ TensorImplPtr gather_op(const TensorImplPtr& a, const TensorImplPtr& indices, in
                                     std::string(dtype_name(indices->dtype())));
     }
     const std::size_t ndim = a->shape().size();
-    int ax = wrap_axis(axis, static_cast<int>(ndim));
+    int ax = wrap_axis(axis, static_cast<int>(ndim), "gather");
     // Any index into an empty axis is out of range, and saying so needs only
     // the shapes — no read of the indices, so no host sync on Metal, which
     // otherwise answered with whatever MLX gathers from nothing.  The CPU
@@ -697,8 +697,8 @@ TensorImplPtr diagonal_op(const TensorImplPtr& a, int offset, int axis1, int axi
     const std::size_t ndim = a->shape().size();
     if (ndim < 2)
         ErrorBuilder("diagonal").fail("input must be ≥2-D");
-    int a1 = wrap_axis(axis1, static_cast<int>(ndim));
-    int a2 = wrap_axis(axis2, static_cast<int>(ndim));
+    int a1 = wrap_axis(axis1, static_cast<int>(ndim), "diagonal");
+    int a2 = wrap_axis(axis2, static_cast<int>(ndim), "diagonal");
     if (a1 == a2)
         ErrorBuilder("diagonal").fail("axis1 and axis2 must differ");
     // Kept in ascending order.  Swapping the axes mirrors the matrix, so the
