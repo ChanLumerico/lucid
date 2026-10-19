@@ -136,7 +136,7 @@ def _kl_expfamily_expfamily(p: ExponentialFamily, q: ExponentialFamily) -> Tenso
     gradients = lucid.autograd.grad(lg_normal.sum(), p_nparams, create_graph=True)
     result = q._log_normalizer(*q_nparams) - lg_normal
     for pnp, qnp, g in zip(p_nparams, q_nparams, gradients, strict=False):
-        result = result - _sum_rightmost((qnp - pnp) * g, len(q.event_shape))
+        result = result - _sum_rightmost((qnp - pnp) * g, pnp.ndim - len(p.batch_shape))
     return result
 
 
@@ -206,7 +206,7 @@ def _kl_wishart_wishart(p: Wishart, q: Wishart) -> Tensor:
     grads = lucid.autograd.grad(lg_p.sum(), p_nparams, create_graph=True)
     result = _log_norm(q_nparams[0], q_nparams[1]) - lg_p
     for pnp, qnp, g in zip(p_nparams, q_nparams, grads, strict=False):
-        result = result - _sum_rightmost((qnp - pnp) * g, len(q.event_shape))
+        result = result - _sum_rightmost((qnp - pnp) * g, pnp.ndim - len(p.batch_shape))
     return result
 
 

@@ -254,7 +254,7 @@
     "lucid/compile/_optim/compiler.py": 774,
     "lucid/coreml/_build.py": 1743,
     "lucid/coreml/_emit.py": 1184,
-    "lucid/distributions/transforms.py": 282,
+    "lucid/distributions/transforms.py": 279,
     "lucid/fft/__init__.py": 379,
     "lucid/linalg/__init__.py": 2254,
     "lucid/models/_utils/_detection.py": 1340,

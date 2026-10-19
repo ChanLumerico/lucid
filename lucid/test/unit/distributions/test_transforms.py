@@ -773,3 +773,31 @@ def test_an_empty_batch_has_an_empty_transformed_log_prob():
         [T.ExpTransform()],
     )
     assert tuple(pushed.log_prob(_t(np.ones((0, 3)))).shape) == (0,)
+
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+@pytest.mark.parametrize("reinterpreted_ndims", [1, 2])
+def test_independent_transform_with_event_dim_inner_matches_reference(
+    ref, device, reinterpreted_ndims
+):
+    """LCD-482: ``IndependentTransform.log_abs_det_jacobian`` sums over
+    ``reinterpreted_batch_ndims`` (not ``reinterpreted_batch_ndims - inner.event_dim``),
+    because the inner transform has already reduced its own event dims."""
+    rt = ref.distributions.transforms
+    raw = np.linspace(-0.8, 0.8, 2 * 3 * 4, dtype=np.float32).reshape(2, 3, 4)
+    x = lucid.tensor(raw, device=device)
+    rx = ref.tensor(raw)
+
+    ours = T.IndependentTransform(T.StickBreakingTransform(), reinterpreted_ndims)
+    theirs = rt.IndependentTransform(rt.StickBreakingTransform(), reinterpreted_ndims)
+    y = ours(x)
+    ry = theirs(rx)
+    got = ours.log_abs_det_jacobian(x, y)
+    want = theirs.log_abs_det_jacobian(rx, ry)
+
+    assert got.device.type == device
+    assert tuple(got.shape) == tuple(want.shape) == (2, 3)[: 2 - reinterpreted_ndims]
+    np.testing.assert_allclose(
+        got.to("cpu").numpy(), want.numpy(), rtol=1e-5, atol=1e-6
+    )
+

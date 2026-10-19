@@ -447,3 +447,145 @@ def test_expfamily_bregman_kl(ref: Any) -> None:
 
     with pytest.raises(NotImplementedError):
         kl_divergence(p, _OtherExpFamily())
+
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+def test_batched_kl_matches_unbatched_across_expfamily_and_wishart(
+    device: str,
+) -> None:
+    """LCD-482: batched KL for Wishart and every registered ExponentialFamily pair
+    (including mixed-event-rank natural parameters) agrees element-by-element with
+    its unbatched scalar oracle."""
+    t = _lucid_at(device, np.float32)
+
+    # 1. Wishart: natural parameters have event rank 2 (precision_matrix) and 0 (df).
+    cov_p = [[2.0, 0.3], [0.3, 1.0]]
+    cov_q = [[1.5, -0.2], [-0.2, 2.0]]
+    w_p0 = D.Wishart(t(4.0), covariance_matrix=t(cov_p))
+    w_q0 = D.Wishart(t(5.0), covariance_matrix=t(cov_q))
+    scalar_wishart = float(kl_divergence(w_p0, w_q0).to("cpu").item())
+
+    for batch_shape in [(3,), (2, 3)]:
+        df_p = lucid.full(batch_shape, 4.0, device=device)
+        df_q = lucid.full(batch_shape, 5.0, device=device)
+        mat_p = t(cov_p).expand(*batch_shape, 2, 2).contiguous()
+        mat_q = t(cov_q).expand(*batch_shape, 2, 2).contiguous()
+        got = kl_divergence(
+            D.Wishart(df_p, covariance_matrix=mat_p),
+            D.Wishart(df_q, covariance_matrix=mat_q),
+        )
+        assert got.device.type == device
+        assert tuple(got.shape) == batch_shape
+        np.testing.assert_allclose(
+            got.to("cpu").numpy(),
+            np.full(batch_shape, scalar_wishart, dtype=np.float32),
+            rtol=1e-5,
+            atol=1e-6,
+        )
+
+    # 2. _kl_expfamily_expfamily on a custom ExponentialFamily whose natural
+    #    parameters have differing event ranks (rank 2 and rank 0).
+    class _MixedRankExpFamily(D.ExponentialFamily):
+        def __init__(self, mat: lucid.Tensor, nu: lucid.Tensor) -> None:
+            self.mat = mat
+            self.nu = nu
+            super().__init__(batch_shape=tuple(nu.shape), event_shape=(2, 2))
+
+        @property
+        @override
+        def _natural_params(self) -> tuple[lucid.Tensor, ...]:
+            return (self.mat, self.nu)
+
+        @override
+        def _log_normalizer(self, *natural_params: lucid.Tensor) -> lucid.Tensor:
+            x, y = natural_params
+            return 0.5 * (x**2).sum(dim=(-2, -1)) + 0.25 * (y**2)
+
+    m_p0 = _MixedRankExpFamily(t(cov_p), t(4.0))
+    m_q0 = _MixedRankExpFamily(t(cov_q), t(5.0))
+    scalar_mixed = float(kl_divergence(m_p0, m_q0).to("cpu").item())
+    m_pb = _MixedRankExpFamily(
+        t(cov_p).expand(3, 2, 2).contiguous(),
+        lucid.full((3,), 4.0, device=device),
+    )
+    m_qb = _MixedRankExpFamily(
+        t(cov_q).expand(3, 2, 2).contiguous(),
+        lucid.full((3,), 5.0, device=device),
+    )
+    got_mixed = kl_divergence(m_pb, m_qb)
+    assert tuple(got_mixed.shape) == (3,)
+    np.testing.assert_allclose(
+        got_mixed.to("cpu").numpy(),
+        np.full((3,), scalar_mixed, dtype=np.float32),
+        rtol=1e-5,
+        atol=1e-6,
+    )
+
+    # 3. Every concrete ExponentialFamily subclass in Lucid: batched KL equals
+    #    the per-slice unbatched KL.
+    exp_cases: list[tuple[D.Distribution, D.Distribution, list[tuple[D.Distribution, D.Distribution]]]] = [
+        (
+            D.Bernoulli(probs=t([0.2, 0.7])),
+            D.Bernoulli(probs=t([0.6, 0.3])),
+            [
+                (D.Bernoulli(probs=t(0.2)), D.Bernoulli(probs=t(0.6))),
+                (D.Bernoulli(probs=t(0.7)), D.Bernoulli(probs=t(0.3))),
+            ],
+        ),
+        (
+            D.Beta(t([2.0, 1.5]), t([3.0, 2.5])),
+            D.Beta(t([1.2, 3.0]), t([2.0, 1.5])),
+            [
+                (D.Beta(t(2.0), t(3.0)), D.Beta(t(1.2), t(2.0))),
+                (D.Beta(t(1.5), t(2.5)), D.Beta(t(3.0), t(1.5))),
+            ],
+        ),
+        (
+            D.Dirichlet(t([[1.5, 2.0, 3.0], [2.0, 1.0, 2.5]])),
+            D.Dirichlet(t([[2.0, 1.5, 2.0], [1.2, 2.5, 1.8]])),
+            [
+                (D.Dirichlet(t([1.5, 2.0, 3.0])), D.Dirichlet(t([2.0, 1.5, 2.0]))),
+                (D.Dirichlet(t([2.0, 1.0, 2.5])), D.Dirichlet(t([1.2, 2.5, 1.8]))),
+            ],
+        ),
+        (
+            D.Exponential(t([1.5, 2.5])),
+            D.Exponential(t([0.8, 1.2])),
+            [
+                (D.Exponential(t(1.5)), D.Exponential(t(0.8))),
+                (D.Exponential(t(2.5)), D.Exponential(t(1.2))),
+            ],
+        ),
+        (
+            D.Gamma(t([2.0, 3.5]), t([1.5, 2.0])),
+            D.Gamma(t([1.5, 2.5]), t([1.0, 1.5])),
+            [
+                (D.Gamma(t(2.0), t(1.5)), D.Gamma(t(1.5), t(1.0))),
+                (D.Gamma(t(3.5), t(2.0)), D.Gamma(t(2.5), t(1.5))),
+            ],
+        ),
+        (
+            D.Normal(t([0.5, -0.5]), t([1.2, 0.8])),
+            D.Normal(t([0.0, 1.0]), t([1.5, 1.2])),
+            [
+                (D.Normal(t(0.5), t(1.2)), D.Normal(t(0.0), t(1.5))),
+                (D.Normal(t(-0.5), t(0.8)), D.Normal(t(1.0), t(1.2))),
+            ],
+        ),
+        (
+            D.Poisson(t([1.5, 3.0])),
+            D.Poisson(t([2.5, 1.2])),
+            [
+                (D.Poisson(t(1.5)), D.Poisson(t(2.5))),
+                (D.Poisson(t(3.0)), D.Poisson(t(1.2))),
+            ],
+        ),
+    ]
+    for p_batched, q_batched, slices in exp_cases:
+        got_b = kl_divergence(p_batched, q_batched).to("cpu").numpy()
+        want_b = np.array(
+            [float(kl_divergence(ps, qs).to("cpu").item()) for ps, qs in slices],
+            dtype=np.float32,
+        )
+        np.testing.assert_allclose(got_b, want_b, rtol=1e-5, atol=1e-6)
+

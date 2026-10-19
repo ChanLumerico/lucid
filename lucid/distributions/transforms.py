@@ -946,8 +946,7 @@ class IndependentTransform(Transform):
     -----
     Forward / inverse: unchanged from the inner transform.
 
-    Log Jacobian determinant (with :math:`n` =
-    ``reinterpreted_batch_ndims`` minus the inner ``event_dim``):
+    Log Jacobian determinant (with :math:`n` = ``reinterpreted_batch_ndims``):
 
     .. math::
 
@@ -1022,9 +1021,7 @@ class IndependentTransform(Transform):
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         """Sum the wrapped Jacobian over the reinterpreted trailing dims."""
         lp = self.transform.log_abs_det_jacobian(x, y)
-        return _sum_rightmost(
-            lp, self.reinterpreted_batch_ndims - self.transform.event_dim
-        )
+        return _sum_rightmost(lp, self.reinterpreted_batch_ndims)
 
 
 class ReshapeTransform(Transform):
