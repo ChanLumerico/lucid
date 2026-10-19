@@ -1601,7 +1601,40 @@ class OneCycleLR(_LRScheduler, _OneCycleLike):
         return _one_cycle_get_lr(self)
 
 
-class SequentialLR:
+class _CompositeSchedulerMixin:
+    """Shared checkpoint serialisation for composite schedulers."""
+
+    schedulers: list[_LRScheduler]
+
+    def state_dict(self) -> dict[str, object]:
+        """Serialisable state, including each wrapped scheduler's own state."""
+        own = {
+            k: v
+            for k, v in self.__dict__.items()
+            if k not in ("optimizer", "schedulers") and not _holds_a_callable(v)
+        }
+        own["schedulers"] = [sch.state_dict() for sch in self.schedulers]
+        return own
+
+    def load_state_dict(self, state_dict: dict[str, object]) -> None:
+        """Restore state produced by :meth:`state_dict`."""
+        incoming = dict(state_dict)
+        raw_children = incoming.pop("schedulers", None)
+        self.__dict__.update(incoming)
+        if raw_children is not None:
+            if not isinstance(raw_children, list):
+                raise TypeError("load_state_dict: 'schedulers' must be a list")
+            child_states: list[dict[str, object]] = raw_children
+            if len(child_states) != len(self.schedulers):
+                raise ValueError(
+                    f"{type(self).__name__}.load_state_dict: got {len(child_states)} child states "
+                    f"for {len(self.schedulers)} schedulers"
+                )
+            for sch, child in zip(self.schedulers, child_states, strict=True):
+                sch.load_state_dict(child)
+
+
+class SequentialLR(_CompositeSchedulerMixin):
     """Chain multiple schedulers and switch between them at epoch milestones.
 
     ``SequentialLR`` runs its list of schedulers one at a time, activating
@@ -1679,42 +1712,6 @@ class SequentialLR:
         _write_rates(optimizer.param_groups, schedulers[0].get_lr())
         optimizer._sync_hyperparams()
 
-    def state_dict(self) -> dict[str, object]:
-        """Serialisable state, including each wrapped scheduler's own state.
-
-        The children are live scheduler objects, so they are replaced by their
-        ``state_dict()`` under ``"schedulers"``; :meth:`load_state_dict` feeds
-        them back into the corresponding children.
-        """
-        own = {
-            k: v
-            for k, v in self.__dict__.items()
-            if k not in ("optimizer", "schedulers") and not _holds_a_callable(v)
-        }
-        own["schedulers"] = [sch.state_dict() for sch in self.schedulers]
-        return own
-
-    def load_state_dict(self, state_dict: dict[str, object]) -> None:
-        """Restore state produced by :meth:`state_dict`.
-
-        ``schedulers`` must have the same length and order as when it was
-        saved — the children themselves are not reconstructed here.
-        """
-        incoming = dict(state_dict)
-        raw_children = incoming.pop("schedulers", None)
-        self.__dict__.update(incoming)
-        if raw_children is not None:
-            if not isinstance(raw_children, list):
-                raise TypeError("load_state_dict: 'schedulers' must be a list")
-            child_states: list[dict[str, object]] = raw_children
-            if len(child_states) != len(self.schedulers):
-                raise ValueError(
-                    f"SequentialLR.load_state_dict: got {len(child_states)} child states "
-                    f"for {len(self.schedulers)} schedulers"
-                )
-            for sch, child in zip(self.schedulers, child_states, strict=True):
-                sch.load_state_dict(child)
-
     def step(self) -> None:
         """Advance the active scheduler by one epoch, switching if a milestone is reached.
 
@@ -1758,7 +1755,7 @@ class SequentialLR:
         return self.schedulers[min(self._idx, len(self.schedulers) - 1)].get_last_lr()
 
 
-class ChainedScheduler:
+class ChainedScheduler(_CompositeSchedulerMixin):
     r"""Apply multiple schedulers simultaneously, compounding their LR changes.
 
     At every :meth:`step` call each scheduler in the list is stepped in
@@ -1844,41 +1841,18 @@ class ChainedScheduler:
         optimizer = self.schedulers[0].optimizer
         values: list[float] = []
         for i, group in enumerate(optimizer.param_groups):
+            tracked = [sch for sch in self.schedulers if i < len(sch.base_lrs)]
+            if not tracked:
+                values.append(_group_float(group, "lr"))
+                continue
             lr = _group_float(group, "initial_lr" if "initial_lr" in group else "lr")
-            for sch in self.schedulers:
+            for sch in tracked:
                 base = sch.base_lrs[i]
                 lr *= sch._last_lr[i] / base if base else 1.0
             group["lr"] = lr
             values.append(lr)
         self._last_lr = values
         optimizer._sync_hyperparams()
-
-    def state_dict(self) -> dict[str, object]:
-        """Serialisable state, including each wrapped scheduler's own state."""
-        own = {
-            k: v
-            for k, v in self.__dict__.items()
-            if k not in ("optimizer", "schedulers") and not _holds_a_callable(v)
-        }
-        own["schedulers"] = [sch.state_dict() for sch in self.schedulers]
-        return own
-
-    def load_state_dict(self, state_dict: dict[str, object]) -> None:
-        """Restore state produced by :meth:`state_dict`."""
-        incoming = dict(state_dict)
-        raw_children = incoming.pop("schedulers", None)
-        self.__dict__.update(incoming)
-        if raw_children is not None:
-            if not isinstance(raw_children, list):
-                raise TypeError("load_state_dict: 'schedulers' must be a list")
-            child_states: list[dict[str, object]] = raw_children
-            if len(child_states) != len(self.schedulers):
-                raise ValueError(
-                    f"ChainedScheduler.load_state_dict: got {len(child_states)} child states "
-                    f"for {len(self.schedulers)} schedulers"
-                )
-            for sch, child in zip(self.schedulers, child_states, strict=True):
-                sch.load_state_dict(child)
 
     def step(self) -> None:
         """Step all chained schedulers simultaneously.

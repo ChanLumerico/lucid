@@ -378,18 +378,43 @@ def test_the_padding_reaches_the_model_at_pad_value() -> None:
 
 
 @pytest.mark.parametrize(
-    ("mean", "std"), [((0.5,), None), ((0.5, 0.5, 0.5), (0.25,))], ids=["1-3", "3-1"]
+    ("mean", "std"), [((0.5, 0.5), None), ((0.5, 0.5, 0.5), (0.25, 0.25))], ids=["2-3", "3-2"]
 )
 def test_a_pad_value_with_unpaired_mean_and_std_names_both(
     mean: tuple[float, ...], std: tuple[float, ...] | None
 ) -> None:
-    """The fill is one value per channel, so ``mean`` and ``std`` must pair.
+    """The fill is one value per channel, so incompatible ``mean`` and ``std`` must raise.
 
     They were zipped to build it, which named neither once ``zip`` turned
     strict — and before that dropped the unpaired channels from the fill.
     """
-    with pytest.raises(ValueError, match="mean and std .* got (1 and 3|3 and 1)"):
+    with pytest.raises(ValueError, match="mean and std .* got (2 and 3|3 and 2)"):
         T.Detection(max_size=64, pad_value=0.0, mean=mean, std=std)
+
+
+@pytest.mark.parametrize(
+    ("mean", "std"),
+    [((0.5,), (0.25,)), ((0.5, 0.25, 0.75), (0.5,)), ((0.5,), (0.25, 0.5, 0.125))],
+    ids=["1-1", "3-1", "1-3"],
+)
+def test_broadcastable_mean_and_std_normalize_and_pad_channels(
+    mean: tuple[float, ...], std: tuple[float, ...]
+) -> None:
+    img = lucid.tensor([[[1.0, 2.0]], [[3.0, 4.0]], [[5.0, 6.0]]])
+    norm = T.Normalize(mean=mean, std=std, max_pixel_value=1.0)
+    out3 = norm(T.Image(img)).data
+    out4 = norm(T.Image(img.unsqueeze(0))).data
+    m_exp = mean * 3 if len(mean) == 1 else mean
+    s_exp = std * 3 if len(std) == 1 else std
+    for c in range(3):
+        expected = (img[c] - m_exp[c]) / s_exp[c]
+        assert lucid.allclose(out3[c], expected)
+        assert lucid.allclose(out4[0, c], expected)
+    det = T.Detection(
+        max_size=64, pad_value=0.25, pad_position="top_left", mean=mean, std=std
+    )
+    padded = det(T.Image(lucid.rand(3, 16, 32))).data
+    assert float((padded[:, 32:, :] - 0.25).abs().max().item()) < 1e-6
 
 
 def test_without_pad_value_the_padding_is_a_normalised_black_pixel() -> None:

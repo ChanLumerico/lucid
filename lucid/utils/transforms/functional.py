@@ -262,32 +262,28 @@ def normalize(
 ) -> Tensor:
     r"""Normalize per channel: ``(img - mean) / std``.
 
-    ``mean`` / ``std`` are broadcast over the channel axis.
+    ``mean`` / ``std`` are broadcast over the channel axis (length ``1`` or ``C``).
 
     Parameters
     ----------
     img : Tensor
         Image ``(C, H, W)`` or ``(B, C, H, W)`` in floating dtype.
     mean : tuple of float
-        Per-channel mean, one entry per channel (length must equal ``C``).
+        Per-channel mean (length ``1`` or ``C``).
     std : tuple of float
-        Per-channel standard deviation; same length as ``mean``.
+        Per-channel standard deviation (length ``1`` or ``C``).
 
     Returns
     -------
     Tensor
         Normalized image with the same shape and dtype as ``img``.
     """
-    c = int(img.shape[-3])
     mean_t = lucid.tensor(list(mean), dtype=img.dtype, device=img.device).reshape(
-        1, c, 1, 1
+        -1, 1, 1
     )
     std_t = lucid.tensor(list(std), dtype=img.dtype, device=img.device).reshape(
-        1, c, 1, 1
+        -1, 1, 1
     )
-    if img.ndim == 3:
-        mean_t = mean_t[0]
-        std_t = std_t[0]
     return (img - mean_t) / std_t
 
 

@@ -1040,6 +1040,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - check Cholesky positive-definiteness across mixed batches
 
+- preserve late group in ChainedScheduler and broadcast 1-channel Normalize
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

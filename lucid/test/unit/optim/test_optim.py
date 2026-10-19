@@ -115,14 +115,10 @@ _BASE_RATE_SCHEDULERS = {
     "SequentialLR": lambda o: _S.SequentialLR(
         o, [_S.ConstantLR(o), _S.LinearLR(o)], milestones=[2]
     ),
-    "ChainedScheduler": pytest.param(
-        lambda o: _S.ChainedScheduler([_S.ConstantLR(o), _S.LinearLR(o)]),
-        marks=pytest.mark.xfail(
-            strict=True,
-            raises=IndexError,
-            reason="FOUND in LCD-470: _compose reads base_lrs[i] for every group",
-        ),
+    "ChainedScheduler": lambda o: _S.ChainedScheduler(
+        [_S.ConstantLR(o), _S.LinearLR(o)]
     ),
+    "CyclicLR": lambda o: _S.CyclicLR(o, base_lr=0.01, max_lr=0.2, step_size_up=2),
 }
 
 
