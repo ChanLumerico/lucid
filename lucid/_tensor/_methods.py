@@ -939,6 +939,22 @@ def _heaviside_(self: Tensor, values: TensorOrScalar) -> Tensor:
     )
 
 
+def _divide(
+    self: Tensor, other: TensorOrScalar, *, rounding_mode: str | None = None
+) -> Tensor:
+    """Element-wise division — :meth:`Tensor.div` under its longer name."""
+    import lucid
+
+    return lucid.divide(self, other, rounding_mode=rounding_mode)
+
+
+def _true_divide(self: Tensor, other: TensorOrScalar) -> Tensor:
+    """Element-wise true (floating-point) division."""
+    import lucid
+
+    return lucid.true_divide(self, other)
+
+
 def _divide_(
     self: Tensor, other: TensorOrScalar, *, rounding_mode: str | None = None
 ) -> Tensor:
@@ -1227,6 +1243,8 @@ _EXTRA_METHODS = (
     ("addcdiv", _addcdiv),
     ("is_set_to", _is_set_to),
     ("bernoulli", _bernoulli),
+    ("divide", _divide),
+    ("true_divide", _true_divide),
     ("bitwise_and_", _bitwise_and_),
     ("bitwise_or_", _bitwise_or_),
     ("bitwise_xor_", _bitwise_xor_),

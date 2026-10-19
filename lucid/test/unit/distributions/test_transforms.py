@@ -801,3 +801,42 @@ def test_independent_transform_with_event_dim_inner_matches_reference(
         got.to("cpu").numpy(), want.numpy(), rtol=1e-5, atol=1e-6
     )
 
+
+@pytest.mark.parametrize("device", ["cpu", "metal"])
+@pytest.mark.parametrize(
+    ("dim", "lengths"),
+    [(-1, [2, 2]), (1, [2, 2]), (0, [1, 2]), (-2, [1, 2])],
+)
+def test_cat_transform_mixed_event_dim_matches_reference(
+    ref, device, dim, lengths
+):
+    """LCD-507: ``CatTransform.log_abs_det_jacobian`` reduces partitions with
+    smaller ``event_dim`` via ``_sum_rightmost`` and concatenates or sums
+    according to whether ``dim`` falls inside ``self.event_dim``."""
+    rt = ref.distributions.transforms
+    raw = np.linspace(-0.8, 0.8, 3 * 4, dtype=np.float32).reshape(3, 4)
+    x = lucid.tensor(raw, device=device)
+    rx = ref.tensor(raw)
+
+    ours = T.CatTransform(
+        [T.ExpTransform(), T.IndependentTransform(T.ExpTransform(), 1)],
+        dim=dim,
+        lengths=lengths,
+    )
+    theirs = rt.CatTransform(
+        [rt.ExpTransform(), rt.IndependentTransform(rt.ExpTransform(), 1)],
+        dim=dim,
+        lengths=lengths,
+    )
+    y = ours(x)
+    ry = theirs(rx)
+    got = ours.log_abs_det_jacobian(x, y)
+    want = theirs.log_abs_det_jacobian(rx, ry)
+
+    assert got.device.type == device
+    assert tuple(got.shape) == tuple(want.shape) == (3,)
+    np.testing.assert_allclose(
+        got.to("cpu").numpy(), want.numpy(), rtol=1e-5, atol=1e-6
+    )
+
+

@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
+- `Tensor.divide` and `Tensor.true_divide` matching `lucid.divide` and `lucid.true_divide` (LCD-507)
+
 - parallel-agent workspace with worktree claims and fast-forward land
 
 - warn_deprecated for one spelling of a call on its way out

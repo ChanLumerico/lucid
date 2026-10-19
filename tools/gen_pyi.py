@@ -1100,6 +1100,8 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def broadcast_to(self, *size: _int) -> Tensor: ...",
         "    def unbind(self, dim: _int = 0) -> list[Tensor]: ...",
         "    def rsqrt(self) -> Tensor: ...",
+        "    def divide(self, other: Tensor | _float, *, rounding_mode: str | None = None) -> Tensor: ...",
+        "    def true_divide(self, other: Tensor | _float) -> Tensor: ...",
     ]
     from lucid._tensor._methods import (
         _BINARY_INPLACE_TWINS,
@@ -1868,6 +1870,7 @@ _PARAM_TYPE_MAP: dict[str, str] = {
     "format": "str",
     "side": "str | None",
     "compute_mode": "str",
+    "rounding_mode": "str | None",
     # ── dtype / device / generator ─────────────────────────────────────────
     "dtype": "DTypeLike",
     "device": "DeviceLike",

@@ -121,8 +121,11 @@ TensorImplPtr pad_op(const TensorImplPtr& a,
         ErrorBuilder("pad").fail("pad_width length must equal ndim");
     const std::size_t ndim = a->shape().size();
     Shape out_shape(ndim);
-    for (std::size_t d = 0; d < ndim; ++d)
+    for (std::size_t d = 0; d < ndim; ++d) {
+        if (pad_width[d].first < 0 || pad_width[d].second < 0)
+            ErrorBuilder("pad").invalid_argument("pad_width entries must be non-negative");
         out_shape[d] = a->shape()[d] + pad_width[d].first + pad_width[d].second;
+    }
     {
         // Flatten the per-axis (lo, hi) pairs into a single int64 list:
         // [lo_0, hi_0, lo_1, hi_1, ...] — matches MPSGraph's padTensor:

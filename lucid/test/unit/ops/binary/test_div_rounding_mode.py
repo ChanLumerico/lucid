@@ -28,6 +28,7 @@ _SPELLINGS: dict[str, Callable[[Any, Any, Any, str | None], Any]] = {
     "div": lambda lib, a, b, m: lib.div(a, b, rounding_mode=m),
     "divide": lambda lib, a, b, m: lib.divide(a, b, rounding_mode=m),
     "Tensor.div": lambda lib, a, b, m: a.div(b, rounding_mode=m),
+    "Tensor.divide": lambda lib, a, b, m: a.divide(b, rounding_mode=m),
 }
 
 #: Operand pairs whose result dtype differs by mode: ``(a, a_dtype, b, b_dtype)``
@@ -179,3 +180,20 @@ def test_rounding_in_place_beside_a_live_view(ref: ModuleType, mode: str) -> Non
     y.sum().backward()
     ry.sum().backward()
     assert w.grad is not None and w.grad.tolist() == rw.grad.tolist()
+
+
+def test_tensor_divide_and_true_divide_methods(ref: ModuleType, device: str) -> None:
+    """LCD-507: ``Tensor.divide``, ``Tensor.divide_``, and ``Tensor.true_divide`` match reference."""
+    a = lucid.tensor([7, -7, 8], dtype=lucid.int64, device=device)
+    ra = ref.tensor([7, -7, 8], dtype=ref.int64)
+    got_td = a.true_divide(2)
+    want_td = ra.true_divide(2)
+    assert str(got_td.dtype).split(".")[-1] == str(want_td.dtype).split(".")[-1]
+    np.testing.assert_allclose(got_td.numpy(), want_td.numpy())
+
+    b = a.clone()
+    rb = ra.clone()
+    b.divide_(2, rounding_mode="trunc")
+    rb.divide_(2, rounding_mode="trunc")
+    assert b.tolist() == rb.tolist()
+

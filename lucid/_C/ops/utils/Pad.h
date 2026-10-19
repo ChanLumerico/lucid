@@ -58,8 +58,10 @@ namespace lucid {
 //
 // Raises
 // ------
-// ShapeMismatch
-//     If ``pad_width.size() != a.rank()`` or any width is negative.
+// InvalidArgument
+//     If any width in ``pad_width`` is negative.
+// LucidError
+//     If ``pad_width.size() != a.rank()``.
 //
 // Notes
 // -----

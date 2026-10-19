@@ -1754,26 +1754,26 @@ class CatTransform(Transform):
     @override
     def _call(self, x: Tensor) -> Tensor:
         """Split ``x`` along ``dim``, apply each transform, and concatenate."""
-        parts = self._split(x)
         return lucid.cat(
-            [t(p) for t, p in zip(self.transforms, parts, strict=True)], dim=self.dim
+            [t(p) for t, p in zip(self.transforms, self._split(x), strict=True)],
+            dim=self.dim,
         )
 
     @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Split ``y`` along ``dim``, apply each inverse, and concatenate."""
-        parts = self._split(y)
         return lucid.cat(
-            [t._inverse(p) for t, p in zip(self.transforms, parts, strict=True)],
+            [t._inverse(p) for t, p in zip(self.transforms, self._split(y), strict=True)],
             dim=self.dim,
         )
 
     @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        """Per-partition Jacobians concatenated back along ``dim``."""
+        """Per-partition Jacobians concatenated or summed according to ``event_dim``."""
         xs, ys = self._split(x), self._split(y)
         ladjs = [
-            t.log_abs_det_jacobian(xi, yi)
+            _sum_rightmost(t.log_abs_det_jacobian(xi, yi), self.event_dim - t.event_dim)
             for t, xi, yi in zip(self.transforms, xs, ys, strict=True)
         ]
-        return lucid.cat(ladjs, dim=self.dim)
+        dim = (self.dim - x.ndim if self.dim >= 0 else self.dim) + self.event_dim
+        return lucid.cat(ladjs, dim=dim) if dim < 0 else sum(ladjs[1:], ladjs[0])

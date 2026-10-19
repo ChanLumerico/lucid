@@ -111,3 +111,30 @@ def test_there_is_one_pad(ref: ModuleType, owner: Any) -> None:
     reference_owner = ref if owner is lucid else ref.Tensor
     assert not hasattr(reference_owner, "pad")
     assert not hasattr(owner, "pad")
+
+
+@pytest.mark.parametrize("mode", ["reflect", "replicate", "circular"])
+def test_non_constant_mode_refuses_value(
+    ref: ModuleType, device: str, mode: str
+) -> None:
+    """LCD-507: non-constant padding modes reject an explicit ``value``."""
+    with pytest.raises(RuntimeError, match="doesn't take in value argument"):
+        ref.nn.functional.pad(ref.zeros(1, 2, 3), (1, 1), mode=mode, value=1.0)
+    with pytest.raises(_C_engine.InvalidArgument, match="doesn't take in value argument"):
+        F.pad(lucid.zeros(1, 2, 3, device=device), (1, 1), mode=mode, value=1.0)
+    with pytest.raises(_C_engine.InvalidArgument, match="doesn't take in value argument"):
+        F.pad(lucid.zeros(1, 2, 3, device=device), (1, 1), mode=mode, value=0.0)
+
+
+@pytest.mark.parametrize(
+    "widths",
+    [[(0, 0), (0, 0), (-1, 1)], [(0, 0), (0, 0), (1, -1)], [(-1, 0), (0, 0), (0, 0)]],
+)
+def test_engine_pad_refuses_negative_widths(
+    device: str, widths: list[tuple[int, int]]
+) -> None:
+    """LCD-507: ``_C_engine.pad`` refuses negative widths instead of reading across rows."""
+    x = lucid.arange(6, dtype=lucid.float32, device=device).reshape(1, 2, 3)
+    with pytest.raises(_C_engine.InvalidArgument, match="non-negative"):
+        _C_engine.pad(x._impl, widths, 0.0)
+

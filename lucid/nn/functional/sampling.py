@@ -861,6 +861,10 @@ def pad(
         )
     pad_pairs = _flat_to_per_dim_pairs(pad, input.ndim)
     if mode != "constant":
+        if value is not None:
+            raise _C_engine.InvalidArgument(
+                f'Padding mode "{mode}" doesn\'t take in value argument'
+            )
         result = input
         for d, (lo, hi) in enumerate(pad_pairs):
             result = _pad_one_dim(result, d, lo, hi, mode)
