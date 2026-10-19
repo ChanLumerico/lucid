@@ -143,7 +143,7 @@ def _class_rows(name: str, kernels: frozenset[str]) -> list[Row]:
             Row(
                 id=f"{name}-target{bad}",
                 consumer=name,
-                call=lambda d, b=bad: {"x": _scores(d), "target": _ids([1, b], d)},
+                call=lambda d, b=bad: {"input": _scores(d), "target": _ids([1, b], d)},
                 match=f"{name}: Target {bad} is out of bounds",
                 metal=POISON,
                 kernels=kernels,
@@ -230,7 +230,7 @@ ROWS: list[Row] = [
         id="cross_entropy-kd-target",
         consumer="cross_entropy",
         call=lambda d: {
-            "x": _scores(d).reshape(N, C, 1),
+            "input": _scores(d).reshape(N, C, 1),
             "target": _ids([[1], [7]], d),
         },
         match="cross_entropy: Target 7 is out of bounds",
@@ -242,7 +242,7 @@ ROWS: list[Row] = [
         id="multilabel_margin_loss-listed",
         consumer="multilabel_margin_loss",
         call=lambda d: {
-            "x": _scores(d),
+            "input": _scores(d),
             "target": _ids([[1, 0, -1, 0], [2, 9, -1, 7]], d),
         },
         match="multilabel_margin_loss: Target 9 is out of bounds",
@@ -268,7 +268,7 @@ ROWS: list[Row] = [
         Row(
             id=f"embedding-index{bad}",
             consumer="embedding",
-            call=lambda d, b=bad: {"x": _ids([[0, b]], d), "weight": _table(d)},
+            call=lambda d, b=bad: {"input": _ids([[0, b]], d), "weight": _table(d)},
             match=f"embedding: index {bad} is out of range for a table with 4",
             metal=NAN_ROW,
             kernels=frozenset({"embedding"}),
@@ -282,14 +282,14 @@ ROWS: list[Row] = [
             call=(
                 (
                     lambda d, b=bad: {
-                        "x": _ids([[0, 1], [0, b]], d),
+                        "input": _ids([[0, 1], [0, b]], d),
                         "weight": _table(d),
                     }
                 )
                 if form == "rows"
                 else (
                     lambda d, b=bad: {
-                        "x": _ids([0, 1, b], d),
+                        "input": _ids([0, 1, b], d),
                         "weight": _table(d),
                         "offsets": _ids([0, 2], d),
                     }
@@ -349,7 +349,7 @@ ROWS: list[Row] = [
             id=f"embedding_bag-offsets{off}{'-last' if last else ''}",
             consumer="embedding_bag",
             call=lambda d, o=off, la=last: {
-                "x": _ids([0, 1, 2], d),
+                "input": _ids([0, 1, 2], d),
                 "weight": _table(d),
                 "offsets": _ids(o, d),
                 "include_last_offset": la,
@@ -374,7 +374,7 @@ ROWS: list[Row] = [
             id=f"{name}-padding_idx{bad}",
             consumer=name,
             call=lambda d, b=bad: {
-                "x": _ids([[0, 1]], d),
+                "input": _ids([[0, 1]], d),
                 "weight": _table(d),
                 "padding_idx": b,
             },
@@ -412,6 +412,12 @@ def test_every_row_has_a_unique_id() -> None:
 # ── CPU: refused before the consumer's kernel ──────────────────────────────
 
 
+def _invoke(fn: Callable[..., lucid.Tensor], kwargs: Kwargs, **extra: object) -> lucid.Tensor:
+    kw = {**kwargs, **extra}
+    args = [kw.pop("tensor")] if "tensor" in kw else []
+    return fn(*args, **kw)
+
+
 @pytest.mark.parametrize("row", ROWS, ids=_ids_of(ROWS))
 def test_the_cpu_refuses_before_any_kernel(row: Row) -> None:
     kwargs = row.call("cpu")
@@ -419,7 +425,7 @@ def test_the_cpu_refuses_before_any_kernel(row: Row) -> None:
     syncs = _C_engine.host_sync_count()
     with lucid.profiler.profile() as prof:
         with pytest.raises(row.exc, match=row.match):
-            fn(**kwargs)
+            _invoke(fn, kwargs)
     dispatched = {event.name for event in prof.events()}
     assert dispatched <= GUARD_READS, f"not a guard read: {dispatched - GUARD_READS}"
     assert not dispatched & row.kernels
@@ -473,7 +479,7 @@ def test_metal_follows_the_documented_policy(row: Row) -> None:
         kwargs = row.call("metal")
         syncs = _C_engine.host_sync_count()
         with pytest.raises(row.exc, match=row.match):
-            fn(**kwargs)
+            _invoke(fn, kwargs)
         if row.metal == REFUSE:
             assert _C_engine.host_sync_count() == syncs, "read back on Metal"
         return
@@ -482,14 +488,14 @@ def test_metal_follows_the_documented_policy(row: Row) -> None:
     # the table indices themselves are never read back.
     expected_syncs = 1 if "offsets" in kwargs else 0
     syncs = _C_engine.host_sync_count()
-    out = fn(**kwargs, **row.per_sample)
+    out = _invoke(fn, kwargs, **row.per_sample)
     assert _C_engine.host_sync_count() - syncs == expected_syncs, "read back on Metal"
     if row.metal == POISON:
         values = _flat(out.tolist())
         assert math.isnan(values[row.bad])
         assert all(math.isfinite(v) for i, v in enumerate(values) if i != row.bad)
         syncs = _C_engine.host_sync_count()
-        mean = fn(**again)
+        mean = _invoke(fn, again)
         assert _C_engine.host_sync_count() == syncs, "read back on Metal"
         assert math.isnan(float(mean.item()))
     elif row.metal == NAN_ROW:
@@ -735,9 +741,9 @@ def test_the_reference_refuses_the_same_rows(ref: ModuleType, row: Row) -> None:
     kwargs = _ref_kwargs(R, row)
     args: list[object] = []
     if row.consumer in ("embedding", "embedding_bag"):
-        args = [kwargs.pop("x"), kwargs.pop("weight")]
-    elif "x" in kwargs:
-        args = [kwargs.pop("x")]
+        args = [kwargs.pop("input"), kwargs.pop("weight")]
+    elif "input" in kwargs:
+        args = [kwargs.pop("input")]
     elif "tensor" in kwargs:
         args = [kwargs.pop("tensor")]
     fn = getattr(R.nn.functional, row.consumer)

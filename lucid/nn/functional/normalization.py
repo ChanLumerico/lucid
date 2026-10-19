@@ -32,7 +32,7 @@ def _check_batch_norm_sample_count(x: Tensor, training: bool) -> None:
 
 
 def batch_norm(
-    x: Tensor,
+    input: Tensor,
     running_mean: Tensor | None,
     running_var: Tensor | None,
     weight: Tensor | None = None,
@@ -50,7 +50,7 @@ def batch_norm(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C, *)`` with 2–5 dimensions:
         ``(N, C)``, ``(N, C, L)``, ``(N, C, H, W)``, or
         ``(N, C, D, H, W)``.
@@ -75,7 +75,7 @@ def batch_norm(
     Returns
     -------
     Tensor
-        Same shape as ``x``.
+        Same shape as ``input``.
 
     Notes
     -----
@@ -106,20 +106,20 @@ def batch_norm(
     """
     from lucid._factories.creation import ones, zeros
 
-    _check_batch_norm_sample_count(x, training)
+    _check_batch_norm_sample_count(input, training)
 
-    C = x.shape[1]
-    ndim = x.ndim
-    xi = _unwrap(x)
+    C = input.shape[1]
+    ndim = input.ndim
+    xi = _unwrap(input)
     w = (
         _unwrap(weight)
         if weight is not None
-        else _unwrap(ones(C, device=x.device, dtype=x.dtype))
+        else _unwrap(ones(C, device=input.device, dtype=input.dtype))
     )
     b = (
         _unwrap(bias)
         if bias is not None
-        else _unwrap(zeros(C, device=x.device, dtype=x.dtype))
+        else _unwrap(zeros(C, device=input.device, dtype=input.dtype))
     )
 
     # ── Eval mode: use precomputed running statistics ─────────────────────────
@@ -157,7 +157,7 @@ def batch_norm(
 
 
 def layer_norm(
-    x: Tensor,
+    input: Tensor,
     normalized_shape: list[int] | tuple[int, ...],
     weight: Tensor | None = None,
     bias: Tensor | None = None,
@@ -173,7 +173,7 @@ def layer_norm(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input whose trailing dims match ``normalized_shape``.
     normalized_shape : list of int or tuple of int
         Trailing dims to normalise over.  E.g. ``(d,)`` for a
@@ -191,7 +191,7 @@ def layer_norm(
     Returns
     -------
     Tensor
-        Same shape as ``x``.
+        Same shape as ``input``.
 
     Notes
     -----
@@ -224,19 +224,19 @@ def layer_norm(
     w: _C_engine.TensorImpl = (
         _unwrap(weight)
         if weight is not None
-        else _unwrap(ones(*shape, device=x.device, dtype=x.dtype))
+        else _unwrap(ones(*shape, device=input.device, dtype=input.dtype))
     )
     b: _C_engine.TensorImpl = (
         _unwrap(bias)
         if bias is not None
-        else _unwrap(zeros(*shape, device=x.device, dtype=x.dtype))
+        else _unwrap(zeros(*shape, device=input.device, dtype=input.dtype))
     )
     # Engine API: layer_norm(x, gamma, beta, eps) — no normalized_shape arg
-    return _wrap(_C_engine.nn.layer_norm(_unwrap(x), w, b, eps))
+    return _wrap(_C_engine.nn.layer_norm(_unwrap(input), w, b, eps))
 
 
 def group_norm(
-    x: Tensor,
+    input: Tensor,
     num_groups: int,
     weight: Tensor | None = None,
     bias: Tensor | None = None,
@@ -254,7 +254,7 @@ def group_norm(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C, *spatial)`` where ``C`` must be
         divisible by ``num_groups``.
     num_groups : int
@@ -271,7 +271,7 @@ def group_norm(
     Returns
     -------
     Tensor
-        Same shape as ``x``.
+        Same shape as ``input``.
 
     Notes
     -----
@@ -298,22 +298,22 @@ def group_norm(
     """
     from lucid._factories.creation import ones, zeros
 
-    C = x.shape[1]
+    C = input.shape[1]
     w = (
         _unwrap(weight)
         if weight is not None
-        else _unwrap(ones(C, device=x.device, dtype=x.dtype))
+        else _unwrap(ones(C, device=input.device, dtype=input.dtype))
     )
     b = (
         _unwrap(bias)
         if bias is not None
-        else _unwrap(zeros(C, device=x.device, dtype=x.dtype))
+        else _unwrap(zeros(C, device=input.device, dtype=input.dtype))
     )
-    return _wrap(_C_engine.nn.group_norm(_unwrap(x), w, b, num_groups, eps))
+    return _wrap(_C_engine.nn.group_norm(_unwrap(input), w, b, num_groups, eps))
 
 
 def rms_norm(
-    x: Tensor,
+    input: Tensor,
     normalized_shape: list[int] | tuple[int, ...],
     weight: Tensor | None = None,
     eps: float | None = None,
@@ -328,7 +328,7 @@ def rms_norm(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input whose last dimension matches ``normalized_shape``.
     normalized_shape : list of int or tuple of int
         Trailing dims to normalise over.  Typically ``(d,)`` where
@@ -337,7 +337,7 @@ def rms_norm(
         Per-element scale :math:`\gamma`.  Defaults to ones.
     eps : float, optional
         Numerical safety added inside the square root.  ``None`` (the
-        default) uses the machine epsilon of ``x``'s dtype, as the
+        default) uses the machine epsilon of ``input``'s dtype, as the
         reference framework does — a fixed ``1e-8`` rounds to zero in
         float16, so a half-precision export divided by an exact zero on
         an all-zero row.
@@ -345,7 +345,7 @@ def rms_norm(
     Returns
     -------
     Tensor
-        Same shape as ``x``.
+        Same shape as ``input``.
 
     Notes
     -----
@@ -375,11 +375,11 @@ def rms_norm(
     if eps is None:
         from lucid._dtype import finfo
 
-        eps = float(finfo(x.dtype).eps)
+        eps = float(finfo(input.dtype).eps)
     norm_shape = tuple(int(d) for d in normalized_shape)
     if not norm_shape:
         raise ValueError("rms_norm: normalized_shape must not be empty")
-    trailing = tuple(int(d) for d in x.shape[-len(norm_shape) :])
+    trailing = tuple(int(d) for d in input.shape[-len(norm_shape) :])
     if trailing != norm_shape:
         raise ValueError(
             f"rms_norm: normalized_shape {norm_shape} does not match the "
@@ -397,14 +397,14 @@ def rms_norm(
     w = (
         _unwrap(weight)
         if weight is not None
-        else _unwrap(ones(C, device=x.device, dtype=x.dtype))
+        else _unwrap(ones(C, device=input.device, dtype=input.dtype))
     )
     if len(norm_shape) == 1:
-        return _wrap(_C_engine.nn.rms_norm(_unwrap(x), w, eps))
+        return _wrap(_C_engine.nn.rms_norm(_unwrap(input), w, eps))
 
-    orig_shape = tuple(int(d) for d in x.shape)
+    orig_shape = tuple(int(d) for d in input.shape)
     lead = orig_shape[: len(orig_shape) - len(norm_shape)]
-    flat = x.reshape(*lead, C)
+    flat = input.reshape(*lead, C)
     w_flat = w if len(w.shape) == 1 else _unwrap(_wrap(w).reshape(C))
     out = _wrap(_C_engine.nn.rms_norm(_unwrap(flat), w_flat, eps))
     return out.reshape(*orig_shape)
@@ -467,7 +467,7 @@ def _check_instance_norm_input(x: Tensor, use_input_stats: bool) -> None:
 
 
 def instance_norm(
-    x: Tensor,
+    input: Tensor,
     running_mean: Tensor | None = None,
     running_var: Tensor | None = None,
     weight: Tensor | None = None,
@@ -486,7 +486,7 @@ def instance_norm(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C, *spatial)`` with ``ndim >= 3``.
     running_mean : Tensor or None, optional
         Running per-channel mean of shape ``(C,)``.  Normalises with it
@@ -513,7 +513,7 @@ def instance_norm(
     Returns
     -------
     Tensor
-        Same shape as ``x``.
+        Same shape as ``input``.
 
     Notes
     -----
@@ -539,23 +539,23 @@ def instance_norm(
     >>> y.shape
     (4, 3, 64, 64)
     """
-    _check_instance_norm_input(x, use_input_stats)
-    spatial_dims: list[int] = list(range(2, x.ndim))
-    C: int = int(x.shape[1])
+    _check_instance_norm_input(input, use_input_stats)
+    spatial_dims: list[int] = list(range(2, input.ndim))
+    C: int = int(input.shape[1])
     # Channel-broadcast shape (1, C, 1, 1, ...) for affine + running stats.
-    bcast_shape: list[int] = [1, C] + [1] * (x.ndim - 2)
+    bcast_shape: list[int] = [1, C] + [1] * (input.ndim - 2)
 
     if use_input_stats or running_mean is None or running_var is None:
         # Per-instance (per-(n,c)) statistics.
-        mean: Tensor = x.mean(spatial_dims, keepdim=True)
-        var: Tensor = x.var(spatial_dims, keepdim=True, correction=0)
+        mean: Tensor = input.mean(spatial_dims, keepdim=True)
+        var: Tensor = input.var(spatial_dims, keepdim=True, correction=0)
         if (
             use_input_stats
             and running_mean is not None
             and running_var is not None
             and momentum != 0.0
         ):
-            _fold_instance_stats(x, running_mean, running_var, momentum)
+            _fold_instance_stats(input, running_mean, running_var, momentum)
     else:
         mean = running_mean.reshape(bcast_shape)
         var = running_var.reshape(bcast_shape)
@@ -568,8 +568,8 @@ def instance_norm(
     # newer MPSGraph runtimes.  No-op for eager (broadcast equivalent).
     from lucid._factories.creation import full as _full_factory
 
-    eps_scalar: Tensor = _full_factory((), eps, device=x.device, dtype=var.dtype)
-    y: Tensor = (x - mean) / (var + eps_scalar).sqrt()
+    eps_scalar: Tensor = _full_factory((), eps, device=input.device, dtype=var.dtype)
+    y: Tensor = (input - mean) / (var + eps_scalar).sqrt()
 
     if weight is not None:
         y = y * weight.reshape(bcast_shape)
@@ -582,7 +582,7 @@ def instance_norm(
 
 
 def local_response_norm(
-    x: Tensor,
+    input: Tensor,
     size: int,
     alpha: float = 1e-4,
     beta: float = 0.75,
@@ -597,7 +597,7 @@ def local_response_norm(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C, *spatial)`` (any number of spatial
         dims).  Inputs with fewer than 2 dimensions are returned
         unchanged.
@@ -615,7 +615,7 @@ def local_response_norm(
     Returns
     -------
     Tensor
-        Same shape as ``x``.
+        Same shape as ``input``.
 
     Notes
     -----
@@ -648,9 +648,9 @@ def local_response_norm(
     >>> y.shape
     (1, 96, 27, 27)
     """
-    xi = _unwrap(x)
+    xi = _unwrap(input)
     if len(xi.shape) < 2:
-        return x
+        return input
 
     # The normaliser is a fractional power of a scaled sum, so the result
     # is a real number whatever the input was — the same statement the
@@ -719,13 +719,13 @@ def _lrn_body(
 
 
 def normalize(
-    x: Tensor, p: float = 2.0, dim: DimLike = 1, eps: float = 1e-12
+    input: Tensor, p: float = 2.0, dim: DimLike = 1, eps: float = 1e-12
 ) -> Tensor:
     r"""Normalize a tensor to unit :math:`L_p` norm along a dimension.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     p : float, optional
         Exponent of the norm (default: 2.0 for Euclidean norm).
@@ -762,13 +762,13 @@ def normalize(
     zero when the slice is all zeros.  Use ``p=2`` for cosine-similarity
     style embeddings, ``p=1`` for probability-simplex projection-like
     behaviour, and ``p=inf`` for max-norm clipping.  An integer or bool
-    ``x`` is refused with a ``DtypeMismatch``, as the reference refuses it.
+    ``input`` is refused with a ``DtypeMismatch``, as the reference refuses it.
     """
-    xi = _require_normable(_unwrap(x), "normalize")
+    xi = _require_normable(_unwrap(input), "normalize")
     _to_axes(dim, "normalize")  # refuses a bool or a non-index dim up front
     if isinstance(dim, int):
         return _wrap(_C_engine.nn.lp_normalize(xi, p, dim, eps))
     # Several dims, or all of them, have no kernel: the norm over them,
     # kept for broadcasting, divides as the kernel's does.
-    denom = vector_norm(x, ord=p, dim=dim, keepdim=True)
-    return x / denom.clamp(min=eps)
+    denom = vector_norm(input, ord=p, dim=dim, keepdim=True)
+    return input / denom.clamp(min=eps)

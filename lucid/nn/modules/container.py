@@ -582,8 +582,8 @@ class ParameterList(Module):
 
     Parameters
     ----------
-    parameters : list[Parameter] or None, optional
-        Initial list of ``Parameter`` objects.  Each is registered under its
+    values : Iterable[Parameter] or None, optional
+        Initial iterable of ``Parameter`` objects.  Each is registered under its
         zero-based integer index formatted as a string.  Pass ``None``
         (default) for an empty list.
 
@@ -646,11 +646,11 @@ class ParameterList(Module):
     >>> n_params = sum(p.numel() for p in bias_bank.parameters())
     """
 
-    def __init__(self, parameters: list[Parameter] | None = None) -> None:
+    def __init__(self, values: Iterable[Parameter] | None = None) -> None:
         """Initialise the ParameterList module. See the class docstring for parameter semantics."""
         super().__init__()
-        if parameters is not None:
-            for i, p in enumerate(parameters):
+        if values is not None:
+            for i, p in enumerate(values):
                 self.register_parameter(str(i), p)
 
     def __getitem__(self, idx: int) -> Parameter:

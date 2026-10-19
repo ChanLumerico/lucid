@@ -50,7 +50,13 @@ from lucid.nn.functional.activations import (
 )
 
 
-class ReLU(Module):
+class _InplaceActivation(Module):
+    def __init__(self, inplace: bool = False) -> None:
+        super().__init__()
+        self.inplace = inplace
+
+
+class ReLU(_InplaceActivation):
     r"""Rectified Linear Unit activation function.
 
     Applies element-wise:
@@ -88,11 +94,6 @@ class ReLU(Module):
     >>> nn.ReLU(inplace=True)(x) is x, x
     (True, tensor([0., 2.]))
     """
-
-    def __init__(self, inplace: bool = False) -> None:
-        """Initialise the ReLU module. See the class docstring for parameter semantics."""
-        super().__init__()
-        self.inplace = inplace
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -265,7 +266,7 @@ class ELU(Module):
         return f"alpha={self.alpha}"
 
 
-class SELU(Module):
+class SELU(_InplaceActivation):
     r"""Scaled Exponential Linear Unit activation function.
 
     Applies element-wise:
@@ -319,11 +320,6 @@ class SELU(Module):
     >>> out.shape
     (8, 10)
     """
-
-    def __init__(self, inplace: bool = False) -> None:
-        """Initialise the SELU module. See the class docstring for parameter semantics."""
-        super().__init__()
-        self.inplace = inplace
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -424,7 +420,7 @@ class GELU(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return gelu(x, self.approximate)
+        return gelu(x, approximate=self.approximate)
 
     @override
     def extra_repr(self) -> str:
@@ -432,7 +428,7 @@ class GELU(Module):
         return f"approximate={self.approximate!r}" if self.approximate != "none" else ""
 
 
-class SiLU(Module):
+class SiLU(_InplaceActivation):
     r"""Sigmoid Linear Unit (Swish) activation function.
 
     Applies element-wise:
@@ -479,11 +475,6 @@ class SiLU(Module):
     (8, 256)
     """
 
-    def __init__(self, inplace: bool = False) -> None:
-        """Initialise the SiLU module. See the class docstring for parameter semantics."""
-        super().__init__()
-        self.inplace = inplace
-
     @override
     def forward(self, x: Tensor) -> Tensor:
         r"""Apply the activation function element-wise.
@@ -501,7 +492,7 @@ class SiLU(Module):
         return silu(x, self.inplace)
 
 
-class Mish(Module):
+class Mish(_InplaceActivation):
     r"""Mish activation function.
 
     Applies element-wise:
@@ -557,7 +548,7 @@ class Mish(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return mish(x)
+        return mish(x, inplace=self.inplace)
 
 
 class Softplus(Module):
@@ -643,7 +634,7 @@ class Softplus(Module):
         return f"beta={self.beta}, threshold={self.threshold}"
 
 
-class Hardswish(Module):
+class Hardswish(_InplaceActivation):
     r"""Hard Swish activation function.
 
     Applies element-wise:
@@ -703,10 +694,10 @@ class Hardswish(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return hardswish(x)
+        return hardswish(x, self.inplace)
 
 
-class Hardsigmoid(Module):
+class Hardsigmoid(_InplaceActivation):
     r"""Hard Sigmoid activation function.
 
     Applies element-wise:
@@ -755,7 +746,7 @@ class Hardsigmoid(Module):
         Tensor
             Output tensor of the same shape as ``input``.
         """
-        return hardsigmoid(x)
+        return hardsigmoid(x, self.inplace)
 
 
 class Sigmoid(Module):
@@ -1172,7 +1163,7 @@ class RReLU(Module):
         return f"lower={self.lower}, upper={self.upper}"
 
 
-class ReLU6(Module):
+class ReLU6(_InplaceActivation):
     r"""ReLU6 activation function.
 
     Applies element-wise:
@@ -1212,11 +1203,6 @@ class ReLU6(Module):
     >>> out.shape
     (4, 32, 14, 14)
     """
-
-    def __init__(self, inplace: bool = False) -> None:
-        """Initialise the ReLU6 module. See the class docstring for parameter semantics."""
-        super().__init__()
-        self.inplace = inplace
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -1473,13 +1459,22 @@ class Hardtanh(Module):
     """
 
     def __init__(
-        self, min_val: float = -1.0, max_val: float = 1.0, inplace: bool = False
+        self,
+        min_val: float = -1.0,
+        max_val: float = 1.0,
+        inplace: bool = False,
+        min_value: float | None = None,
+        max_value: float | None = None,
     ) -> None:
         """Initialise the Hardtanh module. See the class docstring for parameter semantics."""
         super().__init__()
-        self.min_val = min_val
-        self.max_val = max_val
+        self.min_val = min_val if min_value is None else min_value
+        self.max_val = max_val if max_value is None else max_value
         self.inplace = inplace
+        if self.max_val <= self.min_val:
+            raise AssertionError(
+                f"max_val ({self.max_val}) must be greater than min_val ({self.min_val})"
+            )
 
     @override
     def forward(self, x: Tensor) -> Tensor:

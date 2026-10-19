@@ -256,6 +256,7 @@ class RMSNorm(Module):
         self,
         normalized_shape: int | list[int] | tuple[int, ...],
         eps: float | None = None,
+        elementwise_affine: bool = True,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
     ) -> None:
@@ -265,9 +266,13 @@ class RMSNorm(Module):
             normalized_shape = (normalized_shape,)
         self.normalized_shape = tuple(normalized_shape)
         self.eps = eps
-        self.weight = Parameter(
-            ones(*self.normalized_shape, dtype=dtype, device=device)
-        )
+        self.elementwise_affine = elementwise_affine
+        if elementwise_affine:
+            self.weight: Parameter | None = Parameter(
+                ones(*self.normalized_shape, dtype=dtype, device=device)
+            )
+        else:
+            self.weight = None
 
     @override
     def forward(self, x: Tensor) -> Tensor:
@@ -288,7 +293,10 @@ class RMSNorm(Module):
     @override
     def extra_repr(self) -> str:
         """Return a string representation of the layer's configuration."""
-        return f"{self.normalized_shape}, eps={self.eps}"
+        return (
+            f"{self.normalized_shape}, eps={self.eps}, "
+            f"elementwise_affine={self.elementwise_affine}"
+        )
 
 
 class GroupNorm(Module):
@@ -386,6 +394,8 @@ class GroupNorm(Module):
         affine: bool = True,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
+        *,
+        bias: bool = True,
     ) -> None:
         """Initialise the GroupNorm module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -397,9 +407,12 @@ class GroupNorm(Module):
             self.weight: Parameter | None = Parameter(
                 ones(num_channels, dtype=dtype, device=device)
             )
-            self.bias: Parameter | None = Parameter(
-                zeros(num_channels, dtype=dtype, device=device)
-            )
+            if bias:
+                self.bias: Parameter | None = Parameter(
+                    zeros(num_channels, dtype=dtype, device=device)
+                )
+            else:
+                self.bias = None
         else:
             self.weight = None
             self.bias = None
@@ -438,30 +451,69 @@ class _NormBase(Module):
     _version: ClassVar[int] = 2
     weight: Parameter | None
     bias: Parameter | None
+    running_mean: Tensor | None
+    running_var: Tensor | None
+    num_batches_tracked: Tensor | None
 
     def __init__(
-        self,
-        num_features: int,
-        eps: float,
-        momentum: float | None,
-        affine: bool,
-        track_running_stats: bool,
-        device: DeviceLike,
-        dtype: DTypeLike,
+        self, num_features: int, eps: float, momentum: float | None,
+        affine: bool, track_running_stats: bool, device: DeviceLike,
+        dtype: DTypeLike, *, bias: bool = True,
     ) -> None:
         """Initialise the shared state.  See the subclasses for the parameters."""
-        super().__init__()
-        self.num_features: int = num_features
+        self._init_norm_attrs(
+            num_features, eps, momentum, affine, track_running_stats, bias
+        )
+        self._make_state(num_features, device, dtype)
+
+    def _init_norm_attrs(
+        self, num_features: int | None, eps: float, momentum: float | None,
+        affine: bool, track_running_stats: bool, bias: bool,
+    ) -> None:
+        Module.__init__(self)
+        self.num_features: int = num_features  # type: ignore[assignment]
         self.eps: float = eps
         self.momentum: float | None = momentum
         self.affine: bool = affine
+        self._use_bias: bool = bias
         self.track_running_stats: bool = track_running_stats
         if not affine:
             self.weight = None
             self.bias = None
         for name in ("running_mean", "running_var", "num_batches_tracked"):
             self.register_buffer(name, None)
-        self._make_state(num_features, device, dtype)
+
+    def _init_lazy_state(
+        self,
+        eps: float,
+        momentum: float | None,
+        affine: bool,
+        track_running_stats: bool,
+        device: DeviceLike,
+        dtype: DTypeLike,
+        bias: bool,
+    ) -> None:
+        self._init_norm_attrs(None, eps, momentum, affine, track_running_stats, bias)
+        self._device = device
+        self._dtype = dtype
+        # Placeholder slots — actual buffers / params installed lazily.
+        if affine:
+            # Placeholders, not ``None``: an optimizer built before the
+            # first forward must be handed objects that survive being
+            # filled in.  Reached only when ``affine`` is on — a
+            # parameter that will never exist stays ``None``.
+            from lucid.nn.parameter import UninitializedParameter
+
+            empty_0 = _lucid.empty(0, dtype=dtype, device=device)
+            self.register_parameter("weight", UninitializedParameter(empty_0))
+            self.register_parameter(
+                "bias", UninitializedParameter(empty_0) if bias else None
+            )
+
+    def _initialize(self, num_features: int) -> None:
+        """Size the layer: make its state ``num_features`` long."""
+        self.num_features = num_features
+        self._make_state(num_features, self._device, self._dtype)
 
     def _make_state(
         self, num_features: int, device: DeviceLike, dtype: DTypeLike
@@ -471,9 +523,12 @@ class _NormBase(Module):
             # ``fill``: a lazy layer's placeholders are what anything that
             # read ``parameters()`` early holds; an eager layer has none.
             weight = ones(num_features, dtype=dtype, device=device)
-            bias = zeros(num_features, dtype=dtype, device=device)
             _fill(self, "weight", Parameter(weight))
-            _fill(self, "bias", Parameter(bias))
+            if getattr(self, "_use_bias", True):
+                bias = zeros(num_features, dtype=dtype, device=device)
+                _fill(self, "bias", Parameter(bias))
+            else:
+                self.bias = None
         if self.track_running_stats:
             mean = zeros(num_features, dtype=dtype, device=device)
             var = ones(num_features, dtype=dtype, device=device)
@@ -515,9 +570,11 @@ class _NormBase(Module):
         ([0.0, 0.0], 0)
         """
         self.reset_running_stats()
-        if self.affine and self.weight is not None and self.bias is not None:
-            init.ones_(self.weight)
-            init.zeros_(self.bias)
+        if self.affine:
+            if self.weight is not None:
+                init.ones_(self.weight)
+            if self.bias is not None:
+                init.zeros_(self.bias)
 
     @override
     def _load_from_state_dict(
@@ -531,6 +588,16 @@ class _NormBase(Module):
         error_msgs: list[str],
     ) -> None:
         """Load, giving a checkpoint older than the batch counter a zero count."""
+        if self.num_features is None:
+            # Probe known persistent keys for the feature dim; pick a tensor
+            # for dtype/device fallback without boolean truthiness on a Tensor.
+            for k in ("weight", "running_mean", "bias"):
+                t: Tensor | None = state_dict.get(f"{prefix}{k}")
+                if t is not None and len(t.shape) >= 1:
+                    self._dtype = getattr(self, "_dtype", None) or t.dtype
+                    self._device = getattr(self, "_device", None) or t.device
+                    self._initialize(int(t.shape[0]))
+                    break
         version = local_metadata.get("version") if local_metadata else None
         if (not isinstance(version, int) or version < 2) and self.track_running_stats:
             key = f"{prefix}num_batches_tracked"
@@ -646,10 +713,19 @@ class _BatchNormBase(_NormBase):
         track_running_stats: bool = True,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
+        *,
+        bias: bool = True,
     ) -> None:
         """Initialise the _BatchNormBase module. See the class docstring for parameter semantics."""
         super().__init__(
-            num_features, eps, momentum, affine, track_running_stats, device, dtype
+            num_features,
+            eps,
+            momentum,
+            affine,
+            track_running_stats,
+            device,
+            dtype,
+            bias=bias,
         )
 
     @override
@@ -1080,10 +1156,19 @@ class _InstanceNormBase(_NormBase):
         track_running_stats: bool = False,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
+        *,
+        bias: bool = True,
     ) -> None:
         """Initialise the _InstanceNormBase module. See the class docstring for parameter semantics."""
         super().__init__(
-            num_features, eps, momentum, affine, track_running_stats, device, dtype
+            num_features,
+            eps,
+            momentum,
+            affine,
+            track_running_stats,
+            device,
+            dtype,
+            bias=bias,
         )
 
     def _check_input_dim(self, x: Tensor) -> None:
@@ -1565,87 +1650,13 @@ class _LazyBatchNormMixin(_LazyModule, _BatchNormBase):
         track_running_stats: bool = True,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
+        *,
+        bias: bool = True,
     ) -> None:
         # Skip _BatchNormBase.__init__ — we don't have num_features yet.
         """Initialise the _LazyBatchNormMixin module. See the class docstring for parameter semantics."""
-        Module.__init__(self)
-        self.num_features: int | None = None  # type: ignore[assignment]
-        self.eps: float = eps
-        self.momentum: float | None = momentum
-        self.affine: bool = affine
-        self.track_running_stats: bool = track_running_stats
-        self._device = device
-        self._dtype = dtype
-        # Placeholder slots — actual buffers / params installed lazily.
-        if affine:
-            # Placeholders, not ``None``: an optimizer built before the
-            # first forward must be handed objects that survive being
-            # filled in.  Reached only when ``affine`` is on — a
-            # parameter that will never exist stays ``None``.
-            self.register_parameter("weight", self._placeholder())
-            self.register_parameter("bias", self._placeholder())
-        else:
-            self.weight = None
-            self.bias = None
-        if track_running_stats:
-            self.register_buffer("running_mean", None)
-            self.register_buffer("running_var", None)
-            self.register_buffer("num_batches_tracked", None)
-        else:
-            self.register_buffer("running_mean", None)
-            self.register_buffer("running_var", None)
-            self.register_buffer("num_batches_tracked", None)
-
-    def _initialize(self, num_features: int) -> None:
-        """Size the layer: make its state ``num_features`` long."""
-        self.num_features = num_features
-        self._make_state(num_features, self._device, self._dtype)
-
-    @override
-    def _load_from_state_dict(
-        self,
-        state_dict: dict[str, Tensor],
-        prefix: str,
-        local_metadata: dict[str, object],
-        strict: bool,
-        missing_keys: list[str],
-        unexpected_keys: list[str],
-        error_msgs: list[str],
-    ) -> None:
-        """Internal helper for the _LazyBatchNormMixin module."""
-        if self.num_features is None:
-            # Probe known persistent keys for the feature dim.
-            probe_keys: tuple[str, ...] = ("weight", "running_mean", "bias")
-            inferred: int | None = None
-            for k in probe_keys:
-                t: Tensor | None = state_dict.get(f"{prefix}{k}")
-                if t is not None and len(t.shape) >= 1:
-                    inferred = int(t.shape[0])
-                    break
-            if inferred is not None:
-                # Pick a tensor for dtype/device fallback; avoid boolean
-                # truthiness on a Tensor (ambiguous for multi-element).
-                first_seen: Tensor | None = None
-                w_t: Tensor | None = state_dict.get(f"{prefix}weight")
-                if w_t is not None:
-                    first_seen = w_t
-                else:
-                    rm_t: Tensor | None = state_dict.get(f"{prefix}running_mean")
-                    if rm_t is not None:
-                        first_seen = rm_t
-                if first_seen is not None:
-                    self._dtype = self._dtype or first_seen.dtype
-                    self._device = self._device or first_seen.device
-                self._initialize(inferred)
-        # Fall through to parent (handles version<2 num_batches_tracked migration).
-        super()._load_from_state_dict(
-            state_dict,
-            prefix,
-            local_metadata,
-            strict,
-            missing_keys,
-            unexpected_keys,
-            error_msgs,
+        self._init_lazy_state(
+            eps, momentum, affine, track_running_stats, device, dtype, bias
         )
 
     @override
@@ -1881,64 +1892,16 @@ class _LazyInstanceNormMixin(_LazyModule, _InstanceNormBase):
         self,
         eps: float = 1e-5,
         momentum: float | None = 0.1,
-        affine: bool = False,
-        track_running_stats: bool = False,
+        affine: bool = True,
+        track_running_stats: bool = True,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
+        *,
+        bias: bool = True,
     ) -> None:
         """Initialise the _LazyInstanceNormMixin module. See the class docstring for parameter semantics."""
-        Module.__init__(self)
-        self.num_features: int | None = None  # type: ignore[assignment]
-        self.eps: float = eps
-        self.momentum: float | None = momentum
-        self.affine: bool = affine
-        self.track_running_stats: bool = track_running_stats
-        self._device = device
-        self._dtype = dtype
-        if affine:
-            self.register_parameter("weight", self._placeholder())
-            self.register_parameter("bias", self._placeholder())
-        else:
-            self.weight = None
-            self.bias = None
-        for bname in ("running_mean", "running_var", "num_batches_tracked"):
-            self.register_buffer(bname, None)
-
-    def _initialize(self, num_features: int) -> None:
-        """Size the layer: make its state ``num_features`` long."""
-        self.num_features = num_features
-        self._make_state(num_features, self._device, self._dtype)
-
-    @override
-    def _load_from_state_dict(
-        self,
-        state_dict: dict[str, Tensor],
-        prefix: str,
-        local_metadata: dict[str, object],
-        strict: bool,
-        missing_keys: list[str],
-        unexpected_keys: list[str],
-        error_msgs: list[str],
-    ) -> None:
-        """Internal helper for the _LazyInstanceNormMixin module."""
-        if self.num_features is None:
-            for k in ("weight", "running_mean", "bias"):
-                t: Tensor | None = state_dict.get(f"{prefix}{k}")
-                if t is not None and len(t.shape) >= 1:
-                    if self._dtype is None:
-                        self._dtype = t.dtype
-                    if self._device is None:
-                        self._device = t.device
-                    self._initialize(int(t.shape[0]))
-                    break
-        super()._load_from_state_dict(
-            state_dict,
-            prefix,
-            local_metadata,
-            strict,
-            missing_keys,
-            unexpected_keys,
-            error_msgs,
+        self._init_lazy_state(
+            eps, momentum, affine, track_running_stats, device, dtype, bias
         )
 
     @override

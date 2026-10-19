@@ -109,9 +109,9 @@ def test_a_lazy_norm_infers_num_features(name, shape):
 
 
 def test_an_instance_norm_without_affine_has_nothing_to_infer():
-    """``affine=False`` is the default, so ``weight`` stays ``None`` — and
-    that is not the same thing as being uninitialised."""
-    layer = nn.LazyInstanceNorm2d()
+    """With ``affine=False, track_running_stats=False``, ``weight`` stays
+    ``None`` — and that is not the same thing as being uninitialised."""
+    layer = nn.LazyInstanceNorm2d(affine=False, track_running_stats=False)
     assert layer.weight is None
     layer(_noisy((4, 6, 5, 5)))
     assert layer.weight is None

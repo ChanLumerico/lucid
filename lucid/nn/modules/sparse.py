@@ -353,6 +353,8 @@ class EmbeddingBag(Module):
         scale_grad_by_freq: bool = False,
         mode: str = "mean",
         sparse: bool = False,
+        _weight: Tensor | None = None,
+        include_last_offset: bool = False,
         padding_idx: int | None = None,
         device: DeviceLike = None,
         dtype: DTypeLike = None,
@@ -366,14 +368,23 @@ class EmbeddingBag(Module):
         self.scale_grad_by_freq = scale_grad_by_freq
         self.mode = mode
         self.sparse = sparse
+        self.include_last_offset = include_last_offset
         self.padding_idx = padding_idx
-        self.weight = Parameter(
-            empty(num_embeddings, embedding_dim, dtype=dtype, device=device)
-        )
-        init.normal_(self.weight)
+        if _weight is None:
+            self.weight = Parameter(
+                empty(num_embeddings, embedding_dim, dtype=dtype, device=device)
+            )
+            init.normal_(self.weight)
+        else:
+            self.weight = Parameter(_weight)
 
     @override
-    def forward(self, x: Tensor, offsets: Tensor | None = None) -> Tensor:
+    def forward(
+        self,
+        x: Tensor,
+        offsets: Tensor | None = None,
+        per_sample_weights: Tensor | None = None,
+    ) -> Tensor:
         """Look up embeddings for the given indices.
 
         Parameters
@@ -397,6 +408,8 @@ class EmbeddingBag(Module):
             self.scale_grad_by_freq,
             self.mode,
             self.sparse,
+            per_sample_weights=per_sample_weights,
+            include_last_offset=self.include_last_offset,
             padding_idx=self.padding_idx,
         )
 

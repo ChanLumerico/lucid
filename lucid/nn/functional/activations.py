@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-def relu(x: Tensor, inplace: bool = False) -> Tensor:
+def relu(input: Tensor, inplace: bool = False) -> Tensor:
     r"""Apply the rectified linear unit function element-wise.
 
     The simplest and most widely-used activation function in modern deep
@@ -36,15 +36,15 @@ def relu(x: Tensor, inplace: bool = False) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape.
     inplace : bool, optional
-        If ``True``, write the result into ``x`` and return ``x``.
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Element-wise ReLU output, same shape and dtype as ``x``.
+        Element-wise ReLU output, same shape and dtype as ``input``.
 
     Notes
     -----
@@ -75,19 +75,19 @@ def relu(x: Tensor, inplace: bool = False) -> Tensor:
     tensor([0., 0., 0., 1., 2.])
     """
     if not inplace:
-        return _wrap(_C_engine.relu(_unwrap(x)))
-    if x.requires_grad and _C_engine.grad_enabled():
-        return _in_place(x, "relu_", relu)
+        return _wrap(_C_engine.relu(_unwrap(input)))
+    if input.requires_grad and _C_engine.grad_enabled():
+        return _in_place(input, "relu_", relu)
     # No graph to extend: the engine's fused kernel allocates nothing (0.44 ms
     # against 1.51 ms through the graph-preserving path on 64x3x128x128).
-    _metal_check(x)
-    _C_engine.relu_(_unwrap(x))
-    _metal_write_back(x)
-    return x
+    _metal_check(input)
+    _C_engine.relu_(_unwrap(input))
+    _metal_write_back(input)
+    return input
 
 
 def leaky_relu(
-    x: Tensor, negative_slope: float = 0.01, inplace: bool = False
+    input: Tensor, negative_slope: float = 0.01, inplace: bool = False
 ) -> Tensor:
     r"""Leaky rectified linear unit activation.
 
@@ -98,18 +98,18 @@ def leaky_relu(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is applied element-wise.
     negative_slope : float, optional
         Slope :math:`\alpha` of the linear branch for negative inputs.
         Default ``0.01``.
     inplace : bool, optional
-        If ``True``, write the result into ``x`` and return ``x``.
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``.
+        Activated tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -133,11 +133,11 @@ def leaky_relu(
     tensor([-0.2, -0.1, 0., 1.])
     """
     if inplace:
-        return _in_place(x, "leaky_relu_", lambda t: leaky_relu(t, negative_slope))
-    return _wrap(_C_engine.leaky_relu(_unwrap(x), negative_slope))
+        return _in_place(input, "leaky_relu_", lambda t: leaky_relu(t, negative_slope))
+    return _wrap(_C_engine.leaky_relu(_unwrap(input), negative_slope))
 
 
-def elu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
+def elu(input: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
     r"""Exponential linear unit activation.
 
     A smooth alternative to :func:`relu` that saturates to :math:`-\alpha` on
@@ -147,18 +147,18 @@ def elu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
     alpha : float, optional
         Saturation value :math:`\alpha > 0` for negative inputs.
         Default ``1.0``.
     inplace : bool, optional
-        If ``True``, write the result into ``x`` and return ``x``.
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``.
+        Activated tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -183,12 +183,10 @@ def elu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
     >>> elu(x)
     tensor([-0.8647, -0.6321, 0., 1.])
     """
-    if inplace:
-        return _in_place(x, "elu_", lambda t: elu(t, alpha))
-    return _wrap(_C_engine.elu(_unwrap(x), alpha))
+    return _in_place(input, "elu_", lambda t: elu(t, alpha)) if inplace else _wrap(_C_engine.elu(_unwrap(input), alpha))
 
 
-def selu(x: Tensor, inplace: bool = False) -> Tensor:
+def selu(input: Tensor, inplace: bool = False) -> Tensor:
     r"""Scaled exponential linear unit activation.
 
     Self-normalising activation from Klambauer et al. (2017): when used in
@@ -199,15 +197,15 @@ def selu(x: Tensor, inplace: bool = False) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
     inplace : bool, optional
-        If ``True``, write the result into ``x`` and return ``x``.
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``.
+        Activated tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -237,12 +235,10 @@ def selu(x: Tensor, inplace: bool = False) -> Tensor:
     >>> selu(x)
     tensor([-1.111, 0., 1.051])
     """
-    if inplace:
-        return _in_place(x, "selu_", selu)
-    return _wrap(_C_engine.selu(_unwrap(x)))
+    return _in_place(input, "selu_", selu) if inplace else _wrap(_C_engine.selu(_unwrap(input)))
 
 
-def gelu(x: Tensor, approximate: GeluApproximate = "none") -> Tensor:
+def gelu(input: Tensor, *, approximate: GeluApproximate = "none") -> Tensor:
     r"""Gaussian Error Linear Unit activation.
 
     Smooth, non-monotonic activation that has largely replaced ReLU in
@@ -252,7 +248,7 @@ def gelu(x: Tensor, approximate: GeluApproximate = "none") -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
     approximate : str, optional
         Either ``"none"`` (default, exact formula via ``erf``) or
@@ -262,7 +258,7 @@ def gelu(x: Tensor, approximate: GeluApproximate = "none") -> Tensor:
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``.
+        Activated tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -293,13 +289,11 @@ def gelu(x: Tensor, approximate: GeluApproximate = "none") -> Tensor:
     >>> gelu(x)
     tensor([-0.1587, 0., 0.8413, 1.954])
     """
-    xi = _unwrap(x)
-    if approximate == "tanh":
-        return _wrap(_C_engine.gelu(xi))
-    return _wrap(_C_engine.gelu_exact(xi))
+    xi = _unwrap(input)
+    return _wrap(_C_engine.gelu(xi) if approximate == "tanh" else _C_engine.gelu_exact(xi))
 
 
-def silu(x: Tensor, inplace: bool = False) -> Tensor:
+def silu(input: Tensor, inplace: bool = False) -> Tensor:
     r"""Sigmoid Linear Unit (a.k.a. Swish-1) activation.
 
     Smooth, non-monotonic activation popularised by Ramachandran et al.
@@ -308,15 +302,15 @@ def silu(x: Tensor, inplace: bool = False) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
     inplace : bool, optional
-        If ``True``, write the result into ``x`` and return ``x``.
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``.
+        Activated tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -344,12 +338,10 @@ def silu(x: Tensor, inplace: bool = False) -> Tensor:
     >>> silu(x)
     tensor([-0.2384, -0.2689, 0., 0.7311, 1.762])
     """
-    if inplace:
-        return _in_place(x, "silu_", silu)
-    return _wrap(_C_engine.silu(_unwrap(x)))
+    return _in_place(input, "silu_", silu) if inplace else _wrap(_C_engine.silu(_unwrap(input)))
 
 
-def mish(x: Tensor) -> Tensor:
+def mish(input: Tensor, inplace: bool = False) -> Tensor:
     r"""Mish activation function.
 
     Self-regularising non-monotonic activation introduced by Misra (2019).
@@ -360,13 +352,15 @@ def mish(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
+    inplace : bool, optional
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``.
+        Activated tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -387,10 +381,10 @@ def mish(x: Tensor) -> Tensor:
     >>> mish(x)
     tensor([-0.2525, -0.3034, 0., 0.8651, 1.944])
     """
-    return _wrap(_C_engine.mish(_unwrap(x)))
+    return _in_place(input, "mish_", mish) if inplace else _wrap(_C_engine.mish(_unwrap(input)))
 
 
-def hardswish(x: Tensor) -> Tensor:
+def hardswish(input: Tensor, inplace: bool = False) -> Tensor:
     r"""Hard Swish activation — piecewise linear approximation of :func:`silu`.
 
     Introduced in MobileNetV3 (Howard et al. 2019) as a compute-friendly
@@ -400,13 +394,15 @@ def hardswish(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
+    inplace : bool, optional
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``.
+        Activated tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -431,10 +427,10 @@ def hardswish(x: Tensor) -> Tensor:
     >>> hardswish(x)
     tensor([-0., -0.3333, 0., 0.6667, 4.])
     """
-    return _wrap(_C_engine.hard_swish(_unwrap(x)))
+    return _in_place(input, "hardswish_", hardswish) if inplace else _wrap(_C_engine.hard_swish(_unwrap(input)))
 
 
-def hardsigmoid(x: Tensor) -> Tensor:
+def hardsigmoid(input: Tensor, inplace: bool = False) -> Tensor:
     r"""Hard sigmoid — piecewise linear approximation of :func:`sigmoid`.
 
     Avoids the cost of an exponential by clipping a scaled-and-shifted
@@ -443,13 +439,15 @@ def hardsigmoid(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
+    inplace : bool, optional
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``, values in
+        Activated tensor with the same shape as ``input``, values in
         :math:`[0, 1]`.
 
     Notes
@@ -474,10 +472,10 @@ def hardsigmoid(x: Tensor) -> Tensor:
     >>> hardsigmoid(x)
     tensor([0., 0.3333, 0.5, 0.6667, 1.])
     """
-    return _wrap(_C_engine.hard_sigmoid(_unwrap(x)))
+    return _in_place(input, "hardsigmoid_", hardsigmoid) if inplace else _wrap(_C_engine.hard_sigmoid(_unwrap(input)))
 
 
-def sigmoid(x: Tensor) -> Tensor:
+def sigmoid(input: Tensor) -> Tensor:
     r"""Logistic sigmoid activation.
 
     Squashes any real-valued input into the open interval :math:`(0, 1)`.
@@ -486,13 +484,13 @@ def sigmoid(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``, values in
+        Activated tensor with the same shape as ``input``, values in
         :math:`(0, 1)`.
 
     Notes
@@ -516,10 +514,10 @@ def sigmoid(x: Tensor) -> Tensor:
     >>> sigmoid(x)
     tensor([0.1192, 0.5, 0.8808])
     """
-    return _wrap(_C_engine.sigmoid(_unwrap(x)))
+    return _wrap(_C_engine.sigmoid(_unwrap(input)))
 
 
-def tanh(x: Tensor) -> Tensor:
+def tanh(input: Tensor) -> Tensor:
     r"""Hyperbolic tangent activation.
 
     A rescaled, recentred sigmoid that maps the real line to
@@ -529,13 +527,13 @@ def tanh(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``, values in
+        Activated tensor with the same shape as ``input``, values in
         :math:`(-1, 1)`.
 
     Notes
@@ -558,7 +556,7 @@ def tanh(x: Tensor) -> Tensor:
     >>> tanh(x)
     tensor([-0.964, 0., 0.964])
     """
-    return _wrap(_C_engine.tanh(_unwrap(x)))
+    return _wrap(_C_engine.tanh(_unwrap(input)))
 
 
 def _get_softmax_dim(name: str, ndim: int, dim: int | None, stacklevel: int) -> int:
@@ -669,7 +667,7 @@ def log_softmax(
     )
 
 
-def softplus(x: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tensor:
+def softplus(input: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tensor:
     r"""Smooth approximation of :func:`relu`.
 
     Softplus is a strictly positive, :math:`C^\infty` smooth function that
@@ -680,7 +678,7 @@ def softplus(x: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
     beta : float, optional
         Sharpness parameter :math:`\beta > 0`.  Larger ``beta`` makes the
@@ -694,7 +692,7 @@ def softplus(x: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tensor:
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``, strictly positive.
+        Activated tensor with the same shape as ``input``, strictly positive.
 
     Notes
     -----
@@ -720,8 +718,8 @@ def softplus(x: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tensor:
     """
     if beta == 1.0 and threshold >= 50.0:
         # Hot-path: the bare engine kernel is already correct here.
-        return _wrap(_C_engine.softplus(_unwrap(x)))
-    xi = _unwrap(x)
+        return _wrap(_C_engine.softplus(_unwrap(input)))
+    xi = _unwrap(input)
     beta_t = _C_engine.full(list(xi.shape), float(beta), xi.dtype, xi.device)
     threshold_t = _C_engine.full(list(xi.shape), float(threshold), xi.dtype, xi.device)
     bx = _C_engine.mul(xi, beta_t)
@@ -733,7 +731,7 @@ def softplus(x: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tensor:
     return _wrap(_C_engine.where(above, xi, softplus_full))
 
 
-def relu6(x: Tensor, inplace: bool = False) -> Tensor:
+def relu6(input: Tensor, inplace: bool = False) -> Tensor:
     r"""Rectified linear unit clipped at six.
 
     Introduced for quantisation-friendly mobile architectures
@@ -743,15 +741,15 @@ def relu6(x: Tensor, inplace: bool = False) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
     inplace : bool, optional
-        If ``True``, write the result into ``x`` and return ``x``.
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``, values in
+        Activated tensor with the same shape as ``input``, values in
         :math:`[0, 6]`.
 
     Notes
@@ -774,9 +772,7 @@ def relu6(x: Tensor, inplace: bool = False) -> Tensor:
     >>> relu6(x)
     tensor([0., 0., 3., 6.])
     """
-    if inplace:
-        return _in_place(x, "relu6_", relu6)
-    return _wrap(_C_engine.relu6(_unwrap(x)))
+    return _in_place(input, "relu6_", relu6) if inplace else _wrap(_C_engine.relu6(_unwrap(input)))
 
 
 def softmin(
@@ -818,7 +814,7 @@ def softmin(
     return _wrap(_softmin_adapter(_unwrap(input), axis, dtype=dtype))
 
 
-def glu(x: Tensor, dim: int = -1) -> Tensor:
+def glu(input: Tensor, dim: int = -1) -> Tensor:
     r"""Gated Linear Unit (Dauphin et al. 2017).
 
     Splits the input in half along ``dim`` and multiplies the first half
@@ -828,7 +824,7 @@ def glu(x: Tensor, dim: int = -1) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.  The size along ``dim`` must be even — it is split
         into two halves :math:`a` and :math:`b` of equal size.
     dim : int, optional
@@ -837,7 +833,7 @@ def glu(x: Tensor, dim: int = -1) -> Tensor:
     Returns
     -------
     Tensor
-        Output tensor whose shape matches ``x`` except along ``dim``,
+        Output tensor whose shape matches ``input`` except along ``dim``,
         where the size is halved.
 
     Notes
@@ -860,7 +856,7 @@ def glu(x: Tensor, dim: int = -1) -> Tensor:
     >>> glu(x, dim=-1)
     tensor([[0.5, 1.462]])
     """
-    impl = _unwrap(x)
+    impl = _unwrap(input)
     dim = _wrap_dim(dim, len(impl.shape), "glu")
     size = _dim_size(impl.shape, dim)
     if size % 2:  # unequal halves broadcast into a silently wrong product
@@ -869,7 +865,7 @@ def glu(x: Tensor, dim: int = -1) -> Tensor:
     return _wrap(_C_engine.mul(first, _C_engine.sigmoid(second)))
 
 
-def prelu(x: Tensor, weight: Tensor) -> Tensor:
+def prelu(input: Tensor, weight: Tensor) -> Tensor:
     r"""Parametric Rectified Linear Unit (He et al. 2015).
 
     Variant of :func:`leaky_relu` whose negative slope is a **learnable**
@@ -879,17 +875,17 @@ def prelu(x: Tensor, weight: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     weight : Tensor
         Learnable slope :math:`\alpha`.  Either a scalar tensor (slope
         shared across all elements) or a 1-D tensor broadcastable against
-        ``x`` along the channel dimension.
+        ``input`` along the channel dimension.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``.
+        Activated tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -911,7 +907,7 @@ def prelu(x: Tensor, weight: Tensor) -> Tensor:
     >>> prelu(x, w)
     tensor([-0.5, -0.25, 0., 1.])
     """
-    xi = _unwrap(x)
+    xi = _unwrap(input)
     wi = _unwrap(weight)
     # A per-channel ``(C,)`` slope belongs to dim 1 of an ``(N, C, *)`` input.
     # Left as a bare vector it would broadcast against the *last* dim instead,
@@ -925,7 +921,7 @@ def prelu(x: Tensor, weight: Tensor) -> Tensor:
     return _wrap(_C_engine.add(pos, neg_part))
 
 
-def celu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
+def celu(input: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
     r"""Continuously-differentiable Exponential Linear Unit (Barron 2017).
 
     A reparameterisation of :func:`elu` whose first derivative is
@@ -935,18 +931,18 @@ def celu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
     alpha : float, optional
         Saturation value :math:`\alpha > 0` for negative inputs.
         Default ``1.0``.
     inplace : bool, optional
-        If ``True``, write the result into ``x`` and return ``x``.
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``.
+        Activated tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -967,23 +963,18 @@ def celu(x: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
     tensor([-0.8647, -0.6321, 0., 1.])
     """
     if inplace:
-        return _in_place(x, "celu_", lambda t: celu(t, alpha))
-    xi = _unwrap(x)
-    pos = _C_engine.relu(xi)
-    exp_part = _C_engine.sub(
-        _C_engine.exp(
-            _C_engine.div(xi, _C_engine.full(xi.shape, alpha, xi.dtype, xi.device))
-        ),
-        _C_engine.full(xi.shape, 1.0, xi.dtype, xi.device),
-    )
+        return _in_place(input, "celu_", lambda t: celu(t, alpha))
+    xi = _unwrap(input)
+    a_t = _C_engine.full(xi.shape, alpha, xi.dtype, xi.device)
+    one_t = _C_engine.full(xi.shape, 1.0, xi.dtype, xi.device)
+    exp_part = _C_engine.sub(_C_engine.exp(_C_engine.div(xi, a_t)), one_t)
     neg = _C_engine.minimum(
-        _C_engine.zeros(xi.shape, xi.dtype, xi.device),
-        _C_engine.mul(_C_engine.full(xi.shape, alpha, xi.dtype, xi.device), exp_part),
+        _C_engine.zeros(xi.shape, xi.dtype, xi.device), _C_engine.mul(a_t, exp_part)
     )
-    return _wrap(_C_engine.add(pos, neg))
+    return _wrap(_C_engine.add(_C_engine.relu(xi), neg))
 
 
-def hardshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
+def hardshrink(input: Tensor, lambd: float = 0.5) -> Tensor:
     r"""Hard shrinkage operator.
 
     Sets elements with magnitude below :math:`\lambda` to zero, leaves
@@ -993,7 +984,7 @@ def hardshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     lambd : float, optional
         Threshold :math:`\lambda \ge 0`.  Default ``0.5``.
@@ -1001,7 +992,7 @@ def hardshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
     Returns
     -------
     Tensor
-        Shrunk tensor with the same shape as ``x``.
+        Shrunk tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -1024,19 +1015,14 @@ def hardshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
     >>> hardshrink(x, lambd=0.5)
     tensor([-1., 0., 0., 0., 1.])
     """
-    xi = _unwrap(x)
+    xi = _unwrap(input)
     lam = _C_engine.full(xi.shape, lambd, xi.dtype, xi.device)
     neg_lam = _C_engine.full(xi.shape, -lambd, xi.dtype, xi.device)
-    mask = _C_engine.bitwise_or(
-        _C_engine.greater(xi, lam),
-        _C_engine.less(xi, neg_lam),
-    )
-    return _wrap(
-        _C_engine.where(mask, xi, _C_engine.zeros(xi.shape, xi.dtype, xi.device))
-    )
+    mask = _C_engine.bitwise_or(_C_engine.greater(xi, lam), _C_engine.less(xi, neg_lam))
+    return _wrap(_C_engine.where(mask, xi, _C_engine.zeros(xi.shape, xi.dtype, xi.device)))
 
 
-def tanhshrink(x: Tensor) -> Tensor:
+def tanhshrink(input: Tensor) -> Tensor:
     r"""Tanh shrinkage activation.
 
     Behaves like a smooth high-pass filter: subtracts the tanh-saturated
@@ -1045,13 +1031,13 @@ def tanhshrink(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``.
+        Activated tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -1073,7 +1059,7 @@ def tanhshrink(x: Tensor) -> Tensor:
     >>> tanhshrink(x)
     tensor([-1.036, -0.03788, 0., 0.03788, 1.036])
     """
-    xi = _unwrap(x)
+    xi = _unwrap(input)
     return _wrap(_C_engine.sub(xi, _C_engine.tanh(xi)))
 
 
@@ -1131,11 +1117,7 @@ def cosine_similarity(
 
 
 def pairwise_distance(
-    x1: Tensor,
-    x2: Tensor,
-    p: float = 2.0,
-    eps: float = 1e-6,
-    keepdim: bool = False,
+    x1: Tensor, x2: Tensor, p: float = 2.0, eps: float = 1e-6, keepdim: bool = False
 ) -> Tensor:
     r"""Element-wise :math:`L_p` distance between two equally-shaped tensors.
 
@@ -1190,7 +1172,7 @@ def pairwise_distance(
     return _l.linalg.vector_norm(x1 - x2 + eps, p, -1, keepdim)
 
 
-def softshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
+def softshrink(input: Tensor, lambd: float = 0.5) -> Tensor:
     r"""Soft shrinkage operator — proximal operator of :math:`\lambda \|\cdot\|_1`.
 
     Translates the input toward zero by :math:`\lambda` and zeros out
@@ -1200,7 +1182,7 @@ def softshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     lambd : float, optional
         Shrinkage threshold :math:`\lambda \ge 0`.  Default ``0.5``.
@@ -1208,7 +1190,7 @@ def softshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
     Returns
     -------
     Tensor
-        Shrunk tensor with the same shape as ``x``.
+        Shrunk tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -1233,27 +1215,19 @@ def softshrink(x: Tensor, lambd: float = 0.5) -> Tensor:
     >>> softshrink(x, lambd=0.5)
     tensor([-0.5, 0., 0., 0., 0.5])
     """
-    xi = _unwrap(x)
+    xi = _unwrap(input)
     lam = _C_engine.full(xi.shape, lambd, xi.dtype, xi.device)
     neg_lam = _C_engine.full(xi.shape, -lambd, xi.dtype, xi.device)
     zeros = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
-    pos_mask = _C_engine.greater(xi, lam)
-    neg_mask = _C_engine.less(xi, neg_lam)
-    pos_val = _C_engine.sub(xi, lam)
-    neg_val = _C_engine.add(xi, lam)
-    out = _C_engine.where(pos_mask, pos_val, zeros)
-    out = _C_engine.where(neg_mask, neg_val, out)
-    return _wrap(out)
+    out = _C_engine.where(_C_engine.greater(xi, lam), _C_engine.sub(xi, lam), zeros)
+    return _wrap(_C_engine.where(_C_engine.less(xi, neg_lam), _C_engine.add(xi, lam), out))
 
 
 # ── P3 fills: missing activations ──────────────────────────────────────────
 
 
 def hardtanh(
-    x: Tensor,
-    min_val: float = -1.0,
-    max_val: float = 1.0,
-    inplace: bool = False,
+    input: Tensor, min_val: float = -1.0, max_val: float = 1.0, inplace: bool = False
 ) -> Tensor:
     r"""Hardtanh — element-wise clamp to :math:`[\text{min\_val}, \text{max\_val}]`.
 
@@ -1263,19 +1237,19 @@ def hardtanh(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape.
     min_val : float, optional
         Lower clamp.  Default ``-1.0``.
     max_val : float, optional
         Upper clamp.  Default ``1.0``.
     inplace : bool, optional
-        If ``True``, write the result into ``x`` and return ``x``.
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Clamped tensor with the same shape as ``x``.
+        Clamped tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -1300,12 +1274,10 @@ def hardtanh(
     >>> hardtanh(x)
     tensor([-1., -0.5, 0., 0.5, 1.])
     """
-    if inplace:
-        return _in_place(x, "hardtanh_", lambda t: hardtanh(t, min_val, max_val))
-    return _l.clamp(x, min_val, max_val)
+    return _in_place(input, "hardtanh_", lambda t: hardtanh(t, min_val, max_val)) if inplace else _l.clamp(input, min_val, max_val)
 
 
-def logsigmoid(x: Tensor) -> Tensor:
+def logsigmoid(input: Tensor) -> Tensor:
     r"""Numerically stable :math:`\log \sigma(x)`.
 
     Direct evaluation of :math:`\log(1 / (1 + e^{-x}))` underflows once
@@ -1316,13 +1288,13 @@ def logsigmoid(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input logits.
 
     Returns
     -------
     Tensor
-        :math:`\log \sigma(x)` with the same shape as ``x``, values in
+        :math:`\log \sigma(x)` with the same shape as ``input``, values in
         :math:`(-\infty, 0]`.
 
     Notes
@@ -1342,10 +1314,10 @@ def logsigmoid(x: Tensor) -> Tensor:
     >>> logsigmoid(x)
     tensor([-10., -0.6931, -4.54e-05])
     """
-    return -softplus(-x)
+    return -softplus(-input)
 
 
-def softsign(x: Tensor) -> Tensor:
+def softsign(input: Tensor) -> Tensor:
     r"""Softsign activation.
 
     A bounded :math:`(-1, 1)` activation that saturates **polynomially**
@@ -1354,13 +1326,13 @@ def softsign(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any shape; activation is element-wise.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``, values in
+        Activated tensor with the same shape as ``input``, values in
         :math:`(-1, 1)`.
 
     Notes
@@ -1383,37 +1355,34 @@ def softsign(x: Tensor) -> Tensor:
     >>> softsign(x)
     tensor([-0.6667, -0.5, 0., 0.5, 0.6667])
     """
-    return x / (1.0 + _l.abs(x))
+    return input / (1.0 + _l.abs(input))
 
 
 def threshold(
-    x: Tensor,
-    threshold: float,
-    value: float,
-    inplace: bool = False,
+    input: Tensor, threshold: float, value: float, inplace: bool = False
 ) -> Tensor:
     r"""Threshold activation — gate elements by a scalar cutoff.
 
-    Replaces every element of ``x`` that is **not** strictly greater than
+    Replaces every element of ``input`` that is **not** strictly greater than
     ``threshold`` with the constant ``value``.  A generalisation of
     :func:`relu` (recovered by ``threshold=0, value=0``) and a common
     component of dead-zone non-linearities.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     threshold : float
         Cutoff :math:`t`.  Elements satisfying :math:`x > t` are kept.
     value : float
         Replacement constant for elements not above the threshold.
     inplace : bool, optional
-        If ``True``, write the result into ``x`` and return ``x``.
+        If ``True``, write the result into ``input`` and return ``input``.
 
     Returns
     -------
     Tensor
-        Thresholded tensor with the same shape as ``x``.
+        Thresholded tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -1437,9 +1406,7 @@ def threshold(
     >>> threshold(x, threshold=0.5, value=-99.0)
     tensor([-99., -99., -99., 1.])
     """
-    if inplace:
-        return _in_place(x, "threshold_", lambda t: _threshold(t, threshold, value))
-    return _threshold(x, threshold, value)
+    return _in_place(input, "threshold_", lambda t: _threshold(t, threshold, value)) if inplace else _threshold(input, threshold, value)
 
 
 def _threshold(x: Tensor, threshold: float, value: float) -> Tensor:
@@ -1518,10 +1485,7 @@ def straight_through(hard: Tensor, soft: Tensor) -> Tensor:
 
 
 def gumbel_softmax(
-    logits: Tensor,
-    tau: float = 1.0,
-    hard: bool = False,
-    dim: int = -1,
+    logits: Tensor, tau: float = 1.0, hard: bool = False, eps: float = 1e-10, dim: int = -1
 ) -> Tensor:
     r"""Gumbel-Softmax — differentiable relaxation of categorical sampling.
 
@@ -1544,6 +1508,8 @@ def gumbel_softmax(
         If ``True`` the forward pass returns a true one-hot vector while
         the backward pass uses the soft gradient (straight-through
         estimator).  Default ``False``.
+    eps : float, optional
+        Deprecated legacy parameter kept for signature parity.  Default ``1e-10``.
     dim : int, optional
         Dimension over which to take the softmax.  Default ``-1``.
 
@@ -1576,33 +1542,23 @@ def gumbel_softmax(
     >>> y.sum().item()
     1.0
     """
+    if eps != 1e-10:
+        warnings.warn("`eps` parameter is deprecated and has no effect.", stacklevel=2)
     # Sample Gumbel noise: −log(−log U) with U ∈ (0, 1).  Clamp away
     # from the boundaries to avoid log(0).
-    u: Tensor = _l.rand(
-        *tuple(int(s) for s in logits.shape),
-        dtype=logits.dtype,
-        device=logits.device,
-    ).clip(1e-7, 1.0 - 1e-7)
+    u: Tensor = _l.rand_like(logits).clip(1e-7, 1.0 - 1e-7)
     gumbel: Tensor = -(-(u.log())).log()
-
     y_soft: Tensor = softmax((logits + gumbel) / tau, dim=dim)
-
     if not hard:
         return y_soft
-
     # Build a one-hot at argmax, then re-attach ``y_soft``'s gradient.
     idx: Tensor = y_soft.argmax(dim=dim, keepdim=True)
-    y_hard: Tensor = _l.zeros_like(y_soft)
-    y_hard = y_hard.scatter(dim, idx, _l.ones_like(idx, dtype=y_soft.dtype))
+    y_hard: Tensor = _l.zeros_like(y_soft).scatter(dim, idx, _l.ones_like(idx, dtype=y_soft.dtype))
     return straight_through(y_hard, y_soft)
 
 
 def rrelu(
-    x: Tensor,
-    lower: float = 1.0 / 8.0,
-    upper: float = 1.0 / 3.0,
-    training: bool = False,
-    inplace: bool = False,
+    input: Tensor, lower: float = 1.0 / 8.0, upper: float = 1.0 / 3.0, training: bool = False, inplace: bool = False
 ) -> Tensor:
     r"""Randomised leaky ReLU (Xu et al. 2015).
 
@@ -1614,7 +1570,7 @@ def rrelu(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     lower : float, optional
         Lower bound of the uniform slope distribution.  Default ``1/8``.
@@ -1624,12 +1580,12 @@ def rrelu(
         If ``True`` sample a fresh slope per element; if ``False`` use the
         midpoint.  Default ``False``.
     inplace : bool, optional
-        If ``True``, ``x`` itself receives the result and is returned.
+        If ``True``, ``input`` itself receives the result and is returned.
 
     Returns
     -------
     Tensor
-        Activated tensor with the same shape as ``x``.
+        Activated tensor with the same shape as ``input``.
 
     Notes
     -----
@@ -1657,20 +1613,14 @@ def rrelu(
     tensor([-0.2292, 0., 1.])
     """
     if inplace:
-        return _in_place(x, "rrelu_", lambda t: rrelu(t, lower, upper, training))
+        return _in_place(input, "rrelu_", lambda t: rrelu(t, lower, upper, training))
     if training:
-        # Per-element uniform slope, only applied where x < 0.
-        slope: Tensor = (
-            _l.rand(*tuple(int(s) for s in x.shape), dtype=x.dtype, device=x.device)
-            * (upper - lower)
-            + lower
-        )
+        # Per-element uniform slope, only applied where input < 0.
+        slope: Tensor = _l.rand_like(input) * (upper - lower) + lower
     else:
         # Constant midpoint slope.
-        mid: float = 0.5 * (lower + upper)
-        slope = _l.full_like(x, mid)
-    neg_part: Tensor = slope * x
-    return _l.where(x >= 0, x, neg_part)
+        slope = _l.full_like(input, 0.5 * (lower + upper))
+    return _l.where(input >= 0, input, slope * input)
 
 
 # ── In-place variants ─────────────────────────────────────────────────────────
@@ -1678,15 +1628,15 @@ def rrelu(
 # ``F.elu_(x)`` and ``F.elu(x, inplace=True)`` are one call: ``_in_place``.
 
 
-def relu_(x: Tensor, inplace: bool = True) -> Tensor:
-    """In-place ReLU — ``x`` is overwritten with ``max(0, x)``.
+def relu_(input: Tensor, inplace: bool = True) -> Tensor:
+    """In-place ReLU — ``input`` is overwritten with ``max(0, input)``.
 
     Backed by the engine's native in-place ReLU kernel when no autograd
     graph has to be extended (no temporary buffer).
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input; modified in place and also returned.
     inplace : bool, optional
         ``False`` returns :func:`relu`'s fresh result instead.  Default ``True``.
@@ -1694,33 +1644,43 @@ def relu_(x: Tensor, inplace: bool = True) -> Tensor:
     Returns
     -------
     Tensor
-        The same ``x`` tensor, now holding ``max(0, x)``.
+        The same ``input`` tensor, now holding ``max(0, input)``.
     """
-    return relu(x, inplace)
+    return relu(input, inplace)
 
 
-def elu_(x: Tensor, alpha: float = 1.0, inplace: bool = True) -> Tensor:
-    r"""In-place ELU — overwrites ``x`` with :math:`\text{ELU}(x, \alpha)`.
+def elu_(
+    input: Tensor, alpha: float = 1.0, scale: float = 1.0, input_scale: float = 1.0
+) -> Tensor:
+    r"""In-place ELU — overwrites ``input`` with :math:`\text{ELU}(\text{input}, \alpha)`.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input; modified in place.
     alpha : float, optional
         Negative-side scale parameter :math:`\alpha`.  Default ``1.0``.
-    inplace : bool, optional
-        ``False`` returns :func:`elu`'s fresh result instead.  Default ``True``.
+    scale : float, optional
+        Output scale factor.  Default ``1.0``.
+    input_scale : float, optional
+        Negative-side exponent scale factor.  Default ``1.0``.
 
     Returns
     -------
     Tensor
-        The same ``x`` tensor, now holding ``elu(x, alpha)``.
+        The same ``input`` tensor, now holding ``elu(input, alpha)``.
     """
-    return elu(x, alpha, inplace)
+    if scale == 1.0 and input_scale == 1.0:
+        return elu(input, alpha, True)
+    return _in_place(
+        input,
+        "elu_",
+        lambda t: _l.where(t > 0, t * scale, (alpha * scale) * (_l.exp(t * input_scale) - 1.0)),
+    )
 
 
-def selu_(x: Tensor, inplace: bool = True) -> Tensor:
-    """In-place SELU — overwrites ``x`` with ``selu(x)``.
+def selu_(input: Tensor, inplace: bool = True) -> Tensor:
+    """In-place SELU — overwrites ``input`` with ``selu(input)``.
 
     Uses the canonical SELU coefficients (Klambauer 2017); intended
     for use only inside Self-Normalising Networks where the input was
@@ -1729,7 +1689,7 @@ def selu_(x: Tensor, inplace: bool = True) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input; modified in place.
     inplace : bool, optional
         ``False`` returns :func:`selu`'s fresh result instead.  Default ``True``.
@@ -1737,15 +1697,15 @@ def selu_(x: Tensor, inplace: bool = True) -> Tensor:
     Returns
     -------
     Tensor
-        The same ``x`` tensor, now holding ``selu(x)``.
+        The same ``input`` tensor, now holding ``selu(input)``.
     """
-    return selu(x, inplace)
+    return selu(input, inplace)
 
 
 def leaky_relu_(
-    x: Tensor, negative_slope: float = 0.01, inplace: bool = True
+    input: Tensor, negative_slope: float = 0.01, inplace: bool = True
 ) -> Tensor:
-    r"""In-place Leaky ReLU — overwrites ``x`` with the leaky-rectified result.
+    r"""In-place Leaky ReLU — overwrites ``input`` with the leaky-rectified result.
 
     .. math::
 
@@ -1753,7 +1713,7 @@ def leaky_relu_(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input; modified in place.
     negative_slope : float, optional
         Slope applied to the negative side.  Default ``0.01``.
@@ -1764,22 +1724,19 @@ def leaky_relu_(
     Returns
     -------
     Tensor
-        The same ``x`` tensor, now holding ``leaky_relu(x, negative_slope)``.
+        The same ``input`` tensor, now holding ``leaky_relu(input, negative_slope)``.
     """
-    return leaky_relu(x, negative_slope, inplace)
+    return leaky_relu(input, negative_slope, inplace)
 
 
 def hardtanh_(
-    x: Tensor,
-    min_val: float = -1.0,
-    max_val: float = 1.0,
-    inplace: bool = True,
+    input: Tensor, min_val: float = -1.0, max_val: float = 1.0, inplace: bool = True
 ) -> Tensor:
-    """In-place hardtanh — clamps ``x`` to ``[min_val, max_val]`` in place.
+    """In-place hardtanh — clamps ``input`` to ``[min_val, max_val]`` in place.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input; modified in place.
     min_val : float, optional
         Lower clamp bound.  Default ``-1.0``.
@@ -1792,25 +1749,22 @@ def hardtanh_(
     Returns
     -------
     Tensor
-        The same ``x`` tensor, now clamped.
+        The same ``input`` tensor, now clamped.
     """
-    return hardtanh(x, min_val, max_val, inplace)
+    return hardtanh(input, min_val, max_val, inplace)
 
 
 def threshold_(
-    x: Tensor,
-    threshold_val: float,
-    value: float,
-    inplace: bool = True,
+    input: Tensor, threshold: float, value: float, inplace: bool = True
 ) -> Tensor:
-    """In-place threshold — replace entries ``<= threshold_val`` with ``value``.
+    """In-place threshold — replace entries ``<= threshold`` with ``value``.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input; modified in place.
-    threshold_val : float
-        Cutoff; positions where ``x <= threshold_val`` are reset.
+    threshold : float
+        Cutoff; positions where ``input <= threshold`` are reset.
     value : float
         Replacement value for clipped positions.
     inplace : bool, optional
@@ -1820,20 +1774,16 @@ def threshold_(
     Returns
     -------
     Tensor
-        The same ``x`` tensor, with sub-threshold positions set to
+        The same ``input`` tensor, with sub-threshold positions set to
         ``value`` and the rest unchanged.
     """
-    return threshold(x, threshold_val, value, inplace)
+    return _in_place(input, "threshold_", lambda t: _threshold(t, threshold, value)) if inplace else _threshold(input, threshold, value)
 
 
 def rrelu_(
-    x: Tensor,
-    lower: float = 1.0 / 8,
-    upper: float = 1.0 / 3,
-    training: bool = False,
-    inplace: bool = True,
+    input: Tensor, lower: float = 1.0 / 8, upper: float = 1.0 / 3, training: bool = False, inplace: bool = True
 ) -> Tensor:
-    """In-place RReLU — randomised leaky ReLU written back into ``x``.
+    """In-place RReLU — randomised leaky ReLU written back into ``input``.
 
     During training the negative-slope is sampled per-element from a
     uniform :math:`U(\\text{lower}, \\text{upper})`; at inference the
@@ -1841,7 +1791,7 @@ def rrelu_(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input; modified in place.
     lower : float, optional
         Lower bound of the uniform slope sampler.  Default ``1/8``.
@@ -1857,9 +1807,9 @@ def rrelu_(
     Returns
     -------
     Tensor
-        The same ``x`` tensor, now holding ``rrelu(x, lower, upper, training)``.
+        The same ``input`` tensor, now holding ``rrelu(input, lower, upper, training)``.
     """
-    return rrelu(x, lower, upper, training, inplace)
+    return rrelu(input, lower, upper, training, inplace)
 
 
 def symlog(x: Tensor) -> Tensor:

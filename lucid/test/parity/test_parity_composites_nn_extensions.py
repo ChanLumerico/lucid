@@ -317,6 +317,6 @@ class TestInplaceActivationsParity:
         x = self._x()
         t = lucid.tensor(x.copy())
         r = ref.tensor(x.copy())
-        F.threshold_(t, threshold_val=0.0, value=-1.0)
+        F.threshold_(t, threshold=0.0, value=-1.0)
         ref.nn.functional.threshold_(r, threshold=0.0, value=-1.0)
         assert_close(t, r, atol=0.0)

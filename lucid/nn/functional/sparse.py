@@ -68,7 +68,7 @@ def check_embedding_indices(x: Tensor, weight: Tensor, op: str) -> None:
 
 
 def embedding(
-    x: Tensor,
+    input: Tensor,
     weight: Tensor,
     padding_idx: int | None = None,
     max_norm: float | None = None,
@@ -86,13 +86,13 @@ def embedding(
         \mathrm{out}[i_1, \dots, i_k] = W[\, x[i_1, \dots, i_k]\, ]
 
     where ``W`` of shape ``(num_embeddings, embedding_dim)`` is the
-    lookup table and ``x`` holds integer indices in
+    lookup table and ``input`` holds integer indices in
     ``[0, num_embeddings)``.  Equivalent to a one-hot matmul
     :math:`\mathrm{onehot}(x) W` but computed with an indexed gather.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Integer index tensor of arbitrary shape ``(*)``, with entries in
         ``[0, num_embeddings)``.  A CPU entry outside that range raises
         ``IndexError`` before the lookup and a Metal one is isolated in
@@ -108,7 +108,7 @@ def embedding(
         ``[-num_embeddings, num_embeddings)`` (a negative one counts from
         the end), else ``ValueError``.
     max_norm : float, optional
-        If given, every row of ``weight`` that ``x`` looks up and whose
+        If given, every row of ``weight`` that ``input`` looks up and whose
         :math:`L_p` norm exceeds ``max_norm`` is rescaled in place, outside
         autograd, to norm ``max_norm`` before the lookup (with :math:`p` =
         ``norm_type``).  ``weight`` stays a leaf; a tensor that saved it for
@@ -119,7 +119,7 @@ def embedding(
     scale_grad_by_freq : bool, optional
         If ``True``, the gradient reaching each row of ``weight`` from this
         call is divided by how many times that row's index occurs in
-        ``x`` — useful for highly skewed token distributions.  The count
+        ``input`` — useful for highly skewed token distributions.  The count
         is per call: two lookups before one backward are each scaled by
         their own.
     sparse : bool, optional
@@ -161,9 +161,9 @@ def embedding(
         sparse, "embedding", "sparse", sparse, detail="Gradients are always dense."
     )
     padding_idx = _padding_index(padding_idx, weight, "embedding")
-    _check_table(x, weight, "embedding")
+    _check_table(input, weight, "embedding")
     if max_norm is not None:
-        _renorm_rows(weight, x, max_norm, norm_type)
+        _renorm_rows(weight, input, max_norm, norm_type)
     pad = padding_idx if padding_idx is not None else -1
     # Normalised, not passed through.  The engine gather reads the index
     # buffer at a fixed width, so an int8 or bool index of more than a
@@ -171,7 +171,7 @@ def embedding(
     # same shape as the scatter_add defect.  int16/int32/int64 happened to
     # survive; relying on that is relying on an over-read staying inside
     # the page.
-    idx = x if x.dtype == lucid.int64 else x.to(lucid.int64)
+    idx = input if input.dtype == lucid.int64 else input.to(lucid.int64)
     out = _wrap(_C_engine.nn.embedding(_unwrap(weight), _unwrap(idx), pad))
     if scale_grad_by_freq and out.requires_grad:
         return _scale_grad_by_freq(out, idx, int(weight.shape[0]))
@@ -370,7 +370,7 @@ def _bag_of_each_index(
     return bag, n_bags
 
 
-def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
+def one_hot(input: Tensor, num_classes: int = -1) -> Tensor:
     r"""One-hot encode an integer class index tensor.
 
     Maps each integer entry into a one-hot vector along a new trailing
@@ -379,17 +379,17 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
     .. math::
 
         \mathrm{out}[\ldots, c] =
-            \begin{cases} 1 & \text{if } \mathrm{tensor}[\ldots] = c \\
+            \begin{cases} 1 & \text{if } \mathrm{input}[\ldots] = c \\
                           0 & \text{otherwise} \end{cases}
 
     Parameters
     ----------
-    tensor : Tensor
+    input : Tensor
         Integer tensor of arbitrary shape ``(*)`` whose entries are class
         indices in ``[0, num_classes)``.
     num_classes : int, optional
         Total number of classes :math:`C`.  If ``-1`` (the default), it
-        is inferred as ``tensor.max() + 1``; supplying an explicit value
+        is inferred as ``input.max() + 1``; supplying an explicit value
         avoids a host round-trip and is preferred in hot loops.
 
     Returns
@@ -402,13 +402,13 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
     Raises
     ------
     ValueError
-        If ``num_classes`` is ``-1`` and ``tensor`` is empty — there is no
+        If ``num_classes`` is ``-1`` and ``input`` is empty — there is no
         largest index to infer the count from — or if ``num_classes`` is
         otherwise not positive.
     IndexError
-        If a CPU ``tensor`` holds a class outside ``[0, num_classes)``,
+        If a CPU ``input`` holds a class outside ``[0, num_classes)``,
         a negative one included; it used to give a row of zeros.  A Metal
-        ``tensor`` is not read back for the check (that would stall every
+        ``input`` is not read back for the check (that would stall every
         step), and a class outside the range gives a row of zeros there.
 
     Notes
@@ -441,20 +441,20 @@ def one_hot(tensor: Tensor, num_classes: int = -1) -> Tensor:
         # The engine takes only a positive count, so the default this
         # function has always advertised went straight through and was
         # refused.  Inferred here instead, as documented.
-        if tensor.numel() == 0:
+        if input.numel() == 0:
             raise ValueError(
                 "one_hot: cannot infer num_classes from an empty tensor; "
                 "pass num_classes explicitly"
             )
-        num_classes = int(tensor.max().item()) + 1
+        num_classes = int(input.max().item()) + 1
     _check_indices(
-        tensor,
+        input,
         num_classes,
         "one_hot",
         what="class",
         axis=f"num_classes={num_classes}",
     )
-    out = _C_engine.nn.one_hot(_unwrap(tensor), num_classes)
+    out = _C_engine.nn.one_hot(_unwrap(input), num_classes)
     # int64, the dtype the reference framework answers in and the one class
     # indices are carried in everywhere else; the engine builds int8.
     return _wrap(_C_engine.astype(out, _C_engine.Dtype.I64))

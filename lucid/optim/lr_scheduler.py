@@ -707,8 +707,6 @@ class CyclicLR(_LRScheduler, _CyclicLike):
         Decay factor used only in ``"exp_range"`` mode (default: ``1.0``).
     last_epoch : int, optional
         The index of the last epoch (default: ``-1``).
-    verbose : bool, optional
-        Print the updated LR after each step if ``True`` (default: ``False``).
 
     Attributes
     ----------
@@ -1540,8 +1538,6 @@ class OneCycleLR(_LRScheduler, _OneCycleLike):
         (default: ``1e4``).
     last_epoch : int, optional
         The index of the last epoch (default: ``-1``).
-    verbose : bool, optional
-        Print the updated LR after each step if ``True`` (default: ``False``).
 
     Attributes
     ----------

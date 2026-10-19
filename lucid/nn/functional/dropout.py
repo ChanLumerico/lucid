@@ -75,35 +75,35 @@ def _alloc_philox_state(device: DeviceLike) -> Tensor:
 
 
 def dropout(
-    x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
+    input: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
 ) -> Tensor:
     r"""Element-wise Bernoulli dropout — the canonical Srivastava 2014 form.
 
-    During training, each scalar in ``x`` is independently zeroed with
+    During training, each scalar in ``input`` is independently zeroed with
     probability ``p`` and survivors are scaled by :math:`1 / (1 - p)`
     so the expected activation magnitude stays unchanged.  At inference
     (``training=False``) the call is a no-op identity.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input activations of any shape.
     p : float, optional
         Drop probability in :math:`[0, 1]`.  ``p = 0`` short-circuits
-        to identity; ``p = 1`` returns ``x * 0`` in training.
+        to identity; ``p = 1`` returns ``input * 0`` in training.
         Default ``0.5``.
     training : bool, optional
-        When ``False``, returns ``x`` unchanged — identity at
+        When ``False``, returns ``input`` unchanged — identity at
         inference time.  Modules built on top (``nn.Dropout``) pass
         ``self.training`` here.  Default ``True``.
     inplace : bool, optional
-        If ``True``, write the result into ``x`` and return ``x``.
+        If ``True``, write the result into ``input`` and return ``input``.
         Default ``False``.
 
     Returns
     -------
     Tensor
-        Same shape and dtype as ``x``.
+        Same shape and dtype as ``input``.
 
     Notes
     -----
@@ -152,9 +152,9 @@ def dropout(
     """
     if inplace:
         return _dropout_in_place(
-            x, "dropout", p, training, lambda t: dropout(t, p, training)
+            input, "dropout", p, training, lambda t: dropout(t, p, training)
         )
-    dropped = _drop_everything(x, p, training)
+    dropped = _drop_everything(input, p, training)
     if dropped is not None:
         return dropped
     if training and p > 0.0 and _C_engine.compile.current_tracer() is not None:
@@ -180,11 +180,11 @@ def dropout(
             # ``(state_in_tid, state_out_tid)`` variable pairs, and
             # routes the compile through
             # ``compile_generic_fused_step_with_vars``.
-            xi = _unwrap(x)
+            xi = _unwrap(input)
             state = _alloc_philox_state(xi.device)
             y, _ = _C_engine.nn.dropout_stateful(xi, _unwrap(state), p, training)
             return _wrap(y)
-    return _wrap(_C_engine.nn.dropout(_unwrap(x), p, training))
+    return _wrap(_C_engine.nn.dropout(_unwrap(input), p, training))
 
 
 def _alpha_affine(p: float) -> tuple[float, float]:
@@ -232,7 +232,7 @@ def _channel_dropout(
 
 
 def dropout1d(
-    x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
+    input: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
 ) -> Tensor:
     r"""Channel-wise dropout for 1-D sequence / feature inputs.
 
@@ -247,21 +247,21 @@ def dropout1d(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor, typically of shape :math:`(N, C, L)`.
     p : float, optional
         Channel-drop probability in :math:`[0, 1]` (default ``0.5``).
     training : bool, optional
-        When ``False``, returns ``x`` unchanged — identity at
+        When ``False``, returns ``input`` unchanged — identity at
         inference time (default ``True``).
     inplace : bool, optional
-        If ``True``, drop channels of ``x`` itself and return ``x``
+        If ``True``, drop channels of ``input`` itself and return ``input``
         (default ``False``).
 
     Returns
     -------
     Tensor
-        Same shape and dtype as ``x``.
+        Same shape and dtype as ``input``.
 
     Notes
     -----
@@ -284,11 +284,11 @@ def dropout1d(
     >>> x = lucid.ones((2, 4, 5))
     >>> y = dropout1d(x, p=0.5, training=True)  # doctest: +SKIP
     """
-    return _channel_dropout(x, p, training, inplace, "dropout1d")
+    return _channel_dropout(input, p, training, inplace, "dropout1d")
 
 
 def dropout2d(
-    x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
+    input: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
 ) -> Tensor:
     r"""Channel-wise dropout for 2-D (spatial) feature maps.
 
@@ -303,20 +303,20 @@ def dropout2d(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of shape :math:`(N, C, H, W)`.
     p : float, optional
         Channel-drop probability in :math:`[0, 1]` (default ``0.5``).
     training : bool, optional
         When ``False``, identity (default ``True``).
     inplace : bool, optional
-        If ``True``, zero the dropped feature maps of ``x`` itself
-        and return ``x`` (default ``False``).
+        If ``True``, zero the dropped feature maps of ``input`` itself
+        and return ``input`` (default ``False``).
 
     Returns
     -------
     Tensor
-        Same shape and dtype as ``x``.
+        Same shape and dtype as ``input``.
 
     Notes
     -----
@@ -335,11 +335,11 @@ def dropout2d(
     >>> x = lucid.ones((2, 8, 4, 4))
     >>> y = dropout2d(x, p=0.5, training=True)  # doctest: +SKIP
     """
-    return _channel_dropout(x, p, training, inplace, "dropout2d")
+    return _channel_dropout(input, p, training, inplace, "dropout2d")
 
 
 def dropout3d(
-    x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
+    input: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
 ) -> Tensor:
     r"""Channel-wise dropout for 3-D (volumetric) feature maps.
 
@@ -352,20 +352,20 @@ def dropout3d(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of shape :math:`(N, C, D, H, W)`.
     p : float, optional
         Channel-drop probability in :math:`[0, 1]` (default ``0.5``).
     training : bool, optional
         When ``False``, identity (default ``True``).
     inplace : bool, optional
-        If ``True``, ``x`` itself is written and returned
+        If ``True``, ``input`` itself is written and returned
         (default ``False``).
 
     Returns
     -------
     Tensor
-        Same shape and dtype as ``x``.
+        Same shape and dtype as ``input``.
 
     Notes
     -----
@@ -384,11 +384,11 @@ def dropout3d(
     >>> x = lucid.ones((1, 4, 3, 4, 4))
     >>> y = dropout3d(x, p=0.5, training=True)  # doctest: +SKIP
     """
-    return _channel_dropout(x, p, training, inplace, "dropout3d")
+    return _channel_dropout(input, p, training, inplace, "dropout3d")
 
 
 def alpha_dropout(
-    x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
+    input: Tensor, p: float = 0.5, training: bool = False, inplace: bool = False
 ) -> Tensor:
     r"""Alpha dropout — variance-preserving dropout for SELU networks.
 
@@ -404,20 +404,20 @@ def alpha_dropout(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor, any shape.
     p : float, optional
         Element-drop probability in :math:`[0, 1]` (default ``0.5``).
     training : bool, optional
-        When ``False``, identity (default ``True``).
+        When ``False``, identity (default ``False``).
     inplace : bool, optional
-        If ``True``, write the result into ``x`` and return ``x``
+        If ``True``, write the result into ``input`` and return ``input``
         (default ``False``).
 
     Returns
     -------
     Tensor
-        Same shape and dtype as ``x``.
+        Same shape and dtype as ``input``.
 
     Notes
     -----
@@ -447,18 +447,18 @@ def alpha_dropout(
     """
     if inplace:
         return _dropout_in_place(
-            x, "alpha_dropout", p, training, lambda t: alpha_dropout(t, p, training)
+            input, "alpha_dropout", p, training, lambda t: alpha_dropout(t, p, training)
         )
-    dropped = _drop_everything(x, p, training)
+    dropped = _drop_everything(input, p, training)
     if dropped is not None:
         return dropped
     if not training or p == 0.0:
-        return x
-    return _wrap(_C_engine.nn.alpha_dropout(_unwrap(x), p, training))
+        return input
+    return _wrap(_C_engine.nn.alpha_dropout(_unwrap(input), p, training))
 
 
 def feature_alpha_dropout(
-    x: Tensor, p: float = 0.5, training: bool = True, inplace: bool = False
+    input: Tensor, p: float = 0.5, training: bool = False, inplace: bool = False
 ) -> Tensor:
     r"""Channel-wise alpha dropout for SELU convolutional networks.
 
@@ -475,21 +475,21 @@ def feature_alpha_dropout(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of shape :math:`(N, C, *)` (one or more
         spatial dimensions).
     p : float, optional
         Channel-drop probability in :math:`[0, 1]` (default ``0.5``).
     training : bool, optional
-        When ``False``, identity (default ``True``).
+        When ``False``, identity (default ``False``).
     inplace : bool, optional
-        If ``True``, ``x`` is overwritten with the result and
+        If ``True``, ``input`` is overwritten with the result and
         returned (default ``False``).
 
     Returns
     -------
     Tensor
-        Same shape and dtype as ``x``.
+        Same shape and dtype as ``input``.
 
     Notes
     -----
@@ -511,21 +511,21 @@ def feature_alpha_dropout(
     """
     if inplace:
         return _dropout_in_place(
-            x,
+            input,
             "feature_alpha_dropout",
             p,
             training,
             lambda t: feature_alpha_dropout(t, p, training),
         )
-    dropped = _drop_everything(x, p, training)
+    dropped = _drop_everything(input, p, training)
     if dropped is not None:
         return dropped
     if not training or p == 0.0:
-        return x
+        return input
 
-    xi = _unwrap(x)
+    xi = _unwrap(input)
     if len(xi.shape) < 2:
-        return alpha_dropout(x, p, training)
+        return alpha_dropout(input, p, training)
 
     N, C = int(xi.shape[0]), int(xi.shape[1])
     keep_prob = 1.0 - p

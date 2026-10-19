@@ -64,9 +64,9 @@ def losses_with(param: str) -> list[str]:
 
 LOSSES: list[str] = sorted(set(losses_with("reduction")) | set(losses_with("weight")))
 
-#: How each loss's ``weight`` is shaped: one entry per class, or a factor
-#: that broadcasts against the elementwise loss.  A new weighted loss has
-#: to be put in one of the two.
+#: How each loss's ``weight`` is shaped: one entry per class, a factor
+#: that broadcasts against the elementwise loss, or the input's own shape.
+#: A new weighted loss has to be put in one of the three.
 CLASS_WEIGHT = frozenset({"cross_entropy", "nll_loss", "multi_margin_loss"})
 ELEMENT_WEIGHT = frozenset(
     {
@@ -75,6 +75,7 @@ ELEMENT_WEIGHT = frozenset(
         "multilabel_soft_margin_loss",
     }
 )
+SAME_WEIGHT = frozenset({"huber_loss", "l1_loss", "mse_loss"})
 
 
 def _inputs(device: str) -> dict[str, lucid.Tensor]:
@@ -100,13 +101,17 @@ def _inputs(device: str) -> dict[str, lucid.Tensor]:
 #: An ordinary, valid call of each loss, as keyword arguments built from
 #: :func:`_inputs`.
 VALID: dict[str, Callable[[dict[str, lucid.Tensor]], Kwargs]] = {
-    "binary_cross_entropy": lambda t: {"x": t["prob"], "target": t["binary"]},
+    "binary_cross_entropy": lambda t: {"input": t["prob"], "target": t["binary"]},
     "binary_cross_entropy_with_logits": lambda t: {
-        "x": t["x"],
+        "input": t["x"],
         "target": t["binary"],
     },
-    "cosine_embedding_loss": lambda t: {"x1": t["x"], "x2": t["y"], "y": t["sign"]},
-    "cross_entropy": lambda t: {"x": t["x"], "target": t["index"]},
+    "cosine_embedding_loss": lambda t: {
+        "input1": t["x"],
+        "input2": t["y"],
+        "target": t["sign"],
+    },
+    "cross_entropy": lambda t: {"input": t["x"], "target": t["index"]},
     "ctc_loss": lambda t: {
         "log_probs": t["log_probs"],
         "targets": t["ctc_targets"],
@@ -114,25 +119,29 @@ VALID: dict[str, Callable[[dict[str, lucid.Tensor]], Kwargs]] = {
         "target_lengths": [2, 2],
     },
     "gaussian_nll_loss": lambda t: {
-        "x": t["x"],
+        "input": t["x"],
         "target": t["y"],
         "var": t["prob"],
     },
-    "hinge_embedding_loss": lambda t: {"x": t["s1"], "y": t["sign"]},
-    "huber_loss": lambda t: {"x": t["x"], "target": t["y"]},
+    "hinge_embedding_loss": lambda t: {"input": t["s1"], "target": t["sign"]},
+    "huber_loss": lambda t: {"input": t["x"], "target": t["y"]},
     "kl_div": lambda t: {
-        "x": F.log_softmax(t["x"], dim=1),
+        "input": F.log_softmax(t["x"], dim=1),
         "target": F.softmax(t["y"], dim=1),
     },
-    "l1_loss": lambda t: {"x": t["x"], "target": t["y"]},
-    "margin_ranking_loss": lambda t: {"x1": t["s1"], "x2": t["s2"], "y": t["sign"]},
-    "mse_loss": lambda t: {"x": t["x"], "target": t["y"]},
-    "multi_margin_loss": lambda t: {"x": t["x"], "target": t["index"]},
-    "multilabel_margin_loss": lambda t: {"x": t["x"], "target": t["labels"]},
+    "l1_loss": lambda t: {"input": t["x"], "target": t["y"]},
+    "margin_ranking_loss": lambda t: {
+        "input1": t["s1"],
+        "input2": t["s2"],
+        "target": t["sign"],
+    },
+    "mse_loss": lambda t: {"input": t["x"], "target": t["y"]},
+    "multi_margin_loss": lambda t: {"input": t["x"], "target": t["index"]},
+    "multilabel_margin_loss": lambda t: {"input": t["x"], "target": t["labels"]},
     "multilabel_soft_margin_loss": lambda t: {"input": t["x"], "target": t["binary"]},
-    "nll_loss": lambda t: {"x": F.log_softmax(t["x"], dim=1), "target": t["index"]},
-    "poisson_nll_loss": lambda t: {"x": t["x"], "target": t["y"].abs()},
-    "smooth_l1_loss": lambda t: {"x": t["x"], "target": t["y"]},
+    "nll_loss": lambda t: {"input": F.log_softmax(t["x"], dim=1), "target": t["index"]},
+    "poisson_nll_loss": lambda t: {"input": t["x"], "target": t["y"].abs()},
+    "smooth_l1_loss": lambda t: {"input": t["x"], "target": t["y"]},
     "soft_margin_loss": lambda t: {"input": t["x"], "target": t["binary"] * 2.0 - 1.0},
     "triplet_margin_loss": lambda t: {
         "anchor": t["x"],
@@ -230,6 +239,11 @@ def _weight_rows() -> list[Bad]:
                 ),
             ),
         ]
+    for name in sorted(SAME_WEIGHT):
+        rows += [
+            Bad(name, "weight-wrong-shape", _set(weight=_ones(C)), match="weight"),
+            Bad(name, "weight-enlarges", _set(weight=_ones(2, N, C)), match="weight"),
+        ]
     return rows
 
 
@@ -261,7 +275,8 @@ _SPECIFIC: list[Bad] = [
         "cross_entropy",
         "input-0d",
         _set(
-            x=lambda d: lucid.tensor(1.0, device=d), target=lambda d: _class_target(d)
+            input=lambda d: lucid.tensor(1.0, device=d),
+            target=lambda d: _class_target(d),
         ),
         match="input",
     ),
@@ -269,7 +284,8 @@ _SPECIFIC: list[Bad] = [
         "nll_loss",
         "input-0d",
         _set(
-            x=lambda d: lucid.tensor(-1.0, device=d), target=lambda d: _class_target(d)
+            input=lambda d: lucid.tensor(-1.0, device=d),
+            target=lambda d: _class_target(d),
         ),
         match="input",
     ),
@@ -277,7 +293,7 @@ _SPECIFIC: list[Bad] = [
         "nll_loss",
         "target-spatial-mismatch",
         _set(
-            x=lambda d: lucid.randn(N, C, 2, device=d),
+            input=lambda d: lucid.randn(N, C, 2, device=d),
             target=lambda d: _class_target(d, N, 3),
         ),
         match="target",
@@ -285,7 +301,7 @@ _SPECIFIC: list[Bad] = [
     Bad(
         "multi_margin_loss",
         "input-3d",
-        _set(x=lambda d: lucid.randn(N, C, 2, device=d)),
+        _set(input=lambda d: lucid.randn(N, C, 2, device=d)),
         match="input",
     ),
     *(
@@ -312,7 +328,7 @@ _SPECIFIC: list[Bad] = [
             name,
             "input-0d",
             _set(
-                x=lambda d: lucid.tensor(0.5, device=d),
+                input=lambda d: lucid.tensor(0.5, device=d),
                 target=lambda d: _class_target(d),
             ),
             match="input",
@@ -330,7 +346,7 @@ _SPECIFIC: list[Bad] = [
         "multilabel_margin_loss",
         "input-3d",
         _set(
-            x=lambda d: lucid.randn(N, C, 2, device=d),
+            input=lambda d: lucid.randn(N, C, 2, device=d),
             target=lambda d: _class_target(d, N, C, 2),
         ),
         match="input",
@@ -348,30 +364,32 @@ _SPECIFIC: list[Bad] = [
         match="pos_weight",
     ),
     # pair losses: one rank, shapes that line up
-    Bad("cosine_embedding_loss", "target-2d", _set(y=_ones(N, 1)), match="target"),
+    Bad("cosine_embedding_loss", "target-2d", _set(target=_ones(N, 1)), match="target"),
     Bad(
         "cosine_embedding_loss",
         "target-0d-batched-inputs",
-        _set(y=lambda d: lucid.tensor(1.0, device=d)),
+        _set(target=lambda d: lucid.tensor(1.0, device=d)),
         match="target",
     ),
     Bad(
         "cosine_embedding_loss",
         "target-longer",
-        _set(y=_ones(N + 1)),
+        _set(target=_ones(N + 1)),
         match="target",
     ),
     Bad(
         "cosine_embedding_loss",
         "inputs-mismatch",
-        _set(x2=lambda d: lucid.randn(N + 1, C, device=d)),
+        _set(input2=lambda d: lucid.randn(N + 1, C, device=d)),
         match="inputs",
     ),
-    Bad("margin_ranking_loss", "label-2d", _set(y=_ones(1, N)), match="dimensions"),
+    Bad(
+        "margin_ranking_loss", "label-2d", _set(target=_ones(1, N)), match="dimensions"
+    ),
     Bad(
         "margin_ranking_loss",
         "scores-mismatch",
-        _set(x2=lambda d: lucid.randn(N + 1, device=d)),
+        _set(input2=lambda d: lucid.randn(N + 1, device=d)),
         match="dimensions",
     ),
     *(
@@ -502,7 +520,7 @@ def test_every_loss_has_a_valid_call() -> None:
 
 
 def test_every_weighted_loss_is_classified() -> None:
-    assert set(losses_with("weight")) == CLASS_WEIGHT | ELEMENT_WEIGHT
+    assert set(losses_with("weight")) == CLASS_WEIGHT | ELEMENT_WEIGHT | SAME_WEIGHT
 
 
 #: The losses whose target is not elementwise, and so not in
@@ -562,10 +580,16 @@ def test_every_valid_call_still_runs(name: str, device: str) -> None:
             assert out.shape == ()
 
 
-@pytest.mark.parametrize("name", sorted(CLASS_WEIGHT | ELEMENT_WEIGHT))
+@pytest.mark.parametrize("name", sorted(CLASS_WEIGHT | ELEMENT_WEIGHT | SAME_WEIGHT))
 def test_a_well_shaped_weight_is_taken(name: str, device: str) -> None:
     fn = getattr(F, name)
-    shapes = [(C,)] if name in CLASS_WEIGHT else [(C,), (N, C), (N, 1), (1,), ()]
+    shapes = (
+        [(C,)]
+        if name in CLASS_WEIGHT
+        else [(N, C)]
+        if name in SAME_WEIGHT
+        else [(C,), (N, C), (N, 1), (1,), ()]
+    )
     for shape in shapes:
         weight = lucid.full(shape, 2.0, device=device)
         out = fn(**valid_call(name, device), weight=weight, reduction="none")

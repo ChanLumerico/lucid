@@ -890,7 +890,7 @@ class HuberLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return huber_loss(x, target, self.delta, self.reduction)
+        return huber_loss(x, target, reduction=self.reduction, delta=self.delta)
 
     @override
     def extra_repr(self) -> str:
@@ -1778,10 +1778,7 @@ class GaussianNLLLoss(Module):
     """
 
     def __init__(
-        self,
-        full: bool = False,
-        eps: float = 1e-6,
-        reduction: Reduction = "mean",
+        self, *, full: bool = False, eps: float = 1e-6, reduction: Reduction = "mean"
     ) -> None:
         """Initialise the GaussianNLLLoss module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -2532,6 +2529,7 @@ class TripletMarginWithDistanceLoss(Module):
 
     def __init__(
         self,
+        *,
         distance_function: Callable[[Tensor, Tensor], Tensor] | None = None,
         margin: float = 1.0,
         swap: bool = False,
@@ -2578,10 +2576,10 @@ class TripletMarginWithDistanceLoss(Module):
             anchor,
             positive,
             negative,
-            self.distance_function,
-            self.margin,
-            self.swap,
-            self.reduction,
+            distance_function=self.distance_function,
+            margin=self.margin,
+            swap=self.swap,
+            reduction=self.reduction,
         )
 
     @override

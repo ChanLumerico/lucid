@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 
 def linear(
-    x: Tensor,
+    input: Tensor,
     weight: Tensor,
     bias: Tensor | None = None,
 ) -> Tensor:
@@ -31,12 +31,12 @@ def linear(
     transformer block in Lucid ultimately routes through this call.
     ``weight`` is stored in row-major ``(out_features, in_features)``
     orientation (matching the rest of the framework's matmul-of-transpose
-    convention), and the leading batch dims of ``x`` are preserved
+    convention), and the leading batch dims of ``input`` are preserved
     untouched.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input activations, shape ``(..., in_features)``.  Any number of
         leading batch dimensions is allowed.
     weight : Tensor
@@ -57,7 +57,7 @@ def linear(
     Implementation dispatches to the engine's :func:`nn.linear` kernel:
     a single BLAS SGEMM on the CPU stream (Accelerate) or an MLX matmul
     on the GPU stream, fused with the bias addition.  Backward stores
-    the saved ``x`` / ``weight`` so the chain-rule path
+    the saved ``input`` / ``weight`` so the chain-rule path
 
     .. math::
 
@@ -95,27 +95,27 @@ def linear(
         b_impl = _unwrap(bias)
     else:
         b_impl = _C_engine.zeros([out_features], w_impl.dtype, w_impl.device)
-    return _wrap(_C_engine.nn.linear(_unwrap(x), w_impl, b_impl))
+    return _wrap(_C_engine.nn.linear(_unwrap(input), w_impl, b_impl))
 
 
 def bilinear(
-    x1: Tensor,
-    x2: Tensor,
+    input1: Tensor,
+    input2: Tensor,
     weight: Tensor,
     bias: Tensor | None = None,
 ) -> Tensor:
     r"""Bilinear transformation applied to two inputs.
 
     Computes a quadratic interaction between every pair of features from
-    ``x1`` and ``x2``.  Common in fine-grained recognition (bilinear
+    ``input1`` and ``input2``.  Common in fine-grained recognition (bilinear
     pooling), tensor-decomposition attention, and gated cross-modal
     fusion layers.
 
     Parameters
     ----------
-    x1 : Tensor
+    input1 : Tensor
         First input, shape ``(..., in1_features)``.
-    x2 : Tensor
+    input2 : Tensor
         Second input, shape ``(..., in2_features)``.
     weight : Tensor
         Weight tensor, shape ``(out_features, in1_features, in2_features)``.
@@ -157,7 +157,7 @@ def bilinear(
     bias_impl = _unwrap(bias) if bias is not None else None
     return _wrap(
         _C_engine.nn.bilinear_layer(
-            _unwrap(x1), _unwrap(x2), _unwrap(weight), bias_impl
+            _unwrap(input1), _unwrap(input2), _unwrap(weight), bias_impl
         )
     )
 

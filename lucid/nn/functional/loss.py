@@ -19,39 +19,18 @@ import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._autocast import _autocast_entry
-from lucid._dtype import bfloat16 as _bfloat16
-from lucid._dtype import dtype as _dtype
-from lucid._dtype import finfo as _finfo
-from lucid._dtype import float16 as _float16
-from lucid._dtype import float32 as _float32
+from lucid._dtype import bfloat16 as _bfloat16, dtype as _dtype, finfo as _finfo
+from lucid._dtype import float16 as _float16, float32 as _float32
 from lucid._types import Reduction, ReductionKL
 from lucid.nn.functional._loss_checks import (
-    _REDUCTIONS,
-    _broadcast_operands,
-    _broadcast_shape,
-    _cast,
-    _check_broadcasts_to,
-    _check_class_target,
-    _check_class_weight,
-    _check_dtypes,
-    _check_kind,
-    _check_reduction as _check_reduction,
-    _check_same_rank,
-    _check_target,
-    _check_unit_interval,
-    _loss_dtype,
-    _num_classes,
-    _operands,
-    _pair_operands,
-    _shape,
+    _REDUCTIONS, _broadcast_operands, _broadcast_shape, _cast,
+    _check_broadcasts_to, _check_class_target, _check_class_weight,
+    _check_dtypes, _check_kind, _check_reduction as _check_reduction,
+    _check_same_rank, _check_target, _check_unit_interval, _loss_dtype,
+    _num_classes, _operands, _pair_operands, _shape,
 )
 from lucid.nn.functional._index_checks import (
-    _ClassTargets,
-    _check_ctc,
-    _class_index,
-    _class_targets,
-    _host_read,
-    _poison,
+    _ClassTargets, _check_ctc, _class_index, _class_targets, _host_read, _poison,
 )
 
 if TYPE_CHECKING:
@@ -66,11 +45,8 @@ _KERNEL_REDUCTION: dict[str, int] = {"none": 0, "mean": 1, "sum": 2}
 
 
 def _reduce(
-    t: Tensor,
-    reduction: str,
-    out_dtype: _dtype | None = None,
-    *,
-    weight: Tensor | None = None,
+    t: Tensor, reduction: str, out_dtype: _dtype | None = None,
+    *, weight: Tensor | None = None,
 ) -> Tensor:
     """Apply ``reduction`` to the per-element losses ``t`` — the one place a
     loss reduces.
@@ -139,9 +115,7 @@ def _accumulation_dtype(t: Tensor) -> _dtype:
     needs (an ``eps`` of 1e-12, a gradient floor of 1e12) are not float16
     numbers at all.  The result is rounded back to the input's dtype.
     """
-    if t.dtype in (_float16, _bfloat16):
-        return _float32
-    return t.dtype
+    return _float32 if t.dtype in (_float16, _bfloat16) else t.dtype
 
 
 def _float32_scope() -> contextlib.AbstractContextManager[object]:
@@ -159,7 +133,16 @@ def _float32_scope() -> contextlib.AbstractContextManager[object]:
     return autocast_dtype(_C_engine.Dtype.F32)
 
 
-def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
+def _check_same_weight(weight: Tensor | None, x: Tensor, op: str) -> None:
+    if weight is not None and _shape(weight) != _shape(x):
+        raise ValueError(
+            f"{op}: weight of shape {_shape(weight)} must have the same size as input {_shape(x)}"
+        )
+
+
+def mse_loss(
+    input: Tensor, target: Tensor, reduction: Reduction = "mean", weight: Tensor | None = None
+) -> Tensor:
     r"""Mean-squared-error (L2) loss between input and target.
 
     The workhorse loss for regression problems.  Penalises large
@@ -172,20 +155,22 @@ def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Predicted values, any shape.
     target : Tensor
-        Target values that broadcast with ``x``.  A target of another
+        Target values that broadcast with ``input``.  A target of another
         shape is broadcast with a ``UserWarning``, as the reference
         does; one that does not broadcast raises ``ValueError``.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
+    weight : Tensor or None, optional
+        Optional element-wise weight tensor of the same shape as ``input``.
 
     Returns
     -------
     Tensor
         Scalar loss for ``"mean"`` / ``"sum"``, or a per-element
-        tensor of ``x`` and ``target``'s broadcast shape for
+        tensor of ``input`` and ``target``'s broadcast shape for
         ``"none"``.
 
     Notes
@@ -206,7 +191,7 @@ def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor
             L_i & \text{``none''}
         \end{cases}
 
-    The gradient w.r.t. ``x`` is :math:`2(x_i - y_i) / N` under
+    The gradient w.r.t. ``input`` is :math:`2(x_i - y_i) / N` under
     ``"mean"`` reduction — proportional to the error, so updates
     naturally shrink near the optimum.
 
@@ -221,15 +206,21 @@ def mse_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor
     """
     op = "mse_loss"
     _check_reduction(reduction, op)
-    x, target = _operands(op, x, target)
+    _check_same_weight(weight, input, op)
+    x, target = _operands(op, input, target)
     # The fused kernel takes operands of one shape; a target that
     # broadcasts (as l1_loss's and the reference's do) is expanded first.
     x, target = _broadcast_operands(x, target, _check_target(x, target, op))
+    if weight is not None:
+        sq = (x - target) ** 2 * weight
+        return _reduce(sq, reduction, weight=weight)
     red: int = _KERNEL_REDUCTION[reduction]
     return _wrap(_C_engine.nn.mse_loss(_unwrap(x), _unwrap(target), red))
 
 
-def l1_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
+def l1_loss(
+    input: Tensor, target: Tensor, reduction: Reduction = "mean", weight: Tensor | None = None
+) -> Tensor:
     r"""Mean-absolute-error (L1) loss between input and target.
 
     Robust regression loss whose gradient is constant in magnitude
@@ -243,20 +234,22 @@ def l1_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Predicted values, any shape.
     target : Tensor
-        Target values that broadcast with ``x``.  A target of another
+        Target values that broadcast with ``input``.  A target of another
         shape is broadcast with a ``UserWarning``, as the reference
         does; one that does not broadcast raises ``ValueError``.
     reduction : str, optional
         ``"mean"`` (default), ``"sum"``, or ``"none"``.
+    weight : Tensor or None, optional
+        Optional element-wise weight tensor of the same shape as ``input``.
 
     Returns
     -------
     Tensor
         Scalar loss for ``"mean"`` / ``"sum"``, or a per-element
-        tensor of ``x`` and ``target``'s broadcast shape for
+        tensor of ``input`` and ``target``'s broadcast shape for
         ``"none"``.
 
     Notes
@@ -267,7 +260,7 @@ def l1_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
 
         L_i = |x_i - y_i|
 
-    Gradient w.r.t. ``x`` is :math:`\operatorname{sign}(x_i - y_i)`
+    Gradient w.r.t. ``input`` is :math:`\operatorname{sign}(x_i - y_i)`
     (zero at the origin).  Used heavily in image-to-image regression
     (super-resolution, denoising) where outlier-robustness matters.
 
@@ -281,11 +274,12 @@ def l1_loss(x: Tensor, target: Tensor, reduction: Reduction = "mean") -> Tensor:
     tensor(0.5)
     """
     _check_reduction(reduction, "l1_loss")
-    x, target = _operands("l1_loss", x, target)
+    _check_same_weight(weight, input, "l1_loss")
+    x, target = _operands("l1_loss", input, target)
     _check_target(x, target, "l1_loss")
-    diff: _C_engine.TensorImpl = _C_engine.abs(
-        _C_engine.sub(_unwrap(x), _unwrap(target))
-    )
+    diff: _C_engine.TensorImpl = _C_engine.abs(_C_engine.sub(_unwrap(x), _unwrap(target)))
+    if weight is not None:
+        return _reduce(_wrap(diff) * weight, reduction, weight=weight)
     return _reduce(_wrap(diff), reduction)
 
 
@@ -296,29 +290,21 @@ def _check_beta(beta: float, op: str = "smooth_l1_loss") -> None:
 
 def _check_delta(delta: float, op: str = "huber_loss") -> None:
     if isinstance(delta, bool) or not isinstance(delta, (int, float)):
-        raise TypeError(
-            f"{op}: delta must be a float or int, got {type(delta).__name__}"
-        )
+        raise TypeError(f"{op}: delta must be a float or int, got {type(delta).__name__}")
     if not delta > 0.0:
         raise ValueError(f"{op}: delta must be positive, got {delta!r}")
 
 
 def _check_label_smoothing(label_smoothing: float, op: str = "cross_entropy") -> None:
     if isinstance(label_smoothing, bool) or not 0.0 <= label_smoothing <= 1.0:
-        raise ValueError(
-            f"{op}: label_smoothing must be in [0, 1], got {label_smoothing!r}"
-        )
+        raise ValueError(f"{op}: label_smoothing must be in [0, 1], got {label_smoothing!r}")
 
 
-def _check_multi_margin(
-    p: int, weight: Tensor | None, op: str = "multi_margin_loss"
-) -> None:
+def _check_multi_margin(p: int, weight: Tensor | None, op: str = "multi_margin_loss") -> None:
     if isinstance(p, bool) or (p != 1 and p != 2):
         raise ValueError(f"{op}: only p == 1 and p == 2 supported, got {p!r}")
     if weight is not None and weight.ndim != 1:
-        raise ValueError(
-            f"{op}: expected weight to be None or 1D tensor, got {weight.ndim}D"
-        )
+        raise ValueError(f"{op}: expected weight to be None or 1D tensor, got {weight.ndim}D")
 
 
 def _check_triplet_margin(margin: float, op: str) -> None:
@@ -327,7 +313,7 @@ def _check_triplet_margin(margin: float, op: str) -> None:
 
 
 def smooth_l1_loss(
-    x: Tensor, target: Tensor, beta: float = 1.0, reduction: Reduction = "mean"
+    input: Tensor, target: Tensor, reduction: Reduction = "mean", beta: float = 1.0
 ) -> Tensor:
     r"""Smooth L1 loss — a quadratic-near-zero, linear-far-from-zero hybrid.
 
@@ -345,20 +331,20 @@ def smooth_l1_loss(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Predicted values, any shape.
     target : Tensor
-        Target values that broadcast with ``x``.  A target of another
+        Target values that broadcast with ``input``.  A target of another
         shape is broadcast with a ``UserWarning``, as the reference
         does; one that does not broadcast raises ``ValueError``.
+    reduction : str, optional
+        ``"mean"`` (default), ``"sum"``, or ``"none"``.
     beta : float, optional
         Transition point between quadratic and linear regions
         (default ``1.0``).  Smaller ``beta`` makes the loss behave
         more like :func:`l1_loss`; larger ``beta`` makes it behave
         more like :func:`mse_loss`.  A negative (or NaN) ``beta`` raises
         ``ValueError``.
-    reduction : str, optional
-        ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
     Returns
     -------
@@ -401,14 +387,14 @@ def smooth_l1_loss(
     # A negative beta reached huber_loss as its delta, whose refusal named
     # the wrong function and the wrong argument.  Written so NaN fails too.
     _check_beta(beta, op)
-    x, target = _operands(op, x, target)
+    x, target = _operands(op, input, target)
     # Broadcast here, once, so the loss below sees operands of one shape
     # (and warns about the caller's shapes, not its own).
     x, target = _broadcast_operands(x, target, _check_target(x, target, op))
     if beta == 0.0:
         # The degenerate limit is plain L1, as the reference also answers.
         return l1_loss(x, target, reduction=reduction)
-    loss: Tensor = huber_loss(x, target, delta=beta, reduction=reduction)
+    loss: Tensor = huber_loss(x, target, reduction=reduction, delta=beta)
     # In float32 under autocast, as the reduction was: autocast gives
     # ``div`` its own dtype, and a float16 sum past 65504 came back inf.
     with _float32_scope():
@@ -416,7 +402,8 @@ def smooth_l1_loss(
 
 
 def huber_loss(
-    x: Tensor, target: Tensor, delta: float = 1.0, reduction: Reduction = "mean"
+    input: Tensor, target: Tensor, reduction: Reduction = "mean",
+    delta: float = 1.0, weight: Tensor | None = None,
 ) -> Tensor:
     r"""Huber loss — robust regression with a tunable transition point.
 
@@ -435,17 +422,19 @@ def huber_loss(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Predicted values.
     target : Tensor
-        Target values that broadcast with ``x``.  A target of another
+        Target values that broadcast with ``input``.  A target of another
         shape is broadcast with a ``UserWarning``, as the reference
         does; one that does not broadcast raises ``ValueError``.
+    reduction : str, optional
+        ``"mean"`` (default), ``"sum"``, or ``"none"``.
     delta : float, optional
         Threshold at which the loss transitions from quadratic to
         linear (default ``1.0``).
-    reduction : str, optional
-        ``"mean"`` (default), ``"sum"``, or ``"none"``.
+    weight : Tensor or None, optional
+        Optional element-wise weight tensor of the same shape as ``input``.
 
     Returns
     -------
@@ -479,19 +468,22 @@ def huber_loss(
     op = "huber_loss"
     _check_reduction(reduction, op)
     _check_delta(delta, op)
+    _check_same_weight(weight, input, op)
     # The loss keeps the input's dtype, as the reference's does.
-    x, target = _operands(op, x, target, promote=False)
+    x, target = _operands(op, input, target, promote=False)
     x, target = _broadcast_operands(x, target, _check_target(x, target, op))
+    if weight is not None:
+        raw = _C_engine.nn.huber_loss(
+            _unwrap(x), _unwrap(target), delta, _KERNEL_REDUCTION["none"]
+        )
+        return _reduce(_wrap(raw) * weight, reduction)
     red: int = _KERNEL_REDUCTION[reduction]
     return _wrap(_C_engine.nn.huber_loss(_unwrap(x), _unwrap(target), delta, red))
 
 
 def _class_nll(
-    log_p: Tensor,
-    targets: _ClassTargets,
-    weight: Tensor | None,
-    reduction: str,
-    label_smoothing: float,
+    log_p: Tensor, targets: _ClassTargets, weight: Tensor | None,
+    reduction: str, label_smoothing: float,
 ) -> Tensor:
     """Negative log-likelihood of integer class targets — the shared body of
     :func:`cross_entropy` and :func:`nll_loss`.
@@ -529,9 +521,7 @@ def _class_nll(
     # ``None`` when every sample counts once.
     sample_weight: Tensor | None = None
     if weight is not None:
-        sample_weight = _lucid.index_select(weight, 0, safe.reshape(-1)).reshape(
-            list(safe.shape)
-        )
+        sample_weight = _lucid.index_select(weight, 0, safe.reshape(-1)).reshape(list(safe.shape))
     if keep is not None:
         sample_weight = keep if sample_weight is None else sample_weight * keep
     if sample_weight is not None:
@@ -545,10 +535,8 @@ def _class_nll(
         smooth: Tensor = -log_p.mean(dim=1)  # (N, ...)
         if weight is not None:
             # Weighted-uniform: −Σ_c w_c · log_softmax / C
-            log_p_weighted: Tensor = log_p * weight.reshape(
-                [1, num_classes] + [1] * (log_p.ndim - 2)
-            )
-            smooth = -log_p_weighted.sum(dim=1) / num_classes
+            w_shape = [1, num_classes] + [1] * (log_p.ndim - 2)
+            smooth = -(log_p * weight.reshape(w_shape)).sum(dim=1) / num_classes
         if keep is not None:
             smooth = smooth * keep
         nll = (1.0 - label_smoothing) * nll + label_smoothing * smooth
@@ -580,12 +568,8 @@ def _weighted_mean(nll: Tensor, sample_weight: Tensor) -> Tensor:
 
 
 def cross_entropy(
-    x: Tensor,
-    target: Tensor,
-    weight: Tensor | None = None,
-    ignore_index: int = -100,
-    reduction: Reduction = "mean",
-    label_smoothing: float = 0.0,
+    input: Tensor, target: Tensor, weight: Tensor | None = None,
+    ignore_index: int = -100, reduction: Reduction = "mean", label_smoothing: float = 0.0,
 ) -> Tensor:
     r"""Cross-entropy loss for multi-class classification.
 
@@ -600,14 +584,14 @@ def cross_entropy(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Raw logits of shape :math:`(N, C)` or :math:`(N, C, d_1, \dots, d_k)`,
         or :math:`(C,)` for one unbatched sample (with a 0-d target, and a
         0-d loss under ``"none"``).
     target : Tensor
         Either integer class indices of shape :math:`(N,)` /
         :math:`(N, d_1, \dots, d_k)` or per-class probabilities of
-        shape matching ``x``; any other shape raises ``ValueError``.  An
+        shape matching ``input``; any other shape raises ``ValueError``.  An
         index outside :math:`[0, C)` that is not ``ignore_index`` raises
         ``IndexError`` for a CPU tensor; on Metal, where reading the
         target back would stall every step, it makes the loss NaN
@@ -674,6 +658,7 @@ def cross_entropy(
     _check_reduction(reduction, op)
     # 1.0 is a uniform target, which the reference takes; it was refused.
     _check_label_smoothing(label_smoothing, op)
+    x = input
     num_classes: int = _num_classes(x, op)
     _check_class_weight(weight, num_classes, op)
     # A target of the input's own shape holds class probabilities, as in
@@ -701,24 +686,17 @@ def cross_entropy(
     out: Tensor
     if soft:
         # Class dim is 1 for both (N, C) and (N, C, *) inputs.
-        out = _soft_target_nll(
-            _log_softmax(x, dim=1), target, weight, reduction, label_smoothing
-        )
+        out = _soft_target_nll(_log_softmax(x, dim=1), target, weight, reduction, label_smoothing)
     else:
         # The targets are checked before the first kernel runs.
         targets = _class_targets(target, num_classes, op, ignore_index=ignore_index)
-        out = _class_nll(
-            _log_softmax(x, dim=1), targets, weight, reduction, label_smoothing
-        )
+        out = _class_nll(_log_softmax(x, dim=1), targets, weight, reduction, label_smoothing)
     return out.reshape([]) if unbatched and reduction == "none" else out
 
 
 def _soft_target_nll(
-    log_p: Tensor,
-    target: Tensor,
-    weight: Tensor | None,
-    reduction: str,
-    label_smoothing: float,
+    log_p: Tensor, target: Tensor, weight: Tensor | None,
+    reduction: str, label_smoothing: float,
 ) -> Tensor:
     """Cross-entropy against per-class probabilities ``target`` of the
     shape of ``log_p``: ``-sum_c w_c y_c log p_c`` per sample, and a
@@ -734,11 +712,8 @@ def _soft_target_nll(
 
 
 def nll_loss(
-    x: Tensor,
-    target: Tensor,
-    weight: Tensor | None = None,
-    ignore_index: int = -100,
-    reduction: Reduction = "mean",
+    input: Tensor, target: Tensor, weight: Tensor | None = None,
+    ignore_index: int = -100, reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Negative log-likelihood loss for multi-class classification.
 
@@ -750,7 +725,7 @@ def nll_loss(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Log-probabilities of shape :math:`(N, C)` or
         :math:`(N, C, d_1, \dots, d_k)`, or :math:`(C,)` for one unbatched
         sample (with a 0-d target, and a 0-d loss under ``"none"``).
@@ -797,6 +772,7 @@ def nll_loss(
     """
     op = "nll_loss"
     _check_reduction(reduction, op)
+    x = input
     _check_dtypes(op, target, input=x)
     num_classes: int = _num_classes(x, op)
     _check_class_weight(weight, num_classes, op)
@@ -812,10 +788,7 @@ def nll_loss(
 
 
 def binary_cross_entropy(
-    x: Tensor,
-    target: Tensor,
-    weight: Tensor | None = None,
-    reduction: Reduction = "mean",
+    input: Tensor, target: Tensor, weight: Tensor | None = None, reduction: Reduction = "mean"
 ) -> Tensor:
     r"""Binary cross-entropy between predicted probabilities and targets.
 
@@ -836,7 +809,7 @@ def binary_cross_entropy(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Predicted probabilities in :math:`[0, 1]`, any shape.  For a CPU
         tensor an entry outside :math:`[0, 1]` (or NaN) raises
         ``ValueError``, as the reference's CPU kernel does; a Metal
@@ -845,9 +818,9 @@ def binary_cross_entropy(
     target : Tensor
         Target probabilities (typically binary) in :math:`[0, 1]`, of
         the same shape — another shape raises ``ValueError`` rather than
-        being broadcast.  Its range is checked as ``x``'s is.
+        being broadcast.  Its range is checked as ``input``'s is.
     weight : Tensor or None, optional
-        Element-wise rescaling factor that broadcasts to ``x``'s shape;
+        Element-wise rescaling factor that broadcasts to ``input``'s shape;
         one that does not, or that would enlarge it, raises
         ``ValueError``.  Use to up-weight rare classes or hard examples.
     reduction : str, optional
@@ -867,7 +840,7 @@ def binary_cross_entropy(
         L_i = -\big(y_i\,\max(\log p_i, -100)
               + (1 - y_i)\,\max(\log(1 - p_i), -100)\big)
 
-    Gradient w.r.t. ``x`` is
+    Gradient w.r.t. ``input`` is
     :math:`(p_i - y_i) / \max(p_i(1 - p_i), \varepsilon)`, which grows
     without bound as :math:`p_i \to 0` or :math:`1` until the floor
     caps it — the reason the logits-form (which yields a clean
@@ -886,7 +859,7 @@ def binary_cross_entropy(
     op = "binary_cross_entropy"
     _check_reduction(reduction, op)
     # In the input's dtype: the gradient floor below is chosen for it.
-    x, target = _operands(op, x, target, promote=False)
+    x, target = _operands(op, input, target, promote=False)
     _check_target(x, target, op)
     _check_broadcasts_to(weight, _shape(x), "weight", op)
     # Last: the only check that reads values, and only on the CPU.
@@ -938,41 +911,38 @@ def binary_cross_entropy(
 
 
 def binary_cross_entropy_with_logits(
-    x: Tensor,
-    target: Tensor,
-    weight: Tensor | None = None,
-    pos_weight: Tensor | None = None,
-    reduction: Reduction = "mean",
+    input: Tensor, target: Tensor, weight: Tensor | None = None,
+    reduction: Reduction = "mean", pos_weight: Tensor | None = None,
 ) -> Tensor:
     r"""Binary cross-entropy from raw logits (numerically stable).
 
     Mathematically equivalent to
-    ``binary_cross_entropy(sigmoid(x), target)`` but evaluated in a
+    ``binary_cross_entropy(sigmoid(input), target)`` but evaluated in a
     log-sum-exp-style form that avoids overflow/underflow when
-    ``|x|`` is large.  This is the preferred binary classification
+    ``|input|`` is large.  This is the preferred binary classification
     loss for training — composing a separate sigmoid with BCE risks
     catastrophic cancellation in :math:`\log(1 - \sigma(x))` for
     large positive logits.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Raw logits (un-bounded reals), any shape.
     target : Tensor
-        Target probabilities (typically binary), same shape as ``x`` —
+        Target probabilities (typically binary), same shape as ``input`` —
         another shape raises ``ValueError`` rather than being broadcast.
     weight : Tensor or None, optional
-        Element-wise rescaling factor that broadcasts to ``x``'s shape;
+        Element-wise rescaling factor that broadcasts to ``input``'s shape;
         one that does not, or that would enlarge it, raises
         ``ValueError``.
+    reduction : str, optional
+        ``"mean"`` (default), ``"sum"``, or ``"none"``.
     pos_weight : Tensor or None, optional
         Per-class weight applied to the *positive* term only —
         useful for highly-imbalanced binary tasks, where setting
         ``pos_weight = n_neg / n_pos`` recovers the prevalence-
-        balanced gradient.  It broadcasts to ``x``'s shape, as
+        balanced gradient.  It broadcasts to ``input``'s shape, as
         ``weight`` does.
-    reduction : str, optional
-        ``"mean"`` (default), ``"sum"``, or ``"none"``.
 
     Returns
     -------
@@ -997,7 +967,7 @@ def binary_cross_entropy_with_logits(
         L_i = (1 - y_i)\,x_i
               + \big(1 + (w^{+} - 1) y_i\big)\operatorname{softplus}(-x_i).
 
-    Gradient w.r.t. ``x`` is the clean :math:`\sigma(x_i) - y_i`
+    Gradient w.r.t. ``input`` is the clean :math:`\sigma(x_i) - y_i`
     (modulo weighting) — the canonical reason this form is used in
     practice instead of the explicit sigmoid + BCE composition.
 
@@ -1012,7 +982,7 @@ def binary_cross_entropy_with_logits(
     """
     op = "binary_cross_entropy_with_logits"
     _check_reduction(reduction, op)
-    x, target = _operands(op, x, target)
+    x, target = _operands(op, input, target)
     _check_target(x, target, op)
     _check_broadcasts_to(weight, _shape(x), "weight", op)
     _check_broadcasts_to(pos_weight, _shape(x), "pos_weight", op)
@@ -1037,11 +1007,8 @@ def binary_cross_entropy_with_logits(
 
 
 def kl_div(
-    x: Tensor,
-    target: Tensor,
-    size_average: bool | None = None,
-    reduction: ReductionKL = "mean",
-    log_target: bool = False,
+    input: Tensor, target: Tensor, size_average: bool | None = None,
+    reduction: ReductionKL = "mean", log_target: bool = False,
 ) -> Tensor:
     r"""Kullback-Leibler divergence between two distributions.
 
@@ -1051,19 +1018,19 @@ def kl_div(
     to a teacher's), variational inference (the ELBO's KL term),
     and policy-gradient regularisation in RL.
 
-    The convention here matches the reference framework: ``x`` is
+    The convention here matches the reference framework: ``input`` is
     :math:`\log q` (log-predicted), and ``target`` is :math:`p`
     (target probability) — or :math:`\log p` if ``log_target=True``.
     Note this is asymmetric in its arguments — KL is *not* a metric.
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Log-probabilities of the *predicted* distribution
         :math:`\log q`, any shape.
     target : Tensor
         Probabilities of the *target* distribution :math:`p`,
-        or its log when ``log_target=True``.  Same shape as ``x``, or
+        or its log when ``log_target=True``.  Same shape as ``input``, or
         one that broadcasts with it (another raises ``ValueError``).
     size_average : bool or None, optional
         Deprecated.  Retained for signature compatibility; ignored
@@ -1115,7 +1082,7 @@ def kl_div(
     tensor(0.02391)
     """
     _check_reduction(reduction, "kl_div", batchmean=True)
-    x, target = _operands("kl_div", x, target)
+    x, target = _operands("kl_div", input, target)
     _check_target(x, target, "kl_div")
     # `x` is log_q (log of predicted probability) per the standard contract.
     # When log_target=False, target is the raw probability p; when True it
@@ -1142,14 +1109,8 @@ def kl_div(
 
 
 def triplet_margin_loss(
-    anchor: Tensor,
-    positive: Tensor,
-    negative: Tensor,
-    margin: float = 1.0,
-    p: float = 2.0,
-    eps: float = 1e-6,
-    swap: bool = False,
-    reduction: Reduction = "mean",
+    anchor: Tensor, positive: Tensor, negative: Tensor, margin: float = 1.0,
+    p: float = 2.0, eps: float = 1e-6, swap: bool = False, reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Triplet margin loss for metric learning.
 
@@ -1234,20 +1195,14 @@ def triplet_margin_loss(
         d_pn = _unwrap(pairwise_distance(positive, negative, p=p, eps=eps))
         d_an = _C_engine.minimum(d_an, d_pn)
     margin_t = _C_engine.full(d_ap.shape, margin, d_ap.dtype, d_ap.device)
-    loss = _C_engine.clip(
-        _C_engine.add(_C_engine.sub(d_ap, d_an), margin_t), 0.0, math.inf
-    )
+    loss = _C_engine.clip(_C_engine.add(_C_engine.sub(d_ap, d_an), margin_t), 0.0, math.inf)
     return _reduce(_wrap(loss), reduction)
 
 
 def triplet_margin_with_distance_loss(
-    anchor: Tensor,
-    positive: Tensor,
-    negative: Tensor,
-    distance_function: object | None = None,
-    margin: float = 1.0,
-    swap: bool = False,
-    reduction: Reduction = "mean",
+    anchor: Tensor, positive: Tensor, negative: Tensor,
+    *, distance_function: object | None = None, margin: float = 1.0,
+    swap: bool = False, reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Triplet margin loss with a user-supplied distance function.
 
@@ -1318,9 +1273,7 @@ def triplet_margin_with_distance_loss(
 
     op = "triplet_margin_with_distance_loss"
     _check_reduction(reduction, op)
-    _check_same_rank(
-        op, broadcast=False, anchor=anchor, positive=positive, negative=negative
-    )
+    _check_same_rank(op, broadcast=False, anchor=anchor, positive=positive, negative=negative)
     df: object = distance_function
     if df is None:
         # A distance function of the caller's own decides which dtypes it
@@ -1341,11 +1294,8 @@ def triplet_margin_with_distance_loss(
 
 
 def cosine_embedding_loss(
-    x1: Tensor,
-    x2: Tensor,
-    y: Tensor,
-    margin: float = 0.0,
-    reduction: Reduction = "mean",
+    input1: Tensor, input2: Tensor, target: Tensor,
+    margin: float = 0.0, reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Cosine embedding loss for pairwise similarity learning.
 
@@ -1359,15 +1309,15 @@ def cosine_embedding_loss(
 
     Parameters
     ----------
-    x1 : Tensor
+    input1 : Tensor
         First embedding of shape :math:`(N, D)`, or :math:`(D,)` for one
-        unbatched pair (with a 0-d ``y``, and a 0-d loss under
+        unbatched pair (with a 0-d ``target``, and a 0-d loss under
         ``"none"``).
-    x2 : Tensor
+    input2 : Tensor
         Second embedding of the same shape.
-    y : Tensor
+    target : Tensor
         Label tensor of shape :math:`(N,)` with values :math:`\pm 1`, or
-        0-d for one unbatched pair.  A ``y`` of any other rank, inputs of
+        0-d for one unbatched pair.  A ``target`` of any other rank, inputs of
         a rank that does not match it, or shapes that do not line up
         raise ``ValueError``.
     margin : float, optional
@@ -1411,7 +1361,7 @@ def cosine_embedding_loss(
 
     op = "cosine_embedding_loss"
     _check_reduction(reduction, op)
-    x1, x2, y = _pair_operands(op, x1, x2, y, promote=False)
+    x1, x2, y = _pair_operands(op, input1, input2, target, promote=False)
     # A (N,) target pairs (N, D) inputs; a 0-d one pairs one unbatched (D,)
     # pair, which raised IndexError ("axis out of range") here.
     if y.ndim > 1:
@@ -1438,11 +1388,8 @@ def cosine_embedding_loss(
 
 
 def margin_ranking_loss(
-    x1: Tensor,
-    x2: Tensor,
-    y: Tensor,
-    margin: float = 0.0,
-    reduction: Reduction = "mean",
+    input1: Tensor, input2: Tensor, target: Tensor,
+    margin: float = 0.0, reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Pairwise ranking hinge loss.
 
@@ -1455,13 +1402,13 @@ def margin_ranking_loss(
 
     Parameters
     ----------
-    x1 : Tensor
+    input1 : Tensor
         Scores for the first item of each pair, any shape.
-    x2 : Tensor
-        Scores for the second item, same shape as ``x1``.
-    y : Tensor
+    input2 : Tensor
+        Scores for the second item, same shape as ``input1``.
+    target : Tensor
         Pairwise preference label :math:`\pm 1`: :math:`+1` if
-        :math:`x_1` should rank higher, :math:`-1` otherwise.  The three
+        :math:`input1` should rank higher, :math:`-1` otherwise.  The three
         tensors have one rank and broadcastable shapes; otherwise
         ``ValueError`` is raised.
     margin : float, optional
@@ -1499,7 +1446,7 @@ def margin_ranking_loss(
     """
     op = "margin_ranking_loss"
     _check_reduction(reduction, op)
-    x1, x2, y = _pair_operands(op, x1, x2, y, promote=True)
+    x1, x2, y = _pair_operands(op, input1, input2, target, promote=True)
     # A (1, N) label against (N,) scores broadcast to an (N, N) loss.
     _check_same_rank(op, x1=x1, x2=x2, y=y)
     diff = _C_engine.sub(_unwrap(x1), _unwrap(x2))
@@ -1510,15 +1457,12 @@ def margin_ranking_loss(
 
 
 def hinge_embedding_loss(
-    x: Tensor,
-    y: Tensor,
-    margin: float = 1.0,
-    reduction: Reduction = "mean",
+    input: Tensor, target: Tensor, margin: float = 1.0, reduction: Reduction = "mean"
 ) -> Tensor:
     r"""Hinge embedding loss.
 
     Designed for similarity learning on pre-computed distances:
-    given a (typically non-negative) score ``x`` representing a
+    given a (typically non-negative) score ``input`` representing a
     pairwise distance, push positive pairs (label :math:`+1`)
     toward small distances and negative pairs (label :math:`-1`)
     above a fixed ``margin``.  Common in Siamese network training
@@ -1526,10 +1470,10 @@ def hinge_embedding_loss(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Per-pair score (distance) tensor, any shape.
-    y : Tensor
-        Label tensor :math:`\pm 1` with the same shape as ``x`` (one
+    target : Tensor
+        Label tensor :math:`\pm 1` with the same shape as ``input`` (one
         that does not broadcast with it raises ``ValueError``).
     margin : float, optional
         Margin enforced for negative pairs (default ``1.0``).
@@ -1568,7 +1512,7 @@ def hinge_embedding_loss(
     tensor(0.2)
     """
     _check_reduction(reduction, "hinge_embedding_loss")
-    x, y = _operands("hinge_embedding_loss", x, y, promote=False)
+    x, y = _operands("hinge_embedding_loss", input, target, promote=False)
     _check_target(x, y, "hinge_embedding_loss")
     zero: Tensor = _lucid.zeros_like(x)
     loss: Tensor = _lucid.where(y != -1, x, zero) + _lucid.where(
@@ -1578,12 +1522,8 @@ def hinge_embedding_loss(
 
 
 def poisson_nll_loss(
-    x: Tensor,
-    target: Tensor,
-    log_input: bool = True,
-    full: bool = False,
-    eps: float = 1e-8,
-    reduction: Reduction = "mean",
+    input: Tensor, target: Tensor, log_input: bool = True,
+    full: bool = False, eps: float = 1e-8, reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Poisson negative log-likelihood loss for count regression.
 
@@ -1596,16 +1536,16 @@ def poisson_nll_loss(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Predicted Poisson rate.  By default (``log_input=True``)
         treated as :math:`\log \lambda` for numerical stability;
         set ``log_input=False`` to pass the rate :math:`\lambda`
         directly.
     target : Tensor
-        Observed counts that broadcast with ``x``; a shape that does not
+        Observed counts that broadcast with ``input``; a shape that does not
         raises ``ValueError``.
     log_input : bool, optional
-        Whether ``x`` is :math:`\log \lambda` (default) or
+        Whether ``input`` is :math:`\log \lambda` (default) or
         :math:`\lambda`.  The log-form avoids exponentiating an
         unbounded prediction in inner loops.
     full : bool, optional
@@ -1613,7 +1553,7 @@ def poisson_nll_loss(
         :math:`\log(y!) \approx y\log y - y + \tfrac{1}{2}\log(2\pi y)`
         in the loss, where ``target > 1`` (at 0 and 1 the true
         :math:`\log(y!)` is 0).  Has no effect on gradients (constant in
-        ``x``) but yields the correct log-likelihood value.
+        ``input``) but yields the correct log-likelihood value.
     eps : float, optional
         Small constant added before :math:`\log` when
         ``log_input=False`` (default ``1e-8``).
@@ -1650,7 +1590,7 @@ def poisson_nll_loss(
     tensor(-0.2976)
     """
     _check_reduction(reduction, "poisson_nll_loss")
-    x, target = _operands("poisson_nll_loss", x, target)
+    x, target = _operands("poisson_nll_loss", input, target)
     _check_target(x, target, "poisson_nll_loss")
     xi = _unwrap(x)
     ti = _unwrap(target)
@@ -1676,33 +1616,25 @@ def poisson_nll_loss(
         # ``log(target!)`` is 0 and the approximation is not.
         one = _C_engine.full(ti.shape, 1.0, ti.dtype, ti.device)
         safe = _C_engine.maximum(ti, one)  # keeps log finite at target == 0
+        two_pi_safe = _C_engine.mul(
+            _C_engine.full(ti.shape, 2.0 * math.pi, ti.dtype, ti.device), safe
+        )
         stirling = _C_engine.add(
             _C_engine.sub(_C_engine.mul(safe, _C_engine.log(safe)), safe),
             _C_engine.mul(
                 _C_engine.full(ti.shape, 0.5, ti.dtype, ti.device),
-                _C_engine.log(
-                    _C_engine.mul(
-                        _C_engine.full(ti.shape, 2.0 * math.pi, ti.dtype, ti.device),
-                        safe,
-                    )
-                ),
+                _C_engine.log(two_pi_safe),
             ),
         )
         zero = _C_engine.zeros(ti.shape, ti.dtype, ti.device)
-        loss = _C_engine.add(
-            loss, _C_engine.where(_C_engine.greater(ti, one), stirling, zero)
-        )
+        loss = _C_engine.add(loss, _C_engine.where(_C_engine.greater(ti, one), stirling, zero))
 
     return _reduce(_wrap(loss), reduction)
 
 
 def gaussian_nll_loss(
-    x: Tensor,
-    target: Tensor,
-    var: Tensor | float,
-    full: bool = False,
-    eps: float = 1e-6,
-    reduction: Reduction = "mean",
+    input: Tensor, target: Tensor, var: Tensor | float,
+    full: bool = False, eps: float = 1e-6, reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Gaussian negative log-likelihood for heteroscedastic regression.
 
@@ -1722,17 +1654,17 @@ def gaussian_nll_loss(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Predicted means :math:`\mu`, any shape.
     target : Tensor
-        Observed values :math:`y` that broadcast with ``x``; a shape that
+        Observed values :math:`y` that broadcast with ``input``; a shape that
         does not raises ``ValueError``.
     var : Tensor or float
         Predicted variances :math:`\sigma^2 \ge 0`.  Either the shape of
-        ``x``; or that shape without its last dimension — one variance
+        ``input``; or that shape without its last dimension — one variance
         per sample, e.g. ``(N,)`` for an ``(N, D)`` input — which is
         unsqueezed to broadcast over that dimension; or the shape of
-        ``x`` with exactly one dimension of size 1.  A float is one
+        ``input`` with exactly one dimension of size 1.  A float is one
         variance for every element.  Any other shape raises
         ``ValueError``.  A negative variance raises ``ValueError`` for a
         CPU tensor; on Metal, where reading it back would stall the
@@ -1778,6 +1710,7 @@ def gaussian_nll_loss(
     tensor(-0.2841)
     """
     _check_reduction(reduction, "gaussian_nll_loss")
+    x = input
     _check_target(x, target, "gaussian_nll_loss")
     _check_dtypes("gaussian_nll_loss", target, input=x)
     if not isinstance(var, (int, float)):
@@ -1832,13 +1765,9 @@ def gaussian_nll_loss(
 
 
 def ctc_loss(
-    log_probs: Tensor,
-    targets: Tensor,
-    input_lengths: Tensor | Sequence[int],
-    target_lengths: Tensor | Sequence[int],
-    blank: int = 0,
-    reduction: Reduction = "mean",
-    zero_infinity: bool = False,
+    log_probs: Tensor, targets: Tensor,
+    input_lengths: Tensor | Sequence[int], target_lengths: Tensor | Sequence[int],
+    blank: int = 0, reduction: Reduction = "mean", zero_infinity: bool = False,
 ) -> Tensor:
     r"""Connectionist Temporal Classification (CTC) loss.
 
@@ -1939,9 +1868,7 @@ def ctc_loss(
     _check_dtypes(op, log_probs=log_probs)
 
     def _as_lengths(v: Tensor | Sequence[int]) -> Tensor:
-        if isinstance(v, _lucid.Tensor):
-            return v
-        return _lucid.tensor(list(v), dtype=_lucid.int64)
+        return v if isinstance(v, _lucid.Tensor) else _lucid.tensor(list(v), dtype=_lucid.int64)
 
     input_lengths = _as_lengths(input_lengths)
     target_lengths = _as_lengths(target_lengths)
@@ -1959,9 +1886,7 @@ def ctc_loss(
     # ``input_lengths`` past the input, a ``target_lengths`` past its row
     # and a label or ``blank`` outside the classes were all read as given,
     # past the end of their axis.
-    rows: list[int] = _check_ctc(
-        log_probs, targets, input_lengths, target_lengths, blank, op
-    )
+    rows: list[int] = _check_ctc(log_probs, targets, input_lengths, target_lengths, blank, op)
 
     tgt_impl = _unwrap(targets)
     if len(list(tgt_impl.shape)) > 1:
@@ -1976,9 +1901,7 @@ def ctc_loss(
 
     # Ensure integer dtype for lengths and targets.
     def _to_i32(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
-        if getattr(impl, "dtype", None) != _C_engine.I32:
-            return _C_engine.astype(impl, _C_engine.I32)
-        return impl
+        return impl if getattr(impl, "dtype", None) == _C_engine.I32 else _C_engine.astype(impl, _C_engine.I32)
 
     tgt_impl = _to_i32(tgt_impl)
     il_impl = _to_i32(_unwrap(input_lengths))
@@ -2007,12 +1930,8 @@ def ctc_loss(
 
 
 def multi_margin_loss(
-    x: Tensor,
-    target: Tensor,
-    p: int = 1,
-    margin: float = 1.0,
-    weight: Tensor | None = None,
-    reduction: Reduction = "mean",
+    input: Tensor, target: Tensor, p: int = 1, margin: float = 1.0,
+    weight: Tensor | None = None, reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Multi-class hinge (margin) loss — Crammer-Singer SVM objective.
 
@@ -2025,7 +1944,7 @@ def multi_margin_loss(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Class scores of shape :math:`(N, C)`, or :math:`(C,)` for one
         unbatched sample (the ``"none"`` loss then takes the target's
         shape, ``()`` or ``(1,)``).  Any other rank raises
@@ -2078,6 +1997,7 @@ def multi_margin_loss(
     """
     op = "multi_margin_loss"
     _check_reduction(reduction, op)
+    x = input
     _check_dtypes(op, target, input=x)
     # Any other power was computed as written; the reference defines these
     # two.
@@ -2122,9 +2042,7 @@ def multi_margin_loss(
 
 
 def multilabel_margin_loss(
-    x: Tensor,
-    target: Tensor,
-    reduction: Reduction = "mean",
+    input: Tensor, target: Tensor, reduction: Reduction = "mean"
 ) -> Tensor:
     r"""Multi-label hinge loss for set-valued targets.
 
@@ -2142,11 +2060,11 @@ def multilabel_margin_loss(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Class scores of shape :math:`(N, C)` or :math:`(C,)`; any other
         rank raises ``ValueError``.
     target : Tensor
-        Same shape as ``x`` (any other raises ``ValueError``), any
+        Same shape as ``input`` (any other raises ``ValueError``), any
         integer dtype.  The entries before the first negative one are
         the positive class indices.  A listed class outside
         :math:`[0, C)` raises ``IndexError`` for a CPU tensor and makes
@@ -2158,7 +2076,7 @@ def multilabel_margin_loss(
     -------
     Tensor
         Scalar, or per-sample tensor of shape :math:`(N,)` (a 0-d tensor
-        for a 1-D ``x``) under ``"none"``.
+        for a 1-D ``input``) under ``"none"``.
 
     Notes
     -----
@@ -2187,6 +2105,7 @@ def multilabel_margin_loss(
     """
     op = "multilabel_margin_loss"
     _check_reduction(reduction, op)
+    x = input
     _check_dtypes(op, target, input=x)
     num_classes: int = _num_classes(x, op, max_ndim=2)
     # A target of another shape was read column by column against x's
@@ -2232,9 +2151,7 @@ def multilabel_margin_loss(
 
 
 def soft_margin_loss(
-    input: Tensor,
-    target: Tensor,
-    reduction: Reduction = "mean",
+    input: Tensor, target: Tensor, reduction: Reduction = "mean"
 ) -> Tensor:
     r"""Logistic (softplus) loss for binary classification with ±1 labels.
 
@@ -2297,10 +2214,7 @@ def soft_margin_loss(
 
 
 def multilabel_soft_margin_loss(
-    input: Tensor,
-    target: Tensor,
-    weight: Tensor | None = None,
-    reduction: Reduction = "mean",
+    input: Tensor, target: Tensor, weight: Tensor | None = None, reduction: Reduction = "mean"
 ) -> Tensor:
     r"""Per-class logistic loss averaged over labels (multi-label BCE).
 

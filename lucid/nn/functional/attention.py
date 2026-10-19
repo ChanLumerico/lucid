@@ -186,6 +186,7 @@ def scaled_dot_product_attention(
     attn_mask: Tensor | None = None,
     dropout_p: float = 0.0,
     is_causal: bool = False,
+    *,
     scale: float | None = None,
     enable_gqa: bool = False,
 ) -> Tensor:
@@ -270,7 +271,6 @@ def scaled_dot_product_attention(
     (2, 8, 16, 64)
     """
     import math
-
     import lucid as _lucid
 
     query, key, value = _attention_operands(query, key, value, enable_gqa)

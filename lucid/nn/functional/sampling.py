@@ -44,7 +44,7 @@ _KERNEL_PADDINGS = {"zeros": 0, "border": 1}
 
 
 def interpolate(
-    x: Tensor,
+    input: Tensor,
     size: int | tuple[int, ...] | None = None,
     scale_factor: float | tuple[float, ...] | None = None,
     mode: str = "nearest",
@@ -60,7 +60,7 @@ def interpolate(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C, *spatial)``.  ``"nearest"``,
         ``"nearest-exact"`` and ``"area"`` take 1, 2 or 3 spatial axes;
         ``"linear"`` takes 1, ``"bilinear"`` / ``"bicubic"`` 2 and
@@ -138,7 +138,7 @@ def interpolate(
     (1, 3, 8, 8)
     """
     return _resample(
-        x,
+        input,
         size,
         scale_factor,
         mode,
@@ -149,7 +149,7 @@ def interpolate(
 
 
 def grid_sample(
-    x: Tensor,
+    input: Tensor,
     grid: Tensor,
     mode: str = "bilinear",
     padding_mode: str = "zeros",
@@ -157,20 +157,20 @@ def grid_sample(
 ) -> Tensor:
     r"""Sample an input feature map at flow-field coordinates.
 
-    For each output location, looks up a value in ``x`` at the
+    For each output location, looks up a value in ``input`` at the
     (sub-pixel) location specified by ``grid``, using bilinear,
     nearest or bicubic interpolation.  Forms the second half of a spatial
     transformer network (STN) when paired with :func:`affine_grid`.
 
     The grid uses normalised coordinates in :math:`[-1, 1]`:
-    :math:`(-1, -1)` denotes the top-left corner of ``x`` and
+    :math:`(-1, -1)` denotes the top-left corner of ``input`` and
     :math:`(+1, +1)` the bottom-right corner (with the
     ``align_corners=False`` convention placing corners just outside the
     edge pixels).
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Source feature map of shape ``(N, C, H_in, W_in)`` (4-D) or
         ``(N, C, D_in, H_in, W_in)`` (5-D for volumetric sampling).
     grid : Tensor
@@ -192,11 +192,11 @@ def grid_sample(
     -------
     Tensor
         Sampled output of shape ``(N, C, H_out, W_out)`` (or 5-D
-        analogue), with the same dtype as ``x``.
+        analogue), with the same dtype as ``input``.
 
     Notes
     -----
-    ``grid_sample`` is differentiable w.r.t. both ``x`` and ``grid``.
+    ``grid_sample`` is differentiable w.r.t. both ``input`` and ``grid``.
     The gradient w.r.t. ``grid`` is what makes STN-style learned warps
     trainable end-to-end (Jaderberg et al., 2015).  Under
     ``"nearest"`` the grid's gradient is zero: the sample does not move
@@ -229,18 +229,18 @@ def grid_sample(
     >>> y.shape
     (1, 3, 32, 32)
     """
-    _check_options(x, mode, padding_mode)
+    _check_options(input, mode, padding_mode)
     ac = align_corners if align_corners is not None else False
-    if x.ndim == 5 or mode == "bicubic":
-        return _composite_grid_sample(x, grid, mode, padding_mode, ac)
+    if input.ndim == 5 or mode == "bicubic":
+        return _composite_grid_sample(input, grid, mode, padding_mode, ac)
     if padding_mode == "reflection":
         # The kernel has no reflection: the grid is reflected in pixel
         # space first and then read with border padding.
-        grid = _reflect_grid(x, grid, ac, mode == "nearest")
+        grid = _reflect_grid(input, grid, ac, mode == "nearest")
         padding_mode = "border"
     return _wrap(
         _C_engine.nn.grid_sample(
-            _unwrap(x),
+            _unwrap(input),
             _unwrap(grid),
             _KERNEL_MODES[mode],
             _KERNEL_PADDINGS[padding_mode],
@@ -328,7 +328,7 @@ def affine_grid(
 
 
 def unfold(
-    x: Tensor,
+    input: Tensor,
     kernel_size: int | tuple[int, int],
     dilation: int | tuple[int, int] = 1,
     padding: int | tuple[int, int] = 0,
@@ -336,7 +336,7 @@ def unfold(
 ) -> Tensor:
     r"""Extract sliding local blocks (im2col) from a 4-D or unbatched 3-D tensor.
 
-    Slides a ``(kH, kW)`` window across the spatial extent of ``x`` (with
+    Slides a ``(kH, kW)`` window across the spatial extent of ``input`` (with
     given stride, padding, and dilation) and flattens each window into a
     column of the output.  This is the classical *im2col* operation —
     convolution can be written as ``unfold`` + matmul + ``fold``.
@@ -355,7 +355,7 @@ def unfold(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(N, C, H, W)``, or ``(C, H, W)`` unbatched.
     kernel_size : int or (int, int)
         Spatial size of the sliding window.
@@ -389,7 +389,7 @@ def unfold(
     (1, 27, 64)
     """
 
-    xb, unbatched = _add_batch_axis(x, 2)
+    xb, unbatched = _add_batch_axis(input, 2)
     kernel, dilations, pads, strides = (
         list(_ntuple(v, 2, "unfold", arg))
         for v, arg in (
@@ -404,7 +404,7 @@ def unfold(
 
 
 def fold(
-    x: Tensor,
+    input: Tensor,
     output_size: tuple[int, int],
     kernel_size: int | tuple[int, int],
     dilation: int | tuple[int, int] = 1,
@@ -421,14 +421,14 @@ def fold(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Block tensor of shape ``(N, C·kH·kW, L)``, or ``(C·kH·kW, L)``
         unbatched.
     output_size : (int, int)
         Spatial size ``(outH, outW)`` of the destination canvas.
     kernel_size : int or (int, int)
         Spatial size of each block.  Must match the ``kernel_size`` used
-        to produce ``x``.
+        to produce ``input``.
     dilation : int or (int, int), optional
         Spacing between elements within a block.
     padding : int or (int, int), optional
@@ -464,7 +464,7 @@ def fold(
 
     # The unbatched block tensor is ``(C·kH·kW, L)``: one axis short of
     # the batched rank, as a 1-spatial-axis input is.
-    xb, unbatched = _add_batch_axis(x, 1)
+    xb, unbatched = _add_batch_axis(input, 1)
     size, kernel, dilations, pads, strides = (
         list(_ntuple(v, 2, "fold", arg))
         for v, arg in (
@@ -480,7 +480,7 @@ def fold(
 
 
 def embedding_bag(
-    x: Tensor,
+    input: Tensor,
     weight: Tensor,
     offsets: Tensor | None = None,
     max_norm: float | None = None,
@@ -500,7 +500,7 @@ def embedding_bag(
     matrix — essential for very large vocabularies in recommendation
     and NLP models.
 
-    Given a flat index sequence ``x`` partitioned into bags by
+    Given a flat index sequence ``input`` partitioned into bags by
     ``offsets``, the ``i``-th output row is
 
     .. math::
@@ -511,26 +511,26 @@ def embedding_bag(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Either a 1-D index tensor (use with ``offsets``) or a 2-D
         ``(num_bags, seq_len)`` tensor of indices where each row is a
         bag of equal length.
     weight : Tensor
         Embedding table of shape ``(num_embeddings, embedding_dim)``.
     offsets : Tensor, optional
-        Required when ``x`` is 1-D.  Integer tensor whose ``i``-th
-        element is the starting index of bag ``i`` within ``x``.  It must
+        Required when ``input`` is 1-D.  Integer tensor whose ``i``-th
+        element is the starting index of bag ``i`` within ``input``.  It must
         start at 0 and never decrease (else ``ValueError``), and each
-        entry must lie in ``[0, len(x)]`` (else ``IndexError``).
+        entry must lie in ``[0, len(input)]`` (else ``IndexError``).
     max_norm : float, optional
-        Rescale, in place and outside autograd, every row ``x`` looks up
+        Rescale, in place and outside autograd, every row ``input`` looks up
         whose :math:`L_p` norm exceeds ``max_norm`` to that norm before the
         lookup, as :func:`~lucid.nn.functional.embedding` does.
     norm_type : float, optional
         :math:`p` exponent for ``max_norm``.  Default ``2.0``.
     scale_grad_by_freq : bool, optional
         Divide the gradient reaching each row by how many times its index
-        occurs in ``x`` (all bags together).  ``mode="max"`` raises
+        occurs in ``input`` (all bags together).  ``mode="max"`` raises
         ``ValueError``.
     mode : str, optional
         Bag reduction: ``"sum"``, ``"mean"`` (default), or ``"max"``.
@@ -538,13 +538,13 @@ def embedding_bag(
         Request a sparse gradient.  Gradients are always dense, so ``True``
         raises ``NotImplementedError``.
     per_sample_weights : Tensor, optional
-        One weight per index, the shape of ``x``; each looked-up row is
+        One weight per index, the shape of ``input``; each looked-up row is
         scaled by its weight before the bag is summed.  Only
         ``mode="sum"`` takes weights — any other mode raises
         ``NotImplementedError``, as the reference does.
     include_last_offset : bool, optional
         If ``True``, ``offsets`` has length ``num_bags + 1`` and its
-        last entry is the total number of indices in ``x``.
+        last entry is the total number of indices in ``input``.
     padding_idx : int, optional
         Embedding row to mask out (its lookup result contributes zero), in
         ``[-num_embeddings, num_embeddings)``, else ``ValueError``.
@@ -578,29 +578,29 @@ def embedding_bag(
     op = "embedding_bag"
     padding_idx = _padding_index(padding_idx, weight, op)
     pad_idx = -1 if padding_idx is None else padding_idx
-    _check_table(x, weight, op)
-    if x.ndim == 1:
+    _check_table(input, weight, op)
+    if input.ndim == 1:
         if offsets is None:
             raise ValueError("embedding_bag: offsets required for 1-D input")
-        _check_offsets(offsets, int(x.shape[0]), op)
+        _check_offsets(offsets, int(input.shape[0]), op)
     if max_norm is not None:
-        _renorm_rows(weight, x, max_norm, norm_type)
+        _renorm_rows(weight, input, max_norm, norm_type)
 
     # The engine op pools rows it looked up itself, so neither a weight per
     # index nor the lookup's own gradient scaling can reach it.
     scaled = scale_grad_by_freq and weight.requires_grad and _C_engine.grad_enabled()
     if per_sample_weights is not None or scaled:
         return _bag_by_lookup(
-            x,
+            input,
             weight,
-            _bag_of_each_index(x, offsets, include_last_offset),
+            _bag_of_each_index(input, offsets, include_last_offset),
             per_sample_weights,
             mode,
             padding_idx,
             scale_grad_by_freq,
         )
 
-    x_impl = _unwrap(x)
+    x_impl = _unwrap(input)
     w_impl = _unwrap(weight)
     # The table holds embeddings, which are real numbers — pooling them
     # sums or averages, and the CPU kernel is written for floats only.
@@ -778,10 +778,10 @@ def _pad_one_dim(x: Tensor, dim: int, lo: int, hi: int, mode: str) -> Tensor:
 
 
 def pad(
-    x: Tensor,
-    padding: tuple[int, ...],
+    input: Tensor,
+    pad: Sequence[int],
     mode: str = "constant",
-    value: float = 0.0,
+    value: float | None = None,
 ) -> Tensor:
     r"""Pad an N-D tensor along an arbitrary set of trailing dimensions.
 
@@ -792,9 +792,9 @@ def pad(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of any rank ``N``.
-    padding : tuple of int
+    pad : Sequence of int
         Flat padding spec **starting from the last dimension**, in
         ``(left, right)`` pairs.  For example:
 
@@ -820,7 +820,7 @@ def pad(
     -------
     Tensor
         Padded tensor with each padded dim ``d`` enlarged by
-        ``padding[2·k] + padding[2·k+1]`` where ``k`` is its offset from
+        ``pad[2·k] + pad[2·k+1]`` where ``k`` is its offset from
         the last dim.
 
     Raises
@@ -828,7 +828,7 @@ def pad(
     lucid._C.engine.NotImplementedError
         An unknown ``mode``.
     lucid._C.engine.InvalidArgument
-        A ``padding`` of odd length or longer than ``2·N``, a reflection
+        A ``pad`` of odd length or longer than ``2·N``, a reflection
         as wide as its dim, a circular pad wider than it, a replicated
         empty dim, or negative pads that remove more than a dim holds.
         Both a ``RuntimeError``, as the reference raises, and a
@@ -859,20 +859,22 @@ def pad(
             f"pad: unrecognised padding mode {mode!r}; expected one of "
             f"{sorted(_PAD_MODES)}"
         )
-    pad_pairs = _flat_to_per_dim_pairs(padding, x.ndim)
+    pad_pairs = _flat_to_per_dim_pairs(pad, input.ndim)
     if mode != "constant":
-        result = x
+        result = input
         for d, (lo, hi) in enumerate(pad_pairs):
             result = _pad_one_dim(result, d, lo, hi, mode)
         return result
     # The engine pads by non-negative widths: a negative one is a crop.
+    x = input
     for d, (lo, hi) in enumerate(pad_pairs):
         x = _crop(x, d, lo, hi)
     widths = [(max(lo, 0), max(hi, 0)) for lo, hi in pad_pairs]
-    return _wrap(_C_engine.pad(_unwrap(x), widths, value))
+    fill = 0.0 if value is None else float(value)
+    return _wrap(_C_engine.pad(_unwrap(x), widths, fill))
 
 
-def pixel_shuffle(x: Tensor, upscale_factor: int) -> Tensor:
+def pixel_shuffle(input: Tensor, upscale_factor: int) -> Tensor:
     r"""Sub-pixel upsampling: rearrange channels into spatial resolution.
 
     Reshapes a low-resolution multi-channel feature map into a
@@ -893,7 +895,7 @@ def pixel_shuffle(x: Tensor, upscale_factor: int) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         4-D input of shape ``(N, C·r², H, W)``.  The channel dimension
         must be divisible by ``upscale_factor²``.
     upscale_factor : int
@@ -922,23 +924,23 @@ def pixel_shuffle(x: Tensor, upscale_factor: int) -> Tensor:
     (1, 3, 16, 16)
     """
     r: int = int(upscale_factor)
-    if len(x.shape) != 4:
+    if len(input.shape) != 4:
         raise ValueError(
-            f"pixel_shuffle: expected 4-D input, got shape {tuple(x.shape)}"
+            f"pixel_shuffle: expected 4-D input, got shape {tuple(input.shape)}"
         )
-    n, c_r2, h, w = x.shape
+    n, c_r2, h, w = input.shape
     if c_r2 % (r * r) != 0:
         raise ValueError(
             f"pixel_shuffle: channels {c_r2} not divisible by upscale_factor² ({r * r})"
         )
     c: int = c_r2 // (r * r)
-    impl = _unwrap(x)
+    impl = _unwrap(input)
     t = _C_engine.reshape(impl, [n, c, r, r, h, w])
     t = _C_engine.permute(t, [0, 1, 4, 2, 5, 3])
     return _wrap(_C_engine.reshape(t, [n, c, h * r, w * r]))
 
 
-def pixel_unshuffle(x: Tensor, downscale_factor: int) -> Tensor:
+def pixel_unshuffle(input: Tensor, downscale_factor: int) -> Tensor:
     r"""Inverse of :func:`pixel_shuffle`: pack spatial blocks into channels.
 
     Folds each :math:`r \times r` spatial block into ``r²`` extra
@@ -954,7 +956,7 @@ def pixel_unshuffle(x: Tensor, downscale_factor: int) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         4-D input of shape ``(N, C, H·r, W·r)``.  Both spatial dims
         must be divisible by ``downscale_factor``.
     downscale_factor : int
@@ -980,17 +982,17 @@ def pixel_unshuffle(x: Tensor, downscale_factor: int) -> Tensor:
     (1, 12, 8, 8)
     """
     r: int = int(downscale_factor)
-    if len(x.shape) != 4:
+    if len(input.shape) != 4:
         raise ValueError(
-            f"pixel_unshuffle: expected 4-D input, got shape {tuple(x.shape)}"
+            f"pixel_unshuffle: expected 4-D input, got shape {tuple(input.shape)}"
         )
-    n, c, h_r, w_r = x.shape
+    n, c, h_r, w_r = input.shape
     if h_r % r != 0 or w_r % r != 0:
         raise ValueError(
             f"pixel_unshuffle: spatial dims ({h_r}, {w_r}) not divisible by {r}"
         )
     h, w = h_r // r, w_r // r
-    impl = _unwrap(x)
+    impl = _unwrap(input)
     t = _C_engine.reshape(impl, [n, c, h, r, w, r])
     t = _C_engine.permute(t, [0, 1, 3, 5, 2, 4])
     return _wrap(_C_engine.reshape(t, [n, c * r * r, h, w]))
@@ -1222,7 +1224,7 @@ def multi_head_attention_forward(
 # ── P3 fills: channel_shuffle / pdist ──────────────────────────────────────
 
 
-def channel_shuffle(x: Tensor, groups: int) -> Tensor:
+def channel_shuffle(input: Tensor, groups: int) -> Tensor:
     r"""Group-then-transpose channel rearrangement (ShuffleNet).
 
     Splits the channel axis into ``groups`` equal-sized groups,
@@ -1245,7 +1247,7 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor of shape ``(N, C, *spatial)`` (at least 2-D).
         ``C`` must be divisible by ``groups``.
     groups : int
@@ -1254,7 +1256,7 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
     Returns
     -------
     Tensor
-        Channel-shuffled tensor of the same shape as ``x``.
+        Channel-shuffled tensor of the same shape as ``input``.
 
     Notes
     -----
@@ -1274,29 +1276,29 @@ def channel_shuffle(x: Tensor, groups: int) -> Tensor:
     >>> y[0, :, 0, 0]              # channels 0..5 reordered as 0, 2, 4, 1, 3, 5
     tensor([0., 8., 16., 4., 12., 20.])
     """
-    if x.ndim < 2:
+    if input.ndim < 2:
         raise ValueError(
             f"channel_shuffle: expected at least 2-D input (N, C, *), got "
-            f"shape {tuple(x.shape)}"
+            f"shape {tuple(input.shape)}"
         )
-    n = int(x.shape[0])
-    c = int(x.shape[1])
+    n = int(input.shape[0])
+    c = int(input.shape[1])
     if c % int(groups) != 0:
         raise ValueError(
             f"channel_shuffle: channel count {c} not divisible by groups " f"{groups}"
         )
     ch_per_group = c // int(groups)
-    spatial = list(x.shape[2:])
+    spatial = list(input.shape[2:])
 
     # (N, groups, C/groups, *spatial) → (N, C/groups, groups, *spatial) →
     # flatten the two leading channel-related axes back into a single ``C``.
-    reshaped = x.reshape(n, int(groups), ch_per_group, *spatial)
+    reshaped = input.reshape(n, int(groups), ch_per_group, *spatial)
     perm = [0, 2, 1] + list(range(3, 3 + len(spatial)))
     transposed = reshaped.permute(*perm)
     return transposed.reshape(n, c, *spatial)
 
 
-def pdist(x: Tensor, p: float = 2.0) -> Tensor:
+def pdist(input: Tensor, p: float = 2.0) -> Tensor:
     r"""Pairwise :math:`L_p` distances between rows of a 2-D tensor.
 
     For an input of shape ``(N, M)``, returns the
@@ -1313,7 +1315,7 @@ def pdist(x: Tensor, p: float = 2.0) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         2-D input of shape ``(N, M)``.
     p : float, optional
         Exponent of the :math:`L_p` norm.  Common values: ``2`` for
@@ -1342,18 +1344,18 @@ def pdist(x: Tensor, p: float = 2.0) -> Tensor:
     >>> pdist(x, p=2)
     tensor([1., 1., 1.414])
     """
-    if x.ndim != 2:
-        raise ValueError(f"pdist: expected a 2-D input, got shape {tuple(x.shape)}")
-    _require_floating(_unwrap(x), "pdist")
-    n = int(x.shape[0])
+    if input.ndim != 2:
+        raise ValueError(f"pdist: expected a 2-D input, got shape {tuple(input.shape)}")
+    _require_floating(_unwrap(input), "pdist")
+    n = int(input.shape[0])
     if n < 2:
-        return _lucid.zeros(0, dtype=x.dtype, device=x.device)
-    full = _lucid.cdist(x, x, p=p)  # (N, N)
+        return _lucid.zeros(0, dtype=input.dtype, device=input.device)
+    full = _lucid.cdist(input, input, p=p)  # (N, N)
     # Pull out the strict upper triangle (i < j) in row-major order via the
     # index pair generator from ``triu_indices``.
     # ``device=`` matters: a CPU-default index tensor fed to ``gather`` on a
     # Metal tensor raises bad_variant_access.
-    pairs = _lucid.triu_indices(n, n, offset=1, device=x.device)
+    pairs = _lucid.triu_indices(n, n, offset=1, device=input.device)
     flat = full.reshape(n * n)
     flat_idx = pairs[0] * n + pairs[1]
     return _lucid.gather(flat, 0, flat_idx)

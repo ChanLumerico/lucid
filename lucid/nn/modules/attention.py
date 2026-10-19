@@ -300,19 +300,11 @@ class MultiheadAttention(Module):
     """
 
     def __init__(
-        self,
-        embed_dim: int,
-        num_heads: int,
-        dropout: float = 0.0,
-        bias: bool = True,
-        add_bias_kv: bool = False,
-        add_zero_attn: bool = False,
-        kdim: int | None = None,
-        vdim: int | None = None,
-        num_kv_heads: int | None = None,
-        batch_first: bool = False,
-        device: DeviceLike = None,
-        dtype: DTypeLike = None,
+        self, embed_dim: int, num_heads: int, dropout: float = 0.0, bias: bool = True,
+        add_bias_kv: bool = False, add_zero_attn: bool = False,
+        kdim: int | None = None, vdim: int | None = None, batch_first: bool = False,
+        device: DeviceLike | None = None, dtype: DTypeLike | None = None,
+        *, num_kv_heads: int | None = None,
     ) -> None:
         """Initialise the MultiheadAttention module. See the class docstring for parameter semantics."""
         super().__init__()
@@ -373,14 +365,13 @@ class MultiheadAttention(Module):
                 empty(self._kv_dim, self.vdim, dtype=dtype, device=device)
             )
 
-        if bias:
-            # Q bias is embed_dim wide; K/V biases are _kv_dim wide (== embed_dim
-            # for standard MHA, so this is 3*embed_dim then).
-            self.in_proj_bias: Parameter | None = Parameter(
-                empty(embed_dim + 2 * self._kv_dim, dtype=dtype, device=device)
-            )
-        else:
-            self.in_proj_bias = None
+        # Q bias is embed_dim wide; K/V biases are _kv_dim wide (== embed_dim
+        # for standard MHA, so this is 3*embed_dim then).
+        self.in_proj_bias: Parameter | None = (
+            Parameter(empty(embed_dim + 2 * self._kv_dim, dtype=dtype, device=device))
+            if bias
+            else None
+        )
 
         if add_bias_kv:
             self.bias_k: Parameter | None = Parameter(
