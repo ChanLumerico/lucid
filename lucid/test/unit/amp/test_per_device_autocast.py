@@ -275,3 +275,19 @@ def test_var_std_logsumexp_float32_stay_float32_under_autocast(
         np.testing.assert_allclose(
             x.grad.numpy(), rx.grad.numpy(), rtol=1e-5, atol=1e-5
         )
+
+
+def test_autocast_default_dtypes_match_reference(ref: object) -> None:
+    x_cpu = lucid.randn(2, 2, device="cpu", dtype=lucid.float32)
+    rx_cpu = ref.randn(2, 2, dtype=ref.float32)  # type: ignore[attr-defined]
+    with autocast("cpu"), ref.amp.autocast("cpu"):  # type: ignore[attr-defined]
+        assert _state("cpu") == (True, lucid.bfloat16)
+        assert (x_cpu @ x_cpu).dtype is lucid.bfloat16
+        assert (rx_cpu @ rx_cpu).dtype is ref.bfloat16  # type: ignore[attr-defined]
+
+    if metal_available():
+        x_gpu = lucid.randn(2, 2, device="metal", dtype=lucid.float32)
+        with autocast("metal"):
+            assert _state("metal") == (True, lucid.float16)
+            assert (x_gpu @ x_gpu).dtype is lucid.float16
+

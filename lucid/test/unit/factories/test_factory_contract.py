@@ -360,17 +360,30 @@ def test_exact_rows_match_reference(ref: ModuleType, case: str) -> None:
 
 
 @pytest.mark.parametrize("device", DEVICES)
-def test_full_infers_dtype_from_fill_value(device: str) -> None:
-    assert lucid.full((2, 2), True, device=device).dtype is lucid.bool
-    assert lucid.full((2, 2), False, device=device).dtype is lucid.bool
-    assert lucid.full((2, 2), 5, device=device).dtype is lucid.int64
-    assert lucid.full((2, 2), -7, device=device).dtype is lucid.int64
-    assert lucid.full((2, 2), 2.5, device=device).dtype is lucid.float32
-    assert lucid.full((2, 2), 1 + 2j, device=device).dtype is lucid.complex64
-    assert lucid.full((2, 2), np.int16(9), device=device).dtype is lucid.int16
-    assert lucid.full((2, 2), np.float16(1.5), device=device).dtype is lucid.float16
-    scalar_t = lucid.tensor(4, dtype=lucid.int32, device=device)
-    assert lucid.full((2, 2), scalar_t, device=device).dtype is lucid.int32
+def test_full_infers_dtype_from_fill_value(device: str, ref: object) -> None:
+    for fill, want in [
+        (True, lucid.bool),
+        (False, lucid.bool),
+        (5, lucid.int64),
+        (-7, lucid.int64),
+        (2.5, lucid.float32),
+        (1 + 2j, lucid.complex64),
+        (np.int16(9), lucid.int64),
+        (np.float16(1.5), lucid.float32),
+    ]:
+        got = lucid.full((2, 2), fill, device=device)
+        ref_got = ref.full((2, 2), fill)  # type: ignore[attr-defined]
+        assert got.dtype is want
+        assert str(got.dtype).split(".")[-1] == str(ref_got.dtype).split(".")[-1]
+    assert lucid.full((2, 2), np.bool_(True), device=device).dtype is lucid.bool
+    scalar_i32 = lucid.tensor(4, dtype=lucid.int32, device=device)
+    ref_i32 = ref.tensor(4, dtype=ref.int32)  # type: ignore[attr-defined]
+    assert lucid.full((2, 2), scalar_i32, device=device).dtype is lucid.int64
+    assert ref.full((2, 2), ref_i32).dtype is ref.int64  # type: ignore[attr-defined]
+    scalar_f64 = lucid.tensor(1.5, dtype=lucid.float64, device="cpu")
+    ref_f64 = ref.tensor(1.5, dtype=ref.float64)  # type: ignore[attr-defined]
+    assert lucid.full((2, 2), scalar_f64, device=device).dtype is lucid.float32
+    assert ref.full((2, 2), ref_f64).dtype is ref.float32  # type: ignore[attr-defined]
 
 
 def test_full_follows_default_float_dtype() -> None:

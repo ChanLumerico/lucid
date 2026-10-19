@@ -393,14 +393,15 @@ def full(
     larger tensor is not supported here (use :func:`lucid.broadcast_to`
     instead).
     """
+    val = _python_scalar(fill_value)
     _dt_arg = (
-        _scalar_dtype(fill_value, _default_dtype_enum_cached())
+        _scalar_dtype(val, _default_dtype_enum_cached())
         if dtype is None
         else dtype
     )
     _dt, _dev, _rg = normalize_factory_kwargs(_dt_arg, device, requires_grad)
     shape = list(size) if isinstance(size, (list, tuple)) else [size]
-    return _wrap(_leaf(_fill(shape, fill_value, _dt, _dev), _rg))
+    return _wrap(_leaf(_fill(shape, val, _dt, _dev), _rg))
 
 
 def eye(

@@ -6,7 +6,7 @@ import functools
 import threading
 from typing import Callable
 from lucid._C import engine as _C_engine
-from lucid._dtype import dtype, float16, to_engine_dtype
+from lucid._dtype import bfloat16, dtype, float16, to_engine_dtype
 
 #: The device types an autocast scope can name — the same two ``lucid.device``
 #: accepts.
@@ -53,12 +53,9 @@ class autocast:
         :class:`ValueError`.
     dtype : lucid.dtype, optional
         Lower-precision dtype that supported ops cast inputs to inside
-        the scope.  Default :data:`lucid.float16`.  On the CPU, float16
-        runs in float32 — Accelerate has no half-precision kernels — so a
-        CPU scope with the default dtype changes nothing; pass
-        ``dtype=lucid.bfloat16`` for reduced precision there, as the
-        reference framework's CPU autocast does by default.  Not every CPU
-        op has a bfloat16 kernel yet.
+        the scope.  Default :data:`lucid.float16` on ``"metal"`` and
+        :data:`lucid.bfloat16` on ``"cpu"`` (matching the reference
+        framework).
     enabled : bool, optional
         When ``False`` autocast is disabled on ``device_type`` inside the
         scope — useful for ablation or forcing full precision in a nested
@@ -118,7 +115,8 @@ class autocast:
             ``'metal'`` (GPU stream) and ``'cpu'`` (Accelerate stream).
         dtype : lucid.dtype or None, default=None
             Lower-precision dtype that supported ops cast inputs to inside
-            the scope (defaults to :data:`lucid.float16` when ``None``).
+            the scope (defaults to :data:`lucid.float16` on ``'metal'`` and
+            :data:`lucid.bfloat16` on ``'cpu'`` when ``None``).
         enabled : bool, default=True
             When ``False`` autocast is disabled on ``device_type`` inside
             the scope (useful for ablation or nested full-precision blocks).
@@ -133,7 +131,11 @@ class autocast:
         """
         self._engine_device = _to_engine_device(device_type)
         self._device_type = device_type
-        self._dtype = float16 if dtype is None else dtype
+        self._dtype = (
+            (bfloat16 if device_type == "cpu" else float16)
+            if dtype is None
+            else dtype
+        )
         self._enabled = enabled
         self._cache_enabled = True if cache_enabled is None else bool(cache_enabled)
         # One stack of live engine guards per thread: the AMP state the
