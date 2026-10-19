@@ -677,6 +677,20 @@ void route_results(const Node& node, const std::vector<TensorImplPtr>& grads, Ro
         route_one(edges[i].node.get(), edges[i].input_nr, grads[i]);
 }
 
+// Pop ``node``'s pending gradient into ``grad_in``, or let a barrier that runs
+// without an arriving gradient proceed with an empty placeholder.
+template <typename Map, typename Grad>
+bool take_pending(Map& pending, Node& node, Grad& grad_in) {
+    auto it = pending.find(&node);
+    if (it != pending.end()) {
+        grad_in = std::move(it->second);
+        pending.erase(it);
+        return true;
+    }
+    const auto* barrier = graph_barrier_of(&node);
+    return barrier != nullptr && barrier->runs_without_grad();
+}
+
 }  // namespace
 
 // ── Graph-mode backward (create_graph=true) ───────────────────────────────────
@@ -711,11 +725,9 @@ static void backward_for_graph(const std::vector<BackwardRoot>& roots,
     seed_roots(roots, seeds, send);
 
     for (const auto& node : order) {
-        auto it = pending.find(node.get());
-        if (it == pending.end())
+        TensorImplPtr grad_in;
+        if (!take_pending(pending, *node, grad_in))
             continue;
-        TensorImplPtr grad_in = std::move(it->second);
-        pending.erase(it);
 
         // The hooks of the tensors this node produced, and retain_grad, see
         // their whole gradient before the node does.
@@ -758,11 +770,9 @@ static void eager_backward(const std::vector<BackwardRoot>& roots,
 
     std::unordered_set<const Node*> freed;  // released here, freeing eager-read values
     for (const auto& node : order) {
-        auto it = pending.find(node.get());
-        if (it == pending.end())
+        Storage grad_in;
+        if (!take_pending(pending, *node, grad_in))
             continue;  // no gradient reached it
-        Storage grad_in = std::move(it->second);
-        pending.erase(it);
 
         // The hooks of the tensors this node produced, and retain_grad, see
         // their whole gradient — and may replace it — before the node runs on
@@ -1066,11 +1076,9 @@ void grad_for_graph(const std::vector<BackwardRoot>& roots,
     seed_roots(roots, seeds, send);
 
     for (const auto& node : order) {
-        auto it = pending.find(node.get());
-        if (it == pending.end())
+        TensorImplPtr grad_in;
+        if (!take_pending(pending, *node, grad_in))
             continue;
-        TensorImplPtr grad_in = std::move(it->second);
-        pending.erase(it);
         // Off every path to a requested input: nothing of it runs.
         if (!plan.on_path(node.get()))
             continue;
@@ -1143,11 +1151,9 @@ void grad_eager(const std::vector<BackwardRoot>& roots,
 
     std::unordered_set<const Node*> freed;  // released here, freeing eager-read values
     for (const auto& node : order) {
-        auto it = pending.find(node.get());
-        if (it == pending.end())
+        Storage grad_in;
+        if (!take_pending(pending, *node, grad_in))
             continue;
-        Storage grad_in = std::move(it->second);
-        pending.erase(it);
         // Off every path to a requested input: nothing of it runs.
         if (!plan.on_path(node.get()))
             continue;

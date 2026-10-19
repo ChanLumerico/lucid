@@ -172,6 +172,28 @@ def _output_feeding_a_sibling_output(m: ModuleType, device: str) -> object:
     return [seen, _values(x.grad)]
 
 
+def _pre_hook_drops_all(m: ModuleType, device: str) -> object:
+    mod = _module(m, lambda a, b: a * b, pre=lambda _m, go: (None,))
+    a, b = _operands(m, device)
+    mod(a, b).sum().backward()
+    return [_values(a.grad), _values(b.grad)]
+
+
+def _pre_hook_drops_all_under_create_graph(m: ModuleType, device: str) -> object:
+    seen: list[object] = []
+    mod = _module(
+        m,
+        lambda a, b: a * b,
+        pre=lambda _m, go: (None,),
+        full=lambda _m, gi, go: seen.append(
+            [[_values(g) for g in gi], [_values(g) for g in go]]
+        ),
+    )
+    a, b = _operands(m, device)
+    ga, gb = m.autograd.grad(mod(a, b).sum(), (a, b), create_graph=True)
+    return [seen, _values(ga), _values(gb)]
+
+
 _SCENARIOS: dict[str, Scenario] = {
     "empty-gradient": _empty_gradient,
     "output-feeding-a-sibling-output": _output_feeding_a_sibling_output,
@@ -179,6 +201,8 @@ _SCENARIOS: dict[str, Scenario] = {
     "full-hook-drops-all": _full_hook_drops_all,
     "full-hook-drops-under-create-graph": _full_hook_drops_under_create_graph,
     "pre-hook-drops-one": _pre_hook_drops_one,
+    "pre-hook-drops-all": _pre_hook_drops_all,
+    "pre-hook-drops-all-under-create-graph": _pre_hook_drops_all_under_create_graph,
     "unused-input": _unused_input,
     "unused-input-pre-hook-only": _unused_input_pre_hook_only,
     "double-backward": _double_backward,
@@ -193,20 +217,36 @@ def test_matches_the_reference(name: str, ref: ModuleType, device: str) -> None:
     assert _SCENARIOS[name](lucid, device) == want
 
 
-def _pre_hook_drops_all(m: ModuleType, device: str) -> object:
-    mod = _module(m, lambda a, b: a * b, pre=lambda _m, go: (None,))
-    a, b = _operands(m, device)
-    mod(a, b).sum().backward()
-    return [_values(a.grad), _values(b.grad)]
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-494: with every output gradient dropped nothing reaches "
-    "the inputs' barrier, so it never runs to hand them zeros as the reference's "
-    "Function does",
-)
 def test_a_pre_hook_dropping_every_gradient_leaves_zeros(
     ref: ModuleType, device: str
 ) -> None:
-    assert _pre_hook_drops_all(lucid, device) == _pre_hook_drops_all(ref, "cpu")
+    def run(m: ModuleType, dev: str) -> object:
+        seen: list[object] = []
+
+        class Weighted(m.nn.Module):
+            def __init__(self) -> None:
+                super().__init__()
+                self.w = m.nn.Parameter(m.tensor([2.0, 3.0], device=dev))
+
+            def forward(self, a: object, b: object) -> object:
+                return a * b * self.w
+
+        mod = Weighted()
+        mod.register_full_backward_pre_hook(lambda _m, go: (None,))
+        mod.register_full_backward_hook(
+            lambda _m, gi, go: seen.append(
+                [[_values(g) for g in gi], [_values(g) for g in go]]
+            )
+        )
+        a, b = _operands(m, dev)
+        mod(a, b).sum().backward()
+        return [
+            _pre_hook_drops_all(m, dev),
+            seen,
+            _values(a.grad),
+            _values(b.grad),
+            _values(mod.w.grad),
+        ]
+
+    assert run(lucid, device) == run(ref, "cpu")
+

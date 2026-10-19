@@ -41,6 +41,12 @@ public:
     // Run the barrier once every gradient has arrived: one tensor per outgoing
     // edge, null where no gradient flows.
     virtual std::vector<TensorImplPtr> apply_barrier_for_graph() = 0;
+
+    // Whether the barrier runs on its turn even when no gradient reached its
+    // slots — e.g. a hooked module's input barrier once its output barrier has
+    // run, which materializes zeros for the inputs as the reference's Function
+    // does.
+    virtual bool runs_without_grad() const noexcept { return false; }
 };
 
 // The graph-mode barrier protocol of ``node``, or null.  An ordinary node

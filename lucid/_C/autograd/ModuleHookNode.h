@@ -337,6 +337,12 @@ public:
     bool is_barrier() const noexcept override { return true; }
     // A hook's ``None``, or a slot no gradient reached, is an empty storage.
     bool empty_grad_is_none() const noexcept override { return true; }
+    // Once the module's output barrier has run in this pass, the input
+    // barrier runs even when every output gradient was dropped on the way in,
+    // so the inputs and full hooks still receive materialized zeros.
+    bool runs_without_grad() const noexcept override {
+        return state_ && state_->passes.is_running() && state_->outputs_ran;
+    }
 
     // Add an incoming input gradient to what its slot holds.
     //
