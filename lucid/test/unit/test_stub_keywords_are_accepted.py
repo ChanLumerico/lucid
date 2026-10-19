@@ -182,6 +182,10 @@ _OMITTED = frozenset(
         "reduce",
         "grad_variables",
         "epoch",
+        "name",
+        "recompile_limit",
+        "isolate_recompiles",
+        "shapes_spec",
     }
 )
 #: Factory keywords compared only where Lucid offers them.
@@ -215,7 +219,9 @@ def _signature(fn: object) -> inspect.Signature:
 
 
 def _catch_all(params: list[_Param]) -> bool:
-    return any(p.kind == "varkw" for p in params)
+    return any(p.kind == "varkw" for p in params) and not any(
+        p.kind == "kw" for p in params
+    )
 
 
 def _stub_params(path: Path, name: str, cls: str | None) -> list[_Param] | None:
@@ -393,7 +399,12 @@ def _public(module: ModuleType, stub: Path | None = None) -> list[str]:
     out = []
     for n in sorted(names):
         obj = getattr(module, n, None) if not n.startswith("_") else None
-        if obj is None or isinstance(obj, (type, ModuleType)) or not callable(obj):
+        if (
+            obj is None
+            or isinstance(obj, type)
+            or (isinstance(obj, ModuleType) and n != "compile")
+            or not callable(obj)
+        ):
             continue
         if str(getattr(obj, "__module__", "")).startswith("lucid"):
             out.append(n)
@@ -502,14 +513,9 @@ _NAMESPACES: list[tuple[str, list[str], str, str | None]] = [
     ),
 ]
 
-_EXPORT = "export-owned (lucid.compile / lucid.serialization), filed from LCD-410"
-
 #: Signatures that still differ from the reference — strict, so a fix flips
 #: its case to XPASS and the entry leaves with it.
-_SIGNATURE_GAPS: dict[str, str] = {
-    "lucid.compile": _EXPORT,
-    "lucid.save": _EXPORT,
-}
+_SIGNATURE_GAPS: dict[str, str] = {}
 
 
 def _signature_cases() -> list[object]:
@@ -936,3 +942,49 @@ def test_nn_module_forward_parameter_names_match_reference(ref: ModuleType) -> N
             if lnames != rnames:
                 mismatches.append(f"{label}.{name}.forward: {lnames} != {rnames}")
     assert not mismatches, "\n".join(mismatches)
+
+
+def test_lcd434_signature_parity_stragglers(device: str) -> None:
+    import io
+    import pickle
+
+    probs = lucid.tensor([0.0, 1.0, 0.0, 1.0], device=device)
+    drawn = lucid.bernoulli(probs)
+    assert drawn.device == probs.device
+    assert drawn.dtype == probs.dtype
+    assert drawn.tolist() == [0.0, 1.0, 0.0, 1.0]
+
+    scalar_drawn = lucid.bernoulli(lucid.empty(3, device=device), p=1.0)
+    assert scalar_drawn.tolist() == [1.0, 1.0, 1.0]
+    assert probs.bernoulli().tolist() == [0.0, 1.0, 0.0, 1.0]
+    assert probs.bernoulli(0.0).tolist() == [0.0, 0.0, 0.0, 0.0]
+
+    dst = lucid.empty(4, dtype=lucid.int64, device=device)
+    assert dst.bernoulli_(probs) is dst
+    assert dst.tolist() == [0, 1, 0, 1]
+    assert dst.bernoulli_(0.0).tolist() == [0, 0, 0, 0]
+
+    with pytest.raises(RuntimeError, match=r"p_in >= 0 && p_in <= 1"):
+        lucid.bernoulli(lucid.tensor([1.5], device=device))
+    with pytest.raises(ValueError, match=r"\[0, 1\]"):
+        lucid.bernoulli(probs, p=-0.1)
+
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        probs.to(bogus=1)  # type: ignore[call-overload]
+
+    def _fn(x: Tensor) -> Tensor:
+        return x + 1.0
+
+    assert (
+        lucid.compile(_fn, fullgraph=True, mode="reduce-overhead", disable=True) is _fn
+    )
+    assert lucid.compile(fullgraph=True, disable=True)(_fn) is _fn
+
+    buf = io.BytesIO()
+    cpu_t = lucid.tensor([1.0, 2.0, 3.0])
+    lucid.save(cpu_t, buf, pickle, 4)
+    buf.seek(0)
+    loaded = lucid.load(buf, "cpu", pickle, weights_only=True, mmap=False)
+    assert isinstance(loaded, Tensor)
+    assert loaded.tolist() == [1.0, 2.0, 3.0]
+

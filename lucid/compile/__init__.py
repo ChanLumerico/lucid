@@ -41,7 +41,7 @@ import sys
 import types
 from contextlib import contextmanager
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Callable, Iterator, Protocol, cast, final, override
+from typing import TYPE_CHECKING, Callable, Iterator, Protocol, cast, final, overload, override
 
 from lucid._C import engine as _C_engine
 from lucid._tensor import Tensor
@@ -486,10 +486,32 @@ def _host_check() -> Iterator[None]:
         yield
 
 
+type _CompileOptions = dict[str, str | int | bool | Callable[..., object]]
+
+
+@overload
 def compile[**P, R](
-    target: Callable[P, R], *, dynamic: bool = False
-) -> CompiledModule[P, R]:
-    """Wrap ``target`` so calls are routed through cached MPSGraph executables.
+    model: Callable[P, R], *, fullgraph: bool = ..., dynamic: bool | None = ...,
+    backend: str | Callable[..., object] | None = ..., mode: str | None = ...,
+    options: _CompileOptions | None = ..., disable: bool = ...,
+) -> CompiledModule[P, R]: ...
+
+
+@overload
+def compile(
+    model: None = None, *, fullgraph: bool = ..., dynamic: bool | None = ...,
+    backend: str | Callable[..., object] | None = ..., mode: str | None = ...,
+    options: _CompileOptions | None = ..., disable: bool = ...,
+) -> Callable[[Callable[..., object]], object]: ...
+
+
+def compile[**P, R](
+    model: Callable[P, R] | None = None, *, fullgraph: bool = False,
+    dynamic: bool | None = None, backend: str | Callable[..., object] | None = None,
+    mode: str | None = None, options: _CompileOptions | None = None,
+    disable: bool = False,
+) -> CompiledModule[P, R] | Callable[[Callable[..., object]], object]:
+    """Wrap ``model`` so calls are routed through cached MPSGraph executables.
 
     Accepts three call styles:
 
@@ -509,23 +531,31 @@ def compile[**P, R](
 
     Parameters
     ----------
-    target : nn.Module or callable
+    model : nn.Module or callable, optional
         Either an :class:`nn.Module` instance (preferred when the
         compiled unit carries learnable parameters) or any callable
         whose signature is ``(*tensor_args) -> Tensor | tuple | dict``.
-    dynamic : bool, optional
+        When ``None``, returns a decorator factory.
+    fullgraph : bool, optional
+        Compatibility flag with the reference signature.  Default ``False``.
+    dynamic : bool or None, optional
         Treat the leading (batch) axis as symbolic so calls differing only
         in batch size share **one** compiled executable (no recompile per
-        batch).  Default ``False``.  Convolutions cannot be symbolic-batch on
-        Apple's MPSGraph, so a conv graph transparently falls back to per-shape
-        static caching (any batch size still works, one compile per distinct
-        shape); non-conv graphs (MLP / Transformer / attention) get a single
-        dynamic executable.
+        batch).  Default ``None`` (treated as ``False``).
+    backend : str or callable or None, optional
+        Compatibility flag with the reference signature.  Default ``None``.
+    mode : str or None, optional
+        Compatibility flag with the reference signature.  Default ``None``.
+    options : dict or None, optional
+        Compatibility flag with the reference signature.  Default ``None``.
+    disable : bool, optional
+        When ``True``, makes ``compile`` a no-op returning ``model``
+        unchanged.  Default ``False``.
 
     Returns
     -------
     CompiledModule
-        A wrapper exposing the cache + run path.  When ``target`` was a
+        A wrapper exposing the cache + run path.  When ``model`` was a
         Module the wrapper re-exposes the inner module's
         ``parameters`` / ``state_dict`` / training mode; when it was a
         plain callable those return empty sequences.
@@ -571,26 +601,26 @@ def compile[**P, R](
     compile_optimizer : fused forward + backward + optimizer step
         for an even tighter training loop.
     """
+    _ = (fullgraph, backend, mode, options)
+    return _compile_model(model, dyn=bool(dynamic), disable=disable)
 
-    # Factory form: ``@lucid.compile(dynamic=...)`` with no positional —
-    # ``target`` is the callable that comes back via the returned
-    # decorator.  Detect by ``target`` being missing on the call site;
-    # the module ``__call__`` below short-circuits the explicit form.
+
+def _compile_model[**P, R](
+    model: Callable[P, R] | None, *, dyn: bool, disable: bool
+) -> CompiledModule[P, R] | Callable[[Callable[..., object]], object]:
+    if model is None:
+        return _compile_decorator_factory(dynamic=dyn, disable=disable)
+    if disable:
+        return cast("CompiledModule[P, R]", model)
     from lucid.compile._entry.module import CompiledModule as _CM
 
-    if isinstance(target, _Module):
-        # ``_CM`` can't infer P/R from its ``model`` argument, so re-tag
-        # the wrapper with the signature captured from ``target``.
-        return cast(_CM[P, R], _CM(target, dynamic=dynamic))
-    if callable(target):
-        # Wrap plain callable as a synthetic Module so the existing
-        # CompiledModule machinery (signature_of / trace / cache) works
-        # without changes.  The synthetic module holds zero parameters
-        # so ``param_fingerprint`` collapses to an empty tuple.
-        return cast(_CM[P, R], _CM(_CallableModule(target), dynamic=dynamic))
+    if isinstance(model, _Module):
+        return cast(_CM[P, R], _CM(model, dynamic=dyn))
+    if callable(model):
+        return cast(_CM[P, R], _CM(_CallableModule(model), dynamic=dyn))
     raise TypeError(
-        f"lucid.compile: target must be an nn.Module or a callable, "
-        f"got {type(target).__name__}"
+        f"lucid.compile: model must be an nn.Module or a callable, "
+        f"got {type(model).__name__}"
     )
 
 
@@ -654,63 +684,25 @@ class _CallableModule(_Module):
         return f"<_CallableModule wrapping {name}>"
 
 
-def _compile_decorator_factory(*, dynamic: bool = False) -> object:
-    """Return a decorator that applies :func:`compile` with the given options.
-
-    Powers the ``@lucid.compile(dynamic=False)`` factory form when the
-    user calls the module-level wrapper with only kwargs and no
-    positional target.
-    """
+def _compile_decorator_factory(
+    *, dynamic: bool = False, disable: bool = False
+) -> Callable[[Callable[..., object]], object]:
+    """Return a decorator that applies :func:`compile` with the given options."""
 
     def _decorator(target: object) -> object:
         """Apply :func:`compile` to ``target`` with the captured ``dynamic`` flag."""
-        # ``target`` is ``object`` at this dynamic boundary; ``compile``
-        # validates callability internally, so widen for the call.
-        return compile(cast(Callable[..., object], target), dynamic=dynamic)
+        return compile(
+            cast(Callable[..., object], target), dynamic=dynamic, disable=disable
+        )
 
     return _decorator
 
 
 @final
 class _CallableCompileModule(types.ModuleType):
-    """Module subclass so ``lucid.compile(...)`` is callable.
+    """Module subclass so ``lucid.compile(...)`` is callable."""
 
-    Handles three signatures:
-
-    1. ``lucid.compile(module_or_callable)`` → :func:`compile`.
-    2. ``lucid.compile(module_or_callable, dynamic=False)`` → same.
-    3. ``lucid.compile(dynamic=False)`` (no positional) → returns a
-       decorator factory so ``@lucid.compile(dynamic=False)`` works.
-    """
-
-    def __call__(self, *args: object, **kwargs: object) -> object:
-        """Dispatch to :func:`compile` or the decorator factory.
-
-        Three call shapes are accepted (see class docstring).  ``args``
-        is either empty (factory form) or a single positional target
-        (module / callable); ``kwargs`` carries the optional
-        ``dynamic`` flag.
-
-        Raises
-        ------
-        TypeError
-            If more than one positional argument is supplied — the
-            entry point is strictly unary in target.
-        """
-        # The accepted keyword is currently just ``dynamic`` (bool).
-        # Extract + coerce so the typed callees stay typed.
-        dynamic = bool(kwargs.get("dynamic", False))
-        if not args:
-            # Factory form: ``@lucid.compile(dynamic=...)``.
-            return _compile_decorator_factory(dynamic=dynamic)
-        if len(args) != 1:
-            raise TypeError(
-                f"lucid.compile: expected 0 or 1 positional argument, "
-                f"got {len(args)}"
-            )
-        # ``args[0]`` is ``object`` here; ``compile`` validates callability
-        # internally (raising TypeError otherwise), so widen for the call.
-        return compile(cast(Callable[..., object], args[0]), dynamic=dynamic)
+    __call__ = staticmethod(compile)
 
 
 sys.modules[__name__].__class__ = _CallableCompileModule

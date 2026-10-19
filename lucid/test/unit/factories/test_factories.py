@@ -285,7 +285,7 @@ class TestNormal:
 
 class TestBernoulli:
     def test_binary(self, device: str) -> None:
-        t = lucid.bernoulli(0.5, size=(100,), device=device)
+        t = lucid.bernoulli(lucid.full((100,), 0.5, device=device))
         arr = t.numpy()
         assert set(arr.flatten().tolist()) <= {0.0, 1.0}
 

@@ -1056,6 +1056,38 @@ def _addr_(
     )
 
 
+def _bernoulli(
+    self: Tensor,
+    p: float | None = None,
+    *,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
+    """Draw binary random numbers (0 or 1) from a Bernoulli distribution."""
+    import lucid
+
+    return lucid.bernoulli(self, p, generator=generator)
+
+
+def _bernoulli_(
+    self: Tensor,
+    p: Tensor | float = 0.5,
+    *,
+    generator: _C_engine.Generator | None = None,
+) -> Tensor:
+    """Fill ``self`` with independent Bernoulli draws from ``p``, in place."""
+    import lucid
+
+    def _draw(base: Tensor) -> Tensor:
+        out = (
+            lucid.bernoulli(p.expand(base.shape), generator=generator).to(base.dtype)
+            if isinstance(p, Tensor)
+            else lucid.bernoulli(base, p, generator=generator)
+        )
+        return base * 0 + out if base.requires_grad and base.is_floating_point() else out
+
+    return _write(self, "bernoulli_", _draw)
+
+
 _GENERATED_INPLACE_TWINS: tuple[tuple[str, Callable[..., Tensor]], ...] = (
     *((n, _make_unary_inplace(n)) for n in _UNARY_INPLACE_TWINS),
     *((n, _make_binary_inplace(n)) for n in _BINARY_INPLACE_TWINS),
@@ -1072,6 +1104,7 @@ _GENERATED_INPLACE_TWINS: tuple[tuple[str, Callable[..., Tensor]], ...] = (
     ("addmm_", _addmm_),
     ("addmv_", _addmv_),
     ("addr_", _addr_),
+    ("bernoulli_", _bernoulli_),
 )
 
 
@@ -1193,6 +1226,7 @@ _EXTRA_METHODS = (
     ("addcmul", _addcmul),
     ("addcdiv", _addcdiv),
     ("is_set_to", _is_set_to),
+    ("bernoulli", _bernoulli),
     ("bitwise_and_", _bitwise_and_),
     ("bitwise_or_", _bitwise_or_),
     ("bitwise_xor_", _bitwise_xor_),

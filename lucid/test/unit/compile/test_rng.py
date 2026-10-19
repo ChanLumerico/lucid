@@ -110,7 +110,7 @@ class _Draws(nn.Module):
         t = lucid.randint(0, 1000, (x.shape[0], 1), device=dev)
         u = lucid.rand(x.shape[0], 1, device=dev)
         g = lucid.normal(2.0, 0.5, size=(1, x.shape[1]), device=dev)
-        keep = lucid.bernoulli(0.7, size=(x.shape[0], 1), device=dev)
+        keep = lucid.bernoulli(u, 0.7)
         h = self.lin(x + noise) * (t.float() / 1000.0 + u) + g
         return h * keep, noise
 

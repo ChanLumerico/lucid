@@ -158,19 +158,22 @@ def _restore_tensor(
 
 def _resolve_target_device(
     device_str: str,
-    map_location: str | Callable[..., Any] | dict[str, str] | None,
+    map_location: object,
 ) -> str:
-    if isinstance(map_location, str):
-        return "metal" if ("metal" in map_location or "gpu" in map_location) else "cpu"
+    from lucid._device import device as _device_cls
+
+    if isinstance(map_location, (str, _device_cls)):
+        loc = str(map_location)
+        return "metal" if ("metal" in loc or "gpu" in loc) else "cpu"
     if isinstance(map_location, dict):
-        mapped = map_location.get(device_str, device_str)
+        mapped = str(map_location.get(device_str, device_str))
         return "metal" if ("metal" in mapped or "gpu" in mapped) else "cpu"
     return device_str
 
 
 def _load_v3_11tuple(
     pid: tuple[Any, ...],
-    map_location: str | Callable[..., Any] | dict[str, str] | None,
+    map_location: object,
     storages: dict[int, _C_engine.TensorImpl],
     tensors: dict[int, _T],
 ) -> _T:
@@ -225,9 +228,10 @@ class _LucidUnpickler(pickle.Unpickler):
         self,
         file: io.BytesIO,
         *,
-        map_location: str | Callable[..., Any] | dict[str, str] | None = None,
+        map_location: object = None,
+        **pickle_load_args: Any,
     ) -> None:
-        super().__init__(file)
+        super().__init__(file, **pickle_load_args)
         self._map_location = map_location
         self._storages: dict[int, _C_engine.TensorImpl] = {}
         self._tensors: dict[int, _T] = {}
@@ -285,7 +289,7 @@ class _SafeUnpickler(_LucidUnpickler):
 def save(
     obj: object,
     f: str | bytes | os.PathLike[str] | os.PathLike[bytes] | io.IOBase,
-    *,
+    pickle_module: object = pickle,
     pickle_protocol: int = 4,
 ) -> None:
     r"""Serialise ``obj`` to a Lucid-format checkpoint file.
@@ -303,6 +307,9 @@ def save(
         also supported.
     f : str, bytes, os.PathLike, or file-like
         Destination path or open binary file handle.
+    pickle_module : module, optional
+        Module used for pickling metadata and objects. Only the standard
+        :mod:`pickle` module is supported.
     pickle_protocol : int, optional
         Pickle protocol version forwarded to the underlying
         ``pickle.Pickler``. Default ``4``.
@@ -332,6 +339,8 @@ def save(
     >>> sd = {"w": lucid.randn(3, 3)}
     >>> lucid.serialization.save(sd, "/tmp/ckpt.lucid")
     """
+    if pickle_module not in (None, pickle):
+        raise NotImplementedError("lucid.save supports only the standard pickle module")
     sd_metadata: object | None = getattr(obj, "_metadata", None)
     container: dict[str, object] = {"_lucid_format": 2, "obj": obj}
     if sd_metadata is not None:
@@ -353,9 +362,14 @@ def save(
 
 def load(
     f: str | bytes | os.PathLike[str] | os.PathLike[bytes] | io.IOBase,
+    map_location: (
+        str | Callable[[str, str], str] | dict[str, str] | object | None
+    ) = None,
+    pickle_module: object = None,
     *,
-    map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
-    weights_only: bool = True,
+    weights_only: bool | None = True,
+    mmap: bool | None = None,
+    **pickle_load_args: Any,
 ) -> object:
     r"""Load an object saved by :func:`save` or :func:`save_safetensors`.
 
@@ -370,14 +384,23 @@ def load(
     f : str, bytes, os.PathLike, or file-like
         Source path or open binary file handle. Paths ending in
         ``.safetensors`` are delegated to :func:`load_safetensors`.
-    map_location : str, dict, callable, or None, optional
-        Device remapping applied to every loaded tensor. A bare string
-        moves all tensors to that device; a ``dict`` maps source device
-        names to targets; a callable receives ``(tensor, source_device)``
-        and returns the relocated tensor.
+    map_location : str, device, dict, callable, or None, optional
+        Device remapping applied to every loaded tensor. A bare string or
+        :class:`device` moves all tensors to that device; a ``dict`` maps
+        source device names to targets; a callable receives
+        ``(tensor, source_device)`` and returns the relocated tensor.
+    pickle_module : module, optional
+        Module used for unpickling metadata and objects. Only the standard
+        :mod:`pickle` module is supported.
     weights_only : bool, optional
         If ``True`` (default), restrict deserialisation to a safe type
         whitelist. Set to ``False`` only for fully trusted checkpoints.
+    mmap : bool, optional
+        Compatibility flag with the reference signature. ``mmap=True`` is
+        refused with :class:`NotImplementedError`.
+    **pickle_load_args
+        Additional keyword arguments forwarded to :class:`pickle.Unpickler`
+        when ``weights_only=False``.
 
     Returns
     -------
@@ -399,6 +422,9 @@ def load(
     >>> sd["w"].tolist()
     [1.0, 1.0, 1.0]
     """
+    safe_only = _validate_load_options(
+        pickle_module, weights_only=weights_only, mmap=mmap, extra=pickle_load_args
+    )
     if isinstance(f, (str, bytes, os.PathLike)):
         raw_path = os.fspath(f)
         path_str = raw_path.decode() if isinstance(raw_path, bytes) else str(raw_path)
@@ -410,15 +436,15 @@ def load(
         data = f.read()
 
     buf = io.BytesIO(data)
-    if not weights_only:
+    if not safe_only:
         warnings.warn(
             "lucid.load() with weights_only=False allows arbitrary object "
             "deserialization which may execute untrusted code.",
             UserWarning,
             stacklevel=2,
         )
-    unpickler_cls = _SafeUnpickler if weights_only else _LucidUnpickler
-    unpickler = unpickler_cls(buf, map_location=map_location)
+    unpickler_cls = _SafeUnpickler if safe_only else _LucidUnpickler
+    unpickler = unpickler_cls(buf, map_location=map_location, **pickle_load_args)
     container = unpickler.load()
     unpickler._storages.clear()
     unpickler._tensors.clear()
@@ -428,20 +454,38 @@ def load(
     obj = container["obj"]
     if callable(map_location) and not isinstance(map_location, str):
         obj = _apply_map_location(obj, map_location)
+    return _with_state_dict_metadata(obj, container.get("_state_dict_metadata"))
 
-    # Restore the `_metadata` attribute on state_dicts saved with format v2.
-    sd_metadata = container.get("_state_dict_metadata")
-    if sd_metadata is not None and isinstance(obj, dict):
-        try:
-            obj._metadata = sd_metadata  # type: ignore[attr-defined]
-        except AttributeError:
-            # Plain dict can't hold attrs — re-wrap in OrderedDict.
-            from collections import OrderedDict as _OD
 
-            new_obj = _OD(obj)
-            new_obj._metadata = sd_metadata  # type: ignore[attr-defined]
-            obj = new_obj
+def _validate_load_options(
+    pickle_module: object | None,
+    *,
+    weights_only: bool | None,
+    mmap: bool | None,
+    extra: dict[str, object],
+) -> bool:
+    if pickle_module not in (None, pickle):
+        raise NotImplementedError("lucid.load supports only the standard pickle module")
+    if mmap is True:
+        raise NotImplementedError("lucid.load does not support mmap=True")
+    safe_only = True if weights_only is None else bool(weights_only)
+    if safe_only and extra:
+        raise RuntimeError("Cannot use ``pickle_load_args`` with ``weights_only=True``")
+    return safe_only
 
+
+def _with_state_dict_metadata(obj: object, sd_metadata: object) -> object:
+    """Restore the ``_metadata`` attribute on state_dicts saved with format v2."""
+    if sd_metadata is None or not isinstance(obj, dict):
+        return obj
+    try:
+        obj._metadata = sd_metadata  # type: ignore[attr-defined]
+    except AttributeError:
+        from collections import OrderedDict as _OD
+
+        new_obj = _OD(obj)
+        new_obj._metadata = sd_metadata  # type: ignore[attr-defined]
+        return new_obj
     return obj
 
 

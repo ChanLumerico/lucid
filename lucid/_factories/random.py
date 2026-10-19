@@ -588,83 +588,95 @@ def randint(
 
 
 def bernoulli(
-    input: float,
+    input: Tensor,
+    p: float | None = None,
     *,
-    size: list[int] | tuple[int, ...] | None = None,
-    dtype: DTypeLike = None,
-    device: DeviceLike = None,
-    requires_grad: bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor:
-    r"""Return a tensor of independent Bernoulli trials with success probability ``input``.
+    r"""Draw binary random numbers (``0`` or ``1``) from a Bernoulli distribution.
 
-    Each element is drawn from the Bernoulli distribution:
+    The ``input`` tensor holds probabilities in :math:`[0, 1]` to be used for
+    drawing the binary random number, unless scalar ``p`` is supplied, in which
+    case ``input`` provides only the output shape, dtype, and device while each
+    element is drawn from :math:`\text{Bernoulli}(p)`.
 
     .. math::
 
-        X_i \sim \text{Bernoulli}(p), \quad
-        P(X_i = 1) = p, \quad P(X_i = 0) = 1 - p
-
-    with mean $\mathbb{E}[X_i] = p$ and variance
-    $\operatorname{Var}[X_i] = p(1-p)$.
+        \text{out}_i \sim \text{Bernoulli}(p_i), \quad
+        P(\text{out}_i = 1) = p_i, \quad P(\text{out}_i = 0) = 1 - p_i
 
     Parameters
     ----------
-    input : float
-        Success probability.  Must satisfy $0 \le p \le 1$.
-    size : list[int] or tuple[int, ...], optional
-        Shape of the output tensor.  Defaults to ``(1,)`` when ``None``.
-    dtype : lucid.dtype, optional
-        Data type of the output.  Defaults to the global default dtype.
-        Use ``lucid.bool_`` for boolean masks or ``lucid.float32`` for
-        soft weights.
-    device : str or lucid.device, optional
-        Target device — ``"cpu"`` or ``"metal"``.
-    requires_grad : bool, optional
-        Enable autograd tracking.  Default: ``False``.
+    input : Tensor
+        Probability values for the Bernoulli distribution when ``p`` is ``None``,
+        or shape/dtype/device template when ``p`` is given.
+    p : float, optional
+        If provided, uniform success probability in :math:`[0, 1]` used for all
+        elements.
     generator : lucid._C.engine.Generator, optional
-        Explicit generator.  Defaults to the global default.
+        Explicit generator. Defaults to the global default.
 
     Returns
     -------
     Tensor
-        Tensor of shape ``size`` with values in $\{0, 1\}$.
-
-    Notes
-    -----
-    Internally sampled as $X_i = \mathbf{1}[U_i < p]$ where
-    $U_i \sim U[0,1)$, giving exact Bernoulli probabilities.
-
-    **Dropout** (Srivastava et al., 2014) is the canonical use case.
-    A dropout mask $m \sim \text{Bernoulli}(1-\text{drop\_rate})^n$
-    and the retained activations are scaled by $1/(1-\text{drop\_rate})$
-    to preserve expected magnitude:
-
-    .. math::
-
-        \tilde{x}_i = \frac{x_i \cdot m_i}{1 - p_{\text{drop}}}
+        Tensor of the same shape, dtype, and device as ``input`` with values in
+        :math:`\{0, 1\}`.
 
     Examples
     --------
     >>> import lucid
     >>> lucid.manual_seed(0)
-    >>> x = lucid.bernoulli(0.3, size=(10_000,))
+    >>> probs = lucid.full((10_000,), 0.3)
+    >>> x = lucid.bernoulli(probs)
     >>> sorted(set(x.tolist()))                      # only zeros and ones
     [0.0, 1.0]
     >>> abs(float(x.mean()) - 0.3) < 0.02            # ≈ 30 % ones
     True
-
-    Dropout mask for a hidden layer:
-
-    >>> h = lucid.randn(32, 512)
-    >>> keep = lucid.bernoulli(0.8, size=(32, 512))
-    >>> h_dropped = h * keep / 0.8
     """
+    from lucid import _promotion
+
     _check_random()
-    _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
-    shape = list(size) if size is not None else [1]
-    impl = _C_engine.bernoulli(shape, input, _dt, _dev, _get_gen(generator))
-    return _wrap(_leaf(impl, requires_grad))
+    if not hasattr(input, "_impl"):
+        raise TypeError(
+            f"bernoulli(): argument 'input' (position 1) must be Tensor, "
+            f"not {type(input).__name__}"
+        )
+    if input.is_complex():
+        raise _C_engine.NotImplementedError(
+            f'"bernoulli" not implemented for {input.dtype}'
+        )
+    dt, dev, gen = input._impl.dtype, input._impl.device, _get_gen(generator)
+    if p is not None:
+        p_num = _promotion.as_number(p)
+        if isinstance(p_num, bool) or not isinstance(p_num, (int, float)):
+            raise TypeError(
+                f"bernoulli(): argument 'p' must be float, not {type(p).__name__}"
+            )
+        pf = float(p_num)
+        if not 0.0 <= pf <= 1.0:
+            raise _C_engine.InvalidArgument(
+                f"bernoulli_ expects p to be in [0, 1], but got p={pf}"
+            )
+        draw_dt = dt if input.is_floating_point() else _C_engine.Dtype.F32
+        impl = _C_engine.bernoulli(list(input.shape), pf, draw_dt, dev, gen)
+        if draw_dt != dt:
+            impl = _C_engine.astype(impl, dt)
+        return _wrap(_leaf(impl, False))
+    if not input.is_floating_point():
+        raise _C_engine.NotImplementedError(
+            f'"bernoulli_tensor" not implemented for {input.dtype}'
+        )
+    if input.numel() > 0 and not hasattr(input._impl, "_in_dim"):
+        from lucid._engine_scope import untraced
+
+        with untraced():
+            ok = bool(((input >= 0.0) & (input <= 1.0)).all().item())
+        if not ok:
+            raise _C_engine.InvalidArgument(
+                "Expected p_in >= 0 && p_in <= 1 to be true, but got false."
+            )
+    u = _wrap(_C_engine.uniform(list(input.shape), 0.0, 1.0, dt, dev, gen))
+    return (u < input).to(dtype=input.dtype).detach()
 
 
 def normal(

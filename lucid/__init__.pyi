@@ -96,14 +96,17 @@ def set_grad_enabled(mode: _bool) -> None: ...
 def save(
     obj: object,
     f: str | bytes | os.PathLike[str] | os.PathLike[bytes] | IO[bytes],
-    *,
+    pickle_module: object = ...,
     pickle_protocol: _int = 4,
 ) -> None: ...
 def load(
     f: str | bytes | os.PathLike[str] | os.PathLike[bytes] | IO[bytes],
-    *,
     map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
+    pickle_module: object | None = None,
+    *,
     weights_only: _bool = True,
+    mmap: _bool | None = None,
+    **pickle_load_args: object,
 ) -> object: ...
 def save_sharded(
     obj: object,
@@ -170,10 +173,26 @@ class _CompileDecorator:
 
 @overload
 def compile[**P, R](
-    target: Callable[P, R], *, dynamic: _bool = ...
+    model: Callable[P, R],
+    *,
+    fullgraph: _bool = False,
+    dynamic: _bool | None = None,
+    backend: str | Callable[..., object] | None = None,
+    mode: str | None = None,
+    options: dict[str, str | _int | _bool] | None = None,
+    disable: _bool = False,
 ) -> CompiledModule[P, R]: ...
 @overload
-def compile(*, dynamic: _bool = ...) -> _CompileDecorator: ...
+def compile(
+    model: None = None,
+    *,
+    fullgraph: _bool = False,
+    dynamic: _bool | None = None,
+    backend: str | Callable[..., object] | None = None,
+    mode: str | None = None,
+    options: dict[str, str | _int | _bool] | None = None,
+    disable: _bool = False,
+) -> _CompileDecorator: ...
 
 # ── Type predicates ───────────────────────────────────────────────────────────
 def is_tensor(obj: object, /) -> _bool: ...
@@ -336,12 +355,9 @@ def randint(
     generator: _C_engine.Generator | None = None,
 ) -> Tensor: ...
 def bernoulli(
-    input: _float,
+    input: Tensor,
+    p: _float | None = None,
     *,
-    size: list[_int] | tuple[_int, ...] | None = None,
-    dtype: DTypeLike = None,
-    device: DeviceLike = None,
-    requires_grad: _bool = False,
     generator: _C_engine.Generator | None = None,
 ) -> Tensor: ...
 def normal(

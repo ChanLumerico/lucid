@@ -77,7 +77,7 @@ class TestFloat64BitResolution:
                 p = 0.5 * (u24 + u53)
                 g.counter = counter
                 b = lucid.bernoulli(
-                    p, size=(1,), dtype=lucid.float64, generator=g
+                    lucid.tensor([p], dtype=lucid.float64), generator=g
                 ).item()
                 # Since u24 < p < u53, a 24-bit draw would yield 1.0 whereas the 53-bit draw yields 0.0.
                 assert b == 0.0

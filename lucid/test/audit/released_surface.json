@@ -3343,10 +3343,7 @@
     "lucid.bernoulli": {
       "params": [
         "a:input",
-        "k:size=",
-        "k:dtype=",
-        "k:device=",
-        "k:requires_grad=",
+        "a:p=",
         "k:generator="
       ]
     },
@@ -3585,8 +3582,13 @@
     },
     "lucid.compile.compile": {
       "params": [
-        "a:target",
-        "k:dynamic="
+        "a:model=",
+        "k:fullgraph=",
+        "k:dynamic=",
+        "k:backend=",
+        "k:mode=",
+        "k:options=",
+        "k:disable="
       ]
     },
     "lucid.compile.compile_optimizer": {
@@ -6625,8 +6627,11 @@
     "lucid.load": {
       "params": [
         "a:f",
-        "k:map_location=",
-        "k:weights_only="
+        "a:map_location=",
+        "a:pickle_module=",
+        "k:weights_only=",
+        "k:mmap=",
+        "**pickle_load_args"
       ]
     },
     "lucid.load_safetensors": {
@@ -17754,7 +17759,8 @@
       "params": [
         "a:obj",
         "a:f",
-        "k:pickle_protocol="
+        "a:pickle_module=",
+        "a:pickle_protocol="
       ]
     },
     "lucid.save_safetensors": {
