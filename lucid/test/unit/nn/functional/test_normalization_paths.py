@@ -168,7 +168,18 @@ def test_instance_norm_can_use_running_stats_instead_of_the_batch() -> None:
 # ── local_response_norm ──────────────────────────────────────────────────────
 
 
-def test_local_response_norm_passes_through_a_1d_input() -> None:
-    """Fewer than two dimensions has no channel axis to normalise across."""
-    x = lucid.tensor(np.array([1.0, 2.0, 3.0], dtype=np.float32))
-    np.testing.assert_array_equal(F.local_response_norm(x, size=2).numpy(), x.numpy())
+@pytest.mark.parametrize("shape", [(), (3,), (2, 4)], ids=str)
+def test_local_response_norm_refuses_inputs_under_3d(ref, shape) -> None:
+    """Inputs under 3-D have no spatial axes and raise ValueError, matching the reference."""
+    with pytest.raises(ValueError, match="Expected 3D or higher dimensionality"):
+        ref.nn.functional.local_response_norm(ref.ones(shape), size=2)
+    with pytest.raises(ValueError, match="Expected 3D or higher dimensionality"):
+        F.local_response_norm(lucid.ones(shape), size=2)
+
+
+@pytest.mark.parametrize("size", [0, -1, -3])
+def test_local_response_norm_refuses_non_positive_size(ref, size) -> None:
+    with pytest.raises(RuntimeError):
+        ref.nn.functional.local_response_norm(ref.ones(1, 4, 3), size=size)
+    with pytest.raises(RuntimeError, match="kernel size should be greater than zero"):
+        F.local_response_norm(lucid.ones(1, 4, 3), size=size)

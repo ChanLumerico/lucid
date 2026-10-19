@@ -30,9 +30,8 @@ from lucid.nn.functional._loss_checks import (
     _check_same_rank, _check_target, _check_unit_interval, _loss_dtype,
     _num_classes, _operands, _pair_operands, _shape,
 )
-from lucid.nn.functional._index_checks import (
-    _ClassTargets, _check_ctc, _class_index, _class_targets, _host_read, _poison,
-)
+from lucid.nn.functional._index_checks import _ClassTargets, _check_ctc, _class_index, _class_targets, _host_read, _poison
+from lucid.nn.functional._inplace import _keep_in_graph
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -785,7 +784,7 @@ def nll_loss(
         target = target.reshape([1])
     targets = _class_targets(target, num_classes, op, ignore_index=ignore_index)
     out: Tensor = _class_nll(x, targets, weight, reduction, 0.0)
-    return out.reshape([]) if unbatched and reduction == "none" else out
+    return _keep_in_graph(out.reshape([]) if unbatched and reduction == "none" else out, input)
 
 
 def binary_cross_entropy(

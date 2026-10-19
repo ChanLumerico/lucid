@@ -1054,6 +1054,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add Tensor._version, det signed zeros, and Metal leaf base
 
+- align branch gradients, create_graph retention, and dim/LRN validation
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

@@ -67,19 +67,6 @@ _TENSOR_OPS = {
     "minimum": lambda lib, x: lib.minimum(x, lib.zeros_like(x)),
 }
 
-_PYTHON_SIDE = {
-    "hardtanh": "LCD-428 follow-up (api): F.hardtanh is lucid.clamp, whose backward "
-    "passes the gradient at the bound; the reference's hardtanh backward gives 0 there",
-    "celu": "LCD-428 follow-up (api): F.celu is a relu + minimum composite; the "
-    "reference differentiates it as elu, so 0 takes the negative side and +inf gives 1",
-}
-# The cells each Python-side composite gets wrong today, by input value.
-_KNOWN_WRONG = {
-    "hardtanh": lambda v: v in (-1.0, 1.0),
-    "celu": lambda v: v == 0.0 or v == float("inf"),
-}
-
-
 def _ids(v):
     return str(v)
 
@@ -95,43 +82,42 @@ def _same(got, want):
 _WIDTH = 32
 
 
-def _reference_grad(ref, call, value, dtype):
+def _reference_fwd_and_grad(ref, call, value, dtype):
     x = ref.tensor([value] * _WIDTH, dtype=dtype, requires_grad=True)
-    call(x).sum().backward()
-    return float(x.grad[0].item())
+    y = call(x)
+    y.sum().backward()
+    return float(y[0].item()), float(x.grad[0].item())
 
 
-def _lucid_grads(call, value, device, dtype):
+def _lucid_fwd_and_grads(call, value, device, dtype):
     x = lucid.tensor([value] * _WIDTH, dtype=dtype, device=device, requires_grad=True)
-    call(x).sum().backward()
+    y = call(x)
+    y.sum().backward()
     eager = float(x.grad[0].item())
     x2 = lucid.tensor([value] * _WIDTH, dtype=dtype, device=device, requires_grad=True)
     (g,) = lucid.autograd.grad(call(x2).sum(), x2, create_graph=True)
-    return eager, float(g[0].item())
+    return float(y[0].item()), eager, float(g[0].item())
 
 
 def _check(ref, device, dtype_name, value, lucid_call, ref_call):
     if device == "metal" and dtype_name == "float64":
         pytest.skip("Metal has no float64")
-    want = _reference_grad(ref, ref_call, value, getattr(ref, dtype_name))
-    eager, graph = _lucid_grads(lucid_call, value, device, getattr(lucid, dtype_name))
+    want_fwd, want = _reference_fwd_and_grad(
+        ref, ref_call, value, getattr(ref, dtype_name)
+    )
+    got_fwd, eager, graph = _lucid_fwd_and_grads(
+        lucid_call, value, device, getattr(lucid, dtype_name)
+    )
+    assert _same(got_fwd, want_fwd), f"forward: {got_fwd} != reference {want_fwd}"
     assert _same(eager, want), f"backward(): {eager} != reference {want}"
     assert _same(graph, want), f"grad(create_graph=True): {graph} != reference {want}"
-
-
-def _pin(request, reason):
-    request.applymarker(pytest.mark.xfail(strict=True, reason=reason))
 
 
 @pytest.mark.parametrize("dtype_name", ["float32", "float64"])
 @pytest.mark.parametrize("value", _VALUES, ids=_ids)
 @pytest.mark.parametrize("name", list(_ACTIVATIONS))
-def test_activation_gradient_matches_reference(
-    ref, device, name, value, dtype_name, request
-):
+def test_activation_gradient_matches_reference(ref, device, name, value, dtype_name):
     call = _ACTIVATIONS[name]
-    if name in _KNOWN_WRONG and _KNOWN_WRONG[name](value):
-        _pin(request, _PYTHON_SIDE[name])
     _check(
         ref,
         device,

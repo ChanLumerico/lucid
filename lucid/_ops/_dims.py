@@ -83,13 +83,13 @@ def _wrap_dims(dims: Sequence[int], ndim: int, op: str) -> list[int]:
     ------
     IndexError
         Some dim is out of range.
-    ValueError
+    lucid._C.engine.InvalidArgument
         Two dims name the same axis (``0`` and ``-1`` of a 0-d tensor do).
     """
     wrapped = [_wrap_dim(d, ndim, op) for d in dims]
     if len(set(wrapped)) != len(wrapped):
         repeated = next(d for d in wrapped if wrapped.count(d) > 1)
-        raise ValueError(
+        raise _C_engine.InvalidArgument(
             f"{op}(): dim {repeated} appears multiple times in the list of "
             f"dims {tuple(dims)}"
         )

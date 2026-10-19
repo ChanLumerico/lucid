@@ -18,7 +18,7 @@ from lucid._tensor._metal_views import (
     _check as _metal_check, write_back as _metal_write_back
 )
 from lucid._types import DTypeLike, GeluApproximate
-from lucid.nn.functional._inplace import _in_place
+from lucid.nn.functional._inplace import _dead_zone_zero, _in_place, _keep_in_graph
 from lucid.nn.functional.normalization import normalize
 
 if TYPE_CHECKING:
@@ -962,16 +962,15 @@ def celu(input: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
     >>> celu(x, alpha=1.0)
     tensor([-0.8647, -0.6321, 0., 1.])
     """
+    if alpha == 0.0:
+        raise _C_engine.InvalidArgument("ZeroDivisionError: alpha cannot be 0 for CELU")
     if inplace:
         return _in_place(input, "celu_", lambda t: celu(t, alpha))
     xi = _unwrap(input)
+    if alpha == 1.0:
+        return _wrap(_C_engine.elu(xi, 1.0))
     a_t = _C_engine.full(xi.shape, alpha, xi.dtype, xi.device)
-    one_t = _C_engine.full(xi.shape, 1.0, xi.dtype, xi.device)
-    exp_part = _C_engine.sub(_C_engine.exp(_C_engine.div(xi, a_t)), one_t)
-    neg = _C_engine.minimum(
-        _C_engine.zeros(xi.shape, xi.dtype, xi.device), _C_engine.mul(a_t, exp_part)
-    )
-    return _wrap(_C_engine.add(_C_engine.relu(xi), neg))
+    return _wrap(_C_engine.mul(_C_engine.elu(_C_engine.div(xi, a_t), 1.0), a_t))
 
 
 def hardshrink(input: Tensor, lambd: float = 0.5) -> Tensor:
@@ -1015,11 +1014,8 @@ def hardshrink(input: Tensor, lambd: float = 0.5) -> Tensor:
     >>> hardshrink(x, lambd=0.5)
     tensor([-1., 0., 0., 0., 1.])
     """
-    xi = _unwrap(input)
-    lam = _C_engine.full(xi.shape, lambd, xi.dtype, xi.device)
-    neg_lam = _C_engine.full(xi.shape, -lambd, xi.dtype, xi.device)
-    mask = _C_engine.bitwise_or(_C_engine.greater(xi, lam), _C_engine.less(xi, neg_lam))
-    return _wrap(_C_engine.where(mask, xi, _C_engine.zeros(xi.shape, xi.dtype, xi.device)))
+    outside = _unwrap((input > lambd) | (input < -lambd))
+    return _keep_in_graph(_wrap(_C_engine.where(outside, _unwrap(input), _dead_zone_zero(input))), input)
 
 
 def tanhshrink(input: Tensor) -> Tensor:
@@ -1215,12 +1211,13 @@ def softshrink(input: Tensor, lambd: float = 0.5) -> Tensor:
     >>> softshrink(x, lambd=0.5)
     tensor([-0.5, 0., 0., 0., 0.5])
     """
+    if lambd < 0.0:
+        raise _C_engine.InvalidArgument(f"softshrink: lambd must be no less than 0.0, but got {lambd}")
     xi = _unwrap(input)
     lam = _C_engine.full(xi.shape, lambd, xi.dtype, xi.device)
     neg_lam = _C_engine.full(xi.shape, -lambd, xi.dtype, xi.device)
-    zeros = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
-    out = _C_engine.where(_C_engine.greater(xi, lam), _C_engine.sub(xi, lam), zeros)
-    return _wrap(_C_engine.where(_C_engine.less(xi, neg_lam), _C_engine.add(xi, lam), out))
+    out = _C_engine.where(_C_engine.greater(xi, lam), _C_engine.sub(xi, lam), _dead_zone_zero(input))
+    return _keep_in_graph(_wrap(_C_engine.where(_C_engine.less(xi, neg_lam), _C_engine.add(xi, lam), out)), input)
 
 
 # ── P3 fills: missing activations ──────────────────────────────────────────
@@ -1274,7 +1271,13 @@ def hardtanh(
     >>> hardtanh(x)
     tensor([-1., -0.5, 0., 0.5, 1.])
     """
-    return _in_place(input, "hardtanh_", lambda t: hardtanh(t, min_val, max_val)) if inplace else _l.clamp(input, min_val, max_val)
+    if min_val > max_val:
+        raise ValueError("min_val cannot be greater than max_val")
+    if inplace:
+        return _in_place(input, "hardtanh_", lambda t: hardtanh(t, min_val, max_val))
+    inside = _unwrap((input > min_val) & (input < max_val))
+    clamped = _C_engine.clip(_unwrap(input.detach()), min_val, max_val)
+    return _keep_in_graph(_wrap(_C_engine.where(inside, _unwrap(input), clamped)), input)
 
 
 def logsigmoid(input: Tensor) -> Tensor:
@@ -1419,7 +1422,7 @@ def _threshold(x: Tensor, threshold: float, value: float) -> Tensor:
     # ``threshold`` argument shadows its own name, hence this helper.)
     replaced = x <= threshold
     replacement = _l.full_like(x, float(value))
-    return _l.where(replaced, replacement, x)
+    return _keep_in_graph(_l.where(replaced, replacement, x), x)
 
 
 def straight_through(hard: Tensor, soft: Tensor) -> Tensor:
@@ -1614,13 +1617,10 @@ def rrelu(
     """
     if inplace:
         return _in_place(input, "rrelu_", lambda t: rrelu(t, lower, upper, training))
-    if training:
-        # Per-element uniform slope, only applied where input < 0.
-        slope: Tensor = _l.rand_like(input) * (upper - lower) + lower
-    else:
-        # Constant midpoint slope.
-        slope = _l.full_like(input, 0.5 * (lower + upper))
-    return _l.where(input >= 0, input, slope * input)
+    if not training:
+        return leaky_relu(input, 0.5 * (lower + upper), inplace=False)
+    slope: Tensor = _l.rand_like(input) * (upper - lower) + lower
+    return _keep_in_graph(_l.where(input > 0, input, slope * input), input)
 
 
 # ── In-place variants ─────────────────────────────────────────────────────────

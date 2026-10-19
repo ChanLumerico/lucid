@@ -1211,14 +1211,28 @@ def rot90(input: Tensor, k: int = 1, dims: Sequence[int] = (0, 1)) -> Tensor:
     >>> lucid.rot90(x)
     tensor([[2., 4.], [1., 3.]])
     """
-    d0, d1 = dims[0], dims[1]
+    if len(dims) != 2:
+        raise _C_engine.InvalidArgument(
+            f"expected total rotation dims == 2, but got dims = {len(dims)}"
+        )
+    if input.ndim < 2:
+        raise _C_engine.InvalidArgument(
+            f"expected total dims >= 2, but got total dims = {input.ndim}"
+        )
+    d0 = _wrap_dim(dims[0], input.ndim, "rot90")
+    d1 = _wrap_dim(dims[1], input.ndim, "rot90")
+    if d0 == d1:
+        raise _C_engine.InvalidArgument(
+            f"expected rotation dims to be different, but got dim0 = {dims[0]} "
+            f"and dim1 = {dims[1]}"
+        )
     k = k % 4
     if k == 0:
         return input
     if k == 1:
         return _swap_dims(lucid.flip(input, [d1]), d0, d1)
     if k == 2:
-        return lucid.flip(input, list(dims))
+        return lucid.flip(input, [d0, d1])
     return _swap_dims(lucid.flip(input, [d0]), d0, d1)
 
 

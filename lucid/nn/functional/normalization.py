@@ -654,8 +654,14 @@ def local_response_norm(
     (1, 96, 27, 27)
     """
     xi = _unwrap(input)
-    if len(xi.shape) < 2:
-        return input
+    if len(xi.shape) < 3:
+        raise ValueError(
+            f"Expected 3D or higher dimensionality input (got {len(xi.shape)} dimensions)"
+        )
+    if size <= 0:
+        raise RuntimeError(
+            f"local_response_norm: kernel size should be greater than zero, but got size={size}"
+        )
 
     # The normaliser is a fractional power of a scaled sum, so the result
     # is a real number whatever the input was — the same statement the
@@ -681,7 +687,7 @@ def local_response_norm(
 def _lrn_body(
     xi: _C_engine.TensorImpl, size: int, alpha: float, beta: float, k: float
 ) -> _C_engine.TensorImpl:
-    """:func:`local_response_norm` on a floating input of rank 2 or more."""
+    """:func:`local_response_norm` on a floating input of rank 3 or more."""
     ndim = len(xi.shape)
     C = int(xi.shape[1])
     # Pad totals to ``size - 1`` so the post-pad unfold yields exactly C

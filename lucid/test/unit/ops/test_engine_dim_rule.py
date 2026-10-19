@@ -130,17 +130,12 @@ _PUBLIC_REDUCTIONS = [
 def test_public_reduction_refuses_a_repeated_dim(ref, device, op, shape, dims):
     want_err = _outcome(lambda: getattr(ref, op)(ref.ones(shape), dims))[1]
     assert want_err is not None
-    with pytest.raises((RuntimeError, ValueError), match="appears multiple times"):
+    with pytest.raises(RuntimeError, match="appears multiple times"):
         getattr(lucid, op)(lucid.ones(shape, device=device), dims)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-423 follow-up (api): the Python dim rule (_ops/_dims) raises "
-    "ValueError for a repeated dim; the reference and the engine raise RuntimeError",
-)
 def test_public_reduction_repeated_dim_is_a_runtime_error(device):
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError, match="appears multiple times"):
         lucid.sum(lucid.ones(2, 3, device=device), (0, 0))
 
 
@@ -167,15 +162,26 @@ def test_vector_norm_refuses_a_repeated_dim_in_the_engine(device):
         _C_engine.linalg.norm(x._impl, 2.0, [0, -2], False)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-423 follow-up (api): rot90 is a Python composite "
-    "(_ops/composite/shape.py) that never checks its two dims differ",
-)
+@pytest.mark.parametrize("k", [0, 1])
 @pytest.mark.parametrize("dims", [(0, 0), (0, -2)], ids=str)
-def test_rot90_refuses_one_axis_twice(device, dims):
-    with pytest.raises(RuntimeError):
-        lucid.rot90(lucid.ones(2, 3, device=device), 1, dims)
+def test_rot90_refuses_one_axis_twice(device, dims, k):
+    with pytest.raises(RuntimeError, match="expected rotation dims to be different"):
+        lucid.rot90(lucid.ones(2, 3, device=device), k, dims)
+
+
+@pytest.mark.parametrize("k", [0, 1])
+def test_rot90_refuses_bad_dims_length_or_input_rank(ref, device, k):
+    for shape, dims in [
+        ((2, 3), (0,)),
+        ((2, 3), (0, 1, 2)),
+        ((3,), (0, 1)),
+        ((), (0, 1)),
+    ]:
+        want_err = _outcome(lambda: ref.rot90(ref.ones(shape), k, dims))[1]
+        got_err = _outcome(
+            lambda: lucid.rot90(lucid.ones(shape, device=device), k, dims)
+        )[1]
+        _same_refusal(got_err, want_err)
 
 
 # ── the single-dim ops ───────────────────────────────────────────────────────

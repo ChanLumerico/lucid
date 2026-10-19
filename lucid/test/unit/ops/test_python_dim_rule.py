@@ -40,7 +40,7 @@ def test_the_python_rule_is_the_engines(ndim):
     ("dims", "ndim"), [((0, -1), 0), ((1, -1), 2), ((0, 0), 3)], ids=str
 )
 def test_an_axis_named_twice_is_refused(dims, ndim):
-    with pytest.raises(ValueError, match="appears multiple times"):
+    with pytest.raises(RuntimeError, match="appears multiple times"):
         _wrap_dims(dims, ndim, "op")
 
 
@@ -109,7 +109,7 @@ def test_a_straggler_refuses_an_axis_past_the_last(ref, op, dim):
 def test_squeeze_refuses_an_axis_named_twice(ref):
     with pytest.raises(RuntimeError, match="appears multiple times"):
         ref.squeeze(ref.zeros(1, 3), (0, -2))
-    with pytest.raises(ValueError, match="appears multiple times"):
+    with pytest.raises(RuntimeError, match="appears multiple times"):
         lucid.squeeze(lucid.zeros(1, 3), (0, -2))
 
 

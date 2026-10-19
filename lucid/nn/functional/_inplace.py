@@ -16,6 +16,7 @@ from lucid._tensor._metal_views import _check as _metal_check
 from lucid._tensor._metal_views import write_back as _metal_write_back
 
 if TYPE_CHECKING:
+    from lucid._C import engine as _C_engine
     from lucid._tensor.tensor import Tensor
 
 
@@ -56,3 +57,32 @@ def _in_place(x: Tensor, name: str, out_of_place: Callable[[Tensor], Tensor]) ->
     _write_inplace(x, name, out_of_place)
     _metal_write_back(x)
     return x
+
+
+def _keep_in_graph(out: Tensor, x: Tensor) -> Tensor:
+    """Keep a piecewise composite's ``create_graph`` gradient in the graph
+    with derivative zero, as the reference's backward ops do."""
+    from lucid._C import engine as _C_engine
+    from lucid._dispatch import _unwrap, _wrap
+
+    if not (x.requires_grad and _C_engine.grad_enabled()):
+        return out
+    xi = _unwrap(x)
+    oi = _unwrap(out)
+    safe = _C_engine.nan_to_num(xi, 0.0, 0.0, 0.0)
+    zero = _C_engine.relu(_C_engine.clip(safe, 0.0, 0.0))
+    if zero.dtype != oi.dtype:
+        zero = _C_engine.astype(zero, oi.dtype)
+    if zero.shape != oi.shape:
+        zero = _C_engine.sum(zero, [], False)
+    return _wrap(_C_engine.add(oi, zero))
+
+
+def _dead_zone_zero(x: Tensor) -> _C_engine.TensorImpl:
+    """Zero inside a shrinkage dead zone, preserving ``NaN`` (detached)."""
+    from lucid._C import engine as _C_engine
+    from lucid._dispatch import _unwrap
+
+    xi = _unwrap(x)
+    zeros = _C_engine.zeros(xi.shape, xi.dtype, xi.device)
+    return _C_engine.where(_C_engine.isnan(xi), _unwrap(x.detach()), zeros)

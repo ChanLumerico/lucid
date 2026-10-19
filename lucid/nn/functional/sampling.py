@@ -9,6 +9,7 @@ import lucid as _lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._reduce import _require_floating
+from lucid.nn.functional._inplace import _keep_in_graph
 from lucid.nn.functional._grid_sampling import (
     affine_grid_3d as _affine_grid_3d,
     check_options as _check_options,
@@ -856,19 +857,16 @@ def pad(
     """
     if mode not in _PAD_MODES:
         raise _C_engine.NotImplementedError(
-            f"pad: unrecognised padding mode {mode!r}; expected one of "
-            f"{sorted(_PAD_MODES)}"
+            f"pad: unrecognised padding mode {mode!r}; expected one of {sorted(_PAD_MODES)}"
         )
     pad_pairs = _flat_to_per_dim_pairs(pad, input.ndim)
     if mode != "constant":
         if value is not None:
-            raise _C_engine.InvalidArgument(
-                f'Padding mode "{mode}" doesn\'t take in value argument'
-            )
+            raise _C_engine.InvalidArgument(f'Padding mode "{mode}" doesn\'t take in value argument')
         result = input
         for d, (lo, hi) in enumerate(pad_pairs):
             result = _pad_one_dim(result, d, lo, hi, mode)
-        return result
+        return result if mode == "circular" else _keep_in_graph(result, input)
     # The engine pads by non-negative widths: a negative one is a crop.
     x = input
     for d, (lo, hi) in enumerate(pad_pairs):

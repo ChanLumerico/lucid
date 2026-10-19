@@ -267,7 +267,7 @@
     "lucid/models/generative/rectified_flow/_model.py": 289,
     "lucid/models/vision/mask2former/_model.py": 83,
     "lucid/nn/functional/activations.py": 395,
-    "lucid/nn/functional/loss.py": 790,
+    "lucid/nn/functional/loss.py": 789,
     "lucid/nn/functional/pooling.py": 39,
     "lucid/nn/modules/activation.py": 722,
     "lucid/nn/modules/loss.py": 1088,

@@ -268,7 +268,7 @@ _CASES = {
     "triplet_margin_loss": lambda e, x: e.F.triplet_margin_loss(
         x.reshape(4, 4), e.zeros(4, 4), e.t([[1.0] * 4] * 4)
     ),
-    # Python composites that still lose the input (LCD-437)
+    # Python composites that keep the input in the graph (LCD-437)
     "hardshrink": lambda e, x: e.F.hardshrink(x, 0.5),
     "softshrink": lambda e, x: e.F.softshrink(x, 0.5),
     "threshold": lambda e, x: e.F.threshold(x, 0.5, -1.0),
@@ -289,29 +289,8 @@ _CASES = {
     ),
 }
 
-_LCD437 = (
-    "LCD-437: a Python composite whose create_graph gradient loses the input — the "
-    "reference keeps it in the graph with derivative zero"
-)
-_PINS = {
-    **{
-        name: _LCD437
-        for name in (
-            "hardshrink",
-            "softshrink",
-            "threshold",
-            "rrelu_eval",
-            "pad_reflect",
-            "pad_replicate",
-            "pad_reflect1d",
-            "pad_replicate1d",
-            "nll_loss",
-            "nll_loss_2d",
-        )
-    },
-}
-# Lucid's F.hardtanh is clamp, and the reference keeps hardtanh's gradient in
-# the graph, so clamp keeps it too — and the losses built on clamp with it.
+# Lucid's clamp backward attaches a zero derivative so composites over clamp
+# stay differentiable twice; the losses built on clamp inherit that.
 _CLAMP_FAMILY = {"clamp", "clamp_min", "clamp_max", "hinge", "margin_rank"}
 
 
@@ -326,9 +305,7 @@ def _first_and_second(env, call):
 
 
 @pytest.mark.parametrize("name", list(_CASES))
-def test_create_graph_gradient_matches_reference(ref, device, name, request):
-    if name in _PINS:
-        request.applymarker(pytest.mark.xfail(strict=True, reason=_PINS[name]))
+def test_create_graph_gradient_matches_reference(ref, device, name):
     call = _CASES[name]
     want1, want2 = _first_and_second(_Env(ref, device), call)
     got1, got2 = _first_and_second(_Env(lucid, device), call)
