@@ -193,7 +193,7 @@ def _is_bool_scalar(token: object) -> bool:
 def _token(part: object) -> object:
     """One part of a key as ``None``, ``...``, ``bool``, ``int``, ``slice``
     or a ``TensorImpl`` — an integer index or a bool mask."""
-    if part is None or part is Ellipsis or isinstance(part, (bool, int, slice)):
+    if isinstance(part, (type(None), type(Ellipsis), bool, int, slice)):
         return part
     impl = getattr(part, "_impl", None)
     if not isinstance(impl, _C_engine.TensorImpl):
@@ -230,7 +230,7 @@ def _token(part: object) -> object:
         raise IndexError(
             f"tensors used as indices must be integer or bool tensors, got {impl.dtype}"
         )
-    return impl
+    return int(impl.item()) if not impl.shape else impl
 
 
 def _consumes(token: object) -> int:

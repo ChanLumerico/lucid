@@ -283,14 +283,11 @@ def _is_basic(part: object) -> bool:
 def _is_index_scalar(part: object) -> bool:
     if isinstance(part, int):
         return not isinstance(part, bool)
-    if (
-        isinstance(part, list)
-        or hasattr(part, "_impl")
-        or getattr(part, "ndim", 0) != 0
-    ):
+    if isinstance(part, list) or getattr(part, "ndim", 0) != 0:
         return False  # an index tensor, list or array, which the CPU gathers by
-    # The CPU's own reading of a key part decides the rest — a NumPy integer
-    # is an integer to it, a NumPy bool a mask — so the two cannot disagree.
+    # The CPU's own reading of a key part decides the rest — a 0-d integer
+    # tensor or NumPy integer is an integer to it, a bool a mask — so the two
+    # cannot disagree.
     from lucid._tensor._indexing import _token
 
     token = _token(part)

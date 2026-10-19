@@ -310,3 +310,51 @@ def test_the_cpu_names_the_index_out_of_range() -> None:
     x = lucid.zeros(2, 4)
     with pytest.raises(IndexError, match="index 5 .* size 4"):
         x[lucid.tensor([0]), lucid.tensor([5])]
+
+
+_SCALAR_KEY_SPELLINGS: dict[
+    str, Callable[[Callable[[object], object]], object]
+] = {
+    "int": lambda T: 1,
+    "numpy-int": lambda T: np.int64(1),
+    "numpy-0d-array": lambda T: np.array(1),
+    "0d-int64-tensor": lambda T: T(1),
+    "0d-neg-int-tensor": lambda T: T(-2),
+    "tuple-two-0d-ints": lambda T: (T(1), T(2)),
+    "tuple-0d-int-slice": lambda T: (T(1), slice(1, 3)),
+    "ellipsis-0d-int": lambda T: (..., T(2)),
+    "none-0d-int-ellipsis": lambda T: (None, T(1), ...),
+    "0d-bool-true": lambda T: T(True),
+    "0d-bool-false": lambda T: T(False),
+    "tuple-0d-int-0d-bool": lambda T: (T(1), T(True)),
+}
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("name", list(_SCALAR_KEY_SPELLINGS))
+def test_scalar_key_spellings_view_and_write_through_match_reference(
+    ref: ModuleType, device: str, name: str
+) -> None:
+    def run(lib: ModuleType, dev: str) -> tuple[tuple[int, ...], object, object]:
+        x = lib.arange(12.0, device=dev).reshape(3, 4)
+        make_t = (
+            (lambda v: _lucid_tensor(v).to(dev))
+            if lib is lucid
+            else (lambda v: lib.tensor(v))
+        )
+        v = x[_SCALAR_KEY_SPELLINGS[name](make_t)]
+        read = v.tolist()
+        v.add_(10.0)
+        return tuple(v.shape), read, x.tolist()
+
+    assert run(lucid, device) == run(ref, "cpu")
+
+
+@pytest.mark.parametrize("dtype", [lucid.int8, lucid.int16, lucid.int32, lucid.int64])
+def test_0d_integer_tensor_writes_through_across_integer_widths(
+    device: str, dtype: lucid.dtype
+) -> None:
+    x = lucid.arange(4.0, device=device)
+    v = x[lucid.tensor(1, dtype=dtype, device=device)]
+    v.add_(10.0)
+    assert x.tolist() == [0.0, 11.0, 2.0, 3.0]
