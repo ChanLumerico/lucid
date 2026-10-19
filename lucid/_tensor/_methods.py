@@ -1314,3 +1314,4 @@ def _inject_methods(tensor_cls: type) -> None:
     for _name, _fn in (("eval", eval), *_EXTRA_METHODS):
         _fn.__name__ = _name
         setattr(tensor_cls, _name, _fn)
+    type.__setattr__(tensor_cls, "_version", property(lambda self: self._impl.version))

@@ -112,9 +112,10 @@ def test_zeroing_a_gradient_another_op_saved_keeps_its_old_values_on_metal(
 
 def test_the_count_moves_without_making_the_tensor_require_grad(device: str) -> None:
     t = lucid.zeros(3, device=device)
-    before = t._impl.version
+    before = t._version
+    assert before == t._impl.version
     t.fill_(1.0)
-    assert t._impl.version > before
+    assert t._version == t._impl.version > before
     assert not t.requires_grad
     assert t.is_leaf
     assert t.grad is None

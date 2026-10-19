@@ -111,8 +111,7 @@ def inv(A: Tensor) -> Tensor:
     makes the answer depend on the mathematics rather than on which
     machine is asking.
     """
-    shape: tuple[int, ...] = tuple(A.shape)
-    if len(shape) >= 2 and shape[-1] == 0:
+    if len(A.shape) >= 2 and A.shape[-1] == 0:
         # Inversion preserves shape, and there are no elements to
         # factorise, so the input *is* the answer.
         return A
@@ -1811,7 +1810,8 @@ def slogdet(A: Tensor) -> tuple[Tensor, Tensor]:
     (tensor(-1.), tensor(0.6931))
     """
     d = det(A)
-    sign = _wrap(_C_engine.sign(_unwrap(d)))
+    di, z = _unwrap(d), _C_engine.zeros_like(_unwrap(d))
+    sign = _wrap(_C_engine.where(_C_engine.equal(di, z), _C_engine.mul(di, z), _C_engine.sign(di)))
     return sign, cast(Tensor, _LogAbsDet.apply(d))
 
 

@@ -254,7 +254,7 @@ def _link(view: object, base: Tensor, kind: int, **kwargs: object) -> None:
     # ``buf.view(-1)[5].add_(1)``, which nothing else references — is held
     # strongly, or the chain would break before the write reached ``buf``,
     # and so is a copy only the view reaches (``weak=False``).
-    if _ATTR not in base.__dict__:
+    if _ATTR not in base.__dict__ and not (base.requires_grad and base.is_leaf):
         kwargs.setdefault("weak", True)
     view.__dict__[_ATTR] = _Link(base, kind, **kwargs)  # type: ignore[arg-type]
 

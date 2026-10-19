@@ -173,7 +173,7 @@ TensorImplPtr det_gradient(const TensorImplPtr& a,
                            const Shape& a_shape) {
     if (any_near_singular(det))
         return mul_op(spread_over_matrix(g, a_shape), cofactor_op(a));
-    return mul_op(spread_over_matrix(mul_op(det, g), a_shape), mT_op(inv_op(a)));
+    return mul_op(spread_over_matrix(mul_op(det, g), a_shape), inv_op(mT_op(a)));
 }
 
 }  // namespace
@@ -235,8 +235,16 @@ TensorImplPtr det_op(const TensorImplPtr& a) {
     if (empty_matrix(sh))
         return ones_op(out_shape, a->dtype(), a->device());
 
-    Storage out_storage =
-        backend::Dispatcher::for_device(a->device()).linalg_det(a->storage(), sh, a->dtype());
+    // The reference passes row-major A directly to column-major LAPACK getrf,
+    // which factors A^T (det(A^T) = det(A)); transpose the matrix axes so
+    // partial pivoting visits the same pivots and singular signed zeros agree.
+    std::vector<int> perm(sh.size());
+    for (std::size_t i = 0; i < sh.size(); ++i)
+        perm[i] = static_cast<int>(i);
+    std::swap(perm[sh.size() - 2], perm[sh.size() - 1]);
+    auto& disp = backend::Dispatcher::for_device(a->device());
+    Storage a_t = disp.permute(a->storage(), sh, perm, a->dtype());
+    Storage out_storage = disp.linalg_det(a_t, sh, a->dtype());
     auto out = fresh(std::move(out_storage), out_shape, a->dtype(), a->device());
     if (auto* trc = ::lucid::compile::current_tracer()) {
         trc->on_op_io({a}, out);

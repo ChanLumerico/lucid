@@ -23,16 +23,8 @@ _SINGULAR: dict[str, tuple[list[list[float]], float]] = {
     "swap and negative pivot": ([[-1.0, 2.0], [2.0, -4.0]], -1.0),
     "positive pivots": ([[4.0, 2.0], [2.0, 1.0]], 1.0),
     "zero matrix": ([[0.0, 0.0], [0.0, 0.0]], 1.0),
-}
-
-#: The reference factors Aᵀ for a contiguous input (det(Aᵀ) = det(A)); both
-#: devices factor A, so where the two pivot differently the zero's sign does.
-_FACTORS_A = pytest.mark.xfail(
-    strict=True, reason="FOUND with LCD-301: the reference factors Aᵀ, Lucid A"
-)
-_ASYMMETRIC = {
-    "swap in Aᵀ only": [[2.0, 4.0], [1.0, 2.0]],
-    "zero column": [[0.0, 1.0], [0.0, 2.0]],
+    "swap in Aᵀ only": ([[2.0, 4.0], [1.0, 2.0]], -1.0),
+    "zero column": ([[0.0, 1.0], [0.0, 2.0]], -1.0),
 }
 
 
@@ -53,8 +45,11 @@ def _tensor(rows: object, device: str, dtype: str) -> lucid.Tensor:
 @pytest.mark.parametrize("case", list(_SINGULAR))
 def test_a_singular_det_is_a_signed_zero(case: str, device: str, dtype: str) -> None:
     rows, sign = _SINGULAR[case]
-    d = lucid.linalg.det(_tensor(rows, device, dtype)).item()
+    A = _tensor(rows, device, dtype)
+    d = lucid.linalg.det(A).item()
+    s = lucid.linalg.slogdet(A)[0].item()
     assert d == 0.0 and math.copysign(1.0, d) == sign
+    assert s == 0.0 and math.copysign(1.0, s) == sign
 
 
 @pytest.mark.parametrize(("device", "dtype"), _placements())
@@ -90,12 +85,7 @@ def test_a_batch_mixing_singular_and_regular_matrices(device: str, dtype: str) -
 
 
 def _parity_cases() -> list[object]:
-    agree = [pytest.param(rows, id=name) for name, (rows, _) in _SINGULAR.items()]
-    differ = [
-        pytest.param(rows, id=name, marks=_FACTORS_A)
-        for name, rows in _ASYMMETRIC.items()
-    ]
-    return agree + differ
+    return [pytest.param(rows, id=name) for name, (rows, _) in _SINGULAR.items()]
 
 
 @pytest.mark.parity
@@ -104,7 +94,13 @@ def _parity_cases() -> list[object]:
 def test_the_zero_has_the_references_sign(
     rows: list[list[float]], device: str, dtype: str, ref: ModuleType
 ) -> None:
-    d = lucid.linalg.det(_tensor(rows, device, dtype)).item()
-    want = float(ref.linalg.det(ref.tensor(rows, dtype=getattr(ref, dtype))))
+    A = _tensor(rows, device, dtype)
+    A_ref = ref.tensor(rows, dtype=getattr(ref, dtype))
+    d = lucid.linalg.det(A).item()
+    want = float(ref.linalg.det(A_ref))
     assert d == want == 0.0
     assert math.copysign(1.0, d) == math.copysign(1.0, want)
+    s = lucid.linalg.slogdet(A)[0].item()
+    want_s = float(ref.linalg.slogdet(A_ref).sign)
+    assert s == want_s == 0.0
+    assert math.copysign(1.0, s) == math.copysign(1.0, want_s)

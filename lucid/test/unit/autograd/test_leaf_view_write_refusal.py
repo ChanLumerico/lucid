@@ -42,7 +42,9 @@ def _leaf_view_of_plain_base(
     return X, x
 
 
-def _make(lib: ModuleType, device: str, case: str) -> tuple[lucid.Tensor, lucid.Tensor]:
+def _make(
+    lib: ModuleType, device: str, case: str
+) -> tuple[lucid.Tensor, lucid.Tensor | None]:
     """The tensor ``case`` writes into, and the leaf it is about (kept alive)."""
     if case == "base of a leaf view":
         return _leaf_view_of_plain_base(lib, device)
@@ -54,6 +56,8 @@ def _make(lib: ModuleType, device: str, case: str) -> tuple[lucid.Tensor, lucid.
     if case == "view of a leaf view":
         _, x = _leaf_view_of_plain_base(lib, device)
         return x[:], x
+    if case == "view of a dropped leaf":
+        return lib.ones(4, 3, device=device, requires_grad=True)[0], None
     W = lib.ones(4, 3, device=device, requires_grad=True)
     if case == "view of a leaf":
         return W[0], W
@@ -70,6 +74,7 @@ _ALLOWED = {
     "view beside a leaf view": True,
     "view of a leaf view": False,
     "view of a leaf": False,
+    "view of a dropped leaf": False,
     "view through a dropped view": False,
     "view of a leaf's data": True,
 }
@@ -77,7 +82,7 @@ _ALLOWED = {
 
 def _outcome(lib: ModuleType, device: str, case: str, write: str) -> bool:
     target, leaf = _make(lib, device, case)
-    assert leaf.is_leaf and leaf.requires_grad
+    assert leaf is None or (leaf.is_leaf and leaf.requires_grad)
     try:
         _WRITES[write](target)
     except RuntimeError as err:

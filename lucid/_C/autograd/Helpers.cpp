@@ -223,7 +223,8 @@ void accumulate_into(Storage& dst, const Storage& src) {
                        cpu_add_inplace(d, sv);
                    },
                    [&](auto&, auto&) {
-                       throw DeviceMismatch("matching device", "mixed CPU/GPU", "accumulate_into");
+                       throw DeviceMismatch("matching device", "mixed cpu/metal",
+                                            "accumulate_into");
                    },
                },
                dst, *src_ptr);
