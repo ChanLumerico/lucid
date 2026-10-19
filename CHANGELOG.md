@@ -1042,6 +1042,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - preserve late group in ChainedScheduler and broadcast 1-channel Normalize
 
+- propagate requires_grad and refuse backward on unique and unique_consecutive (LCD-483)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

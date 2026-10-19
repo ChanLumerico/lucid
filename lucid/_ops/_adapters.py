@@ -113,12 +113,7 @@ _BINARY_SIGNATURE = inspect.Signature(
 _ADD_SUB_SIGNATURE = _BINARY_SIGNATURE.replace(
     parameters=[
         *_BINARY_SIGNATURE.parameters.values(),
-        inspect.Parameter(
-            "alpha",
-            inspect.Parameter.KEYWORD_ONLY,
-            default=1,
-            annotation=Scalar,
-        ),
+        inspect.Parameter("alpha", inspect.Parameter.KEYWORD_ONLY, default=1, annotation=Scalar),
     ]
 )
 
@@ -134,14 +129,12 @@ def _scale_by_alpha(a: _Impl, b: _Impl, alpha: Scalar) -> _Impl:
         raise RuntimeError(
             "For integral input tensors, argument alpha must not be a floating point number."
         )
-    if alpha == 1:
+    if alpha == 1 or (a.dtype == _C_engine.Bool and alpha != 0):
         return b
     if a.dtype == _C_engine.Bool:
-        return _C_engine.zeros_like(b) if alpha == 0 else b
+        return _C_engine.zeros_like(b)
     scale = _unwrap_or_scalar(alpha, b)
-    if scale.dtype != b.dtype:
-        scale = _C_engine.astype(scale, b.dtype)
-    return _C_engine.mul(b, scale)
+    return _C_engine.mul(b, _C_engine.astype(scale, b.dtype) if scale.dtype != b.dtype else scale)
 
 
 def _make_arith_adapter(
@@ -792,11 +785,7 @@ def _repeat_interleave_tensor(base: _Impl, rep_impl: _Impl, axis: int) -> _Impl:
         raise RuntimeError("repeats must have the same size as input along dim")
     if any(c < 0 for c in counts):
         raise RuntimeError("repeats can not be negative")
-    pieces = [
-        _C_engine.repeat(_C_engine.narrow(base, axis, i, 1), c, axis)
-        for i, c in enumerate(counts)
-        if c > 0
-    ]
+    pieces = [_C_engine.repeat(_C_engine.narrow(base, axis, i, 1), c, axis) for i, c in enumerate(counts) if c > 0]
     if pieces:
         return _C_engine.concatenate(pieces, axis)
     empty_shape = list(base.shape)
@@ -805,29 +794,15 @@ def _repeat_interleave_tensor(base: _Impl, rep_impl: _Impl, axis: int) -> _Impl:
 
 
 def _repeat_interleave_adapter(
-    a_impl: _Impl,
-    repeats: int | Tensor,
-    dim: int | None = None,
-    *,
-    output_size: int | None = None,
+    a_impl: _Impl, repeats: int | Tensor, dim: int | None = None, *, output_size: int | None = None
 ) -> _Impl:
     """repeat_interleave(x, repeats, dim=None, *, output_size=None)."""
-    if dim is None:
-        base = _C_engine.reshape(a_impl, [int(a_impl.numel())])
-        axis = 0
-    else:
-        base = a_impl
-        axis = _wrap_dim(int(dim), len(a_impl.shape), "repeat_interleave")
+    base = _C_engine.reshape(a_impl, [int(a_impl.numel())]) if dim is None else a_impl
+    axis = 0 if dim is None else _wrap_dim(int(dim), len(a_impl.shape), "repeat_interleave")
     repeats = _promotion.as_number(repeats)
-    if not isinstance(repeats, int):
-        out = _repeat_interleave_tensor(base, _unwrap(repeats), axis)
-    else:
-        out = _C_engine.repeat(base, int(repeats), axis)
+    out = _C_engine.repeat(base, int(repeats), axis) if isinstance(repeats, int) else _repeat_interleave_tensor(base, _unwrap(repeats), axis)
     if output_size is not None and int(out.shape[axis]) != int(output_size):
-        raise RuntimeError(
-            "Allocated size does not match required size: "
-            f"expected {out.shape[axis]} but got {output_size}"
-        )
+        raise RuntimeError(f"Allocated size does not match required size: expected {out.shape[axis]} but got {output_size}")
     return out
 
 
@@ -1274,12 +1249,70 @@ _UNIQUE_KERNEL_DTYPES = (
 )
 
 
+def _attach_unique_grad(a_impl: _Impl, values: _Impl, op_name: str) -> None:
+    """Attach a backward node to ``values`` that refuses differentiation, as the reference does."""
+    if not (a_impl.requires_grad and _C_engine.grad_enabled()):
+        return
+
+    def _refuse(_ctx: object, *_grads: _Impl) -> list[_Impl | None]:
+        raise NotImplementedError(f"the derivative for '{op_name}' is not implemented.")
+
+    node = _C_engine._PythonBackwardNode()
+    node.ctx = _C_engine.FunctionCtx()
+    node.backward_fn = _refuse
+    _C_engine._register_python_backward_node([values], node, [a_impl])
+
+
+def _prepare_unique_rows(
+    a_impl: _Impl, dim: int | None, op_name: str
+) -> tuple[_Impl, int | None, list[int], list[int]]:
+    if dim is None:
+        return _C_engine.reshape(a_impl, [a_impl.numel(), 1]), None, [], list(a_impl.shape)
+    ndim = len(a_impl.shape)
+    if ndim == 0:
+        raise IndexError(f"Dimension specified as {dim} but tensor has no dimensions")
+    if not -ndim <= dim < ndim:
+        raise IndexError(f"{op_name}: dim {dim} is out of range for a {ndim}-d tensor")
+    d = dim % ndim
+    if any(int(s) == 0 for ax, s in enumerate(a_impl.shape) if ax != d):
+        raise RuntimeError(
+            "There are 0 sized dimensions, and they aren't selected, so unique cannot be applied"
+        )
+    moved = _C_engine.contiguous(_C_engine.movedim(a_impl, [d], [0]))
+    rest = [int(s) for s in moved.shape[1:]]
+    shape = [int(moved.shape[0])]
+    # The width spelled out: ``-1`` cannot be inferred with no rows.
+    return _C_engine.reshape(moved, [shape[0], math.prod(rest)]), d, rest, shape
+
+
+def _run_unique(
+    a_impl: _Impl, return_inverse: bool, return_counts: bool, dim: int | None, *, consecutive: bool
+) -> _Impl | tuple[_Impl, ...]:
+    op_name = "unique_consecutive" if consecutive else "unique"
+    plain = dim is None and not (return_inverse or return_counts)
+    if not consecutive and plain and a_impl.dtype in _UNIQUE_KERNEL_DTYPES:
+        with _C_engine.NoGradGuard():
+            values = _C_engine.unique(_C_engine.reshape(a_impl, [-1]))
+        _attach_unique_grad(a_impl, values, op_name)
+        return values
+    with _C_engine.NoGradGuard():
+        rows, d, rest, shape = _prepare_unique_rows(a_impl, dim, op_name)
+        values, inverse, counts = _unique_rows(rows, return_inverse, return_counts, consecutive=consecutive)
+        if d is None:
+            values = _C_engine.reshape(values, [-1])
+        else:
+            values = _C_engine.movedim(_C_engine.reshape(values, [int(values.shape[0]), *rest]), [0], [d])
+        out = [values]
+        if inverse is not None:
+            out.append(_C_engine.reshape(inverse, shape))
+        if counts is not None:
+            out.append(counts)
+    _attach_unique_grad(a_impl, values, op_name)
+    return out[0] if len(out) == 1 else tuple(out)
+
+
 def _unique_adapter(
-    a_impl: _Impl,
-    sorted: bool = True,
-    return_inverse: bool = False,
-    return_counts: bool = False,
-    dim: int | None = None,
+    a_impl: _Impl, sorted: bool = True, return_inverse: bool = False, return_counts: bool = False, dim: int | None = None
 ) -> _Impl | tuple[_Impl, ...]:
     """unique(a, sorted=True, return_inverse=False, return_counts=False, dim=None).
 
@@ -1290,40 +1323,18 @@ def _unique_adapter(
     is read back to size the result — the one host round trip.
     """
     del sorted  # sorted either way; the reference leaves the order open
-    plain = dim is None and not (return_inverse or return_counts)
-    if plain and a_impl.dtype in _UNIQUE_KERNEL_DTYPES:
-        return _C_engine.unique(_C_engine.reshape(a_impl, [-1]))
-    d: int | None = None  # the dim the slices run along; None reads ``a`` as 1-D
-    rest: list[int] = []  # one slice's shape
-    if dim is None:
-        shape: list[int] = list(a_impl.shape)
-        rows = _C_engine.reshape(a_impl, [a_impl.numel(), 1])
-    else:
-        ndim = len(a_impl.shape)
-        if not -ndim <= dim < ndim:
-            raise IndexError(f"unique: dim {dim} is out of range for a {ndim}-d tensor")
-        d = dim % ndim
-        moved = _C_engine.contiguous(_C_engine.movedim(a_impl, [d], [0]))
-        rest = [int(s) for s in moved.shape[1:]]
-        shape = [int(moved.shape[0])]
-        # The width spelled out: ``-1`` cannot be inferred with no rows.
-        rows = _C_engine.reshape(moved, [shape[0], math.prod(rest)])
-    values, inverse, counts = _unique_rows(rows, return_inverse, return_counts)
-    if d is None:
-        values = _C_engine.reshape(values, [-1])
-    else:
-        values = _C_engine.reshape(values, [int(values.shape[0]), *rest])
-        values = _C_engine.movedim(values, [0], [d])
-    out = [values]
-    if inverse is not None:
-        out.append(_C_engine.reshape(inverse, shape))
-    if counts is not None:
-        out.append(counts)
-    return out[0] if len(out) == 1 else tuple(out)
+    return _run_unique(a_impl, return_inverse, return_counts, dim, consecutive=False)
+
+
+def _unique_consecutive_adapter(
+    a_impl: _Impl, return_inverse: bool = False, return_counts: bool = False, dim: int | None = None
+) -> _Impl | tuple[_Impl, ...]:
+    """unique_consecutive(a, return_inverse=False, return_counts=False, dim=None)."""
+    return _run_unique(a_impl, return_inverse, return_counts, dim, consecutive=True)
 
 
 def _unique_rows(
-    rows: _Impl, inverse: bool, counts: bool
+    rows: _Impl, inverse: bool, counts: bool, *, consecutive: bool = False
 ) -> tuple[_Impl, _Impl | None, _Impl | None]:
     """The distinct rows of a 2-D ``rows``, sorted; each row's group; each group's size.
 
@@ -1337,7 +1348,9 @@ def _unique_rows(
     n, width = int(rows.shape[0]), int(rows.shape[1])
     device = rows.device
     order: _Impl | None = None
-    if inverse or width != 1:
+    if consecutive:
+        ranked = rows
+    elif inverse or width != 1:
         order = _lexicographic_order(rows)
         ranked = _C_engine.index_select(rows, 0, order)
     else:
@@ -1359,13 +1372,12 @@ def _unique_rows(
     )
     first = _C_engine.reshape(_C_engine.nonzero(starts), [-1])
     groups: _Impl | None = None
-    if order is not None and inverse:
+    if inverse:
         group = _C_engine.sub(
             _C_engine.cumsum(_C_engine.astype(starts, _C_engine.I64), 0),
             _C_engine.ones([n], _C_engine.I64, device),
         )
-        zeros = _C_engine.zeros([n], _C_engine.I64, device)
-        groups = _C_engine.scatter(zeros, 0, order, group)
+        groups = _C_engine.scatter(_C_engine.zeros([n], _C_engine.I64, device), 0, order, group) if order is not None else group
     sizes: _Impl | None = None
     if counts:
         ends = _C_engine.concatenate(
@@ -1406,44 +1418,27 @@ def _cartesian_prod_adapter(*tensors: Tensor) -> _Impl:
 
 
 def _searchsorted_adapter(
-    sorted_sequence: Tensor,
-    input: Tensor,
-    *,
-    out_int32: bool = False,
-    right: bool = False,
-    side: str | None = None,
-    sorter: Tensor | None = None,
+    sorted_sequence: Tensor, input: Tensor, *, out_int32: bool = False, right: bool = False, side: str | None = None, sorter: Tensor | None = None
 ) -> _Impl:
     """searchsorted(sorted_seq, values, *, out_int32=False, right=False, side=None, sorter=None)."""
     if side is not None:
         if side not in ("left", "right"):
-            raise RuntimeError(
-                f"searchsorted(): side can only be 'left' or 'right', got {side!r}"
-            )
+            raise RuntimeError(f"searchsorted(): side can only be 'left' or 'right', got {side!r}")
         if right and side == "left":
-            raise RuntimeError(
-                "searchsorted(): side and right can't be set to opposites, "
-                "got side of left while right was True"
-            )
+            raise RuntimeError("searchsorted(): side and right can't be set to opposites, got side of left while right was True")
         right = side == "right"
     seq_impl = _unwrap(sorted_sequence)
     if sorter is not None:
         s_impl = _unwrap(sorter)
-        if s_impl.dtype != _C_engine.I64:
-            raise RuntimeError("searchsorted: sorter must be int64 dtype")
-        if list(s_impl.shape) != list(seq_impl.shape):
-            raise RuntimeError("searchsorted: sorter must match sorted_sequence shape")
+        if s_impl.dtype != _C_engine.I64 or list(s_impl.shape) != list(seq_impl.shape):
+            raise RuntimeError("searchsorted: sorter must be int64 dtype and match sorted_sequence shape")
         seq_impl = _C_engine.gather(seq_impl, s_impl, len(seq_impl.shape) - 1)
     out = _C_engine.searchsorted(seq_impl, _unwrap(input), bool(right))
     return _C_engine.astype(out, _C_engine.I32) if out_int32 else out
 
 
 def _bucketize_adapter(
-    input: Tensor,
-    boundaries: Tensor,
-    *,
-    out_int32: bool = False,
-    right: bool = False,
+    input: Tensor, boundaries: Tensor, *, out_int32: bool = False, right: bool = False
 ) -> _Impl:
     """bucketize(values, boundaries, *, out_int32=False, right=False)."""
     out = _C_engine.bucketize(_unwrap(input), _unwrap(boundaries), bool(right))

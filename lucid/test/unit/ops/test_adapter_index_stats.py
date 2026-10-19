@@ -226,6 +226,93 @@ def test_unique_sorted_false_still_answers(ref: ModuleType, device: str) -> None
     assert sorted(got.tolist()) == sorted(ref.unique(ref.tensor([3, 1, 3])).tolist())
 
 
+@pytest.mark.parametrize("name", list(_UNIQUE_DATA))
+@pytest.mark.parametrize("inverse", [False, True])
+@pytest.mark.parametrize("counts", [False, True])
+def test_unique_consecutive_flat(
+    ref: ModuleType, device: str, name: str, inverse: bool, counts: bool
+) -> None:
+    data = _UNIQUE_DATA[name]
+    x = lucid.tensor(data, device=device)
+    rx = ref.tensor(data)
+    want = ref.unique_consecutive(rx, return_inverse=inverse, return_counts=counts)
+    _same(
+        lucid.unique_consecutive(x, return_inverse=inverse, return_counts=counts),
+        want,
+    )
+    _same(x.unique_consecutive(return_inverse=inverse, return_counts=counts), want)
+    _same(
+        x.unique(return_inverse=inverse, return_counts=counts),
+        ref.unique(rx, return_inverse=inverse, return_counts=counts),
+    )
+
+
+@pytest.mark.parametrize("dim", [0, 1, -1])
+def test_unique_consecutive_along_a_dim(
+    ref: ModuleType, device: str, dim: int
+) -> None:
+    data = [[[1, 2], [1, 2]], [[1, 2], [1, 2]], [[0, 5], [0, 5]], [[1, 2], [1, 2]]]
+    x = lucid.tensor(data, device=device)
+    want = ref.unique_consecutive(
+        ref.tensor(data), dim=dim, return_inverse=True, return_counts=True
+    )
+    _same(
+        lucid.unique_consecutive(x, dim=dim, return_inverse=True, return_counts=True),
+        want,
+    )
+    _same(x.unique_consecutive(dim=dim, return_inverse=True, return_counts=True), want)
+
+
+@pytest.mark.parametrize("op", ["unique", "unique_consecutive"])
+@pytest.mark.parametrize("as_method", [False, True])
+@pytest.mark.parametrize("inverse", [False, True])
+@pytest.mark.parametrize("counts", [False, True])
+@pytest.mark.parametrize("dim", [None, 0, 1])
+def test_unique_propagates_requires_grad_and_refuses_backward(
+    device: str,
+    op: str,
+    as_method: bool,
+    inverse: bool,
+    counts: bool,
+    dim: int | None,
+) -> None:
+    x = lucid.tensor(
+        [[3.0, 1.0], [3.0, 1.0], [2.0, 1.0]], device=device, requires_grad=True
+    )
+    fn = getattr(x, op) if as_method else lambda **kw: getattr(lucid, op)(x, **kw)
+    out = fn(return_inverse=inverse, return_counts=counts, dim=dim)
+    if isinstance(out, tuple):
+        values = out[0]
+        for aux in out[1:]:
+            assert not aux.requires_grad
+            assert aux.grad_fn is None
+    else:
+        values = out
+    assert values.requires_grad
+    assert values.grad_fn is not None
+    with pytest.raises(
+        NotImplementedError, match=rf"the derivative for '{op}' is not implemented"
+    ):
+        values.sum().backward()
+
+    with lucid.no_grad():
+        out_ng = fn(return_inverse=inverse, return_counts=counts, dim=dim)
+    values_ng = out_ng[0] if isinstance(out_ng, tuple) else out_ng
+    assert not values_ng.requires_grad
+    assert values_ng.grad_fn is None
+
+
+@pytest.mark.parametrize("op", ["unique", "unique_consecutive"])
+def test_unique_refuses_zero_sized_unselected_dim_and_0d_dim(
+    device: str, op: str
+) -> None:
+    fn = getattr(lucid, op)
+    with pytest.raises(IndexError, match="tensor has no dimensions"):
+        fn(lucid.tensor(5.0, device=device), dim=0)
+    with pytest.raises(RuntimeError, match="0 sized dimensions"):
+        fn(lucid.zeros(2, 0, device=device), dim=0)
+
+
 @pytest.mark.parametrize("op", ["scatter", "scatter_add"])
 def test_scatter_passes_the_index_at_full_width(device: str, op: str) -> None:
     base = lucid.zeros(4, device=device)

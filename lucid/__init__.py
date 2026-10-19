@@ -180,7 +180,7 @@ __all__ = [
     "kthvalue",
     "where", "masked_fill", "roll", "flip", "fliplr", "flipud",
     "sort", "argsort", "topk",
-    "nonzero", "unique", "meshgrid",
+    "nonzero", "unique", "unique_consecutive", "meshgrid",
     "tril", "triu",
     "contiguous", "detach", "clone",
     # ── stats / search ────────────────────────────────────────────────────
@@ -301,7 +301,7 @@ _OPS_NAMES: frozenset[str] = frozenset([
     "where", "masked_fill",
     # ── sort / search ─────────────────────────────────────────────────────
     "sort", "argsort", "topk", "kthvalue",
-    "nonzero", "unique", "meshgrid",
+    "nonzero", "unique", "unique_consecutive", "meshgrid",
     "searchsorted", "bucketize", "histc", "cartesian_prod",
 ])
 

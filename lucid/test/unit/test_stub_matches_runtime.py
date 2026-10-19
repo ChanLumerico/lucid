@@ -104,7 +104,8 @@ def _signature_params(signature: inspect.Signature, method: bool) -> list[_Param
 
 def _forwards(params: list[_Param]) -> bool:
     """A ``*args, **kwargs`` forwarder: it binds nothing of its own."""
-    return any(p.kind == "**kwargs" for p in params)
+    kinds = {p.kind for p in params}
+    return "*args" in kinds and "**kwargs" in kinds
 
 
 def _stub_defs(path: Path, cls: str | None) -> dict[str, list[ast.FunctionDef]]:
@@ -172,10 +173,9 @@ def _cases() -> list[object]:
 #: unchecked, and listed so the guard cannot go quiet: a name that stops
 #: being one of these fails, as does a new one.  ``var`` / ``std`` and the
 #: pairs read the reference's overloads by type; ``to`` its four shapes;
-#: ``compile`` is a decorator; ``no_grad`` / ``enable_grad`` are classes.
+#: ``no_grad`` / ``enable_grad`` are classes.
 _CONTRACT_ONLY = frozenset(
     {
-        "lucid.compile",
         "lucid.enable_grad",
         "lucid.no_grad",
         "lucid.std",

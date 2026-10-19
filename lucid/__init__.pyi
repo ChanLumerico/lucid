@@ -2250,6 +2250,7 @@ def unique(input: Tensor, sorted: _bool = ..., return_inverse: _bool = ..., retu
     Tensor([1, 2, 3, 4])
     """
     ...
+def unique_consecutive(input: Tensor, return_inverse: _bool = ..., return_counts: _bool = ..., dim: _int | None = ...) -> Tensor: ...
 def topk(input: Tensor, k: _int, dim: _int = ..., largest: _bool = ..., sorted: _bool = ...) -> tuple[Tensor, Tensor]:
     r"""    Return the ``k`` largest (or smallest) values along ``dim`` and their indices.
     

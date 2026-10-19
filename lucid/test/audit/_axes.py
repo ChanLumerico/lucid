@@ -580,7 +580,6 @@ NOT_DIFFERENTIABLE: dict[str, str] = {
     "lucid.from_numpy": "constructs a new leaf from an array",
     "lucid.tensor": "constructs a new leaf from data",
     "lucid.heaviside": "a step function the reference defines no derivative for",
-    "lucid.unique": "deduplicated, reordered values: no derivative in the reference",
     "lucid.nn.utils.clip_grad_norm": "rescales .grad in place; the norm is bookkeeping",
     "lucid.nn.utils.get_total_norm": "a norm of .grad tensors, read after backward",
     "lucid.utils.transforms.functional.posterize": "bit-level quantisation of pixel values",
