@@ -450,8 +450,17 @@ def _fold_instance_stats(
         _C_engine.eval_tensors_async([running_mean._impl, running_var._impl])
 
 
-def _check_instance_norm_input(x: Tensor, use_input_stats: bool) -> None:
+def _check_instance_norm_input(
+    x: Tensor,
+    use_input_stats: bool,
+    running_mean: Tensor | None,
+    running_var: Tensor | None,
+) -> None:
     """Refuse an input instance normalisation has no statistics for."""
+    if not use_input_stats and (running_mean is None or running_var is None):
+        raise RuntimeError(
+            "Expected running_mean and running_var to be defined when use_input_stats is false"
+        )
     if x.ndim < 3:
         raise ValueError(
             f"instance_norm: expected at least 3-D input (N, C, *spatial), "
@@ -503,7 +512,8 @@ def instance_norm(
     use_input_stats : bool, optional
         When ``True`` (default) statistics come from the current
         instance, which needs more than one spatial element (else
-        ``ValueError``).  When ``False``, the running buffers if given.
+        ``ValueError``).  When ``False``, ``running_mean`` and
+        ``running_var`` must be defined (else ``RuntimeError``).
     momentum : float, optional
         Weight the batch takes when it is folded into the running
         buffers: ``running = (1 - momentum) * running + momentum * batch``.
@@ -539,7 +549,7 @@ def instance_norm(
     >>> y.shape
     (4, 3, 64, 64)
     """
-    _check_instance_norm_input(input, use_input_stats)
+    _check_instance_norm_input(input, use_input_stats, running_mean, running_var)
     spatial_dims: list[int] = list(range(2, input.ndim))
     C: int = int(input.shape[1])
     # Channel-broadcast shape (1, C, 1, 1, ...) for affine + running stats.
@@ -549,12 +559,7 @@ def instance_norm(
         # Per-instance (per-(n,c)) statistics.
         mean: Tensor = input.mean(spatial_dims, keepdim=True)
         var: Tensor = input.var(spatial_dims, keepdim=True, correction=0)
-        if (
-            use_input_stats
-            and running_mean is not None
-            and running_var is not None
-            and momentum != 0.0
-        ):
+        if running_mean is not None and running_var is not None and momentum != 0.0:
             _fold_instance_stats(input, running_mean, running_var, momentum)
     else:
         mean = running_mean.reshape(bcast_shape)

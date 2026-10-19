@@ -1030,6 +1030,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - fix IndependentTransform Jacobian reduction and batched Wishart KL
 
+- align LazyInstanceNorm defaults, instance_norm buffer check, and type_as device
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

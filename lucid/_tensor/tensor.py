@@ -3806,22 +3806,21 @@ class Tensor:
         )
 
     def type_as(self, other: Self) -> Self:
-        r"""Cast ``self`` to the dtype of ``other``.
+        r"""Cast ``self`` to the dtype and device of ``other``.
 
-        Convenience wrapper around :meth:`to` that adopts the dtype of
-        another tensor. Useful when two tensors must have matching
-        precision before a fused op.
+        Equivalent to ``self.type(other.type())``: converts both precision
+        and device placement to match ``other``.
 
         Parameters
         ----------
         other : Tensor
-            Tensor whose ``dtype`` will be adopted.
+            Tensor whose ``dtype`` and ``device`` will be adopted.
 
         Returns
         -------
         Tensor
-            ``self`` cast to ``other.dtype``. If the dtype already
-            matches, the call is a no-op.
+            ``self`` on ``other.device`` with ``other.dtype``. If both
+            already match, returns ``self`` unchanged.
 
         Examples
         --------
@@ -3839,7 +3838,7 @@ class Tensor:
         types preserve gradients; integer→float→integer round-trips lose
         information in the integer truncation step.
         """
-        return self.to(other.dtype)
+        return self.to(*_type_target(other.type()))
 
     def lerp(self, end: Self, weight: float | Self) -> Self:
         r"""Linearly interpolate between ``self`` and ``end``.

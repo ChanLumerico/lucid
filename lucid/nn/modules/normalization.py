@@ -1869,8 +1869,8 @@ class _LazyInstanceNormMixin(_LazyNormMixin, _InstanceNormBase):
     A checkpoint restore via ``_load_from_state_dict`` can also trigger
     initialization before any forward pass.
 
-    Defaults follow the eager InstanceNorm: ``affine=False``,
-    ``track_running_stats=False``.
+    Defaults follow the reference LazyInstanceNorm: ``affine=True``,
+    ``track_running_stats=True``.
 
     Parameters
     ----------
@@ -1880,10 +1880,10 @@ class _LazyInstanceNormMixin(_LazyNormMixin, _InstanceNormBase):
         EMA factor for running stats; ``None`` never updates them.
     affine : bool, optional
         If ``True``, lazily allocates per-channel scale and shift.
-        Default: ``False``.
+        Default: ``True``.
     track_running_stats : bool, optional
         If ``True``, lazily allocates running mean/variance buffers.
-        Default: ``False``.
+        Default: ``True``.
     device : DeviceLike, optional
         Device for lazily allocated tensors.  Default: ``None``.
     dtype : DTypeLike, optional
@@ -1933,10 +1933,10 @@ class LazyInstanceNorm1d(_LazyInstanceNormMixin):
         EMA factor for running stats; ``None`` never updates them.
     affine : bool, optional
         If ``True``, lazily allocates per-channel scale and shift.
-        Default: ``False``.
+        Default: ``True``.
     track_running_stats : bool, optional
         If ``True``, lazily allocates running mean/variance buffers.
-        Default: ``False``.
+        Default: ``True``.
     device : DeviceLike, optional
         Device for lazily allocated tensors.  Default: ``None``.
     dtype : DTypeLike, optional
@@ -1983,10 +1983,10 @@ class LazyInstanceNorm2d(_LazyInstanceNormMixin):
         EMA factor for running stats; ``None`` never updates them.
     affine : bool, optional
         If ``True``, lazily allocates per-channel scale and shift.
-        Default: ``False``.
+        Default: ``True``.
     track_running_stats : bool, optional
         If ``True``, lazily allocates running mean/variance buffers.
-        Default: ``False``.
+        Default: ``True``.
     device : DeviceLike, optional
         Device for lazily allocated tensors.  Default: ``None``.
     dtype : DTypeLike, optional
@@ -2034,10 +2034,10 @@ class LazyInstanceNorm3d(_LazyInstanceNormMixin):
         EMA factor for running stats; ``None`` never updates them.
     affine : bool, optional
         If ``True``, lazily allocates per-channel scale and shift.
-        Default: ``False``.
+        Default: ``True``.
     track_running_stats : bool, optional
         If ``True``, lazily allocates running mean/variance buffers.
-        Default: ``False``.
+        Default: ``True``.
     device : DeviceLike, optional
         Device for lazily allocated tensors.  Default: ``None``.
     dtype : DTypeLike, optional

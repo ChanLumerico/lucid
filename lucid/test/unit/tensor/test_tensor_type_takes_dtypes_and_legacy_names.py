@@ -156,3 +156,41 @@ def test_byte_tensor_names_nothing():
     with pytest.raises(ValueError, match="invalid type"):
         lucid.ones(2).type("lucid.ByteTensor")
     assert lucid.ones(2, dtype=lucid.int8).type() == "lucid.CharTensor"
+
+
+def test_type_as_moves_device_and_casts_dtype(cross_device_pair):
+    cpu, metal = cross_device_pair
+    x_cpu = lucid.tensor([1.0, 2.0], dtype=lucid.float32, device=cpu, requires_grad=True)
+    proto_metal = lucid.zeros(2, dtype=lucid.float16, device=metal)
+    y = x_cpu.type_as(proto_metal)
+    assert y.device == lucid.device(metal) and y.dtype == lucid.float16
+    assert y.type_as(proto_metal) is y
+    back = y.type_as(x_cpu)
+    assert back.device == lucid.device(cpu) and back.dtype == lucid.float32
+    back.sum().backward()
+    assert x_cpu.grad is not None and x_cpu.grad.device == lucid.device(cpu)
+    assert x_cpu.grad.tolist() == [1.0, 1.0]
+
+
+@pytest.mark.parity
+def test_type_as_matches_reference_across_devices(ref):
+    if not ref.backends.mps.is_available():
+        pytest.skip("the reference has no Apple GPU device here")
+    ours_cpu = lucid.ones(2, dtype=lucid.int32, device="cpu")
+    ours_gpu = lucid.zeros(2, dtype=lucid.float16, device="metal")
+    theirs_cpu = ref.ones(2, dtype=ref.int32, device="cpu")
+    theirs_gpu = ref.zeros(2, dtype=ref.float16, device="mps")
+
+    ours_to_gpu = ours_cpu.type_as(ours_gpu)
+    theirs_to_gpu = theirs_cpu.type_as(theirs_gpu)
+    assert ours_to_gpu.device == lucid.device("metal")
+    assert theirs_to_gpu.device.type == "mps"
+    assert ours_to_gpu.dtype == lucid.float16
+    assert theirs_to_gpu.dtype == ref.float16
+
+    ours_to_cpu = ours_gpu.type_as(ours_cpu)
+    theirs_to_cpu = theirs_gpu.type_as(theirs_cpu)
+    assert ours_to_cpu.device == lucid.device("cpu")
+    assert theirs_to_cpu.device.type == "cpu"
+    assert ours_to_cpu.dtype == lucid.int32
+    assert theirs_to_cpu.dtype == ref.int32

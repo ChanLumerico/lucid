@@ -211,6 +211,55 @@ def test_the_functional_owns_the_check(device):
         F.instance_norm(x)
     rm, rv = lucid.zeros(_C, device=device), lucid.ones(_C, device=device)
     assert F.instance_norm(x, rm, rv, use_input_stats=False).shape == (4, _C, 1)
+    for mean_arg, var_arg in [(None, None), (rm, None), (None, rv)]:
+        with pytest.raises(
+            RuntimeError,
+            match="Expected running_mean and running_var to be defined when use_input_stats is false",
+        ):
+            F.instance_norm(x, mean_arg, var_arg, use_input_stats=False)
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize(
+    "cls_name,shape",
+    [
+        ("LazyInstanceNorm1d", (2, _C, 4)),
+        ("LazyInstanceNorm2d", (2, _C, 3, 4)),
+        ("LazyInstanceNorm3d", (2, _C, 2, 3, 4)),
+    ],
+)
+def test_lazy_instance_norm_defaults_match_reference(ref, cls_name, shape, device):
+    ours = getattr(nn, cls_name)().to(device)
+    theirs = getattr(ref.nn, cls_name)()
+    assert (ours.affine, ours.track_running_stats) == (True, True)
+    assert (ours.affine, ours.track_running_stats) == (
+        theirs.affine,
+        theirs.track_running_stats,
+    )
+    x_np = _input(shape)
+    out = ours(lucid.tensor(x_np, device=device))
+    ref_out = theirs(ref.tensor(x_np))
+    np.testing.assert_allclose(
+        _host(out), ref_out.detach().numpy(), rtol=1e-5, atol=1e-5
+    )
+    assert set(ours.state_dict()) == set(theirs.state_dict())
+
+
+@pytest.mark.parity
+def test_instance_norm_refuses_missing_buffers_when_use_input_stats_is_false(ref):
+    x_ours, x_ref = lucid.ones(2, _C, 4), ref.ones(2, _C, 4)
+    rm_ours, rv_ours = lucid.zeros(_C), lucid.ones(_C)
+    rm_ref, rv_ref = ref.zeros(_C), ref.ones(_C)
+    msg = "Expected running_mean and running_var to be defined when use_input_stats is false"
+    for (m_o, v_o), (m_r, v_r) in [
+        ((None, None), (None, None)),
+        ((rm_ours, None), (rm_ref, None)),
+        ((None, rv_ours), (None, rv_ref)),
+    ]:
+        with pytest.raises(RuntimeError, match=msg):
+            F.instance_norm(x_ours, m_o, v_o, use_input_stats=False)
+        with pytest.raises(RuntimeError, match=msg):
+            ref.nn.functional.instance_norm(x_ref, m_r, v_r, use_input_stats=False)
 
 
 @pytest.mark.parity
