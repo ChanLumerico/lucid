@@ -1027,7 +1027,7 @@ class Tensor:
         By default, gradients are only stored on **leaf** tensors.  Intermediate
         (non-leaf) results in the computation graph have their ``.grad``
         discarded after the backward pass to save memory.  Calling
-        ``retain_grad()`` on an intermediate tensor before the forward pass
+        ``retain_grad()`` on an intermediate tensor before :meth:`backward`
         instructs the engine to keep that gradient so it can be inspected
         afterwards.
 
@@ -1112,10 +1112,11 @@ class Tensor:
           the graph.
         * After an in-place op on ``self``, a hook registered earlier still
           sees the gradient of the value before the write.
-        * The hook is kept by the graph node that produced ``self``, and is
-          released with that node's saved state after a backward without
-          ``retain_graph``.  A hook on the output of an op that saves
-          nothing for backward lives as long as the graph does.
+        * On a non-leaf, the hook is kept by the producer graph node and
+          released after backward without ``retain_graph``.  On a **leaf**,
+          the hook runner lives in the leaf's C++ ``AutogradMeta``, so a
+          closure capturing the leaf forms a cycle (``leaf → AutogradMeta →
+          runner → closure → leaf``) until ``handle.remove()`` is called.
 
         Chain-rule effect: if the hook returns a tensor :math:`\tilde g`,
         the engine substitutes :math:`\frac{\partial \mathcal{L}}{\partial \mathbf{x}}
@@ -1170,22 +1171,15 @@ class Tensor:
         gradient : Tensor, optional
             The seed gradient — the gradient of some external scalar with
             respect to ``self``.  Must have the same shape as ``self``.
-
-            * For **scalar** tensors (``numel() == 1``) this may be omitted;
-              Lucid uses an implicit seed of ``1.0``.
-            * For **non-scalar** tensors it is **required**.  Pass the upstream
-              gradient explicitly (e.g. when differentiating through a loss
-              that is itself a vector).
+            Omitted on scalar tensors (implicit ``1.0``); required on
+            non-scalar tensors.
         retain_graph : bool, optional
             If ``False`` (default), intermediate tensors and gradient functions
-            stored in the computation graph are freed immediately after the
-            backward pass to reclaim memory.  Set to ``True`` if you need to
-            call ``backward()`` again on the same graph (e.g. to compute
-            multiple gradient signals or to inspect intermediate values).
+            in the computation graph are freed after the backward pass.  Set
+            to ``True`` to call ``backward()`` again on the same graph.
         create_graph : bool, optional
             When ``True`` the backward pass itself is recorded, so the
-            gradients it leaves in ``.grad`` are differentiable (gradients
-            of gradients).
+            gradients it leaves in ``.grad`` are differentiable.
         inputs : Tensor, sequence of Tensor, or None, optional
             Accumulate only into these tensors' ``.grad``; every other
             leaf keeps what it had.  A non-leaf input has its ``.grad``
@@ -1194,19 +1188,19 @@ class Tensor:
 
         Raises
         ------
+        TypeError
+            If ``gradient`` is neither a :class:`Tensor` nor ``None``, or
+            ``inputs`` is not a tensor or sequence of tensors.
         RuntimeError
-            If ``self`` does not require grad — it has no ``grad_fn``, so
-            no leaf could receive a gradient (a loss computed under
-            :func:`lucid.no_grad`, for instance).
-        RuntimeError
-            If ``self`` has more than one element and ``gradient`` is not
-            provided.
-        RuntimeError
+            If ``self`` does not require grad, if ``gradient`` is omitted for
+            a non-scalar or complex output, or if ``inputs`` is empty or
+            contains a tensor that does not require grad.
+        lucid._C.engine.ShapeMismatch
             If ``gradient.shape != self.shape``.
-        RuntimeError
-            If ``inputs`` is empty or one of them does not require grad.
-        NotImplementedError
-            If ``inputs`` is given together with ``create_graph=True``.
+        lucid._C.engine.DtypeMismatch
+            If ``self`` and ``gradient`` disagree on complex vs. real dtype.
+        lucid._C.engine.DeviceMismatch
+            If ``gradient.device != self.device``.
 
         Notes
         -----
