@@ -22,6 +22,7 @@
 #include "../core/ErrorBuilder.h"
 #include "../core/PhantomMode.h"
 #include "../core/Storage.h"
+#include "../core/StridedCopy.h"
 #include "../core/TensorImpl.h"
 #include "_OptimDetail.h"
 
@@ -153,17 +154,25 @@ double read_state_scalar(const TensorImpl& t) {
 // without the Dispatcher.  Under phantom mode a first step would make the
 // state phantom for good (and count the step), and a step with state would
 // update real parameters for real; a phantom parameter or gradient has no
-// values to step from.  So none of it runs: refused before any slot, counter
-// or buffer moves.
+// values to step from.  A parameter whose elements overlap (an expanded
+// view, or unfold windows that overlap) is refused here as well, before any
+// slot, counter, or earlier parameter in the group moves.
 void Optimizer::refuse_phantom_step() const {
     if (PhantomMode::is_enabled())
         refuse_phantom_read("optimizer step under phantom mode");
-    for (const auto& p : params_) {
+    for (std::size_t i = 0; i < params_.size(); ++i) {
+        const auto& p = params_[i];
         if (!p)
             continue;
         const auto& grad = p->grad_storage();
         if (p->is_phantom() || (grad.has_value() && storage_is_phantom(*grad)))
             refuse_phantom_read("optimizer step of a phantom parameter");
+        if (grad.has_value() && !p->is_contiguous() &&
+            strided::overlaps_itself(p->shape(), p->stride()))
+            ErrorBuilder("optimizer step")
+                .invalid_argument("parameter " + std::to_string(i) +
+                                  " has overlapping elements (an expanded view, or unfold "
+                                  "windows that overlap) — clone() first");
     }
 }
 
@@ -443,9 +452,6 @@ void Optimizer::step() {
             state_initialized_[i] = true;
         }
         ++steps_[i];
-        // A parameter whose elements overlap (an expanded view) is refused
-        // after this slot's state has moved and the parameters ahead of it
-        // were stepped: the refusal is not atomic.
         write_elements(p, *grad, "optimizer step", [&](std::shared_ptr<TensorImpl>& elems) {
             update_one(i, elems, *grad);
             // So an autograd node that saved the parameter before the update

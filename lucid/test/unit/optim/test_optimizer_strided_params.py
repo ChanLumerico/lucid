@@ -271,7 +271,7 @@ def test_lbfgs_steps_strided_parameters_into_their_base(device: str, ref: Any) -
 @pytest.mark.parametrize(
     "make",
     [
-        lambda ps: optim.SGD(ps, lr=0.1),
+        lambda ps: optim.SGD(ps, lr=0.1, momentum=0.9),
         lambda ps: optim.Adam(ps, lr=0.1),
     ],
     ids=["SGD", "Adam"],
@@ -280,11 +280,32 @@ def test_a_parameter_whose_elements_overlap_is_refused(
     make: Callable[[list[nn.Parameter]], optim.Optimizer], device: str
 ) -> None:
     # Every element of the expanded view is the base's one element: there is
-    # no single value to write.  The step wrote all four past it on the CPU.
+    # no single value to write.  The step is refused atomically before any
+    # earlier parameter in the group or any optimizer state slot is modified.
+    dense = nn.Parameter(lucid.tensor([2.0, -3.0]).to(device))
     base = lucid.zeros(1, device=device)
     p = nn.Parameter(_view(base, (4,), (0,), 0))
-    opt = make([p])
+    opt = make([dense, p])
+
+    # Step ``dense`` once while ``p`` has no gradient so ``dense`` has live
+    # optimizer state; ``p`` remains uninitialized.
+    dense.grad = lucid.tensor([0.5, -1.5]).to(device)
+    opt.step()
+    dense_before = _flat(dense).copy()
+    state_before = {
+        k: np.array(v, copy=True) for k, v in opt.state_dict()["state"][0].items()
+    }
+    assert 1 not in opt.state_dict()["state"]
+
+    dense.grad = lucid.tensor([4.0, 5.0]).to(device)
     p.grad = lucid.tensor([1.0, 2.0, 3.0, 4.0]).to(device)
-    with pytest.raises(RuntimeError, match="overlap"):
+    with pytest.raises((_C_engine.InvalidArgument, RuntimeError), match=r"parameter 1.*overlap"):
         opt.step()
+
+    np.testing.assert_array_equal(_flat(dense), dense_before)
     assert _flat(base).tolist() == [0.0]
+    state_after = opt.state_dict()["state"]
+    assert 1 not in state_after
+    for k, expected in state_before.items():
+        np.testing.assert_array_equal(np.asarray(state_after[0][k]), expected)
+

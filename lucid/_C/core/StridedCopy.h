@@ -18,11 +18,62 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <utility>
 #include <vector>
 
 #include "Shape.h"
 
 namespace lucid::strided {
+
+// Whether two of a view's elements are the same byte.  A zero stride on an
+// axis longer than one — an expanded view — always makes one; so do windows
+// that overlap, as an unfold with step < size gives, though every stride is
+// non-zero.  Such a view reads fine, and a write into it has no single value
+// for a repeated element to take — unless it is a fill (refuse_ambiguous_write).
+inline bool overlaps_itself(const Shape& shape, const Stride& stride) {
+    const std::size_t n = shape_numel(shape);
+    if (n <= 1)
+        return false;
+    std::vector<std::pair<std::int64_t, std::int64_t>> axes;  // |stride|, extent - 1
+    for (std::size_t d = 0; d < shape.size(); ++d) {
+        if (shape[d] <= 1)
+            continue;
+        if (stride[d] == 0)
+            return true;
+        axes.emplace_back(stride[d] < 0 ? -stride[d] : stride[d], shape[d] - 1);
+    }
+    // Sorted by stride, if every axis steps past all that the smaller ones
+    // reach, each index lands on its own byte, as the digits of a
+    // mixed-radix number do.
+    std::sort(axes.begin(), axes.end());
+    std::int64_t reach = 0;
+    bool separated = true;
+    for (const auto& [step, span] : axes) {
+        if (step <= reach) {
+            separated = false;
+            break;
+        }
+        reach += step * span;
+    }
+    if (separated)
+        return false;
+    // Strides that interleave can still miss each other, so count addresses.
+    std::vector<std::int64_t> at(n);
+    std::vector<std::int64_t> idx(shape.size(), 0);
+    for (std::size_t i = 0; i < n; ++i) {
+        std::int64_t off = 0;
+        for (std::size_t d = 0; d < shape.size(); ++d)
+            off += idx[d] * stride[d];
+        at[i] = off;
+        for (std::size_t d = shape.size(); d-- > 0;) {
+            if (++idx[d] < shape[d])
+                break;
+            idx[d] = 0;
+        }
+    }
+    std::sort(at.begin(), at.end());
+    return std::adjacent_find(at.begin(), at.end()) != at.end();
+}
 
 // A strided view laid out as (outer..., inner) blocks after merging axes:
 // size-1 axes dropped, and an axis folded into the one before it whenever
