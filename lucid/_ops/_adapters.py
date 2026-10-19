@@ -38,7 +38,7 @@ from lucid._dispatch import (
     _unwrap,
     _unwrap_or_scalar,
 )
-from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
+from lucid._dtype import _ENGINE_TO_DTYPE
 from lucid._ops._dims import (
     _dim_size,
     _require_real_axis,
@@ -46,7 +46,7 @@ from lucid._ops._dims import (
     _wrap_dim,
     _wrap_dims,
 )
-from lucid._ops._reduce import _ValuesIndices, _reduction_axes
+from lucid._ops._reduce import _ValuesIndices
 from lucid._types import Scalar, TensorOrScalar
 
 if TYPE_CHECKING:
@@ -109,12 +109,45 @@ _BINARY_SIGNATURE = inspect.Signature(
     ]
 )
 
+#: ``(input, other, *, alpha=1)`` for ``add``, ``add_``, ``sub``, ``sub_``.
+_ADD_SUB_SIGNATURE = _BINARY_SIGNATURE.replace(
+    parameters=[
+        *_BINARY_SIGNATURE.parameters.values(),
+        inspect.Parameter(
+            "alpha",
+            inspect.Parameter.KEYWORD_ONLY,
+            default=1,
+            annotation=Scalar,
+        ),
+    ]
+)
+
+
+def _scale_by_alpha(a: _Impl, b: _Impl, alpha: Scalar) -> _Impl:
+    """Scale ``b`` by ``alpha`` for ``add`` / ``sub``, matching the reference's dtype rules."""
+    if isinstance(alpha, bool):
+        if a.dtype != _C_engine.Bool:
+            raise RuntimeError("Boolean alpha only supported for Boolean results.")
+        return b if alpha else _C_engine.zeros_like(b)
+    if isinstance(alpha, float) and _promotion.is_integral(a.dtype):
+        raise RuntimeError(
+            "For integral input tensors, argument alpha must not be a floating point number."
+        )
+    if alpha == 1:
+        return b
+    if a.dtype == _C_engine.Bool:
+        return _C_engine.zeros_like(b) if alpha == 0 else b
+    scale = _unwrap_or_scalar(alpha, b)
+    if scale.dtype != b.dtype:
+        scale = _C_engine.astype(scale, b.dtype)
+    return _C_engine.mul(b, scale)
+
 
 def _make_arith_adapter(
     engine_fn: Callable[[_Impl, _Impl], _Impl],
     *,
     inplace: bool = False,
-) -> Callable[[_Impl, _Impl], _Impl]:
+) -> Callable[..., _Impl]:
     """Wrap a binary engine function with scalars and dtype promotion.
 
     Both operands go through :func:`lucid._dispatch._binary_operands`, the
@@ -144,19 +177,22 @@ def _make_arith_adapter(
     name = getattr(engine_fn, "__name__", "_arith_adapter")
 
     subtracts = engine_fn in (_C_engine.sub, _C_engine.sub_)
+    adds_or_subtracts = subtracts or engine_fn in (_C_engine.add, _C_engine.add_)
     powers = engine_fn is _C_engine.pow
     opmath = engine_fn in _OPMATH_OPS
 
     # Positional-only: the wrappers bind the advertised names to position
     # (``exponent`` for ``pow``), so ``other=`` must not reach the body too.
-    def _adapter(input: _Impl, other: _Impl, /) -> _Impl:
+    def _adapter(input: _Impl, other: _Impl, /, *, alpha: Scalar = 1) -> _Impl:
+        if subtracts:
+            _refuse_bool_subtraction(input, other)
         if powers and isinstance(input, _C_engine.TensorImpl):
             scalar = _scalar_power(input, other)
             if scalar is not None:
                 return scalar
-        if subtracts:
-            _refuse_bool_subtraction(input, other)
         a, b = _binary_operands(input, other, opmath=opmath, inplace=inplace)
+        if adds_or_subtracts and (alpha != 1 or isinstance(alpha, (bool, float))):
+            b = _scale_by_alpha(a, b, alpha)
         return engine_fn(a, b)
 
     # The adapter's own ``(input, other)`` is the op's signature — not the
@@ -164,7 +200,9 @@ def _make_arith_adapter(
     # and advertised the operands in the wrong order.
     _adapter.__doc__ = getattr(engine_fn, "__doc__", None)
     _adapter.__name__ = name
-    _adapter.__dict__["__signature__"] = _BINARY_SIGNATURE
+    _adapter.__dict__["__signature__"] = (
+        _ADD_SUB_SIGNATURE if adds_or_subtracts else _BINARY_SIGNATURE
+    )
     return _adapter
 
 
@@ -240,11 +278,17 @@ def _as_dim(value: object) -> int:
         ) from None
 
 
-def _gather_adapter(input: _Impl, dim: int, index: Tensor) -> _Impl:
-    """gather(input, dim, index).
+def _gather_adapter(
+    input: _Impl, dim: int, index: Tensor, *, sparse_grad: bool = False
+) -> _Impl:
+    """gather(input, dim, index, *, sparse_grad=False).
 
     ``dim`` may be a 0-d integer tensor, as the reference reads one.
     """
+    if sparse_grad:
+        raise _C_engine.NotImplementedError(
+            "gather(): sparse_grad=True is not supported"
+        )
     if not hasattr(index, "_impl"):
         raise TypeError(f"gather(): index must be a Tensor, got {type(index).__name__}")
     d = dim if type(dim) is int else _as_dim(dim)
@@ -364,8 +408,15 @@ def _masked_select_adapter(a_impl: _Impl, mask: _Impl) -> _Impl:
     )
 
 
-def _sort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> _Impl:
-    """sort(a, dim=-1, descending=False) — the sorted values along ``dim``."""
+def _sort_adapter(
+    a_impl: _Impl,
+    dim: int = -1,
+    descending: bool = False,
+    *,
+    stable: bool = False,
+) -> _Impl:
+    """sort(a, dim=-1, descending=False, *, stable=False) — the sorted values along ``dim``."""
+    del stable
     d = _wrap_dim(int(dim), len(a_impl.shape), "sort")
     out = _C_engine.sort(a_impl, d)
     if descending and a_impl.shape:
@@ -373,14 +424,21 @@ def _sort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> _Im
     return out
 
 
-def _argsort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> _Impl:
-    """argsort(a, dim=-1, descending=False).
+def _argsort_adapter(
+    a_impl: _Impl,
+    dim: int = -1,
+    descending: bool = False,
+    *,
+    stable: bool = False,
+) -> _Impl:
+    """argsort(a, dim=-1, descending=False, *, stable=False).
 
     Descending keeps equal keys in their input order, as ascending does:
     sort the reversed input ascending, map each position ``p`` of it back
     to index ``n - 1 - p``, and reverse.  Reversing the ascending indices
     instead would put ties last-first.
     """
+    del stable
     d = _wrap_dim(int(dim), len(a_impl.shape), "argsort")
     if not descending or not a_impl.shape:
         return _C_engine.argsort(a_impl, d)
@@ -391,14 +449,19 @@ def _argsort_adapter(a_impl: _Impl, dim: int = -1, descending: bool = False) -> 
 
 
 def _topk_adapter(
-    a_impl: _Impl, k: int, dim: int = -1, largest: bool = True
+    a_impl: _Impl,
+    k: int,
+    dim: int = -1,
+    largest: bool = True,
+    sorted: bool = True,
 ) -> _ValuesIndices[_Impl]:
-    """topk(a, k, dim=-1, largest=True) — ``(values, indices)``, best first.
+    """topk(a, k, dim=-1, largest=True, sorted=True) — ``(values, indices)``, best first.
 
     The smallest ``k`` are the head of the stable ascending order, so equal
     keys keep their input order and NaN, which sorts last, is taken only
     when fewer than ``k`` numbers remain.
     """
+    del sorted
     d = _wrap_dim(int(dim), len(a_impl.shape), "topk")
     # A 0-d tensor's one element is both its largest and its smallest, and
     # ``narrow`` below has no real axis to cut.
@@ -462,9 +525,7 @@ def _narrow_adapter(a_impl: _Impl, dim: int, start: int, length: int) -> _Impl:
     ndim = len(a_impl.shape)
     if s < 0 and -ndim <= d < ndim:
         s += a_impl.shape[d]
-    return _own_impl(
-        _C_engine.narrow(a_impl, d, s, int(length)), a_impl
-    )
+    return _own_impl(_C_engine.narrow(a_impl, d, s, int(length)), a_impl)
 
 
 def _as_strided_adapter(
@@ -562,12 +623,15 @@ def _broadcast_to_adapter(x_impl: _Impl, size: int | Sequence[int]) -> _Impl:
     return _C_engine.expand(x_impl, _int_list(size, "broadcast_to", "size"))
 
 
-def _expand_adapter(x_impl: _Impl, size: int | Sequence[int]) -> _Impl:
-    """expand(input, size) — ``x.expand(2, 3)`` is ``x.expand((2, 3))``.
+def _expand_adapter(
+    x_impl: _Impl, size: int | Sequence[int], *, implicit: bool = False
+) -> _Impl:
+    """expand(input, size, *, implicit=False) — ``x.expand(2, 3)`` is ``x.expand((2, 3))``.
 
     ``-1`` in any position means *keep the existing size along that dim*,
     matching the reference framework semantics.
     """
+    del implicit
     raw = _int_list(size, "expand", "size")
     # Resolve -1 entries: replace with the corresponding source dimension.
     src_shape = list(x_impl.shape)
@@ -681,130 +745,6 @@ def _squeeze_adapter(
     return _own_impl(result, x_impl)
 
 
-# ── Reduction adapters (dim/keepdim/correction/dtype kwargs) ─────────────────
-
-
-def _max_adapter(
-    x_impl: _Impl,
-    dim: int | Sequence[int] | None = None,
-    keepdim: bool = False,
-) -> _Impl:
-    """max(x, dim=None, keepdim=False)."""
-    return _C_engine.max(x_impl, _reduction_axes(x_impl, dim, "max"), bool(keepdim))
-
-
-def _min_adapter(
-    x_impl: _Impl,
-    dim: int | Sequence[int] | None = None,
-    keepdim: bool = False,
-) -> _Impl:
-    """min(x, dim=None, keepdim=False)."""
-    return _C_engine.min(x_impl, _reduction_axes(x_impl, dim, "min"), bool(keepdim))
-
-
-def _flat_arg_reduce(
-    engine_fn: Callable[[_Impl, int, bool], _Impl],
-    name: str,
-    x_impl: _Impl,
-    keepdim: bool,
-) -> _Impl:
-    """``dim=None``: the index into the flattened tensor, as documented.
-
-    It used to reduce the last axis instead, so ``x.argmax()`` of a matrix
-    answered one index per row where the reference — and the docstring —
-    give one into the whole tensor.  ``keepdim`` keeps every axis, at 1.
-    """
-    shape = list(x_impl.shape)
-    if math.prod(shape) == 0:
-        raise IndexError(
-            f"{name}(): Expected reduction dim to be specified for input.numel() == 0."
-        )
-    out = engine_fn(_C_engine.reshape(x_impl, [-1]), 0, False)
-    return _C_engine.reshape(out, [1] * len(shape)) if keepdim else out
-
-
-def _argmax_adapter(
-    x_impl: _Impl,
-    dim: int | None = None,
-    keepdim: bool = False,
-) -> _Impl:
-    """argmax(x, dim=None, keepdim=False)."""
-    if dim is None:
-        return _flat_arg_reduce(_C_engine.argmax, "argmax", x_impl, bool(keepdim))
-    return _C_engine.argmax(x_impl, int(dim), bool(keepdim))
-
-
-def _argmin_adapter(
-    x_impl: _Impl,
-    dim: int | None = None,
-    keepdim: bool = False,
-) -> _Impl:
-    """argmin(x, dim=None, keepdim=False)."""
-    if dim is None:
-        return _flat_arg_reduce(_C_engine.argmin, "argmin", x_impl, bool(keepdim))
-    return _C_engine.argmin(x_impl, int(dim), bool(keepdim))
-
-
-def _truth_count(a_impl: _Impl, axes: list[int], keepdim: bool, falsy: bool) -> _Impl:
-    """How many entries along ``axes`` are non-zero (``falsy``: are zero).
-
-    A sum rather than ``max`` / ``min`` of the truth values: those refuse an
-    empty reduced axis, where ``any`` is ``False`` and ``all`` ``True``.  A
-    complex entry is non-zero when either part is; Metal's complex-to-bool
-    cast reads the real part alone.
-    """
-    if a_impl.dtype in (_C_engine.C64, _C_engine.C128):
-        truth = _C_engine.logical_or(
-            _C_engine.astype(_C_engine.real(a_impl), _C_engine.Bool),
-            _C_engine.astype(_C_engine.imag(a_impl), _C_engine.Bool),
-        )
-    else:
-        truth = _C_engine.astype(a_impl, _C_engine.Bool)
-    if falsy:
-        truth = _C_engine.logical_not(truth)
-    return _C_engine.sum(truth, axes, keepdim)
-
-
-def _logical_reduce(
-    name: str, a_impl: _Impl, dim: int | Sequence[int] | None, keepdim: bool
-) -> _Impl:
-    """``any`` / ``all`` over ``dim`` — ``all`` is "no entry is zero"."""
-    if dim is None and not keepdim:
-        return _C_engine.any(a_impl) if name == "any" else _C_engine.all(a_impl)
-    axes = _reduction_axes(a_impl, dim, name)
-    counted = _truth_count(a_impl, axes, bool(keepdim), falsy=name == "all")
-    none = _C_engine.equal(counted, _C_engine.zeros_like(counted))
-    return none if name == "all" else _C_engine.logical_not(none)
-
-
-def _any_adapter(
-    a_impl: _Impl, dim: int | Sequence[int] | None = None, keepdim: bool = False
-) -> _Impl:
-    """any(input, dim=None, keepdim=False) — whether some entry is non-zero."""
-    return _logical_reduce("any", a_impl, dim, keepdim)
-
-
-def _all_adapter(
-    a_impl: _Impl, dim: int | Sequence[int] | None = None, keepdim: bool = False
-) -> _Impl:
-    """all(input, dim=None, keepdim=False) — whether every entry is non-zero."""
-    return _logical_reduce("all", a_impl, dim, keepdim)
-
-
-def _logsumexp_adapter(
-    a_impl: _Impl,
-    dim: int | Sequence[int] | None = None,
-    keepdim: bool = False,
-) -> _Impl:
-    """logsumexp(a, dim=None, keepdim=False) — accept axis/None like sum/mean."""
-    axes = _reduction_axes(a_impl, dim, "logsumexp")
-    # An integer or bool input is summed in the default float dtype, as the
-    # reference framework does — the engine op computes in the input dtype.
-    if _promotion.is_integral(a_impl.dtype):
-        a_impl = _C_engine.astype(a_impl, to_engine_dtype(None))
-    return _C_engine.logsumexp(a_impl, axes, bool(keepdim))
-
-
 # ── Repeat / split adapters ──────────────────────────────────────────────────
 
 
@@ -830,21 +770,60 @@ def _repeat_method_adapter(x_impl: _Impl, repeats: int | Sequence[int]) -> _Impl
     return _C_engine.tile(x_impl, _int_list(repeats, "repeat", "repeats"))
 
 
+def _repeat_interleave_tensor(base: _Impl, rep_impl: _Impl, axis: int) -> _Impl:
+    """Interleave ``base`` along ``axis`` by a 0-D or 1-D integer tensor ``rep_impl``."""
+    if not _promotion.is_integer(rep_impl.dtype) or rep_impl.dtype == _C_engine.Bool:
+        raise RuntimeError("repeats has to be Long or Int tensor")
+    if not rep_impl.shape:
+        return _C_engine.repeat(base, int(rep_impl.item()), axis)
+    if len(rep_impl.shape) != 1:
+        raise RuntimeError("repeats must be 0-dim or 1-dim tensor")
+    raw_list = rep_impl.tolist()
+    assert isinstance(raw_list, list)
+    counts = [int(c) for c in raw_list if isinstance(c, (int, float))]
+    axis_len = int(base.shape[axis])
+    if len(counts) == 1 and axis_len != 1:
+        counts = counts * axis_len
+    if len(counts) != axis_len:
+        raise RuntimeError("repeats must have the same size as input along dim")
+    if any(c < 0 for c in counts):
+        raise RuntimeError("repeats can not be negative")
+    pieces = [
+        _C_engine.repeat(_C_engine.narrow(base, axis, i, 1), c, axis)
+        for i, c in enumerate(counts)
+        if c > 0
+    ]
+    if pieces:
+        return _C_engine.concatenate(pieces, axis)
+    empty_shape = list(base.shape)
+    empty_shape[axis] = 0
+    return _C_engine.zeros(empty_shape, base.dtype, base.device)
+
+
 def _repeat_interleave_adapter(
     a_impl: _Impl,
-    repeats: int,
+    repeats: int | Tensor,
     dim: int | None = None,
+    *,
+    output_size: int | None = None,
 ) -> _Impl:
-    """repeat_interleave(x, repeats, dim=None) — defers to engine.repeat.
-
-    The engine's ``repeat`` op already implements interleaved replication
-    along a single axis; ``dim=None`` means flatten first, then repeat
-    along axis 0.
-    """
+    """repeat_interleave(x, repeats, dim=None, *, output_size=None)."""
     if dim is None:
-        flat = _C_engine.reshape(a_impl, [int(a_impl.numel())])
-        return _C_engine.repeat(flat, int(repeats), 0)
-    return _C_engine.repeat(a_impl, int(repeats), int(dim))
+        base = _C_engine.reshape(a_impl, [int(a_impl.numel())])
+        axis = 0
+    else:
+        base = a_impl
+        axis = _wrap_dim(int(dim), len(a_impl.shape), "repeat_interleave")
+    if not isinstance(repeats, int):
+        out = _repeat_interleave_tensor(base, _unwrap(repeats), axis)
+    else:
+        out = _C_engine.repeat(base, int(repeats), axis)
+    if output_size is not None and int(out.shape[axis]) != int(output_size):
+        raise RuntimeError(
+            "Allocated size does not match required size: "
+            f"expected {out.shape[axis]} but got {output_size}"
+        )
+    return out
 
 
 def _split_pieces(
@@ -1420,20 +1399,45 @@ def _searchsorted_adapter(
     sorted_sequence: Tensor,
     input: Tensor,
     *,
+    out_int32: bool = False,
     right: bool = False,
+    side: str | None = None,
+    sorter: Tensor | None = None,
 ) -> _Impl:
-    """searchsorted(sorted_seq, values, right=False) — accept tensor inputs."""
-    return _C_engine.searchsorted(_unwrap(sorted_sequence), _unwrap(input), bool(right))
+    """searchsorted(sorted_seq, values, *, out_int32=False, right=False, side=None, sorter=None)."""
+    if side is not None:
+        if side not in ("left", "right"):
+            raise RuntimeError(
+                f"searchsorted(): side can only be 'left' or 'right', got {side!r}"
+            )
+        if right and side == "left":
+            raise RuntimeError(
+                "searchsorted(): side and right can't be set to opposites, "
+                "got side of left while right was True"
+            )
+        right = side == "right"
+    seq_impl = _unwrap(sorted_sequence)
+    if sorter is not None:
+        s_impl = _unwrap(sorter)
+        if s_impl.dtype != _C_engine.I64:
+            raise RuntimeError("searchsorted: sorter must be int64 dtype")
+        if list(s_impl.shape) != list(seq_impl.shape):
+            raise RuntimeError("searchsorted: sorter must match sorted_sequence shape")
+        seq_impl = _C_engine.gather(seq_impl, s_impl, len(seq_impl.shape) - 1)
+    out = _C_engine.searchsorted(seq_impl, _unwrap(input), bool(right))
+    return _C_engine.astype(out, _C_engine.I32) if out_int32 else out
 
 
 def _bucketize_adapter(
     input: Tensor,
     boundaries: Tensor,
     *,
+    out_int32: bool = False,
     right: bool = False,
 ) -> _Impl:
-    """bucketize(values, boundaries, right=False)."""
-    return _C_engine.bucketize(_unwrap(input), _unwrap(boundaries), bool(right))
+    """bucketize(values, boundaries, *, out_int32=False, right=False)."""
+    out = _C_engine.bucketize(_unwrap(input), _unwrap(boundaries), bool(right))
+    return _C_engine.astype(out, _C_engine.I32) if out_int32 else out
 
 
 def _isclose_adapter(

@@ -755,7 +755,7 @@ class Tensor:
     def type_as(self, other: Self) -> Self: ...
     def lerp(self, end: Self, weight: float | Self) -> Self: ...
     def where(self, condition: Self, other: Self | float) -> Self: ...
-    def diff(self, n: int = 1, dim: int = -1) -> Self: ...
+    def diff(self, n: int = 1, dim: int = -1, prepend: Tensor | None = None, append: Tensor | None = None) -> Tensor: ...
     def addmm(
         self, mat1: Self, mat2: Self, *, beta: float = 1.0, alpha: float = 1.0
     ) -> Self: ...
@@ -918,6 +918,8 @@ _SHADOWED_BUILTINS = re.compile(r"\b(int|float|bool)\b")
 def _method_param(param: inspect.Parameter, operand: bool) -> str:
     if operand:
         ptype = "Tensor | _float" if param.name in ("other", "exponent") else "Tensor"
+    elif param.annotation is not inspect.Parameter.empty:
+        ptype = _SHADOWED_BUILTINS.sub(r"_\1", _stringify_annotation(param.annotation))
     else:
         ptype = _SHADOWED_BUILTINS.sub(r"_\1", _PARAM_TYPE_MAP.get(param.name, "object"))
     default = "" if param.default is param.empty else " = ..."
@@ -1021,10 +1023,10 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def cummin(self, dim: _int | None = None) -> Tensor: ...",
         "    def squeeze(self, dim: _int | list[_int] | None = None) -> Tensor: ...",
         "    def unsqueeze(self, dim: DimLike) -> Tensor: ...",
-        "    def gather(self, dim: _int, index: Tensor) -> Tensor: ...",
-        "    def sort(self, dim: _int = -1, descending: _bool = False) -> Tensor: ...",
-        "    def argsort(self, dim: _int = -1, descending: _bool = False) -> Tensor: ...",
-        "    def topk(self, k: _int, dim: _int = -1, largest: _bool = True) -> tuple[Tensor, Tensor]: ...",
+        "    def gather(self, dim: _int, index: Tensor, *, sparse_grad: _bool = False) -> Tensor: ...",
+        "    def sort(self, dim: _int = -1, descending: _bool = False, *, stable: _bool = False) -> Tensor: ...",
+        "    def argsort(self, dim: _int = -1, descending: _bool = False, *, stable: _bool = False) -> Tensor: ...",
+        "    def topk(self, k: _int, dim: _int = -1, largest: _bool = True, sorted: _bool = True) -> tuple[Tensor, Tensor]: ...",
         "    def chunk(self, chunks: _int, dim: _int = 0) -> list[Tensor]: ...",
         "    def softmax(self, dim: _int = -1, dtype: DTypeLike = None) -> Tensor: ...",
         "    def log_softmax(self, dim: _int = -1, dtype: DTypeLike = None) -> Tensor: ...",
@@ -1036,7 +1038,7 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    def repeat(self, repeats: Sequence[_int]) -> Tensor: ...",
         "    @overload",
         "    def repeat(self, *repeats: _int) -> Tensor: ...",
-        "    def repeat_interleave(self, repeats: _int, dim: _int | None = None) -> Tensor: ...",
+        "    def repeat_interleave(self, repeats: _int | Tensor, dim: _int | None = None, *, output_size: _int | None = None) -> Tensor: ...",
         "    def split(self, split_size: _int | list[_int], dim: _int = 0) -> list[Tensor]: ...",
         "    def any(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
         "    def all(self, dim: DimLike = None, keepdim: _bool = False) -> Tensor: ...",
@@ -1083,9 +1085,9 @@ def gen_tensor_pyi() -> tuple[str, int]:
         "    @overload",
         "    def permute(self, *dims: _int) -> Tensor: ...",
         "    @overload",
-        "    def expand(self, size: Sequence[_int]) -> Tensor: ...",
+        "    def expand(self, size: Sequence[_int], *, implicit: _bool = False) -> Tensor: ...",
         "    @overload",
-        "    def expand(self, *size: _int) -> Tensor: ...",
+        "    def expand(self, *size: _int, implicit: _bool = False) -> Tensor: ...",
         "    def diagonal(self, offset: _int = 0, dim1: _int = -2, dim2: _int = -1) -> Tensor: ...",
         "    def as_strided(self, size: Sequence[_int], stride: Sequence[_int], storage_offset: _int | None = None) -> Tensor: ...",
         "    def swapaxes(self, axis0: _int, axis1: _int) -> Tensor: ...",
@@ -1667,6 +1669,11 @@ _PARAM_TYPE_MAP: dict[str, str] = {
     "test_elements": "Tensor",
     "exponent": "Tensor | Scalar",
     "weight": "Tensor",
+    "prepend": "Tensor | None",
+    "append": "Tensor | None",
+    "fweights": "Tensor | None",
+    "aweights": "Tensor | None",
+    "sorter": "Tensor | None",
     "self": "Tensor",
     # ── dim-style (single int, never None) ─────────────────────────────────
     "dim1": "int",
@@ -1711,6 +1718,8 @@ _PARAM_TYPE_MAP: dict[str, str] = {
     "bins": "int",
     "bins_a": "int",
     "bins_b": "int",
+    "decimals": "int",
+    "output_size": "int | None",
     "lo": "float",
     "hi": "float",
     "lo_a": "float",
@@ -1773,6 +1782,10 @@ _PARAM_TYPE_MAP: dict[str, str] = {
     "return_indices": "bool",
     "requires_grad": "bool",
     "as_tuple": "bool",
+    "sparse_grad": "bool",
+    "implicit": "bool",
+    "out_int32": "bool",
+    "assume_unique": "bool",
     # ── strings ────────────────────────────────────────────────────────────
     "mode": "str",
     "norm": "str | None",
@@ -1787,6 +1800,8 @@ _PARAM_TYPE_MAP: dict[str, str] = {
     "name": "str",
     "path": "str",
     "format": "str",
+    "side": "str | None",
+    "compute_mode": "str",
     # ── dtype / device / generator ─────────────────────────────────────────
     "dtype": "DTypeLike",
     "device": "DeviceLike",
@@ -1866,6 +1881,7 @@ def _stringify_annotation(ann: object) -> str:
     raw = repr(ann) if not isinstance(ann, str) else ann
     raw = raw.replace("<class '", "").replace("'>", "")
     raw = raw.replace("typing.", "")
+    raw = raw.replace("collections.abc.", "")
     raw = raw.replace("lucid._tensor.tensor.Tensor", "Tensor")
     raw = raw.replace("lucid._C.engine.TensorImpl", "Tensor")
     raw = raw.replace("lucid._C._engine.TensorImpl", "Tensor")
@@ -2210,14 +2226,14 @@ def gen_init_pyi() -> tuple[str, int]:
         "def argmin(input: Tensor, dim: _int | None = None, keepdim: _bool = False) -> Tensor: ...",
         "def squeeze(input: Tensor, dim: _int | list[_int] | None = None) -> Tensor: ...",
         "def repeat(input: Tensor, repeats: _int, dim: _int | None = None) -> Tensor: ...",
-        "def repeat_interleave(input: Tensor, repeats: _int, dim: _int | None = None) -> Tensor: ...",
+        "def repeat_interleave(input: Tensor, repeats: _int | Tensor, dim: _int | None = None, *, output_size: _int | None = None) -> Tensor: ...",
         "def split(tensor: Tensor, split_size_or_sections: _int | list[_int], dim: _int = 0) -> list[Tensor]: ...",
         "def tensordot(a: Tensor, b: Tensor, dims: _int | list[list[_int]] = 2) -> Tensor: ...",
         "def meshgrid(*tensors: Tensor, indexing: str = 'ij') -> list[Tensor]: ...",
-        "def gather(input: Tensor, dim: _int, index: Tensor) -> Tensor: ...",
+        "def gather(input: Tensor, dim: _int, index: Tensor, *, sparse_grad: _bool = False) -> Tensor: ...",
         # ``lucid.lerp`` / ``lucid.diff`` forward to the method of that name.
         "def lerp(input: Tensor, end: Tensor, weight: _float | Tensor) -> Tensor: ...",
-        "def diff(input: Tensor, n: _int = 1, dim: _int = -1) -> Tensor: ...",
+        "def diff(input: Tensor, n: _int = 1, dim: _int = -1, prepend: Tensor | None = None, append: Tensor | None = None) -> Tensor: ...",
     ]
     seen.update(line.split("(")[0].removeprefix("def ").strip() for line in overrides)
 

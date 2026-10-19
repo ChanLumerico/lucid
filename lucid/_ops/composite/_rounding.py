@@ -15,7 +15,7 @@ from typing import final, override
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._factories.creation import zeros_like
-from lucid._ops._division import _trunc_quotient
+from lucid._ops._division import _round_decimals, _trunc_quotient
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function, FunctionCtx
 
@@ -38,10 +38,32 @@ class _TruncQuotient(Function):
         return (zero if needs_a else None), (zero if needs_b else None)
 
 
+@final
+class _RoundDecimals(Function):
+    """``round(a, decimals=dec)``, with a zero derivative."""
+
+    @override
+    @staticmethod
+    def forward(ctx: FunctionCtx, a: Tensor, dec: int) -> Tensor:
+        return _wrap(_round_decimals(a._impl.data_alias(), dec))
+
+    @override
+    @staticmethod
+    def backward(ctx: FunctionCtx, grad: Tensor) -> tuple[Tensor | None, None]:
+        return (zeros_like(grad) if ctx.needs_input_grad[0] else None), None
+
+
 def _recorded_trunc_quotient(
     a: _C_engine.TensorImpl, b: _C_engine.TensorImpl
 ) -> _C_engine.TensorImpl:
     """``trunc(a / b)`` in the graph, through :class:`_TruncQuotient`."""
     out = _TruncQuotient.apply(_wrap(a), _wrap(b))
+    assert isinstance(out, Tensor)
+    return out._impl
+
+
+def _recorded_round_decimals(a: _C_engine.TensorImpl, dec: int) -> _C_engine.TensorImpl:
+    """``round(a, decimals=dec)`` in the graph, through :class:`_RoundDecimals`."""
+    out = _RoundDecimals.apply(_wrap(a), dec)
     assert isinstance(out, Tensor)
     return out._impl

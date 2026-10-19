@@ -6,7 +6,7 @@ from typing import Sequence, TYPE_CHECKING
 
 import lucid
 from lucid._C import engine as _C_engine
-from lucid._types import DTypeLike
+from lucid._types import DeviceLike, DTypeLike
 from lucid._ops.composite.indexing import _scatter_add
 from lucid._ops._dims import _wrap_dim
 from lucid._ops._reduce import (
@@ -309,7 +309,55 @@ def nanquantile(
 # ── covariance & correlation ──────────────────────────────────────────────────
 
 
-def cov(input: Tensor, *, correction: int = 1) -> Tensor:
+def _cov_weights(
+    n_obs: int,
+    dtype: DTypeLike,
+    device: DeviceLike,
+    fweights: Tensor | None,
+    aweights: Tensor | None,
+) -> tuple[Tensor, Tensor | None]:
+    """Validate ``fweights`` and ``aweights`` for :func:`cov`."""
+    w = lucid.ones((1, n_obs), dtype=dtype, device=device)
+    if fweights is not None:
+        if (
+            fweights.is_floating_point()
+            or fweights.is_complex()
+            or fweights.dtype == lucid.bool_
+        ):
+            raise _C_engine.InvalidArgument(
+                f"cov(): expected fweights to have integral dtype but got {fweights.dtype}"
+            )
+        if fweights.ndim > 1 or int(fweights.numel()) != n_obs:
+            raise _C_engine.InvalidArgument(
+                "cov(): fweights must be 1-D with length matching observation count"
+            )
+        if bool((fweights < 0).any().item()):
+            raise _C_engine.InvalidArgument("cov(): fweights cannot be negative")
+        w = w * fweights.to(dtype=dtype, device=device).reshape(1, n_obs)
+    aw: Tensor | None = None
+    if aweights is not None:
+        if aweights.is_complex() or aweights.dtype == lucid.bool_:
+            raise _C_engine.InvalidArgument(
+                f"cov(): expected aweights to be real numeric but got {aweights.dtype}"
+            )
+        if aweights.ndim > 1 or int(aweights.numel()) != n_obs:
+            raise _C_engine.InvalidArgument(
+                "cov(): aweights must be 1-D with length matching observation count"
+            )
+        if bool((aweights < 0).any().item()):
+            raise _C_engine.InvalidArgument("cov(): aweights cannot be negative")
+        aw = aweights.to(dtype=dtype, device=device).reshape(1, n_obs)
+        w = w * aw
+    return w, aw
+
+
+def cov(
+    input: Tensor,
+    *,
+    correction: int = 1,
+    fweights: Tensor | None = None,
+    aweights: Tensor | None = None,
+) -> Tensor:
     r"""Covariance matrix of ``input``.
 
     Parameters
@@ -321,6 +369,10 @@ def cov(input: Tensor, *, correction: int = 1) -> Tensor:
         Bessel correction; the divisor is ``max(1, M - correction)``.
         Default ``1`` (unbiased sample covariance); pass ``0`` for the
         biased population covariance.
+    fweights : Tensor, optional
+        1-D integer tensor of observation repeat counts (length ``M``).
+    aweights : Tensor, optional
+        1-D numeric tensor of relative observation weights (length ``M``).
 
     Returns
     -------
@@ -332,16 +384,38 @@ def cov(input: Tensor, *, correction: int = 1) -> Tensor:
     --------
     corrcoef : normalised counterpart (Pearson correlation).
     """
-    if input.ndim == 1:
+    if input.ndim > 2:
+        raise _C_engine.InvalidArgument(
+            f"cov(): expected input to have two or fewer dimensions "
+            f"but got an input with {input.ndim} dimensions"
+        )
+    if input.ndim == 0:
+        x = input.reshape(1, 1)
+    elif input.ndim == 1:
         x = input.unsqueeze(0)  # (1, M)
     else:
         x = input  # (N, M)
+    if not lucid.is_floating_point(x) and not lucid.is_complex(x):
+        x = x.to(lucid.get_default_dtype())
 
-    n_obs = x.shape[1]
-    mean = x.sum(dim=1, keepdim=True) * (1.0 / n_obs)  # (N, 1)
-    xc = x - mean  # (N, M)
-    denom = float(max(1, n_obs - correction))
-    return lucid.matmul(xc, xc.swapaxes(-1, -2)) * (1.0 / denom)  # (N, N)
+    n_obs = int(x.shape[1])
+    if fweights is None and aweights is None:
+        mean = x.sum(dim=1, keepdim=True) * (1.0 / n_obs)  # (N, 1)
+        xc = x - mean  # (N, M)
+        denom = float(max(1, n_obs - correction))
+        return lucid.matmul(xc, xc.swapaxes(-1, -2)) * (1.0 / denom)  # (N, N)
+
+    w, aw = _cov_weights(n_obs, x.dtype, x.device, fweights, aweights)
+    w_sum = w.sum()
+    mean = (x * w).sum(dim=1, keepdim=True) / w_sum
+    xc = x - mean
+    if aw is None:
+        denom_t = w_sum - float(correction)
+    elif correction == 0:
+        denom_t = w_sum
+    else:
+        denom_t = w_sum - float(correction) * (w * aw).sum() / w_sum
+    return lucid.matmul(xc * w, xc.swapaxes(-1, -2)) / denom_t
 
 
 def corrcoef(input: Tensor) -> Tensor:
@@ -382,8 +456,21 @@ def corrcoef(input: Tensor) -> Tensor:
 
 # ── pairwise distances ────────────────────────────────────────────────────────
 
+_CDIST_MODES: frozenset[str] = frozenset(
+    {
+        "use_mm_for_euclid_dist_if_necessary",
+        "use_mm_for_euclid_dist",
+        "donot_use_mm_for_euclid_dist",
+    }
+)
 
-def cdist(x1: Tensor, x2: Tensor, p: float = 2.0) -> Tensor:
+
+def cdist(
+    x1: Tensor,
+    x2: Tensor,
+    p: float = 2.0,
+    compute_mode: str = "use_mm_for_euclid_dist_if_necessary",
+) -> Tensor:
     r"""Pairwise :math:`L_p` distance matrix between rows of ``x1`` and ``x2``.
 
     Specialised paths exist for ``p`` in :math:`\{1, 2, \infty, 0\}`;
@@ -404,6 +491,11 @@ def cdist(x1: Tensor, x2: Tensor, p: float = 2.0) -> Tensor:
         :math:`L_p` exponent.  Default ``2.0`` (Euclidean).  Use
         ``float("inf")`` for Chebyshev, ``0.0`` for the Hamming-style
         non-zero count.
+    compute_mode : str, optional
+        Controls whether the matrix-multiplication identity is used when
+        ``p == 2.0``.  One of ``'use_mm_for_euclid_dist_if_necessary'``
+        (default), ``'use_mm_for_euclid_dist'``, or
+        ``'donot_use_mm_for_euclid_dist'``.
 
     Returns
     -------
@@ -420,9 +512,15 @@ def cdist(x1: Tensor, x2: Tensor, p: float = 2.0) -> Tensor:
     """
     from lucid._dispatch import _unwrap, _wrap
 
+    if compute_mode not in _CDIST_MODES:
+        raise _C_engine.InvalidArgument(
+            f"possiblemodes: 'use_mm_for_euclid_dist_if_necessary', "
+            f"'use_mm_for_euclid_dist', 'donot_use_mm_for_euclid_dist', "
+            f"was given: {compute_mode}"
+        )
     for operand in (x1, x2):
         _require_floating(_unwrap(operand), "cdist")
-    if p == 2.0:
+    if p == 2.0 and compute_mode != "donot_use_mm_for_euclid_dist":
         # ||a - b||² = ||a||² + ||b||² − 2 a·bᵀ, which never materialises
         # the (..., P, R, M) difference.
         x1_sq = (x1 * x1).sum(dim=-1, keepdim=True)  # (..., P, 1)
@@ -837,10 +935,55 @@ def histogram2d(
     return counts, x_edges, y_edges
 
 
+def _histogramdd_weighted(
+    input: Tensor,
+    weight: Tensor,
+    bins_seq: list[int],
+    edges_list: list[Tensor],
+    density: bool,
+) -> Tensor:
+    """Compute weighted N-D histogram counts over ``edges_list``."""
+    n_samples, d_axes = int(input.shape[0]), int(input.shape[1])
+    if tuple(weight.shape) != (n_samples,):
+        raise ValueError(
+            f"histogramdd: weight shape {tuple(weight.shape)} must match "
+            f"sample count ({n_samples},)"
+        )
+    dtype = input.dtype if input.is_floating_point() else lucid.get_default_dtype()
+    device = input.device
+    flat_idx = lucid.zeros(n_samples, dtype=lucid.int64, device=device)
+    inside = lucid.ones(n_samples, dtype=lucid.bool, device=device)
+    total_bins = 1
+    for d in range(d_axes):
+        nb = bins_seq[d]
+        total_bins *= nb
+        col = input[:, d].to(dtype)
+        edges = edges_list[d].to(dtype=dtype, device=device)
+        inside = inside & (col >= edges[0]) & (col <= edges[-1])
+        b_d = _uniform_bucket(col, edges, nb).clamp(0, nb - 1)
+        flat_idx = flat_idx * nb + b_d
+    mass = lucid.where(
+        inside, weight.to(dtype), lucid.zeros(n_samples, dtype=dtype, device=device)
+    )
+    counts_flat = _scatter_add(
+        lucid.zeros(total_bins, dtype=dtype, device=device), 0, flat_idx, mass
+    )
+    counts = counts_flat.reshape(bins_seq)
+    if density:
+        counts = counts / counts.sum()
+        for d in range(d_axes):
+            edges = edges_list[d].to(dtype=dtype, device=device)
+            widths = edges[1:] - edges[:-1]
+            shape = [bins_seq[d] if i == d else 1 for i in range(d_axes)]
+            counts = counts / widths.reshape(shape)
+    return counts
+
+
 def histogramdd(
     input: Tensor,
     bins: int | Sequence[int] = 10,
     range: Sequence[tuple[float, float]] | None = None,
+    weight: Tensor | None = None,
     density: bool = False,
 ) -> tuple[Tensor, list[Tensor]]:
     """N-dimensional histogram for arbitrary sample dimension.
@@ -857,6 +1000,8 @@ def histogramdd(
     range : sequence of (float, float), optional
         Per-axis ``(lo, hi)`` ranges.  When ``None`` (default) each
         axis uses its own ``(min, max)`` of the samples.
+    weight : Tensor, optional
+        1-D tensor of shape ``(N,)`` holding per-sample weights.
     density : bool, optional
         When ``True`` divide by total count × bin volume to yield a
         density that integrates to 1.  Default ``False``.
@@ -910,7 +1055,7 @@ def histogramdd(
             )
 
     counts_impl, edges_impl = _C_engine.histogramdd(
-        _unwrap(input), bins_seq, ranges, density
+        _unwrap(input), bins_seq, ranges, density and weight is None
     )
     counts = _wrap(counts_impl)
     edges_flat = _wrap(edges_impl)
@@ -921,6 +1066,8 @@ def histogramdd(
         n = bins_seq[d] + 1
         edges_list.append(edges_flat[offset : offset + n])
         offset += n
+    if weight is not None:
+        counts = _histogramdd_weighted(input, weight, bins_seq, edges_list, density)
     return counts, edges_list
 
 

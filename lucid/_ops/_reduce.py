@@ -527,3 +527,110 @@ def _log_softmax_adapter(
         floating_only=True,
     )
 
+
+def _max_adapter(
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> _Impl:
+    """max(x, dim=None, keepdim=False)."""
+    return _C_engine.max(x_impl, _reduction_axes(x_impl, dim, "max"), bool(keepdim))
+
+
+def _min_adapter(
+    x_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> _Impl:
+    """min(x, dim=None, keepdim=False)."""
+    return _C_engine.min(x_impl, _reduction_axes(x_impl, dim, "min"), bool(keepdim))
+
+
+def _flat_arg_reduce(
+    engine_fn: Callable[[_Impl, int, bool], _Impl],
+    name: str,
+    x_impl: _Impl,
+    keepdim: bool,
+) -> _Impl:
+    """``dim=None``: the index into the flattened tensor, as documented."""
+    shape = list(x_impl.shape)
+    if math.prod(shape) == 0:
+        raise IndexError(
+            f"{name}(): Expected reduction dim to be specified for input.numel() == 0."
+        )
+    out = engine_fn(_C_engine.reshape(x_impl, [-1]), 0, False)
+    return _C_engine.reshape(out, [1] * len(shape)) if keepdim else out
+
+
+def _argmax_adapter(
+    x_impl: _Impl,
+    dim: int | None = None,
+    keepdim: bool = False,
+) -> _Impl:
+    """argmax(x, dim=None, keepdim=False)."""
+    if dim is None:
+        return _flat_arg_reduce(_C_engine.argmax, "argmax", x_impl, bool(keepdim))
+    return _C_engine.argmax(x_impl, int(dim), bool(keepdim))
+
+
+def _argmin_adapter(
+    x_impl: _Impl,
+    dim: int | None = None,
+    keepdim: bool = False,
+) -> _Impl:
+    """argmin(x, dim=None, keepdim=False)."""
+    if dim is None:
+        return _flat_arg_reduce(_C_engine.argmin, "argmin", x_impl, bool(keepdim))
+    return _C_engine.argmin(x_impl, int(dim), bool(keepdim))
+
+
+def _truth_count(a_impl: _Impl, axes: list[int], keepdim: bool, falsy: bool) -> _Impl:
+    """How many entries along ``axes`` are non-zero (``falsy``: are zero)."""
+    if a_impl.dtype in (_C_engine.C64, _C_engine.C128):
+        truth = _C_engine.logical_or(
+            _C_engine.astype(_C_engine.real(a_impl), _C_engine.Bool),
+            _C_engine.astype(_C_engine.imag(a_impl), _C_engine.Bool),
+        )
+    else:
+        truth = _C_engine.astype(a_impl, _C_engine.Bool)
+    if falsy:
+        truth = _C_engine.logical_not(truth)
+    return _C_engine.sum(truth, axes, keepdim)
+
+
+def _logical_reduce(
+    name: str, a_impl: _Impl, dim: int | Sequence[int] | None, keepdim: bool
+) -> _Impl:
+    """``any`` / ``all`` over ``dim`` — ``all`` is "no entry is zero"."""
+    if dim is None and not keepdim:
+        return _C_engine.any(a_impl) if name == "any" else _C_engine.all(a_impl)
+    axes = _reduction_axes(a_impl, dim, name)
+    counted = _truth_count(a_impl, axes, bool(keepdim), falsy=name == "all")
+    none = _C_engine.equal(counted, _C_engine.zeros_like(counted))
+    return none if name == "all" else _C_engine.logical_not(none)
+
+
+def _any_adapter(
+    a_impl: _Impl, dim: int | Sequence[int] | None = None, keepdim: bool = False
+) -> _Impl:
+    """any(input, dim=None, keepdim=False) — whether some entry is non-zero."""
+    return _logical_reduce("any", a_impl, dim, keepdim)
+
+
+def _all_adapter(
+    a_impl: _Impl, dim: int | Sequence[int] | None = None, keepdim: bool = False
+) -> _Impl:
+    """all(input, dim=None, keepdim=False) — whether every entry is non-zero."""
+    return _logical_reduce("all", a_impl, dim, keepdim)
+
+
+def _logsumexp_adapter(
+    a_impl: _Impl,
+    dim: int | Sequence[int] | None = None,
+    keepdim: bool = False,
+) -> _Impl:
+    """logsumexp(a, dim=None, keepdim=False) — accept axis/None like sum/mean."""
+    axes = _reduction_axes(a_impl, dim, "logsumexp")
+    if _promotion.is_integral(a_impl.dtype):
+        a_impl = _C_engine.astype(a_impl, to_engine_dtype(None))
+    return _C_engine.logsumexp(a_impl, axes, bool(keepdim))

@@ -241,6 +241,7 @@ def isin(
     elements: Tensor | TensorLike,
     test_elements: Tensor | TensorLike,
     *,
+    assume_unique: bool = False,
     invert: bool = False,
 ) -> Tensor:
     r"""Per-element set-membership test.
@@ -256,6 +257,10 @@ def isin(
         reshaped back to ``elements.shape``.
     test_elements : Tensor | TensorLike
         The set of values to test against. Flattened internally.
+    assume_unique : bool, optional
+        If ``True``, assumes both ``elements`` and ``test_elements``
+        contain unique items. Accepted for reference-framework parity;
+        defaults to ``False``.
     invert : bool, optional
         If ``True``, return the negation of the membership test.
         Defaults to ``False``.
@@ -288,6 +293,7 @@ def isin(
     >>> lucid.isin(e, t)
     tensor([False, True, False, True], dtype=lucid.bool)
     """
+    del assume_unique
     if not _is_tensor(elements):
         elements = lucid.tensor(elements)
     if not _is_tensor(test_elements):

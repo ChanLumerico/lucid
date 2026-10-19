@@ -510,15 +510,6 @@ _EXPORT = "export-owned (lucid.compile / lucid.serialization), filed from LCD-41
 #: Signatures that still differ from the reference — strict, so a fix flips
 #: its case to XPASS and the entry leaves with it.
 _SIGNATURE_GAPS: dict[str, str] = {
-    "Tensor.add": _LCD_412,
-    "Tensor.add_": _LCD_412,
-    "Tensor.diff": _LCD_412,
-    "Tensor.expand": _LCD_412,
-    "Tensor.gather": _LCD_412,
-    "Tensor.repeat_interleave": _LCD_412,
-    "Tensor.sub": _LCD_412,
-    "Tensor.sub_": _LCD_412,
-    "Tensor.topk": _LCD_412,
     "amp.autocast.__init__": _LCD_412,
     "autograd.functional.hessian": _LCD_412,
     "autograd.functional.jacobian": _LCD_412,
@@ -554,21 +545,8 @@ _SIGNATURE_GAPS: dict[str, str] = {
     "linalg.vander": _LCD_431,
     "linalg.vecdot": _LCD_431,
     "linalg.vector_norm": _LCD_431,
-    "lucid.add": _LCD_412,
-    "lucid.bucketize": _LCD_412,
-    "lucid.cdist": _LCD_412,
     "lucid.compile": _EXPORT,
-    "lucid.cov": _LCD_412,
-    "lucid.diff": _LCD_412,
-    "lucid.from_dlpack": _LCD_412,
-    "lucid.gather": _LCD_412,
-    "lucid.histogramdd": _LCD_412,
-    "lucid.isin": _LCD_412,
-    "lucid.repeat_interleave": _LCD_412,
     "lucid.save": _EXPORT,
-    "lucid.searchsorted": _LCD_412,
-    "lucid.sub": _LCD_412,
-    "lucid.topk": _LCD_412,
     "nn.BatchNorm1d": _LCD_430,
     "nn.BatchNorm2d": _LCD_430,
     "nn.BatchNorm3d": _LCD_430,
@@ -931,3 +909,84 @@ def test_atan2_reads_input_over_other(ref: ModuleType, device: str) -> None:
     want = ref.atan2(ref.tensor(x.tolist()), ref.tensor(y.tolist())).tolist()
     for got in (lucid.atan2(x, y), lucid.atan2(input=x, other=y), x.atan2(other=y)):
         assert got.tolist() == pytest.approx(want, rel=1e-6)
+
+
+def test_lcd412_ops_and_tensor_keywords_match_reference(
+    ref: ModuleType, device: str
+) -> None:
+    x = lucid.tensor([1.0, 2.0, 3.0], device=device)
+    y = lucid.tensor([0.5, -1.0, 2.0], device=device)
+    assert lucid.add(x, y, alpha=2.0).tolist() == pytest.approx([2.0, 0.0, 7.0])
+    assert lucid.sub(x, y, alpha=2.0).tolist() == pytest.approx([0.0, 4.0, -1.0])
+    xc = x.clone()
+    xc.add_(y, alpha=2.0)
+    assert xc.tolist() == pytest.approx([2.0, 0.0, 7.0])
+    xc.sub_(y, alpha=2.0)
+    assert xc.tolist() == pytest.approx([1.0, 2.0, 3.0])
+
+    r = lucid.tensor([1.2345, -2.555, 125.0], device=device)
+    assert lucid.round(r, decimals=2).tolist() == pytest.approx([1.23, -2.56, 125.0])
+    assert lucid.round(r, decimals=-1).tolist() == pytest.approx([0.0, -0.0, 120.0])
+    rc = r.clone()
+    rc_view = rc[:]
+    rc.round_(decimals=2)
+    assert rc_view.tolist() == pytest.approx([1.23, -2.56, 125.0])
+
+    rep = lucid.tensor([1, 2, 1], device=device)
+    assert lucid.repeat_interleave(x, rep, dim=0, output_size=4).tolist() == [
+        1.0,
+        2.0,
+        2.0,
+        3.0,
+    ]
+
+    seq = lucid.tensor([1.0, 3.0, 5.0], device=device)
+    vals = lucid.tensor([3.0, 0.0], device=device)
+    s_i32 = lucid.searchsorted(seq, vals, out_int32=True, side="right")
+    assert s_i32.dtype == lucid.int32 and s_i32.tolist() == [2, 0]
+    b_i32 = lucid.bucketize(vals, seq, out_int32=True, right=True)
+    assert b_i32.dtype == lucid.int32 and b_i32.tolist() == [2, 0]
+
+    prep = lucid.tensor([0.0], device=device)
+    app = lucid.tensor([6.0], device=device)
+    assert x.diff(n=1, dim=0, prepend=prep, append=app).tolist() == [
+        1.0,
+        1.0,
+        1.0,
+        3.0,
+    ]
+    assert lucid.isin(
+        x, lucid.tensor([2.0, 4.0], device=device), assume_unique=True
+    ).tolist() == [
+        False,
+        True,
+        False,
+    ]
+
+    mat = lucid.tensor([[1.0, 2.0, 4.0], [2.0, 0.0, 1.0]], device=device)
+    fw = lucid.tensor([1, 2, 1], device=device)
+    aw = lucid.tensor([0.5, 1.5, 1.0], device=device)
+    rmat = ref.tensor([[1.0, 2.0, 4.0], [2.0, 0.0, 1.0]])
+    rfw = ref.tensor([1, 2, 1])
+    raw = ref.tensor([0.5, 1.5, 1.0])
+    assert lucid.cov(mat, fweights=fw, aweights=aw).reshape(
+        -1
+    ).tolist() == pytest.approx(
+        ref.cov(rmat, fweights=rfw, aweights=raw).reshape(-1).tolist(), rel=1e-5
+    )
+
+    pts = lucid.tensor([[0.1, 0.2], [0.8, 0.9]], device=device)
+    w = lucid.tensor([2.5, 1.5], device=device)
+    counts, _ = lucid.histogramdd(pts, bins=2, range=[(0.0, 1.0), (0.0, 1.0)], weight=w)
+    assert counts.reshape(-1).tolist() == pytest.approx([2.5, 0.0, 0.0, 1.5])
+    rpts = ref.tensor([[0.1, 0.2], [0.8, 0.9]])
+    assert lucid.cdist(
+        pts, pts, p=2.0, compute_mode="donot_use_mm_for_euclid_dist"
+    ).reshape(-1).tolist() == pytest.approx(
+        ref.cdist(rpts, rpts, p=2.0, compute_mode="donot_use_mm_for_euclid_dist")
+        .reshape(-1)
+        .tolist(),
+        abs=1e-6,
+    )
+    dl = lucid.from_dlpack(lucid.tensor([1.0, 2.0]), device=device, copy=True)
+    assert dl.device.type == device and dl.tolist() == [1.0, 2.0]

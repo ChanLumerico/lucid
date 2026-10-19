@@ -629,7 +629,12 @@ def from_numpy(ndarray: np.ndarray, /) -> Tensor:
 _DLPACK_METAL = 8
 
 
-def from_dlpack(ext_tensor: object) -> Tensor:
+def from_dlpack(
+    ext_tensor: object,
+    *,
+    device: DeviceLike = None,
+    copy: bool | None = None,
+) -> Tensor:
     """Construct a Lucid tensor from any object exposing the DLPack
     protocol (``__dlpack__``) or from a raw PyCapsule.
 
@@ -641,17 +646,29 @@ def from_dlpack(ext_tensor: object) -> Tensor:
       Metal tensor two views of one allocation. NumPy cannot read a
       capsule of this device type, so this path bypasses it entirely.
     * **Everything else** — through NumPy, which shares host memory
-      where it can. The result lives on the CPU regardless of the
-      producer's device; call ``.to("metal")`` after importing.
+      where it can. The result lives on the CPU by default unless
+      ``device`` is explicitly specified.
 
     Requires numpy for the host dialect — install via
     ``pip install lucid[numpy]`` if missing. The Metal dialect needs
     nothing.
+
+    Parameters
+    ----------
+    ext_tensor : object
+        An object exposing ``__dlpack__`` or a raw DLPack ``PyCapsule``.
+    device : DeviceLike, optional
+        Target device for the returned tensor.
+    copy : bool or None, optional
+        If ``True``, always copy the data; if ``False``, raise ``BufferError``
+        when a copy is required.
     """
-    device = getattr(ext_tensor, "__dlpack_device__", None)
-    if callable(device):
+    from lucid._dispatch import _parse_device, _wrap
+
+    dl_device = getattr(ext_tensor, "__dlpack_device__", None)
+    if callable(dl_device):
         try:
-            kind, _index = device()
+            kind, _index = dl_device()
         except (
             AttributeError,
             NotImplementedError,
@@ -662,15 +679,27 @@ def from_dlpack(ext_tensor: object) -> Tensor:
             # A broken producer falls back to numpy.
             kind = None
         if kind == _DLPACK_METAL:
-            from lucid._C import engine as _C_engine
-            from lucid._dispatch import _wrap
-
             capsule = ext_tensor.__dlpack__()  # type: ignore[attr-defined]
-            return _wrap(_C_engine.from_dlpack_metal(capsule))
+            out = _wrap(_C_engine.from_dlpack_metal(capsule))
+            if device is not None:
+                target_dev = _parse_device(device)
+                if target_dev != out._impl.device:
+                    if copy is False:
+                        raise BufferError(
+                            "from_dlpack: cannot move across devices when copy=False"
+                        )
+                    return out.to(device=target_dev)
+            return out.clone() if copy else out
 
+    if (
+        device is not None
+        and copy is False
+        and _parse_device(device) != _C_engine.Device.CPU
+    ):
+        raise BufferError("from_dlpack: cannot move across devices when copy=False")
     np = _require_numpy("lucid.from_dlpack")
     arr = np.from_dlpack(ext_tensor)  # type: ignore[attr-defined]
-    return tensor(arr)
+    return tensor(arr, device=device)
 
 
 def to_dlpack(tensor: Tensor) -> object:

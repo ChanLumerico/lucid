@@ -564,7 +564,9 @@ def aminmax(
     (-1.0, 4.0)
     """
     if dim is not None and (isinstance(dim, bool) or not isinstance(dim, int)):
-        raise TypeError(f"aminmax(): argument 'dim' must be int, not {type(dim).__name__}")
+        raise TypeError(
+            f"aminmax(): argument 'dim' must be int, not {type(dim).__name__}"
+        )
     if dim is None:
         lo = lucid.min(input)
         hi = lucid.max(input)
@@ -613,9 +615,7 @@ def logcumsumexp(input: Tensor, dim: int) -> Tensor:
         return input.clone()
     n = int(input.shape[d])
     work_dt = (
-        lucid.float32
-        if input.dtype in (lucid.float16, lucid.bfloat16)
-        else input.dtype
+        lucid.float32 if input.dtype in (lucid.float16, lucid.bfloat16) else input.dtype
     )
     acc = input.to(work_dt) if work_dt != input.dtype else input
     step = 1
@@ -675,7 +675,9 @@ def renorm(input: Tensor, p: float, dim: int, maxnorm: float) -> Tensor:
     return out.to(input.dtype) if is_half else out
 
 
-def _align_trapezoid_x(name: str, yw: Tensor, x: Tensor, d: int) -> tuple[Tensor, Tensor]:
+def _align_trapezoid_x(
+    name: str, yw: Tensor, x: Tensor, d: int
+) -> tuple[Tensor, Tensor]:
     if x.dtype == lucid.bool:
         raise RuntimeError(
             f"{name}: received a bool input for `x`, but bool is not supported"
@@ -808,6 +810,50 @@ def cumulative_trapezoid(
     """
     areas, d = _trapezoid_areas("cumulative_trapezoid", y, x, dx, dim)
     return lucid.cumsum(areas, dim=d)
+
+
+def _validate_diff_extra(input: Tensor, d: int, extra: Tensor | None) -> None:
+    if extra is None:
+        return
+    if extra.ndim != input.ndim or any(
+        extra.shape[i] != input.shape[i] for i in range(input.ndim) if i != d
+    ):
+        raise _C_engine.InvalidArgument(
+            "diff expects prepend and append to match input shape "
+            "on all dimensions except dim"
+        )
+
+
+def _diff(
+    input: Tensor,
+    n: int = 1,
+    dim: int = -1,
+    prepend: Tensor | None = None,
+    append: Tensor | None = None,
+) -> Tensor:
+    """Compute the ``n``-th discrete difference along ``dim``."""
+    d = _wrap_dim(dim, input.ndim, "diff")
+    if input.ndim == 0:
+        raise _C_engine.InvalidArgument(
+            "diff expects input to be at least one-dimensional"
+        )
+    if n < 0:
+        raise _C_engine.InvalidArgument(f"order must be non-negative but got {n}")
+    _validate_diff_extra(input, d, prepend)
+    _validate_diff_extra(input, d, append)
+    if n == 0:
+        return input
+    parts = [t for t in (prepend, input, append) if t is not None]
+    result = lucid.cat(parts, dim=d) if len(parts) > 1 else input
+    for _ in range(n):
+        length = int(result.shape[d])
+        if length <= 1:
+            result = result.narrow(d, 0, 0)
+            continue
+        a = result.narrow(d, 1, length - 1)
+        b = result.narrow(d, 0, length - 1)
+        result = lucid.logical_xor(a, b) if result.dtype == lucid.bool else a - b
+    return result
 
 
 __all__ = [

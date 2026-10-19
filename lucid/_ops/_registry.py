@@ -16,12 +16,19 @@ from typing import Any, Callable
 from lucid import _dispatch
 from lucid._C import engine as _C_engine
 from lucid._ops import _adapters as A  # accessor for every signature-normaliser
-from lucid._ops._division import _make_div_adapter
+from lucid._ops._division import _make_div_adapter, _make_round_adapter
 from lucid._ops._reduce import (
+    _all_adapter,
+    _any_adapter,
+    _argmax_adapter,
+    _argmin_adapter,
     _cumprod_adapter,
     _cumsum_adapter,
     _log_softmax_adapter,
+    _logsumexp_adapter,
+    _max_adapter,
     _mean_adapter,
+    _min_adapter,
     _prod_adapter,
     _softmax_adapter,
     _std_adapter,
@@ -162,7 +169,8 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("reciprocal",_float_valued(_R.reciprocal),1, method_name="reciprocal",free_fn_name="reciprocal"),
     OpEntry("floor",     _R.floor,     1, method_name="floor",     free_fn_name="floor"),
     OpEntry("ceil",      _R.ceil,      1, method_name="ceil",      free_fn_name="ceil"),
-    OpEntry("round",     _R.round,     1, method_name="round",     free_fn_name="round"),
+    OpEntry("round",     _make_round_adapter(), 1, method_name="round", free_fn_name="round",
+            extra_kwargs=["decimals"]),
     OpEntry("sin",       _float_valued(_R.sin),       1, method_name="sin",       free_fn_name="sin"),
     OpEntry("cos",       _float_valued(_R.cos),       1, method_name="cos",       free_fn_name="cos"),
     OpEntry("tan",       _float_valued(_R.tan),       1, method_name="tan",       free_fn_name="tan"),
@@ -214,7 +222,8 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("relu_",       _R.relu_,       1, inplace=True, method_name="relu_"),
     OpEntry("floor_",      _R.floor_,      1, inplace=True, method_name="floor_"),
     OpEntry("ceil_",       _R.ceil_,       1, inplace=True, method_name="ceil_"),
-    OpEntry("round_",      _R.round_,      1, inplace=True, method_name="round_"),
+    OpEntry("round_",      _make_round_adapter(inplace=True), 1, inplace=True, method_name="round_",
+            extra_kwargs=["decimals"]),
 
     # ── binary ─────────────────────────────────────────────────────────────
     # add/sub/mul/pow/maximum/minimum are wrapped with _make_arith_adapter
@@ -225,8 +234,10 @@ _REGISTRY: list[OpEntry] = [
     # the engine enforces.  outer has none — an elementwise product, nothing
     # contracted — so it promotes its two tensors (and only tensors) through
     # the adapter it shares with linalg.outer.
-    OpEntry("add",      A._make_arith_adapter(_R.add),      2, method_name="add",      free_fn_name="add"),
-    OpEntry("sub",      A._make_arith_adapter(_R.sub),      2, method_name="sub",      free_fn_name="sub"),
+    OpEntry("add",      A._make_arith_adapter(_R.add),      2, method_name="add",      free_fn_name="add",
+            extra_kwargs=["alpha"]),
+    OpEntry("sub",      A._make_arith_adapter(_R.sub),      2, method_name="sub",      free_fn_name="sub",
+            extra_kwargs=["alpha"]),
     OpEntry("mul",      A._make_arith_adapter(_R.mul),      2, method_name="mul",      free_fn_name="mul"),
     # div adds ``rounding_mode``: "floor" is floor_divide's path, "trunc"
     # rounds toward zero (``lucid._ops._division``).
@@ -243,8 +254,10 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("outer",    A._outer_adapter, 2, method_name="outer", free_fn_name="outer"),
 
     # ── in-place binary ────────────────────────────────────────────────────
-    OpEntry("add_",     A._make_arith_adapter(_R.add_, inplace=True),     2, inplace=True, method_name="add_"),
-    OpEntry("sub_",     A._make_arith_adapter(_R.sub_, inplace=True),     2, inplace=True, method_name="sub_"),
+    OpEntry("add_",     A._make_arith_adapter(_R.add_, inplace=True),     2, inplace=True, method_name="add_",
+            extra_kwargs=["alpha"]),
+    OpEntry("sub_",     A._make_arith_adapter(_R.sub_, inplace=True),     2, inplace=True, method_name="sub_",
+            extra_kwargs=["alpha"]),
     OpEntry("mul_",     A._make_arith_adapter(_R.mul_, inplace=True),     2, inplace=True, method_name="mul_"),
     OpEntry("div_",     _make_div_adapter(inplace=True), 2, inplace=True, method_name="div_"),
     OpEntry("pow_",     A._make_arith_adapter(_R.pow_, inplace=True),     2, inplace=True, method_name="pow_"),
@@ -258,15 +271,15 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["dim", "keepdim", "dtype"]),
     OpEntry("prod",   _prod_adapter,   1, method_name="prod",   free_fn_name="prod",
             extra_kwargs=["dim", "keepdim", "dtype"]),
-    OpEntry("max",    A._max_adapter,    1, method_name="max",    free_fn_name="max",
+    OpEntry("max",    _max_adapter,    1, method_name="max",    free_fn_name="max",
             extra_kwargs=["dim", "keepdim"]),
-    OpEntry("min",    A._min_adapter,    1, method_name="min",    free_fn_name="min",
+    OpEntry("min",    _min_adapter,    1, method_name="min",    free_fn_name="min",
             extra_kwargs=["dim", "keepdim"]),
     OpEntry("var",    _var_adapter,      1, method_name="var",    free_fn_name="var",
             extra_kwargs=["dim", "keepdim", "correction", "unbiased"]),
-    OpEntry("argmax", A._argmax_adapter, 1, method_name="argmax", free_fn_name="argmax",
+    OpEntry("argmax", _argmax_adapter, 1, method_name="argmax", free_fn_name="argmax",
             extra_kwargs=["dim", "keepdim"]),
-    OpEntry("argmin", A._argmin_adapter, 1, method_name="argmin", free_fn_name="argmin",
+    OpEntry("argmin", _argmin_adapter, 1, method_name="argmin", free_fn_name="argmin",
             extra_kwargs=["dim", "keepdim"]),
     OpEntry("cumsum", _cumsum_adapter, 1, method_name="cumsum", free_fn_name="cumsum",
             extra_kwargs=["dim", "dtype"]),
@@ -296,7 +309,8 @@ _REGISTRY: list[OpEntry] = [
     # broadcast_to is expand without the -1: a view on the CPU, as expand is.
     OpEntry("broadcast_to", A._broadcast_to_adapter, 1, method_name="broadcast_to",
             free_fn_name="broadcast_to", extra_kwargs=["size"]),
-    OpEntry("expand",     A._expand_adapter, 1, method_name="expand",     free_fn_name="expand"),
+    OpEntry("expand",     A._expand_adapter, 1, method_name="expand",     free_fn_name="expand",
+            extra_kwargs=["size", "implicit"]),
     OpEntry("as_strided", A._as_strided_adapter, 1, method_name="as_strided", free_fn_name="as_strided"),
     OpEntry("expand_dims",_R.expand_dims,1, method_name="expand_dims",
             extra_kwargs=["dim"]),
@@ -328,15 +342,15 @@ _REGISTRY: list[OpEntry] = [
     # gather(input, dim, index), the reference order.  The engine takes
     # (a, indices, dim); the adapter reorders.
     OpEntry("gather",    A._gather_adapter, 1, method_name="gather", free_fn_name="gather",
-            extra_kwargs=["dim", "index"]),
+            extra_kwargs=["dim", "index", "sparse_grad"]),
     OpEntry("sort",      A._sort_adapter,    1, method_name="sort",      free_fn_name="sort",
-            extra_kwargs=["dim", "descending"]),
+            extra_kwargs=["dim", "descending", "stable"]),
     OpEntry("argsort",   A._argsort_adapter, 1, method_name="argsort",   free_fn_name="argsort",
-            extra_kwargs=["dim", "descending"]),
+            extra_kwargs=["dim", "descending", "stable"]),
     OpEntry("nonzero",   A._nonzero_adapter, 1, method_name="nonzero", free_fn_name="nonzero"),
     OpEntry("unique",    A._unique_adapter,  1, method_name=None,      free_fn_name="unique"),
     OpEntry("topk",      A._topk_adapter, 1, method_name="topk",      free_fn_name="topk",
-            extra_kwargs=["k", "dim", "largest"]),
+            extra_kwargs=["k", "dim", "largest", "sorted"]),
     OpEntry("diagonal",  _R.diagonal,  1, method_name="diagonal",  free_fn_name="diagonal",
             extra_kwargs=["offset", "dim1", "dim2"]),
 
@@ -391,9 +405,9 @@ _REGISTRY: list[OpEntry] = [
             extra_kwargs=["dim", "keepdim", "correction", "unbiased"]),
 
     # ── boolean reductions ─────────────────────────────────────────────────
-    OpEntry("any", A._any_adapter, 1, method_name="any", free_fn_name="any",
+    OpEntry("any", _any_adapter, 1, method_name="any", free_fn_name="any",
             extra_kwargs=["dim", "keepdim"]),
-    OpEntry("all", A._all_adapter, 1, method_name="all", free_fn_name="all",
+    OpEntry("all", _all_adapter, 1, method_name="all", free_fn_name="all",
             extra_kwargs=["dim", "keepdim"]),
 
     # ── linear algebra ─────────────────────────────────────────────────────
@@ -448,7 +462,7 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("nextafter", A._make_arith_adapter(_R.nextafter), 2, method_name="nextafter", free_fn_name="nextafter"),
 
     # ── reduction compositions ──────────────────────────────────────────────
-    OpEntry("logsumexp", A._logsumexp_adapter, 1,
+    OpEntry("logsumexp", _logsumexp_adapter, 1,
             method_name="logsumexp", free_fn_name="logsumexp"),
 
     # ── linear-algebra compositions ─────────────────────────────────────────
@@ -492,10 +506,10 @@ _REGISTRY: list[OpEntry] = [
             method_name=None, free_fn_name="cartesian_prod"),
     OpEntry("searchsorted",  A._searchsorted_adapter, 2,
             method_name=None, free_fn_name="searchsorted",
-            extra_kwargs=["right"]),
+            extra_kwargs=["out_int32", "right", "side", "sorter"]),
     OpEntry("bucketize",     A._bucketize_adapter, 2,
             method_name=None, free_fn_name="bucketize",
-            extra_kwargs=["right"]),
+            extra_kwargs=["out_int32", "right"]),
 
     # ══ aliases of existing primitives (no new C++ — share engine kernels) ══
 
@@ -540,7 +554,9 @@ _REGISTRY: list[OpEntry] = [
     # repeat_interleave: thin wrapper around engine.repeat that supports
     # ``dim=None`` (flatten first) like the reference framework's API.
     OpEntry("repeat_interleave", A._repeat_interleave_adapter, 1,
-            method_name="repeat_interleave", free_fn_name="repeat_interleave"),
+            method_name="repeat_interleave", free_fn_name="repeat_interleave",
+            extra_kwargs=["repeats", "dim", "output_size"]),
+
 
     # Shape aliases.
     OpEntry("view",   A._view_adapter,   1,

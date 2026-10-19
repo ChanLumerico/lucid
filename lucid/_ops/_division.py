@@ -13,7 +13,7 @@ from collections.abc import Callable
 
 from lucid import _promotion
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _binary_operands
+from lucid._dispatch import _REAL_FLOATS, _binary_operands
 from lucid._dtype import _ENGINE_TO_DTYPE
 from lucid._ops._adapters import _BINARY_SIGNATURE
 
@@ -28,6 +28,19 @@ _DIV_SIGNATURE = _BINARY_SIGNATURE.replace(
             inspect.Parameter.KEYWORD_ONLY,
             default=None,
             annotation=str | None,
+        ),
+    ]
+)
+
+#: ``round``'s ``(input, *, decimals=0)``, the reference's.
+_ROUND_SIGNATURE = inspect.Signature(
+    [
+        inspect.Parameter("input", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        inspect.Parameter(
+            "decimals",
+            inspect.Parameter.KEYWORD_ONLY,
+            default=0,
+            annotation=int,
         ),
     ]
 )
@@ -120,4 +133,34 @@ def _make_div_adapter(*, inplace: bool = False) -> Callable[..., _Impl]:
     _adapter.__doc__ = getattr(_C_engine.div, "__doc__", None)
     _adapter.__name__ = "div_" if inplace else "div"
     _adapter.__dict__["__signature__"] = _DIV_SIGNATURE
+    return _adapter
+
+
+def _round_decimals(a: _Impl, dec: int) -> _Impl:
+    """Round a real floating-point ``a`` to ``dec`` decimal places."""
+    work = _C_engine.astype(a, _C_engine.F32) if a.dtype == _C_engine.BF16 else a
+    scale = _C_engine.full([], 10.0 ** abs(dec), work.dtype, work.device)
+    if dec > 0:
+        out = _C_engine.div(_C_engine.round(_C_engine.mul(work, scale)), scale)
+    else:
+        out = _C_engine.mul(_C_engine.round(_C_engine.div(work, scale)), scale)
+    return _C_engine.astype(out, a.dtype) if work.dtype != a.dtype else out
+
+
+def _make_round_adapter(*, inplace: bool = False) -> Callable[..., _Impl]:
+    """``round(input, *, decimals=0)``, or ``round_`` with ``inplace``."""
+
+    def _adapter(input: _Impl, /, *, decimals: int = 0) -> _Impl:
+        dec = int(decimals)
+        if dec == 0 or input.dtype not in _REAL_FLOATS:
+            return _C_engine.round_(input) if inplace else _C_engine.round(input)
+        if _C_engine.grad_enabled() and input.requires_grad:
+            from lucid._ops.composite._rounding import _recorded_round_decimals
+
+            return _recorded_round_decimals(input, dec)
+        return _round_decimals(input, dec)
+
+    _adapter.__doc__ = getattr(_C_engine.round, "__doc__", None)
+    _adapter.__name__ = "round_" if inplace else "round"
+    _adapter.__dict__["__signature__"] = _ROUND_SIGNATURE
     return _adapter

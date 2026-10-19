@@ -51,7 +51,6 @@ from lucid._factories.creation import (
     full as _full,
 )
 from lucid._factories.converters import tensor as _tensor_fn, _to_impl
-from lucid._ops._dims import _wrap_dim
 
 if TYPE_CHECKING:
     from lucid.autograd._hooks import RemovableHandle as _RemovableHandle
@@ -3975,7 +3974,13 @@ class Tensor:
             _where_adapter(condition, self, other)
         )
 
-    def diff(self, n: int = 1, dim: int = -1) -> Self:
+    def diff(
+        self,
+        n: int = 1,
+        dim: int = -1,
+        prepend: Tensor | None = None,
+        append: Tensor | None = None,
+    ) -> Tensor:
         r"""Compute the ``n``-th order discrete difference along ``dim``.
 
         The first-order difference operator :math:`\Delta` is defined as
@@ -4000,12 +4005,18 @@ class Tensor:
         dim : int, optional
             Axis along which to compute the difference. Negative values
             count from the end. Default ``-1`` (last axis).
+        prepend : Tensor, optional
+            Values to prepend to ``self`` along ``dim`` before computing the
+            difference.
+        append : Tensor, optional
+            Values to append to ``self`` along ``dim`` before computing the
+            difference.
 
         Returns
         -------
         Tensor
-            Tensor whose size along ``dim`` is ``self.shape[dim] - n`` and
-            whose other axes match ``self``.
+            Tensor whose size along ``dim`` is ``self.shape[dim] - n`` (plus any
+            prepended/appended elements) and whose other axes match ``self``.
 
         Notes
         -----
@@ -4022,20 +4033,9 @@ class Tensor:
         >>> x.diff(n=2).tolist()
         [1.0, 1.0, 1.0]
         """
-        d = _wrap_dim(dim, len(self._impl.shape), "diff")
-        if not self._impl.shape:
-            raise _C_engine.InvalidArgument(
-                "diff expects input to be at least one-dimensional"
-            )
-        if n < 0:
-            raise _C_engine.InvalidArgument(f"order must be non-negative but got {n}")
-        result: Self = self
-        for _ in range(n):
-            length = result._impl.shape[d]
-            a_impl = _ss(result._impl, d, slice(1, length, 1))
-            b_impl = _ss(result._impl, d, slice(0, length - 1, 1))
-            result = Tensor.__new_from_impl__(_C_engine.sub(a_impl, b_impl))  # type: ignore[assignment]
-        return result
+        from lucid._ops.composite.reductions import _diff
+
+        return _diff(self, n=n, dim=dim, prepend=prepend, append=append)
 
     def addmm(
         self, mat1: Self, mat2: Self, *, beta: float = 1.0, alpha: float = 1.0
@@ -4252,7 +4252,6 @@ def _tensor_unpickle(
 
 # ── inject dunders and methods after class definition ────────────────────────
 from lucid._tensor._repr import tensor_repr as _tensor_repr  # noqa: E402
-from lucid._tensor._indexing import _select_slice as _ss  # noqa: E402
 from lucid._tensor._dunders import _inject_dunders  # noqa: E402
 from lucid._tensor._methods import _clamp_inplace, _inject_methods  # noqa: E402
 from lucid._tensor._to import _inject_to, _legacy_type_name, _type_target  # noqa: E402
