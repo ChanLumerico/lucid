@@ -123,7 +123,7 @@ class MixupCollator:
         if float(lucid.rand(1).item()) >= self.p:
             return images, targets
         lam = _sample_lambda(self.alpha)
-        perm = lucid.randperm(int(images.shape[0]))  # type: ignore[attr-defined]
+        perm = lucid.randperm(int(images.shape[0]))
         mixed_images = lam * images + (1.0 - lam) * images[perm]
         mixed_targets = lam * targets + (1.0 - lam) * targets[perm]
         return mixed_images, mixed_targets
@@ -216,7 +216,7 @@ class CutMixCollator:
         keep_1c = F.pad(inner, (bx1, w - bx2, by1, h - by2), value=1.0)  # (1, H, W)
         keep = keep_1c[None]  # (1, 1, H, W) — broadcasts over batch + channels
 
-        perm = lucid.randperm(b)  # type: ignore[attr-defined]
+        perm = lucid.randperm(b)
         mixed_images = images * keep + images[perm] * (1.0 - keep)
         mixed_targets = lam_eff * targets + (1.0 - lam_eff) * targets[perm]
         return mixed_images, mixed_targets

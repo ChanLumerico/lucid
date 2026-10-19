@@ -209,7 +209,9 @@ import dataclasses as _dc
 _DtypeCls = dtype
 
 
-def _resolve_dtype_name(d: _DtypeCls | _C_engine.Dtype | str) -> str:
+def _resolve_dtype_name(
+    d: _DtypeCls | type[_DtypeCls] | _C_engine.Dtype | str,
+) -> str:
     """Map any dtype-like input to its canonical lucid dtype name.
 
     Used by ``finfo`` / ``iinfo`` to discriminate ``float16`` from
@@ -249,7 +251,9 @@ class finfo:
     resolution: float = 0.0
     dtype: str = ""
 
-    def __init__(self, dt: _DtypeCls | _C_engine.Dtype | str) -> None:
+    def __init__(
+        self, dt: _DtypeCls | type[_DtypeCls] | _C_engine.Dtype | str
+    ) -> None:
         """Populate floating-point limits for ``dt``.
 
         Parameters
@@ -327,7 +331,9 @@ class iinfo:
     min: int = 0
     dtype: str = ""
 
-    def __init__(self, dt: _DtypeCls | _C_engine.Dtype | str) -> None:
+    def __init__(
+        self, dt: _DtypeCls | type[_DtypeCls] | _C_engine.Dtype | str
+    ) -> None:
         """Populate integer limits for ``dt``.
 
         Parameters

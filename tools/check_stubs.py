@@ -307,12 +307,21 @@ def main() -> int:
         return 1
 
     import importlib
+    import lucid
 
     from lucid._C import engine as _C_engine
     from lucid._tensor.tensor import Tensor
     from tools.gen_pyi import tensor_method_params
 
     stub_ns = importlib.import_module("tools.stub_namespaces")
+
+    if _report_drift(
+        "INIT",
+        stub_ns.module_all_drift(generated["lucid/__init__.pyi"], lucid.__all__),
+        "lucid/__init__.pyi stub(s) omit symbol(s) listed in lucid.__all__.\n"
+        "  Add them to _INIT_HEADER in tools/gen_pyi.py, then regenerate.",
+    ):
+        return 1
 
     if _report_drift(
         "TENSOR",

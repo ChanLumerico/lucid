@@ -687,11 +687,11 @@ _DTYPES: dict[object, tuple[int, int]] = {
     lucid.int32: (_C_engine.coreml.DTYPE_INT32, -1),
 }
 
-INT8 = _C_engine.coreml.DTYPE_INT8
-UINT8 = _C_engine.coreml.MIL_SUBBYTE["8"]
-BLOB_INT8 = _C_engine.coreml.BLOB_INT8
-BLOB_UINT8 = _C_engine.coreml.BLOB_UINT8
-INT32 = _C_engine.coreml.DTYPE_INT32
+INT8: int = _C_engine.coreml.DTYPE_INT8
+UINT8: int = _C_engine.coreml.MIL_SUBBYTE["8"]
+BLOB_INT8: int = _C_engine.coreml.BLOB_INT8
+BLOB_UINT8: int = _C_engine.coreml.BLOB_UINT8
+INT32: int = _C_engine.coreml.DTYPE_INT32
 #: The values an int32 constant or program-body integer can hold.
 INT32_MIN, INT32_MAX = -(2**31), 2**31 - 1
 
@@ -762,9 +762,9 @@ def int32_clip_bounds(low: int, high: int | None) -> tuple[int, int | None]:
     return low, None if high is None else min(high, INT32_MAX)
 
 
-BOOL = _C_engine.coreml.DTYPE_BOOL
-STRING = _C_engine.coreml.DTYPE_STRING
-FLOAT32 = _C_engine.coreml.DTYPE_FLOAT32
+BOOL: int = _C_engine.coreml.DTYPE_BOOL
+STRING: int = _C_engine.coreml.DTYPE_STRING
+FLOAT32: int = _C_engine.coreml.DTYPE_FLOAT32
 
 
 def mil_dtype(dtype: object) -> int:
@@ -818,9 +818,9 @@ def blob_dtype(dtype: object) -> int:
 # MIL spells the cast target as a string, not the numeric dtype.
 CAST_NAMES = {FLOAT32: "fp32", _C_engine.coreml.DTYPE_FLOAT16: "fp16"}
 
-FLOAT16 = _C_engine.coreml.DTYPE_FLOAT16
-BLOB_FLOAT16 = _C_engine.coreml.BLOB_FLOAT16
-BLOB_FLOAT32 = _C_engine.coreml.BLOB_FLOAT32
+FLOAT16: int = _C_engine.coreml.DTYPE_FLOAT16
+BLOB_FLOAT16: int = _C_engine.coreml.BLOB_FLOAT16
+BLOB_FLOAT32: int = _C_engine.coreml.BLOB_FLOAT32
 
 
 def body_dtypes(precision: Precision) -> tuple[int, int]:

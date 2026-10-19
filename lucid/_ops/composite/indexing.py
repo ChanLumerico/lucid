@@ -28,7 +28,6 @@ from typing import TYPE_CHECKING, final, override
 import lucid
 from lucid import _promotion
 from lucid._dispatch import _cannot_cast_inplace, _unwrap, _wrap
-from lucid._dtype import iinfo
 from lucid._ops._dims import _wrap_dim
 import lucid._C.engine as _C_engine
 from lucid._tensor._indexing import (
@@ -430,7 +429,7 @@ def _reduce_identity(reduce: str, input: Tensor) -> bool | float:
         return float("-inf") if reduce == "amax" else float("inf")
     if input.dtype == lucid.bool_:
         return reduce == "amin"
-    info = iinfo(input.dtype)
+    info = lucid.iinfo(input.dtype)
     return info.min if reduce == "amax" else info.max
 
 

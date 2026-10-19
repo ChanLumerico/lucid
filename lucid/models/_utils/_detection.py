@@ -1753,7 +1753,7 @@ def _sample_without_replacement(pool: list[int], k: int) -> list[int]:
         return []
     if k >= len(pool):
         return list(pool)
-    perm = cast(list[int], lucid.randperm(len(pool)).tolist())  # type: ignore[attr-defined]
+    perm = cast(list[int], lucid.randperm(len(pool)).tolist())
     return sorted(pool[i] for i in perm[:k])
 
 
@@ -2836,5 +2836,5 @@ class MultiScaleResolution:
     def _draw(self) -> int:
         if len(self.sizes) == 1:
             return self.sizes[0]
-        pick = cast(list[int], lucid.randperm(len(self.sizes)).tolist())  # type: ignore[attr-defined]
+        pick = cast(list[int], lucid.randperm(len(self.sizes)).tolist())
         return self.sizes[pick[0]]

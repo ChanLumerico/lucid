@@ -140,3 +140,32 @@ def test_class_check_reports_every_kind_of_drift() -> None:
         "Demo.renamed: stub (x), runtime (input)",
         "Demo.size: overload names (axis), runtime (dim)",
     ]
+
+
+def test_module_all_drift_reports_missing_and_private_imports() -> None:
+    """LCD-291: every name in ``lucid.__all__`` must be explicitly exported
+    in ``lucid/__init__.pyi`` (imports without ``as X`` are private in PEP 484
+    stubs and rejected under ``mypy --strict``)."""
+    import lucid
+    from tools.stub_namespaces import module_all_drift
+
+    sample_stub = """
+from lucid._dtype import dtype as dtype
+from lucid._dtype import finfo
+def zeros() -> None: ...
+class Tensor: ...
+half = dtype
+__version__: str
+"""
+    problems = module_all_drift(
+        sample_stub,
+        ["dtype", "finfo", "iinfo", "zeros", "Tensor", "half", "__version__"],
+    )
+    assert problems == [
+        "lucid.finfo: in lucid.__all__, not exported in lucid/__init__.pyi",
+        "lucid.iinfo: in lucid.__all__, not exported in lucid/__init__.pyi",
+    ]
+
+    init_pyi = (_REPO_ROOT / "lucid" / "__init__.pyi").read_text(encoding="utf-8")
+    assert module_all_drift(init_pyi, lucid.__all__) == []
+

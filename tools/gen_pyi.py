@@ -1181,8 +1181,9 @@ import numpy as np
 # strict-mode type checkers (pyright, mypy ``--no-implicit-reexport``) treat
 # these as private imports and IDEs miss ``lucid.Tensor`` autocompletion.
 from lucid._C import engine as _C_engine
-from lucid._dtype import dtype as dtype
+from lucid._dtype import dtype as dtype, finfo as finfo, iinfo as iinfo
 from lucid._device import device as device
+from lucid._factories._generator import Generator as Generator
 from lucid._ops._reduce import _MinMax as _MinMax
 from lucid._tensor.tensor import Tensor as Tensor
 
@@ -1206,6 +1207,7 @@ from lucid._types import (
 
 # ── Package metadata ──────────────────────────────────────────────────────────
 __version__: str
+__all__: list[str]
 
 # ── Dtype objects ─────────────────────────────────────────────────────────────
 class float16(dtype): ...
@@ -1237,6 +1239,12 @@ def set_default_dtype(d: dtype, /) -> None: ...
 def get_default_dtype() -> dtype: ...
 def set_default_device(device: device | str) -> None: ...
 def get_default_device() -> device: ...
+def set_num_threads(n: _int, /) -> None: ...
+def get_num_threads() -> _int: ...
+def set_num_interop_threads(n: _int, /) -> None: ...
+def get_num_interop_threads() -> _int: ...
+def use_deterministic_algorithms(mode: _bool, *, warn_only: _bool = False) -> None: ...
+def are_deterministic_algorithms_enabled() -> _bool: ...
 
 # ── Gradient control ──────────────────────────────────────────────────────────
 def no_grad() -> AbstractContextManager[None]: ...
@@ -1258,6 +1266,19 @@ def load(
     map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
     weights_only: _bool = True,
 ) -> object: ...
+def save_sharded(
+    obj: object,
+    path: str | bytes | os.PathLike[str],
+    *,
+    shard_size_mb: _float = 1024.0,
+    pickle_protocol: _int = 4,
+) -> None: ...
+def load_sharded(
+    path: str | bytes | os.PathLike[str],
+    *,
+    map_location: str | Callable[[str, str], str] | dict[str, str] | None = None,
+    weights_only: _bool = True,
+) -> object: ...
 def save_safetensors(
     state_dict: dict[str, Tensor],
     path: str,
@@ -1274,14 +1295,22 @@ def load_safetensors(
 from lucid import nn as nn
 from lucid import optim as optim
 from lucid import autograd as autograd
+from lucid import func as func
 from lucid import linalg as linalg
+from lucid import fft as fft
+from lucid import signal as signal
+from lucid import special as special
+from lucid import diffeq as diffeq
 from lucid import utils as utils
 from lucid import amp as amp
 from lucid import profiler as profiler
 from lucid import einops as einops
+from lucid import quantization as quantization
+from lucid import coreml as coreml
 from lucid import metal as metal
 from lucid import backends as backends
 from lucid import test as test
+from lucid import weights as weights
 from lucid import dtypes as dtypes
 
 # ── lucid.compile (callable module) ───────────────────────────────────────────
@@ -1328,6 +1357,13 @@ def as_tensor(
     device: DeviceLike = None,
 ) -> Tensor: ...
 def from_numpy(ndarray: np.ndarray, /) -> Tensor: ...
+def from_dlpack(
+    ext_tensor: object,
+    *,
+    device: DeviceLike = None,
+    copy: _bool | None = None,
+) -> Tensor: ...
+def to_dlpack(tensor: Tensor) -> object: ...
 
 # ── Tensor factories — deterministic (creation.py) ───────────────────────
 def zeros(
@@ -1432,6 +1468,10 @@ def logspace(
 
 # ── Tensor factories — random (random.py) ───────────────────────────────
 def manual_seed(seed: _int) -> None: ...
+def seed() -> _int: ...
+def initial_seed() -> _int: ...
+def get_rng_state() -> Tensor: ...
+def set_rng_state(new_state: Tensor) -> None: ...
 def rand(
     *size: _int | tuple[_int, ...],
     dtype: DTypeLike = None,
@@ -1486,6 +1526,14 @@ def randn_like(
     input: Tensor,
     *,
     dtype: DTypeLike = None,
+    device: DeviceLike = None,
+    requires_grad: _bool = False,
+) -> Tensor: ...
+def randperm(
+    n: _int,
+    *,
+    generator: _C_engine.Generator | None = None,
+    dtype: DTypeLike = ...,
     device: DeviceLike = None,
     requires_grad: _bool = False,
 ) -> Tensor: ...

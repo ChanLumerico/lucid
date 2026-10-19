@@ -16,7 +16,7 @@ import annotationlib
 import ast
 import inspect
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 
 def _split_top(params: str) -> list[str]:
@@ -134,7 +134,13 @@ def _signature_params(fn: object) -> list[str] | None:
         return None
     names = []
     for p in signature.parameters.values():
-        prefix = {p.VAR_POSITIONAL: "*", p.VAR_KEYWORD: "**"}.get(p.kind, "")
+        prefix = (
+            "*"
+            if p.kind is p.VAR_POSITIONAL
+            else "**"
+            if p.kind is p.VAR_KEYWORD
+            else ""
+        )
         names.append(prefix + p.name)
     return names[1:]
 
@@ -202,3 +208,30 @@ def class_drift(
         if want is not None:
             problems += _method_drift(f"{name}.{method}", defs, want)
     return problems
+
+
+def module_all_drift(stub: str, all_names: Sequence[str], *, module: str = "lucid") -> list[str]:
+    """Every name in *all_names* not explicitly exported by the module *stub*.
+
+    Under PEP 484 (``mypy --strict`` / ``--no-implicit-reexport``, pyright),
+    an import in a ``.pyi`` stub only re-exports a symbol when written in the
+    redundant ``X as X`` alias form.
+    """
+    exported: set[str] = set()
+    for node in ast.parse(stub).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            exported.add(node.name)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            exported.add(node.target.id)
+        elif isinstance(node, ast.Assign):
+            exported.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            exported.update(
+                alias.asname for alias in node.names if alias.asname is not None
+            )
+    return [
+        f"{module}.{n}: in {module}.__all__, not exported in {module}/__init__.pyi"
+        for n in all_names
+        if n not in exported
+    ]
+
