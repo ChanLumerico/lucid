@@ -35,6 +35,7 @@ operands and building scalar operands is :mod:`lucid._dispatch`'s job.
 
 import math
 import numbers
+from typing import overload
 
 from lucid._C import engine as _C_engine
 from lucid._globals import get_default_dtype
@@ -132,18 +133,27 @@ def can_cast(da: _C_engine.Dtype, db: _C_engine.Dtype) -> bool:
     return _BY_CODE[da.value][0] <= _BY_CODE[db.value][0]
 
 
+@overload
+def as_number(x: None) -> None: ...
+@overload
+def as_number[T](x: T) -> T: ...
 def as_number(x: object) -> object:
     """``x`` as the Python number it holds when it is another library's scalar.
 
     A NumPy scalar registers with :mod:`numbers` (``float32`` as Real,
-    ``int64`` as Integral) without deriving from the builtin, so it reached
-    the operand checks as neither a tensor nor a number: arithmetic raised
-    and ``==`` handed the comparison to NumPy, which answered with an
-    ndarray.  It is a weak scalar, as the reference takes it.  Anything
-    else — a Python number, a tensor, ``None`` — comes back as is.
+    ``int64`` as Integral) without deriving from the builtin, and ``bool_``
+    registers with neither, so they reached the operand checks as neither a
+    tensor nor a number: arithmetic raised and ``==`` handed the comparison
+    to NumPy, which answered with an ndarray.  It is a weak scalar, as the
+    reference takes it.  Anything else — a Python number, a tensor, ``None``
+    — comes back as is.
     """
-    if isinstance(x, NUMBER):
+    if type(x) in _NUMBER_KIND:
         return x
+    if isinstance(x, bool) or (
+        type(x).__name__ in ("bool", "bool_") and type(x).__module__ == "numpy"
+    ):
+        return bool(x)
     if isinstance(x, numbers.Integral):
         return int(x)
     if isinstance(x, numbers.Real):
@@ -153,12 +163,15 @@ def as_number(x: object) -> object:
     return x
 
 
-_COMPARABLE = (*NUMBER, numbers.Complex, _C_engine.TensorImpl)
+_COMPARABLE = (*NUMBER, _C_engine.TensorImpl)
 
 
 def is_comparable(other: object) -> bool:
     """Whether ``other`` is a Tensor or a number that ``==`` / ``!=`` compares element-wise."""
-    return isinstance(other, _COMPARABLE) or getattr(other, "_impl", None) is not None
+    return (
+        isinstance(as_number(other), _COMPARABLE)
+        or getattr(other, "_impl", None) is not None
+    )
 
 
 def check_pow_scalar(d: _C_engine.Dtype, exponent: object) -> None:
@@ -171,6 +184,7 @@ def check_pow_scalar(d: _C_engine.Dtype, exponent: object) -> None:
     exponent : object
         Candidate scalar exponent.
     """
+    exponent = as_number(exponent)
     if isinstance(exponent, bool) or not isinstance(exponent, (int, float)):
         return
     c = d.value
@@ -382,7 +396,7 @@ def result_type(*operands: Operand) -> _C_engine.Dtype:
     first: _C_engine.TensorImpl | None = None
     kind = -1
     for x in operands:
-        if isinstance(x, NUMBER):
+        if isinstance(x := as_number(x), NUMBER):
             kind = max(kind, _number_kind(x))
             continue
         c = x.dtype.value

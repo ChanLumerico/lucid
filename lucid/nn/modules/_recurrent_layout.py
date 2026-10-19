@@ -19,7 +19,7 @@ from collections.abc import Sequence
 from typing import NamedTuple
 
 import lucid as _lucid
-from lucid import stack
+from lucid import _promotion, stack
 from lucid._dispatch import _unwrap, _wrap
 from lucid._factories.creation import zeros
 from lucid._ops._autocast import _autocast_entry
@@ -336,16 +336,17 @@ def _check_dropout(dropout: object, num_layers: int) -> float:
     Raises:
         ValueError: ``dropout`` is not a number in ``[0, 1]``.
     """
+    d = _promotion.as_number(dropout)
     if (
-        isinstance(dropout, bool)
-        or not isinstance(dropout, (int, float))
-        or not 0.0 <= dropout <= 1.0
+        isinstance(d, bool)
+        or not isinstance(d, (int, float))
+        or not 0.0 <= d <= 1.0
     ):
         raise ValueError(
             "dropout should be a number in range [0, 1] representing the "
             f"probability of an element being zeroed, got {dropout!r}"
         )
-    if dropout > 0 and num_layers == 1:
+    if d > 0 and num_layers == 1:
         warnings.warn(
             "dropout option adds dropout after all but last recurrent layer, "
             "so non-zero dropout expects num_layers greater than 1, but got "
@@ -353,7 +354,7 @@ def _check_dropout(dropout: object, num_layers: int) -> float:
             UserWarning,
             stacklevel=3,
         )
-    return float(dropout)
+    return float(d)
 
 
 def _inter_layer_dropout(

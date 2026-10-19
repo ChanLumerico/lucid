@@ -7,6 +7,7 @@ import operator
 from typing import Sequence, SupportsIndex, TYPE_CHECKING
 
 import lucid
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._globals import get_default_device
 from lucid._types import DTypeLike, DeviceLike
@@ -170,6 +171,7 @@ def moveaxis(
     >>> lucid.moveaxis(x, [0, 1], [-1, -2]).shape
     (4, 5, 3, 2)
     """
+    source, destination = _promotion.as_number(source), _promotion.as_number(destination)
     _src = list(source) if not isinstance(source, int) else source
     _dst = list(destination) if not isinstance(destination, int) else destination
     return lucid.movedim(input, _src, _dst)
@@ -581,17 +583,14 @@ def _section_count(indices_or_sections: object, op: str) -> int | None:
     TypeError
         A ``bool``, or neither an integer nor a sequence of them.
     """
-    if isinstance(indices_or_sections, int) and not isinstance(
-        indices_or_sections, bool
-    ):
-        return indices_or_sections
+    num = _promotion.as_number(indices_or_sections)
+    if isinstance(num, int) and not isinstance(num, bool):
+        return num
     if isinstance(indices_or_sections, lucid.Tensor):
         return None if indices_or_sections.ndim else operator.index(indices_or_sections)
     if isinstance(indices_or_sections, Sequence):
         return None
-    if isinstance(indices_or_sections, SupportsIndex) and not isinstance(
-        indices_or_sections, bool
-    ):
+    if isinstance(indices_or_sections, SupportsIndex) and not isinstance(num, bool):
         return operator.index(indices_or_sections)
     raise TypeError(
         f"{op}(): indices_or_sections must be an int or a sequence of ints, "

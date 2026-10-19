@@ -125,6 +125,7 @@ _ADD_SUB_SIGNATURE = _BINARY_SIGNATURE.replace(
 
 def _scale_by_alpha(a: _Impl, b: _Impl, alpha: Scalar) -> _Impl:
     """Scale ``b`` by ``alpha`` for ``add`` / ``sub``, matching the reference's dtype rules."""
+    alpha = _promotion.as_number(alpha)
     if isinstance(alpha, bool):
         if a.dtype != _C_engine.Bool:
             raise RuntimeError("Boolean alpha only supported for Boolean results.")
@@ -191,8 +192,10 @@ def _make_arith_adapter(
             if scalar is not None:
                 return scalar
         a, b = _binary_operands(input, other, opmath=opmath, inplace=inplace)
-        if adds_or_subtracts and (alpha != 1 or isinstance(alpha, (bool, float))):
-            b = _scale_by_alpha(a, b, alpha)
+        if adds_or_subtracts:
+            alpha = _promotion.as_number(alpha)
+            if alpha != 1 or isinstance(alpha, (bool, float)):
+                b = _scale_by_alpha(a, b, alpha)
         return engine_fn(a, b)
 
     # The adapter's own ``(input, other)`` is the op's signature — not the
@@ -339,6 +342,7 @@ def _scatter_adapter(
     width, so one past the axis is refused rather than wrapped.
     """
     idx_impl = _unwrap(index)
+    src = _promotion.as_number(src)
     if isinstance(src, _promotion.NUMBER):
         src_impl = _C_engine.full(
             list(idx_impl.shape), src, x_impl.dtype, x_impl.device
@@ -814,6 +818,7 @@ def _repeat_interleave_adapter(
     else:
         base = a_impl
         axis = _wrap_dim(int(dim), len(a_impl.shape), "repeat_interleave")
+    repeats = _promotion.as_number(repeats)
     if not isinstance(repeats, int):
         out = _repeat_interleave_tensor(base, _unwrap(repeats), axis)
     else:
@@ -854,7 +859,7 @@ def _split_pieces(
         len(x_impl.shape), "split expects at least a 1-dimensional tensor"
     )
     axis_size = _dim_size(x_impl.shape, wrapped)
-    if isinstance(sections, bool):
+    if isinstance(_promotion.as_number(sections), bool):
         raise TypeError(
             f"split(): {what} must be an int or a sequence of ints, got {sections!r}"
         )
@@ -915,6 +920,7 @@ def _tensordot_adapter(
     dims: int | Sequence[Sequence[int]] = 2,
 ) -> _Impl:
     """tensordot(a, b, dims=2) — an int, or a pair of axis lists."""
+    dims = _promotion.as_number(dims)
     if isinstance(dims, int):
         ra = len(a_impl.shape)
         axes_a = list(range(ra - int(dims), ra))
@@ -939,7 +945,7 @@ def _outer_adapter(a_impl: _Impl, b_impl: _Impl) -> _Impl:
     refused it, since an outer product with one is not an outer product.
     """
     for operand in (a_impl, b_impl):
-        if isinstance(operand, (bool, int, float, complex)):
+        if isinstance(_promotion.as_number(operand), _promotion.NUMBER):
             raise TypeError(f"outer: expected a tensor, got {type(operand).__name__}")
     a_impl, b_impl = _promote_impls([a_impl, b_impl])
     return _C_engine.outer(a_impl, b_impl)
@@ -951,7 +957,7 @@ _keep_engine_signature(_outer_adapter, _C_engine.outer)
 def _kron_adapter(a_impl: _Impl, b_impl: _Impl) -> _Impl:
     """kron(a, b) — the two tensors at their common dtype."""
     for operand in (a_impl, b_impl):
-        if isinstance(operand, (bool, int, float, complex)):
+        if isinstance(_promotion.as_number(operand), _promotion.NUMBER):
             raise TypeError(f"kron: expected a tensor, got {type(operand).__name__}")
     a_impl, b_impl = _promote_impls([a_impl, b_impl])
     return _C_engine.kron(a_impl, b_impl)
@@ -1033,6 +1039,8 @@ def _clip_scalar_bounds(
     ``clip`` is the engine kernel — ``clip_`` for ``Tensor.clamp_``, so the
     in-place form takes the fast path exactly when this one does.
     """
+    min = _promotion.as_number(min)
+    max = _promotion.as_number(max)
     if not isinstance(min, (int, float, type(None))) or not isinstance(
         max, (int, float, type(None))
     ):
@@ -1064,7 +1072,7 @@ def _clip_dtype(
     if min is None and max is None:
         raise ValueError("clip: at least one of min or max must be given")
     bounds: list[_promotion.Operand] = [
-        b if isinstance(b, _promotion.NUMBER) else _unwrap(b)
+        bn if isinstance(bn := _promotion.as_number(b), _promotion.NUMBER) else _unwrap(bn)
         for b in (min, max)
         if b is not None
     ]
@@ -1158,9 +1166,11 @@ def _where_adapter(
         c = _C_engine.astype(c, _C_engine.Bool)
     # Tensor is a TYPE_CHECKING-only name here, so the test is for
     # scalar-ness rather than for the wrapper type.
+    input = _promotion.as_number(input)
+    other = _promotion.as_number(other)
     ref_impl = c
     for branch in (input, other):
-        if not isinstance(branch, (bool, int, float, complex)):
+        if not isinstance(branch, _promotion.NUMBER):
             ref_impl = _unwrap(branch)
             break
     x_impl, y_impl = _promote_impls(

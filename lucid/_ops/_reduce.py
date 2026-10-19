@@ -286,8 +286,9 @@ _VAR_KEYWORDS = frozenset({"dim", "unbiased", "keepdim", "correction"})
 
 def _as_correction(name: str, value: object) -> float:
     """``value`` as a ``correction``: a real number, a bool as 1 or 0."""
-    if isinstance(value, (int, float)):
-        return float(value)
+    num = _promotion.as_number(value)
+    if isinstance(num, (int, float)):
+        return float(num)
     raise TypeError(
         f"{name}(): correction must be a number, got {type(value).__name__}"
     )
@@ -317,7 +318,7 @@ def _variance_operands(
             f"{len(args) + 1} were given"
         )
     names: tuple[str, ...]
-    if args and isinstance(args[0], bool):
+    if args and isinstance(_promotion.as_number(args[0]), bool):
         if len(args) > 1:
             raise TypeError(
                 f"{name}(input, unbiased) takes no further positional arguments; "
@@ -326,7 +327,9 @@ def _variance_operands(
         names = ("unbiased",)
     else:
         bias = (
-            "unbiased" if len(args) < 2 or isinstance(args[1], bool) else "correction"
+            "unbiased"
+            if len(args) < 2 or isinstance(_promotion.as_number(args[1]), bool)
+            else "correction"
         )
         names = ("dim", bias, "keepdim")[: len(args)]
     bound = dict(kwargs)
@@ -355,7 +358,11 @@ def _variance(
     name: str, x_impl: _Impl, args: tuple[object, ...], kwargs: dict[str, object]
 ) -> _Impl:
     """The corrected variance a ``var`` / ``std`` call asks for."""
-    if not kwargs and len(args) < 2 and not (args and isinstance(args[0], bool)):
+    if (
+        not kwargs
+        and len(args) < 2
+        and not (args and isinstance(_promotion.as_number(args[0]), bool))
+    ):
         # ``x.var()`` / ``x.var(dim)``: nothing to parse.
         dim: object = args[0] if args else None
         correction, keepdim = 1.0, False

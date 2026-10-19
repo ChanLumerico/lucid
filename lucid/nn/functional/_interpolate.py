@@ -33,6 +33,7 @@ from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 import lucid as _lucid
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid.nn.functional._grid_sampling import cubic_coefficients
@@ -363,8 +364,10 @@ def _per_axis(
     name: str, value: float | Sequence[float], spatial: list[int]
 ) -> list[float]:
     """One entry per spatial axis: a number is repeated, a sequence checked."""
-    if isinstance(value, (int, float)):
-        return [float(value)] * len(spatial)
+    val_num = _promotion.as_number(value)
+    if isinstance(val_num, (int, float)):
+        return [float(val_num)] * len(spatial)
+    assert not isinstance(value, (int, float))
     entries = [float(v) for v in value]
     if len(entries) != len(spatial):
         raise ValueError(

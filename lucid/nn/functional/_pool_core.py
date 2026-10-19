@@ -15,6 +15,7 @@ from collections.abc import Callable, Sequence
 from typing import Literal, overload
 
 import lucid as _lucid
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._tensor.tensor import Tensor
@@ -334,6 +335,7 @@ def _adaptive_size(
     refused rather than reaching the window arithmetic, which divides by it.
     """
     n = len(spatial)
+    output_size = _promotion.as_number(output_size)
     given = (output_size,) * n if isinstance(output_size, int) else tuple(output_size)
     if len(given) != n:
         raise ValueError(
@@ -432,11 +434,10 @@ def _fractional_output_size(
         out = _ntuple(output_size, n, op, "output_size")
     else:
         assert output_ratio is not None
-        ratios = (
-            (float(output_ratio),) * n
-            if isinstance(output_ratio, (int, float))
-            else tuple(float(r) for r in output_ratio)
-        )
+        if isinstance(output_ratio := _promotion.as_number(output_ratio), (int, float)):
+            ratios = (float(output_ratio),) * n
+        else:
+            ratios = tuple(float(r) for r in output_ratio)
         if len(ratios) != n or not all(0.0 < r < 1.0 for r in ratios):
             raise ValueError(
                 f"{op}: output_ratio must be {n} numbers in (0, 1), got {output_ratio!r}"
@@ -541,9 +542,10 @@ def _fractional_max_pool(
     assert isinstance(flat, list)
     u: list[float] = []
     for v in flat:
-        if not isinstance(v, (int, float)):
+        v_num = _promotion.as_number(v)
+        if not isinstance(v_num, (int, float)):
             raise TypeError(f"{op}: _random_samples must be real, got {v!r}")
-        u.append(float(v))
+        u.append(float(v_num))
     for b in range(batch):
         for c in range(channels):
             at = (b * channels + c) * n

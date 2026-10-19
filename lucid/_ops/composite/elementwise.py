@@ -16,6 +16,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, cast
 
 import lucid
+from lucid import _promotion
 from lucid._dispatch import _binary_operands, _float_input, _wrap
 from lucid._ops.composite import _bessel
 from lucid._ops.composite._gamma import _lgamma, _polygamma
@@ -186,9 +187,8 @@ def subtract(input: Tensor, other: Tensor | Scalar, *, alpha: float = 1.0) -> Te
     >>> lucid.subtract(a, b, alpha=2.0)
     tensor([2., 1.])
     """
-    if alpha == 1.0:
-        return input - other
-    return input - (other * alpha)
+    alpha = _promotion.as_number(alpha)
+    return input - other if alpha == 1.0 and not isinstance(alpha, bool) else input - (other * alpha)
 
 
 def multiply(input: Tensor, other: Tensor | Scalar) -> Tensor:
@@ -353,9 +353,8 @@ def rsub(input: Tensor, other: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor
     >>> lucid.rsub(a, 10.0)
     tensor([9., 8.])
     """
-    if alpha == 1.0:
-        return other - input
-    return other - (input * alpha)
+    alpha = _promotion.as_number(alpha)
+    return other - input if alpha == 1.0 and not isinstance(alpha, bool) else other - (input * alpha)
 
 
 def arctan2(input: Tensor, other: Tensor) -> Tensor:
@@ -811,7 +810,7 @@ def heaviside(input: Tensor, values: Tensor | Scalar) -> Tensor:
     tensor([0., 0.5, 1.])
     """
     if not _is_tensor(values):
-        values = lucid.full_like(input, float(cast(float, values)))
+        values = lucid.full_like(input, float(_promotion.as_number(cast(float, values))))
     return lucid.where(
         input == 0.0,
         values,
@@ -1064,9 +1063,9 @@ def float_power(input: Tensor | Scalar, exponent: Tensor | Scalar) -> Tensor:
     if _is_tensor(exponent):
         exponent = exponent.to(dtype=lucid.float64)
     if not _is_tensor(input) and _is_tensor(exponent):
-        input = exponent.new_full((), float(cast(float, input)))
+        input = exponent.new_full((), float(_promotion.as_number(input)))
     if not _is_tensor(exponent) and _is_tensor(input):
-        exponent = input.new_full((), float(cast(float, exponent)))
+        exponent = input.new_full((), float(_promotion.as_number(exponent)))
     # ``cast`` evaluates its first argument at run time, and ``Tensor``
     # is imported here only under ``TYPE_CHECKING`` — so the bare name
     # raised ``NameError`` on **every** call and float_power had never
@@ -1318,7 +1317,7 @@ def ldexp(input: Tensor, other: Tensor | Scalar) -> Tensor:
     exp_t: Tensor = (
         other.to(dtype=work_dtype)
         if _is_tensor(other)
-        else lucid.tensor(cast(float, other), dtype=work_dtype, device=input.device)
+        else lucid.tensor(_promotion.as_number(other), dtype=work_dtype, device=input.device)
     )
     limit = 2400.0 if work_dtype == lucid.float64 else 300.0
     k = lucid.clip(lucid.trunc(exp_t), -limit, limit)

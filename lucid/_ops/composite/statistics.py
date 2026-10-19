@@ -5,6 +5,7 @@ import math
 from typing import Sequence, TYPE_CHECKING
 
 import lucid
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._types import DeviceLike, DTypeLike
 from lucid._ops.composite.indexing import _scatter_add
@@ -899,7 +900,10 @@ def histogram2d(
     from lucid._C import engine as _C_engine
     from lucid._dispatch import _unwrap, _wrap
 
-    nbins_a, nbins_b = (bins, bins) if isinstance(bins, int) else bins
+    if isinstance(bins := _promotion.as_number(bins), int):
+        nbins_a, nbins_b = bins, bins
+    else:
+        nbins_a, nbins_b = bins
     if range is None:
         x_flat = x.reshape(-1)
         y_flat = y.reshape(-1)
@@ -1021,7 +1025,7 @@ def histogramdd(
             f"histogramdd: expected (N, D) input, got shape {tuple(input.shape)}"
         )
     D: int = int(input.shape[1])
-    if isinstance(bins, int):
+    if isinstance(bins := _promotion.as_number(bins), int):
         bins_seq: list[int] = [int(bins)] * D
     else:
         bins_seq = [int(b) for b in bins]
@@ -1167,7 +1171,7 @@ def _histogram_bins(
 ) -> tuple[Tensor, Tensor, Tensor | None]:
     """The edges, each value's bin, and — when the range was read from the
     values — whether that range is finite."""
-    if not isinstance(bins, int):
+    if not isinstance(bins := _promotion.as_number(bins), int):
         if isinstance(bins, lucid.Tensor):
             edges = bins.reshape(-1).to(dtype=values.dtype, device=values.device)
         else:

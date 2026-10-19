@@ -99,6 +99,7 @@ def _scalar_power(
     When the computation stays in a half dtype (outside Metal autocast),
     ``PowScalarBackward::forward`` rounds the exponent to that half dtype.
     """
+    exponent = _promotion.as_number(exponent)
     _promotion.check_pow_scalar(base.dtype, exponent)
     if isinstance(exponent, bool) or not isinstance(exponent, (int, float)):
         return None
@@ -108,7 +109,7 @@ def _scalar_power(
 
 
 def _is_bool_operand(x: object) -> bool:
-    if isinstance(x, bool):
+    if isinstance(_promotion.as_number(x), bool):
         return True
     impl = x if isinstance(x, _C_engine.TensorImpl) else getattr(x, "_impl", None)
     return getattr(impl, "dtype", None) == _C_engine.Bool

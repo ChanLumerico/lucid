@@ -915,7 +915,8 @@ def _normalize_value(
     """
     impl = getattr(value, "_impl", None)
     if not isinstance(impl, _C_engine.TensorImpl):
-        if isinstance(value, (bool, int, float, complex)):
+        value = _promotion.as_number(value)
+        if isinstance(value, _promotion.NUMBER):
             impl = _scalar_impl(value, dst.dtype, dst.device)
         else:
             impl = _to_impl(value, device=dst.device)

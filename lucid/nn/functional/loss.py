@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import lucid as _lucid
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._autocast import _autocast_entry
@@ -284,31 +285,31 @@ def l1_loss(
 
 
 def _check_beta(beta: float, op: str = "smooth_l1_loss") -> None:
-    if isinstance(beta, bool) or not beta >= 0.0:
+    if isinstance(beta := _promotion.as_number(beta), bool) or not beta >= 0.0:
         raise ValueError(f"{op}: beta must be non-negative, got {beta!r}")
 
 
 def _check_delta(delta: float, op: str = "huber_loss") -> None:
-    if isinstance(delta, bool) or not isinstance(delta, (int, float)):
+    if isinstance(delta := _promotion.as_number(delta), bool) or not isinstance(delta, (int, float)):
         raise TypeError(f"{op}: delta must be a float or int, got {type(delta).__name__}")
     if not delta > 0.0:
         raise ValueError(f"{op}: delta must be positive, got {delta!r}")
 
 
 def _check_label_smoothing(label_smoothing: float, op: str = "cross_entropy") -> None:
-    if isinstance(label_smoothing, bool) or not 0.0 <= label_smoothing <= 1.0:
+    if isinstance(label_smoothing := _promotion.as_number(label_smoothing), bool) or not 0.0 <= label_smoothing <= 1.0:
         raise ValueError(f"{op}: label_smoothing must be in [0, 1], got {label_smoothing!r}")
 
 
 def _check_multi_margin(p: int, weight: Tensor | None, op: str = "multi_margin_loss") -> None:
-    if isinstance(p, bool) or (p != 1 and p != 2):
+    if isinstance(p := _promotion.as_number(p), bool) or (p != 1 and p != 2):
         raise ValueError(f"{op}: only p == 1 and p == 2 supported, got {p!r}")
     if weight is not None and weight.ndim != 1:
         raise ValueError(f"{op}: expected weight to be None or 1D tensor, got {weight.ndim}D")
 
 
 def _check_triplet_margin(margin: float, op: str) -> None:
-    if isinstance(margin, bool) or not margin > 0.0:
+    if isinstance(margin := _promotion.as_number(margin), bool) or not margin > 0.0:
         raise ValueError(f"{op}: expected margin to be greater than 0, got {margin!r}")
 
 
@@ -1710,10 +1711,9 @@ def gaussian_nll_loss(
     tensor(-0.2841)
     """
     _check_reduction(reduction, "gaussian_nll_loss")
-    x = input
-    _check_target(x, target, "gaussian_nll_loss")
+    _check_target(x := input, target, "gaussian_nll_loss")
     _check_dtypes("gaussian_nll_loss", target, input=x)
-    if not isinstance(var, (int, float)):
+    if not isinstance(var := _promotion.as_number(var), (int, float)):
         _check_kind(var, "floating", "var", "gaussian_nll_loss")
         d = _loss_dtype(x, target, var)
         var = _cast(var, d)

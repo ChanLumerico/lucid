@@ -19,7 +19,6 @@ Pure Python + the engine: no external imports (H4).
 
 import functools
 import math
-import numbers
 import struct
 from collections.abc import Sequence, Set
 
@@ -112,19 +111,14 @@ def _python_scalar(value: object) -> PyScalar:
     ``np.int64`` → ``int``) — unlike ``float(value)``, which would lose
     the integer and refuse the complex.
     """
-    if isinstance(value, _PY_SCALAR_TYPES) and type(value) in _PY_SCALAR_TYPES:
+    value = _promotion.as_number(value)
+    if isinstance(value, _PY_SCALAR_TYPES):
         return value
     item = getattr(value, "item", None)
     if callable(item):
-        value = item()
-        if isinstance(value, _PY_SCALAR_TYPES) and type(value) in _PY_SCALAR_TYPES:
+        value = _promotion.as_number(item())
+        if isinstance(value, _PY_SCALAR_TYPES):
             return value
-    if isinstance(value, numbers.Integral):
-        return int(value)
-    if isinstance(value, numbers.Real):
-        return float(value)
-    if isinstance(value, numbers.Complex):
-        return complex(value)
     raise TypeError(
         f"expected a number (bool, int, float or complex), got {type(value).__name__}"
     )
@@ -307,6 +301,7 @@ def _fill(
     complex, or an integer past :math:`2^{53}` — is packed into a 0-d
     tensor of the target dtype and broadcast instead.
     """
+    value = _promotion.as_number(value)
     if dtype in _FLOATING and isinstance(value, (bool, int, float)):
         return _C_engine.full(shape, float(value), dtype, device)
     v = _coerce(value, dtype)

@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 import lucid as _lucid
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._tensor import _metal_views
 
@@ -1106,10 +1107,11 @@ def calculate_gain(nonlinearity: str, param: float | None = None) -> float:
         "selu": 3.0 / 4.0,
     }
     if nonlinearity == "leaky_relu":
-        if param is None:
+        param_num = _promotion.as_number(param)
+        if param_num is None:
             slope: float = 0.01
-        elif not isinstance(param, bool) and isinstance(param, (int, float)):
-            slope = float(param)
+        elif not isinstance(param_num, bool) and isinstance(param_num, (int, float)):
+            slope = float(param_num)
         else:
             raise ValueError(f"negative_slope {param!r} not a valid number")
         return math.sqrt(2.0 / (1 + slope**2))

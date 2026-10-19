@@ -3,6 +3,7 @@
 from typing import Sequence, TYPE_CHECKING
 
 import lucid
+from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _wrap
 from lucid._ops._dims import _wrap_dim
@@ -563,11 +564,12 @@ def aminmax(
     >>> (out.min.item(), out.max.item())
     (-1.0, 4.0)
     """
-    if dim is not None and (isinstance(dim, bool) or not isinstance(dim, int)):
+    dim_num = _promotion.as_number(dim)
+    if dim_num is not None and (isinstance(dim_num, bool) or not isinstance(dim_num, int)):
         raise TypeError(
             f"aminmax(): argument 'dim' must be int, not {type(dim).__name__}"
         )
-    if dim is None:
+    if dim_num is None:
         lo = lucid.min(input)
         hi = lucid.max(input)
         if keepdim and input.ndim > 0:
@@ -575,7 +577,7 @@ def aminmax(
             lo = lo.reshape(ones)
             hi = hi.reshape(ones)
         return _MinMax((lo, hi))
-    axes = _reduction_axes(input._impl, dim, "aminmax")
+    axes = _reduction_axes(input._impl, dim_num, "aminmax")
     return _MinMax((lucid.min(input, axes, keepdim), lucid.max(input, axes, keepdim)))
 
 
