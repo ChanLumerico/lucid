@@ -13,17 +13,22 @@ from collections.abc import Callable
 from typing import final, override
 
 import lucid
+from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._dtype import finfo as _finfo
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function, FunctionCtx
 from lucid.linalg import (
     LinAlgError,
     _la,
     _lu_factor_packed,
+    _Pinv,
     cholesky,
+    eigh,
     inv,
     solve,
     solve_triangular,
+    svd,
 )
 
 # ── *_ex variants — return (result, info) instead of raising ───────────────
@@ -218,7 +223,7 @@ def _with_partial_factors(out: Tensor, A: Tensor, info: Tensor, upper: bool) -> 
 
 
 def cholesky_ex(
-    A: Tensor,
+    input: Tensor,
     *,
     upper: bool = False,
     check_errors: bool = False,
@@ -236,7 +241,7 @@ def cholesky_ex(
 
     Parameters
     ----------
-    A : Tensor
+    input : Tensor
         Candidate SPD matrix of shape ``(*, n, n)``.
     upper : bool, keyword-only, optional
         If ``True`` return the upper-triangular factor :math:`U` such
@@ -254,7 +259,7 @@ def cholesky_ex(
         defines; the rest is zero (LAPACK leaves it to its blocking).
     info : Tensor
         ``int32`` status, scalar or shape ``(*,)`` matching the batch
-        of ``A``.
+        of ``input``.
 
     Notes
     -----
@@ -279,6 +284,7 @@ def cholesky_ex(
     >>> int(info)
     2
     """
+    A = input
     try:
         return cholesky(A, upper=upper), _info_zero(A)
     except LinAlgError:
@@ -373,8 +379,8 @@ def solve_ex(
     B : Tensor
         Right-hand side of shape ``(*, n, k)`` (or ``(*, n)``).
     left : bool, keyword-only, optional
-        Currently must be ``True``.  ``False`` (``X A = B``) is not yet
-        implemented and raises ``NotImplementedError``.
+        If ``True`` (default), solve :math:`A X = B`; ``False`` solves
+        :math:`X A = B`.
     check_errors : bool, keyword-only, optional
         If ``True``, raise for the first singular matrix instead of
         reporting it through ``info``.
@@ -410,16 +416,14 @@ def solve_ex(
     >>> int(info)
     0
     """
-    if not left:
-        raise NotImplementedError("solve_ex: only left=True is supported")
     try:
-        return solve(A, B), _info_zero(A)
+        return solve(A, B, left=left), _info_zero(A)
     except LinAlgError:
         pass  # located per matrix below
-    info = _getrf_info(A)
+    info = _getrf_info(A if left else A.mT)
     if check_errors:
         _raise_ex_failure("solve_ex", info, _singular_reason("solve"))
-    return _on_the_rest(lambda M: solve(M, B), A, info), info
+    return _on_the_rest(lambda M: solve(M, B, left=left), A, info), info
 
 
 def lu_factor_ex(
@@ -484,7 +488,7 @@ def _lu_factor_ex(
 
 
 def ldl_factor(
-    A: Tensor,
+    input: Tensor,
     *,
     hermitian: bool = False,
 ) -> tuple[Tensor, Tensor]:
@@ -504,11 +508,11 @@ def ldl_factor(
 
     Parameters
     ----------
-    A : Tensor
+    input : Tensor
         Symmetric / Hermitian matrix of shape ``(*, n, n)``.
     hermitian : bool, keyword-only, optional
-        Whether a complex ``A`` is Hermitian rather than symmetric.  A real
-        ``A`` is both, so either value factors it the same.  Default
+        Whether a complex ``input`` is Hermitian rather than symmetric.  A real
+        ``input`` is both, so either value factors it the same.  Default
         ``False``, as the reference's.
 
     Returns
@@ -535,10 +539,10 @@ def ldl_factor(
     upper one as it found it — the input's own entries.  Those are
     cleared here, so ``LD`` holds the factorization and nothing else.
 
-    ``LD`` is differentiable in ``A``, to any order, wherever the pivots
+    ``LD`` is differentiable in ``input``, to any order, wherever the pivots
     do not change — an addition over the reference framework, which
     defines no derivative for this factorization and raises on backward.
-    The gradient lands on ``A``'s lower triangle, the part ``sytrf``
+    The gradient lands on ``input``'s lower triangle, the part ``sytrf``
     reads, as :func:`cholesky`'s does.
 
     Raises
@@ -560,12 +564,12 @@ def ldl_factor(
     tensor([1, 2], dtype=lucid.int32)
     """
     del hermitian  # only real input is factored, where it changes nothing
-    LD, pivots, _ = _ldl_factor_ex(A, check_errors=True, op="ldl_factor")
+    LD, pivots, _ = _ldl_factor_ex(input, check_errors=True, op="ldl_factor")
     return LD, pivots
 
 
 def ldl_factor_ex(
-    A: Tensor,
+    input: Tensor,
     *,
     hermitian: bool = False,
     check_errors: bool = False,
@@ -584,7 +588,7 @@ def ldl_factor_ex(
 
     Parameters
     ----------
-    A : Tensor
+    input : Tensor
         Symmetric / Hermitian matrix of shape ``(*, n, n)``.
     hermitian : bool, keyword-only, optional
         As :func:`ldl_factor`.  Default ``False``.
@@ -616,7 +620,7 @@ def ldl_factor_ex(
     1
     """
     del hermitian  # only real input is factored, where it changes nothing
-    return _ldl_factor_ex(A, check_errors=check_errors, op="ldl_factor_ex")
+    return _ldl_factor_ex(input, check_errors=check_errors, op="ldl_factor_ex")
 
 
 def _ldl_factor_ex(
@@ -730,3 +734,115 @@ class _LDLFactorGrad(Function):
         G = lucid.matmul(lucid.matmul(P.mT, 0.5 * (Z + Z.mT)), P)
         grad = 2.0 * lucid.tril(G) - lucid.diag_embed(G.diagonal(dim1=-2, dim2=-1))
         return lucid.where(failed, lucid.zeros_like(grad), grad), None, None, None
+
+
+def _complete_svd_basis(
+    factor: Tensor, full_dim: int, k: int, *, columns: bool
+) -> Tensor:
+    """Complete a thin orthogonal factor ``factor`` with its null-space basis."""
+    batch = tuple(int(s) for s in factor.shape[:-2])
+    if 0 in batch:
+        return lucid.zeros(
+            *batch, full_dim, full_dim, dtype=factor.dtype, device=factor.device
+        )
+    if k == 0:
+        eye = lucid.eye(full_dim, dtype=factor.dtype, device=factor.device)
+        return lucid.broadcast_to(eye, (*batch, full_dim, full_dim)).contiguous()
+    with lucid.no_grad():
+        fd = factor.detach() if columns else factor.detach().mT
+        bad = ~lucid.isfinite(fd).all(dim=(-2, -1), keepdim=True)
+        safe = lucid.where(bad, lucid.zeros_like(fd), fd)
+        eye = lucid.eye(full_dim, dtype=factor.dtype, device=factor.device)
+        proj = eye - lucid.matmul(safe, safe.mT)
+        _, v_impl = _la.eigh(_unwrap(proj))
+        null = _wrap(v_impl)[..., :, k:]
+        null = lucid.where(bad, lucid.full_like(null, float("nan")), null)
+        if not columns:
+            null = null.mT.contiguous()
+    return lucid.cat([factor, null], dim=-1 if columns else -2)
+
+
+def _complete_svd_factors(
+    A: Tensor, U: object, S: object, Vh: object, full_matrices: bool
+) -> tuple[Tensor, Tensor, Tensor]:
+    """Return ``(U, S, Vh)`` with full orthogonal bases when ``full_matrices=True``."""
+    assert isinstance(U, Tensor) and isinstance(S, Tensor) and isinstance(Vh, Tensor)
+    if full_matrices:
+        m, n = int(A.shape[-2]), int(A.shape[-1])
+        k = min(m, n)
+        if m > n:
+            U = _complete_svd_basis(U, m, k, columns=True)
+        elif m < n:
+            Vh = _complete_svd_basis(Vh, n, k, columns=False)
+    return U, S, Vh
+
+
+def _tol_tensor(
+    val: float | Tensor, A: Tensor, dtype: lucid.dtype, op: str = "matrix_rank"
+) -> Tensor:
+    """Coerce a scalar or tensor tolerance ``val`` for ``matrix_rank`` / ``pinv``."""
+    if isinstance(val, Tensor):
+        if val.is_complex():
+            raise TypeError(
+                f"{op}: tolerance tensor of complex dtype is not supported, got {val.dtype}"
+            )
+        return val.to(dtype).unsqueeze(-1)
+    return lucid.full((1,), float(val), dtype=dtype, device=A.device)
+
+
+def _sv_cutoff(
+    A: Tensor,
+    sv: Tensor,
+    *,
+    atol: float | Tensor | None,
+    rtol: float | Tensor | None,
+    op: str = "matrix_rank",
+) -> Tensor:
+    """Compute per-matrix singular-value cutoff ``max(atol, max_sv * rtol)``."""
+    atol_t = _tol_tensor(0.0 if atol is None else atol, A, sv.dtype, op)
+    eps = float(_finfo(sv.dtype).eps)
+    default_rtol = max(int(A.shape[-2]), int(A.shape[-1])) * eps
+    if rtol is not None:
+        rtol_t = _tol_tensor(rtol, A, sv.dtype, op)
+    elif atol is None:
+        rtol_t = _tol_tensor(default_rtol, A, sv.dtype, op)
+    else:
+        zero = lucid.zeros_like(atol_t)
+        rtol_t = lucid.where(
+            atol_t > zero, zero, _tol_tensor(default_rtol, A, sv.dtype, op)
+        )
+    if sv.numel() == 0:
+        return atol_t
+    max_sv = _wrap(_C_engine.max(_unwrap(sv), [-1], True))
+    return lucid.maximum(atol_t, max_sv * rtol_t)
+
+
+def _pinv_with_tol(
+    A: Tensor,
+    *,
+    atol: float | Tensor | None,
+    rtol: float | Tensor | None,
+    hermitian: bool,
+) -> Tensor:
+    """Compute ``pinv(A)`` under custom ``atol``/``rtol`` or ``hermitian=True``."""
+    if A.ndim < 2 or (hermitian and A.shape[-1] != A.shape[-2]):
+        raise ValueError(f"pinv: invalid input shape {tuple(A.shape)}")
+    with lucid.no_grad():
+        if hermitian:
+            w, V = eigh(A)
+            sv = w.abs()
+            cutoff = _sv_cutoff(A, sv, atol=atol, rtol=rtol, op="pinv")
+            inv_w = lucid.where(sv > cutoff, 1.0 / w, lucid.zeros_like(w))
+            P = lucid.matmul(V * inv_w.unsqueeze(-2), V.mT)
+        else:
+            U, sv, Vh = svd(A, full_matrices=False)
+            cutoff = _sv_cutoff(A, sv, atol=atol, rtol=rtol, op="pinv")
+            inv_s = lucid.where(sv > cutoff, 1.0 / sv, lucid.zeros_like(sv))
+            P = lucid.matmul(Vh.mT * inv_s.unsqueeze(-2), U.mT)
+    if A.requires_grad and lucid.is_grad_enabled():
+        out = _Pinv.apply(A, _unwrap(P))
+        assert isinstance(out, Tensor)
+        return out
+    return P
+
+

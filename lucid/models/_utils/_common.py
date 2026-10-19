@@ -562,7 +562,7 @@ def truncated_svd_linear(layer: nn.Linear, rank: int) -> nn.Sequential:
         )
 
     with lucid.no_grad():
-        u, s, vh = lucid.linalg.svd(layer.weight)
+        u, s, vh = lucid.linalg.svd(layer.weight, full_matrices=False)
 
     first = nn.Linear(in_features, rank, bias=False)
     second = nn.Linear(rank, out_features, bias=layer.bias is not None)

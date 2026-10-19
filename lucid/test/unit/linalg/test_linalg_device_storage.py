@@ -86,12 +86,18 @@ def test_lu_factor_outputs_are_usable(device):
 def test_svd_outputs_are_usable_and_reduced(device, shape):
     rng = np.random.default_rng(2)
     a = lucid.tensor(rng.standard_normal(shape).astype(np.float32), device=device)
-    u, s, vh = LA.svd(a)
+    u, s, vh = LA.svd(a, full_matrices=False)
     k = min(shape)
     assert u.shape == (shape[0], k)
     assert s.shape == (k,)
     assert vh.shape == (k, shape[1])
     for name, t in (("U", u), ("S", s), ("Vh", vh)):
+        _assert_storage_usable(t, f"svd.{name}")
+    u_full, s_full, vh_full = LA.svd(a)
+    assert u_full.shape == (shape[0], shape[0])
+    assert s_full.shape == (k,)
+    assert vh_full.shape == (shape[1], shape[1])
+    for name, t in (("U_full", u_full), ("S_full", s_full), ("Vh_full", vh_full)):
         _assert_storage_usable(t, f"svd.{name}")
 
 
@@ -127,9 +133,15 @@ def test_lu_factor_matches_across_devices():
 def test_svd_reconstructs_input(shape, device):
     rng = np.random.default_rng(5)
     a = rng.standard_normal(shape).astype(np.float32)
-    u, s, vh = LA.svd(lucid.tensor(a, device=device))
+    k = min(shape)
+    u, s, vh = LA.svd(lucid.tensor(a, device=device), full_matrices=False)
     recon = (u @ lucid.diag_embed(s) @ vh).numpy()
     assert np.abs(recon - a).max() < 1e-4
+    u_full, s_full, vh_full = LA.svd(lucid.tensor(a, device=device))
+    recon_full = (u_full[:, :k] @ lucid.diag_embed(s_full) @ vh_full[:k, :]).numpy()
+    assert np.abs(recon_full - a).max() < 1e-4
+    assert np.abs((u_full.mT @ u_full).numpy() - np.eye(shape[0])).max() < 1e-4
+    assert np.abs((vh_full @ vh_full.mT).numpy() - np.eye(shape[1])).max() < 1e-4
 
 
 # ── backward paths that depended on the above ────────────────────────────────

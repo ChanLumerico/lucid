@@ -49,7 +49,7 @@ if TYPE_CHECKING:
 # ── Error-function family ──────────────────────────────────────────────────
 
 
-def erfcx(x: Tensor) -> Tensor:
+def erfcx(input: Tensor) -> Tensor:
     r"""Scaled complementary error function.
 
     Computes :math:`\mathrm{erfcx}(x) = e^{x^2}\, \mathrm{erfc}(x)`, the
@@ -61,14 +61,14 @@ def erfcx(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
     -------
     Tensor
         :math:`e^{x^2}\,\mathrm{erfc}(x)` element-wise, same shape and
-        dtype as ``x``.
+        dtype as ``input``.
 
     Notes
     -----
@@ -93,7 +93,7 @@ def erfcx(x: Tensor) -> Tensor:
     >>> erfcx(lucid.tensor([0.0, 1.0, 5.0]))
     tensor([1., 0.4276, 0.1107])
     """
-    return _in_float32(_erfcx_stable, _real(x))
+    return _in_float32(_erfcx_stable, _real(input))
 
 
 # Every scaled special function below had the same defect: it was written
@@ -148,7 +148,7 @@ def _erfcx_stable(x: Tensor) -> Tensor:
 # ── Modified Bessel I₀ / I₁ family ─────────────────────────────────────────
 
 
-def i0e(x: Tensor) -> Tensor:
+def i0e(input: Tensor) -> Tensor:
     r"""Exponentially scaled modified Bessel function of order 0.
 
     Computes :math:`I_0(x)\, e^{-|x|}`, the standard exponentially-scaled
@@ -161,14 +161,14 @@ def i0e(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
     -------
     Tensor
         :math:`I_0(x)\, e^{-|x|}` element-wise, same shape and dtype as
-        ``x``.
+        ``input``.
 
     Notes
     -----
@@ -191,7 +191,7 @@ def i0e(x: Tensor) -> Tensor:
     >>> i0e(lucid.tensor([0.0, 1.0, 5.0, 20.0]))
     tensor([1., 0.4658, 0.1835, 0.08978])
     """
-    x = _real(x)
+    x = _real(input)
     if x.dtype == lucid.float64:
         return _bessel._i0e(x)
     return _in_float32(_i0e_as_fit, x)
@@ -234,7 +234,7 @@ _I1_LARGE_COEFFS: list[float] = [
 ]
 
 
-def i1(x: Tensor) -> Tensor:
+def i1(input: Tensor) -> Tensor:
     r"""Modified Bessel function of the first kind, order 1.
 
     Computes :math:`I_1(x)`, the order-one solution of the modified
@@ -244,13 +244,13 @@ def i1(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
     -------
     Tensor
-        :math:`I_1(x)` element-wise, same shape and dtype as ``x``.
+        :math:`I_1(x)` element-wise, same shape and dtype as ``input``.
 
     Notes
     -----
@@ -277,7 +277,7 @@ def i1(x: Tensor) -> Tensor:
     >>> i1(lucid.tensor([0.0, 1.0, 5.0]))
     tensor([0., 0.5652, 24.34])
     """
-    x = _real(x)
+    x = _real(input)
     if x.dtype == lucid.float64:
         return _bessel._i1(x)
     return _in_float32(_i1_as_fit, x)
@@ -304,7 +304,7 @@ def _i1_as_fit(x: Tensor) -> Tensor:
     return lucid.where(ax <= 3.75, val_small, val_large * lucid.sign(x))
 
 
-def i1e(x: Tensor) -> Tensor:
+def i1e(input: Tensor) -> Tensor:
     r"""Exponentially scaled modified Bessel function of order 1.
 
     Computes :math:`I_1(x)\, e^{-|x|}`, the bounded counterpart of
@@ -315,14 +315,14 @@ def i1e(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
     -------
     Tensor
         :math:`I_1(x)\, e^{-|x|}` element-wise, same shape and dtype as
-        ``x``.
+        ``input``.
 
     Notes
     -----
@@ -344,7 +344,7 @@ def i1e(x: Tensor) -> Tensor:
     >>> i1e(lucid.tensor([0.0, 1.0, 5.0]))
     tensor([0., 0.2079, 0.164])
     """
-    x = _real(x)
+    x = _real(input)
     if x.dtype == lucid.float64:
         return _bessel._i1e(x)
     return _in_float32(_i1e_as_fit, x)
@@ -370,7 +370,7 @@ def _i1e_as_fit(x: Tensor) -> Tensor:
 _INV_SQRT2 = 1.0 / math.sqrt(2.0)
 
 
-def ndtr(x: Tensor) -> Tensor:
+def ndtr(input: Tensor) -> Tensor:
     r"""Standard normal cumulative distribution function.
 
     Evaluates :math:`\Phi(x) = P(Z \le x)` where :math:`Z` is a standard
@@ -380,13 +380,13 @@ def ndtr(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
     -------
     Tensor
-        :math:`\Phi(x)` element-wise, same shape and dtype as ``x``;
+        :math:`\Phi(x)` element-wise, same shape and dtype as ``input``;
         values lie in ``(0, 1)``.
 
     Notes
@@ -411,7 +411,7 @@ def ndtr(x: Tensor) -> Tensor:
     >>> ndtr(lucid.tensor([-3.0, -1.0, 0.0, 1.0, 3.0]))
     tensor([0.00135, 0.1587, 0.5, 0.8413, 0.9987])
     """
-    return 0.5 * (1.0 + lucid.erf(x * _INV_SQRT2))
+    return 0.5 * (1.0 + lucid.erf(input * _INV_SQRT2))
 
 
 # Where ``log_ndtr`` hands the upper tail to ``log1p`` of the complement.
@@ -422,7 +422,7 @@ def ndtr(x: Tensor) -> Tensor:
 _LOG_NDTR_UPPER = 2.0 * math.sqrt(2.0)
 
 
-def log_ndtr(x: Tensor) -> Tensor:
+def log_ndtr(input: Tensor) -> Tensor:
     r"""Numerically stable logarithm of the standard normal CDF.
 
     Computes :math:`\log \Phi(x)` without losing precision in the deep
@@ -432,14 +432,14 @@ def log_ndtr(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
     -------
     Tensor
         :math:`\log \Phi(x)` element-wise, same shape and dtype as
-        ``x``; values lie in :math:`(-\infty, 0]`.
+        ``input``; values lie in :math:`(-\infty, 0]`.
 
     Notes
     -----
@@ -481,7 +481,7 @@ def log_ndtr(x: Tensor) -> Tensor:
     >>> log_ndtr(lucid.tensor([-10.0, -1.0, 0.0, 1.0]))
     tensor([-53.23, -1.841, -0.6931, -0.1728])
     """
-    x = _real(x)
+    x = _real(input)
     lo = lucid.full_like(x, -1.0)
     hi = lucid.full_like(x, _LOG_NDTR_UPPER)
     # Each branch sees only its own stretch of the line: ``where``
@@ -528,7 +528,7 @@ _NDTRI_D = (
 )
 
 
-def ndtri(p: Tensor) -> Tensor:
+def ndtri(input: Tensor) -> Tensor:
     r"""Inverse standard normal CDF (probit / quantile function).
 
     Computes :math:`\Phi^{-1}(p)`, the quantile function of the standard
@@ -538,7 +538,7 @@ def ndtri(p: Tensor) -> Tensor:
 
     Parameters
     ----------
-    p : Tensor
+    input : Tensor
         Input tensor of probabilities in :math:`(0, 1)`; any
         floating-point dtype.
 
@@ -546,7 +546,7 @@ def ndtri(p: Tensor) -> Tensor:
     -------
     Tensor
         :math:`\Phi^{-1}(p)` element-wise, same shape and dtype as
-        ``p``; values are unbounded reals.
+        ``input``; values are unbounded reals.
 
     Notes
     -----
@@ -579,7 +579,7 @@ def ndtri(p: Tensor) -> Tensor:
     >>> ndtri(lucid.tensor([0.025, 0.5, 0.975]))
     tensor([-1.96, 0., 1.96])
     """
-    return _in_float32(_ndtri, _real(p))
+    return _in_float32(_ndtri, _real(input))
 
 
 def _ndtri(p: Tensor) -> Tensor:
@@ -644,7 +644,7 @@ def _ndtri(p: Tensor) -> Tensor:
 # ── x-times-log-of-something helpers ───────────────────────────────────────
 
 
-def xlog1py(x: Tensor, y: Tensor) -> Tensor:
+def xlog1py(input: Tensor, other: Tensor) -> Tensor:
     r"""Safe product :math:`x \log(1 + y)` with limit-convention zero handling.
 
     Computes :math:`x \log(1 + y)` element-wise but takes the product as
@@ -657,16 +657,16 @@ def xlog1py(x: Tensor, y: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Multiplier tensor.
-    y : Tensor
-        Argument of ``log1p``; broadcast-compatible with ``x``.
+    other : Tensor
+        Argument of ``log1p``; broadcast-compatible with ``input``.
 
     Returns
     -------
     Tensor
         :math:`x \log(1 + y)` element-wise, broadcast to the common
-        shape of ``x`` and ``y``.
+        shape of ``input`` and ``other``.
 
     Notes
     -----
@@ -707,10 +707,10 @@ def xlog1py(x: Tensor, y: Tensor) -> Tensor:
     >>> xlog1py(lucid.tensor([0.0, 2.0]), lucid.tensor([-1.0, -1.0]))
     tensor([0., -inf])
     """
-    return _x_times_log(x, y, lucid.log1p, pole=-1.0, root=0.0)
+    return _x_times_log(input, other, lucid.log1p, pole=-1.0, root=0.0)
 
 
-def entr(x: Tensor) -> Tensor:
+def entr(input: Tensor) -> Tensor:
     r"""Element-wise entropy kernel :math:`-x \log x`.
 
     Returns the per-element contribution to Shannon entropy.  This is
@@ -720,7 +720,7 @@ def entr(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.  Integer and bool inputs are taken as ``float32``.
         Values below zero give ``-inf``.
 
@@ -728,7 +728,7 @@ def entr(x: Tensor) -> Tensor:
     -------
     Tensor
         Element-wise :math:`-x \log x` with the limit convention at
-        ``x = 0``; same shape as ``x``.
+        ``x = 0``; same shape as ``input``.
 
     Notes
     -----
@@ -760,7 +760,7 @@ def entr(x: Tensor) -> Tensor:
     >>> entr(lucid.tensor([0.0, 0.5, 1.0, 2.0]))
     tensor([0., 0.3466, 0., -1.386])
     """
-    x = _real(x)
+    x = _real(input)
     # ``0.0 - …`` rather than a unary minus: the convention's 0 at x == 0
     # is +0, and negating it would print as -0.
     val = 0.0 - lucid.xlogy(x, x)
@@ -776,7 +776,7 @@ def entr(x: Tensor) -> Tensor:
 # ── Gamma family ───────────────────────────────────────────────────────────
 
 
-def multigammaln(a: Tensor, p: int) -> Tensor:
+def multigammaln(input: Tensor, p: int) -> Tensor:
     r"""Logarithm of the multivariate gamma function :math:`\Gamma_p(a)`.
 
     Computes :math:`\log \Gamma_p(a)`, the natural generalisation of
@@ -786,7 +786,7 @@ def multigammaln(a: Tensor, p: int) -> Tensor:
 
     Parameters
     ----------
-    a : Tensor
+    input : Tensor
         Real argument; any floating-point dtype.  Each entry must
         satisfy :math:`a > (p - 1)/2` for the function to be finite
         (otherwise the underlying ``lgamma`` returns ``inf``).
@@ -797,8 +797,8 @@ def multigammaln(a: Tensor, p: int) -> Tensor:
     Returns
     -------
     Tensor
-        :math:`\log \Gamma_p(a)` element-wise over ``a``, same shape
-        and dtype as ``a``.
+        :math:`\log \Gamma_p(a)` element-wise over ``input``, same shape
+        and dtype as ``input``.
 
     Notes
     -----
@@ -823,13 +823,13 @@ def multigammaln(a: Tensor, p: int) -> Tensor:
     """
     if int(p) < 1:
         raise ValueError(f"multigammaln requires p >= 1, got {p}")
-    accum = lucid.zeros_like(a)
+    accum = lucid.zeros_like(input)
     for i in range(1, int(p) + 1):
-        accum = accum + lucid.lgamma(a + (1.0 - float(i)) / 2.0)
+        accum = accum + lucid.lgamma(input + (1.0 - float(i)) / 2.0)
     return float(p * (p - 1)) / 4.0 * math.log(math.pi) + accum
 
 
-def polygamma(n: int, x: Tensor) -> Tensor:
+def polygamma(n: int, input: Tensor) -> Tensor:
     r"""Polygamma function :math:`\psi^{(n)}(x)`.
 
     The ``n``-th derivative of the digamma function.  Polygamma
@@ -844,14 +844,14 @@ def polygamma(n: int, x: Tensor) -> Tensor:
         :func:`lucid.digamma`, ``n = 1`` is the trigamma function.  Any
         order is accepted, though :math:`\psi^{(n)}` grows like
         :math:`n!` and overflows float32 for large ``n`` — see Notes.
-    x : Tensor
+    input : Tensor
         Real argument; any floating-point dtype.
 
     Returns
     -------
     Tensor
         :math:`\psi^{(n)}(x)` element-wise, same shape and dtype as
-        ``x``.
+        ``input``.
 
     Notes
     -----
@@ -909,7 +909,7 @@ def polygamma(n: int, x: Tensor) -> Tensor:
     n = int(n)
     if n < 0:
         raise ValueError(f"polygamma: n must be ≥ 0, got {n}")
-    return _polygamma(n, x)
+    return _polygamma(n, input)
 
 
 # ── Spherical Bessel ───────────────────────────────────────────────────────
@@ -1592,7 +1592,7 @@ def _bessel_j0_large(x: Tensor) -> Tensor:
     return f0 * lucid.cos(theta) / lucid.sqrt(ax)
 
 
-def bessel_j0(x: Tensor) -> Tensor:
+def bessel_j0(input: Tensor) -> Tensor:
     r"""Bessel function of the first kind, order 0.
 
     Computes :math:`J_0(x)`, the regular-at-origin solution of Bessel's
@@ -1602,13 +1602,13 @@ def bessel_j0(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
     -------
     Tensor
-        :math:`J_0(x)` element-wise, same shape and dtype as ``x``.
+        :math:`J_0(x)` element-wise, same shape and dtype as ``input``.
 
     Notes
     -----
@@ -1638,9 +1638,9 @@ def bessel_j0(x: Tensor) -> Tensor:
     >>> bool(bessel_j0(lucid.tensor(2.4048)).abs() < 1e-4)  # the first zero
     True
     """
-    if x.dtype == lucid.float64:
-        return _bessel._j0(x)
-    return _split(x, 3.0, _bessel_j0_small, _bessel_j0_large)
+    if input.dtype == lucid.float64:
+        return _bessel._j0(input)
+    return _split(input, 3.0, _bessel_j0_small, _bessel_j0_large)
 
 
 def _bessel_j1_small(x: Tensor) -> Tensor:
@@ -1684,7 +1684,7 @@ def _bessel_j1_large(x: Tensor) -> Tensor:
     return lucid.where(x < 0, -val, val)
 
 
-def bessel_j1(x: Tensor) -> Tensor:
+def bessel_j1(input: Tensor) -> Tensor:
     r"""Bessel function of the first kind, order 1.
 
     Computes :math:`J_1(x)`, the regular order-one solution of Bessel's
@@ -1695,13 +1695,13 @@ def bessel_j1(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
     -------
     Tensor
-        :math:`J_1(x)` element-wise, same shape and dtype as ``x``.
+        :math:`J_1(x)` element-wise, same shape and dtype as ``input``.
 
     Notes
     -----
@@ -1727,9 +1727,9 @@ def bessel_j1(x: Tensor) -> Tensor:
     >>> bool(bessel_j1(lucid.tensor(3.8317)).abs() < 1e-4)  # the first zero
     True
     """
-    if x.dtype == lucid.float64:
-        return _bessel._j1(x)
-    return _split(x, 3.0, _bessel_j1_small, _bessel_j1_large)
+    if input.dtype == lucid.float64:
+        return _bessel._j1(input)
+    return _split(input, 3.0, _bessel_j1_small, _bessel_j1_large)
 
 
 _TWO_OVER_PI = 2.0 / math.pi
@@ -1769,7 +1769,7 @@ def _bessel_y0_large(x: Tensor) -> Tensor:
     return lucid.sqrt(0.636619772 / x) * (lucid.sin(xx) * p + z * lucid.cos(xx) * q)
 
 
-def bessel_y0(x: Tensor) -> Tensor:
+def bessel_y0(input: Tensor) -> Tensor:
     r"""Bessel function of the second kind, order 0.
 
     Computes :math:`Y_0(x)`, the singular-at-origin partner of
@@ -1779,14 +1779,14 @@ def bessel_y0(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; only :math:`x > 0` is in the domain.  Any
         floating-point dtype.
 
     Returns
     -------
     Tensor
-        :math:`Y_0(x)` element-wise, same shape and dtype as ``x``.
+        :math:`Y_0(x)` element-wise, same shape and dtype as ``input``.
 
     Notes
     -----
@@ -1816,10 +1816,10 @@ def bessel_y0(x: Tensor) -> Tensor:
     >>> bessel_y0(lucid.tensor([1.0, 5.0, 10.0]))
     tensor([0.08826, -0.3085, 0.05567])
     """
-    if x.dtype == lucid.float64:
-        return _bessel._y0(x)
+    if input.dtype == lucid.float64:
+        return _bessel._y0(input)
     return _half_line_split(
-        _real(x), 8.0, _bessel_y0_small, _bessel_y0_large, -math.inf
+        _real(input), 8.0, _bessel_y0_small, _bessel_y0_large, -math.inf
     )
 
 
@@ -1864,7 +1864,7 @@ def _bessel_y1_large(x: Tensor) -> Tensor:
     return lucid.sqrt(0.636619772 / x) * (lucid.sin(xx) * p + z * lucid.cos(xx) * q)
 
 
-def bessel_y1(x: Tensor) -> Tensor:
+def bessel_y1(input: Tensor) -> Tensor:
     r"""Bessel function of the second kind, order 1.
 
     Computes :math:`Y_1(x)`, the singular-at-origin order-one solution
@@ -1873,14 +1873,14 @@ def bessel_y1(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; only :math:`x > 0` is in the domain.  Any
         floating-point dtype.
 
     Returns
     -------
     Tensor
-        :math:`Y_1(x)` element-wise, same shape and dtype as ``x``.
+        :math:`Y_1(x)` element-wise, same shape and dtype as ``input``.
 
     Notes
     -----
@@ -1906,10 +1906,10 @@ def bessel_y1(x: Tensor) -> Tensor:
     >>> bessel_y1(lucid.tensor([1.0, 5.0, 10.0]))
     tensor([-0.7812, 0.1479, 0.249])
     """
-    if x.dtype == lucid.float64:
-        return _bessel._y1(x)
+    if input.dtype == lucid.float64:
+        return _bessel._y1(input)
     return _half_line_split(
-        _real(x), 8.0, _bessel_y1_small, _bessel_y1_large, -math.inf
+        _real(input), 8.0, _bessel_y1_small, _bessel_y1_large, -math.inf
     )
 
 
@@ -1933,7 +1933,7 @@ def _modified_bessel_k0_large(x: Tensor) -> Tensor:
     return _K0E_LARGE(2.0 / x) * lucid.exp(-x) / lucid.sqrt(x)
 
 
-def modified_bessel_k0(x: Tensor) -> Tensor:
+def modified_bessel_k0(input: Tensor) -> Tensor:
     r"""Modified Bessel function of the second kind, order 0.
 
     Computes :math:`K_0(x)`, the exponentially decaying solution of the
@@ -1943,14 +1943,14 @@ def modified_bessel_k0(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; only :math:`x > 0` is in the domain.  Any
         floating-point dtype.
 
     Returns
     -------
     Tensor
-        :math:`K_0(x)` element-wise, same shape and dtype as ``x``.
+        :math:`K_0(x)` element-wise, same shape and dtype as ``input``.
 
     Notes
     -----
@@ -1976,10 +1976,10 @@ def modified_bessel_k0(x: Tensor) -> Tensor:
     >>> modified_bessel_k0(lucid.tensor([0.5, 1.0, 5.0]))
     tensor([0.9244, 0.421, 0.003691])
     """
-    if x.dtype == lucid.float64:
-        return _bessel._k0(x)
+    if input.dtype == lucid.float64:
+        return _bessel._k0(input)
     return _half_line_split(
-        _real(x), 2.0, _modified_bessel_k0_small, _modified_bessel_k0_large, math.inf
+        _real(input), 2.0, _modified_bessel_k0_small, _modified_bessel_k0_large, math.inf
     )
 
 
@@ -2043,7 +2043,7 @@ def _modified_bessel_k1_large(x: Tensor) -> Tensor:
     return _K1E_LARGE(2.0 / x) * lucid.exp(-x) / lucid.sqrt(x)
 
 
-def modified_bessel_k1(x: Tensor) -> Tensor:
+def modified_bessel_k1(input: Tensor) -> Tensor:
     r"""Modified Bessel function of the second kind, order 1.
 
     Computes :math:`K_1(x)`, the order-one analogue of :math:`K_0`.
@@ -2053,13 +2053,13 @@ def modified_bessel_k1(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; only :math:`x > 0` is in the domain.
 
     Returns
     -------
     Tensor
-        :math:`K_1(x)` element-wise, same shape and dtype as ``x``.
+        :math:`K_1(x)` element-wise, same shape and dtype as ``input``.
 
     Notes
     -----
@@ -2084,10 +2084,10 @@ def modified_bessel_k1(x: Tensor) -> Tensor:
     >>> modified_bessel_k1(lucid.tensor([0.5, 1.0, 5.0]))
     tensor([1.656, 0.6019, 0.004045])
     """
-    if x.dtype == lucid.float64:
-        return _bessel._k1(x)
+    if input.dtype == lucid.float64:
+        return _bessel._k1(input)
     return _half_line_split(
-        _real(x), 2.0, _modified_bessel_k1_small, _modified_bessel_k1_large, math.inf
+        _real(input), 2.0, _modified_bessel_k1_small, _modified_bessel_k1_large, math.inf
     )
 
 
@@ -2134,7 +2134,7 @@ def scaled_modified_bessel_k1(x: Tensor) -> Tensor:
 # ── Name aliases matching reference framework's lucid.special surface ─────────
 
 
-def gammaln(x: Tensor) -> Tensor:
+def gammaln(input: Tensor) -> Tensor:
     r"""Natural logarithm of the absolute value of the gamma function.
 
     Convenience alias for :func:`lucid.lgamma`.  Computes
@@ -2143,7 +2143,7 @@ def gammaln(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
@@ -2171,10 +2171,10 @@ def gammaln(x: Tensor) -> Tensor:
     >>> gammaln(lucid.tensor([1.0, 5.0, 100.0]))
     tensor([0., 3.178, 359.1])
     """
-    return lucid.lgamma(x)
+    return lucid.lgamma(input)
 
 
-def psi(x: Tensor) -> Tensor:
+def psi(input: Tensor) -> Tensor:
     r"""Digamma function :math:`\psi(x) = \frac{d}{dx} \log \Gamma(x)`.
 
     Convenience alias for :func:`lucid.digamma`.  The digamma function
@@ -2183,7 +2183,7 @@ def psi(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
@@ -2214,10 +2214,10 @@ def psi(x: Tensor) -> Tensor:
     >>> psi(lucid.tensor([1.0, 2.0, 10.0]))
     tensor([-0.5772, 0.4228, 2.252])
     """
-    return lucid.digamma(x)
+    return lucid.digamma(input)
 
 
-def expit(x: Tensor) -> Tensor:
+def expit(input: Tensor) -> Tensor:
     r"""Logistic sigmoid (expit) function :math:`\sigma(x)`.
 
     Convenience alias for :func:`lucid.sigmoid`.  Maps the real line
@@ -2226,14 +2226,14 @@ def expit(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
     -------
     Tensor
         :math:`\sigma(x) = 1 / (1 + e^{-x})` element-wise, same shape
-        and dtype as ``x``.
+        and dtype as ``input``.
 
     Notes
     -----
@@ -2255,10 +2255,10 @@ def expit(x: Tensor) -> Tensor:
     >>> expit(lucid.tensor([-2.0, 0.0, 2.0]))
     tensor([0.1192, 0.5, 0.8808])
     """
-    return lucid.sigmoid(x)
+    return lucid.sigmoid(input)
 
 
-def modified_bessel_i0(x: Tensor) -> Tensor:
+def modified_bessel_i0(input: Tensor) -> Tensor:
     r"""Modified Bessel function of the first kind, order 0.
 
     Convenience alias for :func:`lucid.i0`.  Computes :math:`I_0(x)`,
@@ -2267,13 +2267,13 @@ def modified_bessel_i0(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
     -------
     Tensor
-        :math:`I_0(x)` element-wise, same shape and dtype as ``x``.
+        :math:`I_0(x)` element-wise, same shape and dtype as ``input``.
 
     Notes
     -----
@@ -2295,10 +2295,10 @@ def modified_bessel_i0(x: Tensor) -> Tensor:
     >>> modified_bessel_i0(lucid.tensor([0.0, 1.0, 3.0]))
     tensor([1., 1.266, 4.881])
     """
-    return lucid.i0(x)
+    return lucid.i0(input)
 
 
-def modified_bessel_i1(x: Tensor) -> Tensor:
+def modified_bessel_i1(input: Tensor) -> Tensor:
     r"""Modified Bessel function of the first kind, order 1.
 
     Convenience wrapper around :func:`i1`.  Computes :math:`I_1(x)`,
@@ -2308,7 +2308,7 @@ def modified_bessel_i1(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor; any floating-point dtype.
 
     Returns
@@ -2335,7 +2335,7 @@ def modified_bessel_i1(x: Tensor) -> Tensor:
     >>> modified_bessel_i1(lucid.tensor([0.0, 1.0, 3.0]))
     tensor([0., 0.5652, 3.953])
     """
-    return i1(x)
+    return i1(input)
 
 
 __all__ = [

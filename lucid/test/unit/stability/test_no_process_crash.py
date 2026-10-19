@@ -124,7 +124,7 @@ _REPORTED = [
     ("svdvals_inf", "allnan(L.svdvals(INF23), (2,))", OK),
     (
         "svd_nan",
-        "u, s, vh = L.svd(NAN23)\nallnan(u, (2, 2))\nallnan(s, (2,))\nallnan(vh, (2, 3))",
+        "u, s, vh = L.svd(NAN23)\nallnan(u, (2, 2))\nallnan(s, (2,))\nallnan(vh, (3, 3))",
         OK,
     ),
     ("norm_nuc_nan", "allnan(L.norm(NAN23, ord='nuc'), ())", OK),
@@ -536,12 +536,12 @@ for _shape in ("(0, 0)", "(0, 3, 3)"):
 _LINALG_EMPTY += [
     (
         "svd_0x3",
-        "u, s, vh = L.svd(R(0, 3))\nshape(u, (0, 0))\nshape(s, (0,))\nshape(vh, (0, 3))",
+        "u, s, vh = L.svd(R(0, 3))\nshape(u, (0, 0))\nshape(s, (0,))\nshape(vh, (3, 3))",
         OK,
     ),
     (
         "svd_3x0",
-        "u, s, vh = L.svd(R(3, 0))\nshape(u, (3, 0))\nshape(s, (0,))\nshape(vh, (0, 0))",
+        "u, s, vh = L.svd(R(3, 0))\nshape(u, (3, 3))\nshape(s, (0,))\nshape(vh, (0, 0))",
         OK,
     ),
     ("qr_0x3", "N(L.qr(R(0, 3))[1])", OK),

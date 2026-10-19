@@ -8,7 +8,7 @@ from typing import Callable, cast, final, override
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
-from lucid._dtype import _ENGINE_TO_DTYPE, finfo as _finfo, to_engine_dtype
+from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
 from lucid._ops._adapters import _outer_adapter
 from lucid._ops._dims import _wrap_dim
 from lucid._ops._reduce import _p_norm, _reduction_axes, _require_normable
@@ -60,7 +60,7 @@ def _linalg_op[R](fn: Callable[..., R]) -> Callable[..., R]:
 
 
 @_linalg_op
-def inv(x: Tensor) -> Tensor:
+def inv(A: Tensor) -> Tensor:
     r"""Compute the multiplicative inverse of a square matrix.
 
     Returns the unique matrix :math:`A^{-1}` such that
@@ -76,7 +76,7 @@ def inv(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    A : Tensor
         Square matrix of shape ``(*, n, n)`` (batch dims allowed).  Must
         be non-singular; raises a runtime error on singular input.
 
@@ -84,7 +84,7 @@ def inv(x: Tensor) -> Tensor:
     -------
     Tensor
         Inverse matrix of shape ``(*, n, n)`` with the same dtype as
-        ``x``.
+        ``A``.
 
     Notes
     -----
@@ -112,16 +112,16 @@ def inv(x: Tensor) -> Tensor:
     makes the answer depend on the mathematics rather than on which
     machine is asking.
     """
-    shape: tuple[int, ...] = tuple(x.shape)
+    shape: tuple[int, ...] = tuple(A.shape)
     if len(shape) >= 2 and shape[-1] == 0:
         # Inversion preserves shape, and there are no elements to
         # factorise, so the input *is* the answer.
-        return x
-    return _la.inv(x)  # type: ignore[arg-type, return-value]
+        return A
+    return _la.inv(A)  # type: ignore[arg-type, return-value]
 
 
 @_linalg_op
-def det(x: Tensor) -> Tensor:
+def det(A: Tensor) -> Tensor:
     r"""Compute the determinant of a square matrix.
 
     For a square matrix :math:`A \in \mathbb{R}^{n \times n}` returns the
@@ -131,7 +131,7 @@ def det(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    A : Tensor
         Square matrix of shape ``(*, n, n)``.
 
     Returns
@@ -156,12 +156,11 @@ def det(x: Tensor) -> Tensor:
     >>> det(lucid.tensor([[1.0, 2.0], [3.0, 4.0]]))
     tensor(-2.)
     """
-    return _la.det(x)  # type: ignore[arg-type, return-value]
+    return _la.det(A)  # type: ignore[arg-type, return-value]
 
 
-@_linalg_op
-def solve(A: Tensor, b: Tensor) -> Tensor:
-    r"""Solve a square linear system :math:`AX = B`.
+def solve(A: Tensor, B: Tensor, *, left: bool = True) -> Tensor:
+    r"""Solve a square linear system :math:`AX = B` (or :math:`XA = B`).
 
     Returns the unique solution :math:`X` of the system
 
@@ -177,14 +176,17 @@ def solve(A: Tensor, b: Tensor) -> Tensor:
     ----------
     A : Tensor
         Square coefficient matrix of shape ``(*, n, n)``.
-    b : Tensor
-        Right-hand side of shape ``(*, n, k)`` (multiple RHS columns) or
-        ``(*, n)`` (single RHS vector).
+    B : Tensor
+        Right-hand side of shape ``(*, n, k)`` (or ``(*, k, n)`` when
+        ``left=False``) or ``(*, n)`` (single RHS vector).
+    left : bool, keyword-only, optional
+        If ``True`` (default) solves :math:`AX = B`; if ``False`` solves
+        :math:`XA = B` via transposition.
 
     Returns
     -------
     Tensor
-        Solution :math:`X` with the same shape as ``b``.
+        Solution :math:`X` with the same shape as ``B``.
 
     Notes
     -----
@@ -201,10 +203,17 @@ def solve(A: Tensor, b: Tensor) -> Tensor:
     >>> solve(A, b)
     tensor([2., 3.])
     """
-    return _la.solve(A, b)  # type: ignore[arg-type, return-value]
+    if not left:
+        if B.ndim < 2 or tuple(B.shape) == tuple(A.shape[:-1]):
+            raise _C_engine.ShapeMismatch(
+                f"solve(left=False): B must be a matrix or batch of matrices, got shape {tuple(B.shape)}"
+            )
+        rhs = B.unsqueeze(0).mT if tuple(B.mT.shape) == tuple(A.shape[:-1]) else B.mT
+        return _wrap(_la.solve(_unwrap(A.mT), _unwrap(rhs))).mT
+    return _wrap(_la.solve(_unwrap(A), _unwrap(B)))
 
 
-def cholesky(x: Tensor, *, upper: bool = False) -> Tensor:
+def cholesky(input: Tensor, *, upper: bool = False) -> Tensor:
     r"""Cholesky decomposition of a symmetric positive-definite matrix.
 
     For a real symmetric positive-definite (SPD) matrix :math:`A`
@@ -222,7 +231,7 @@ def cholesky(x: Tensor, *, upper: bool = False) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Symmetric positive-definite matrix of shape ``(*, n, n)``.
     upper : bool, optional
         If ``True`` return the upper-triangular factor :math:`U` such
@@ -259,7 +268,7 @@ def cholesky(x: Tensor, *, upper: bool = False) -> Tensor:
     >>> L @ L.T
     tensor([[4., 2.], [2., 3.]])
     """
-    return cast(Tensor, _CholeskyAutograd.apply(x, upper))
+    return cast(Tensor, _CholeskyAutograd.apply(input, upper))
 
 
 from lucid.autograd.function import Function as _AutogradFunction
@@ -319,10 +328,12 @@ class _CholeskyAutograd(_AutogradFunction):
 
 
 def norm(
-    x: Tensor,
+    input: Tensor,
     ord: int | float | str | None = None,
     dim: int | list[int] | tuple[int, ...] | None = None,
     keepdim: bool = False,
+    *,
+    dtype: object = None,
 ) -> Tensor:
     r"""Compute a vector or matrix norm.
 
@@ -338,7 +349,7 @@ def norm(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.  May be a vector ``(n,)``, a matrix ``(m, n)``, or
         higher-rank with explicit ``dim``.
     ord : int, float, str or None, optional
@@ -351,6 +362,8 @@ def norm(
         reduces over all elements.
     keepdim : bool, optional
         If ``True``, retains reduced dimensions with size 1.
+    dtype : dtype, keyword-only, optional
+        If given, ``input`` is cast to ``dtype`` before computing the norm.
 
     Returns
     -------
@@ -360,7 +373,7 @@ def norm(
     Raises
     ------
     DtypeMismatch
-        If ``x`` is an integer or bool tensor (a ``TypeError``).
+        If ``input`` is an integer or bool tensor (a ``TypeError``).
     ValueError
         If ``ord`` is given without ``dim`` and the input is neither a
         vector nor a single matrix — a batch of matrices leaves it
@@ -416,30 +429,8 @@ def norm(
     >>> norm(A, ord=1, dim=1)   # per-row vector 1-norm
     tensor([6., 15.])
     """
-    # Dispatch, which is what the docstring above has always promised and
-    # what this function did not do.  Every argument used to go straight
-    # into the engine's flat p-norm, so ``ord`` was read as a *vector*
-    # order over the flattened input no matter the rank.  On a 2-D input
-    # that is a different function under the same name:
-    #
-    #   ord=1     21    vs      9   (max absolute column sum)
-    #   ord=2     9.539 vs  9.508   (Frobenius, not spectral)
-    #   ord=inf    6    vs     15   (max absolute row sum)
-    #
-    # None of these raised.  ``ord=2`` is the worst of them: Frobenius and
-    # spectral agree to three significant figures on well-conditioned
-    # matrices and diverge exactly where the answer starts to matter, so
-    # anything using ``norm(A, ord=2)`` as a Lipschitz bound or a
-    # conditioning estimate was quietly reading the wrong number.
-    #
-    # The rules, measured rather than assumed:
-    #
-    #   ord is a string          matrix norm ("fro" / "nuc")
-    #   dim is None, ord None    flatten, 2-norm, any rank
-    #   dim is None, ord given   1-D vector norm / 2-D matrix norm; else refuse
-    #   dim names one axis       vector norm
-    #   dim names two axes       matrix norm
-    _require_normable(_unwrap(x), "norm")
+    _require_normable(_unwrap(input), "norm")
+    x = _wrap(_cast_for_norm(input, dtype)) if dtype is not None else input
     rank = len(_unwrap(x).shape)
     axes: tuple[int, ...] | None
     if dim is None:
@@ -543,21 +534,6 @@ def _scaled(
 #               U ((J + J^T) diag(s)) Vh + (I_m - U U^T) G_U Σ⁻¹ Vh    [if m>k]
 #   dA from Vh: K = F ⊙ (Vh G_Vh^T)
 #               U (diag(s) (K + K^T)) Vh + U Σ⁻¹ G_Vh (I_n - Vh^T Vh)  [if n>k]
-#
-# Three things were wrong here, and they compounded rather than
-# cancelling.  The Loewner term carried ``s_i`` where the derivation puts
-# ``s_j`` — which is the singular value that multiplies from the *other*
-# side; the sign followed it, since ``s_i² - s_j²`` is the negative of
-# what the formula asks for; and the symmetrisation ``J + J^T`` was
-# missing entirely, so only half the term survived.
-#
-# A left singular vector is defined up to a sign, and that made the
-# defect hard to see: comparing U against another framework's shows
-# columns differing by a sign, and it is tempting to stop there.  What
-# settles it is Lucid's own forward: a central difference of it agrees
-# with the reference's *analytic* gradient to 6e-17 and disagreed with
-# Lucid's by 6e-1, on a matrix whose singular values are well separated.
-# The convention was never the issue.
 
 
 def _svd_loewner(S: Tensor) -> Tensor:
@@ -674,7 +650,9 @@ class _SVDVhGrad(_AutogradFunction):
         return dA
 
 
-def svd(x: Tensor, full_matrices: bool = False) -> tuple[Tensor, Tensor, Tensor]:
+def svd(
+    A: Tensor, full_matrices: bool = True, *, driver: str | None = None
+) -> tuple[Tensor, Tensor, Tensor]:
     r"""Singular value decomposition of a matrix.
 
     Factorizes any (possibly rectangular) matrix :math:`A \in
@@ -693,13 +671,15 @@ def svd(x: Tensor, full_matrices: bool = False) -> tuple[Tensor, Tensor, Tensor]
 
     Parameters
     ----------
-    x : Tensor
+    A : Tensor
         Input matrix of shape ``(*, m, n)`` (batch dims allowed).
     full_matrices : bool, optional
         If ``True`` (default), :math:`U` is ``(m, m)`` and
         :math:`V^\top` is ``(n, n)`` — the full orthogonal factors.
         If ``False``, returns the reduced SVD with :math:`U` shaped
         ``(m, k)`` and :math:`V^\top` shaped ``(k, n)``.
+    driver : str or None, keyword-only, optional
+        LAPACK driver name.  Must be ``None``.
 
     Returns
     -------
@@ -732,41 +712,35 @@ def svd(x: Tensor, full_matrices: bool = False) -> tuple[Tensor, Tensor, Tensor]
     >>> S
     tensor([2., 1.])
     """
-    unsupported_if(
-        full_matrices,
-        "svd",
-        "full_matrices",
-        full_matrices,
-        detail="Only the reduced factorisation is computed; the default is False here for that reason.",
-    )
-    _svd_result = _la.svd(_unwrap(x))
-    u_impl: _C_engine.TensorImpl
-    s_impl: _C_engine.TensorImpl
-    vh_impl: _C_engine.TensorImpl
-    u_impl, s_impl, vh_impl = _svd_result
-    if not _C_engine.grad_enabled() or not x.requires_grad:
-        return _wrap(u_impl), _wrap(s_impl), _wrap(vh_impl)
+    unsupported_if(driver is not None, "svd", "driver", driver)
+    u_impl, s_impl, vh_impl = _la.svd(_unwrap(A))
+    if not _C_engine.grad_enabled() or not A.requires_grad:
+        return _complete_svd_factors(
+            A, _wrap(u_impl), _wrap(s_impl), _wrap(vh_impl), full_matrices
+        )
     # Pass TensorImpl (not Tensor) so _make_apply ignores them in the
     # differentiable-input scan — no spurious cross-edges in the graph.
-    U = _SVDUGrad.apply(x, u_impl, s_impl, vh_impl)
-    S = _SVDSGrad.apply(x, u_impl, s_impl, vh_impl)
-    Vh = _SVDVhGrad.apply(x, u_impl, s_impl, vh_impl)
-    return U, S, Vh  # type: ignore[return-value]
+    U = _SVDUGrad.apply(A, u_impl, s_impl, vh_impl)
+    S = _SVDSGrad.apply(A, u_impl, s_impl, vh_impl)
+    Vh = _SVDVhGrad.apply(A, u_impl, s_impl, vh_impl)
+    return _complete_svd_factors(A, U, S, Vh, full_matrices)
 
 
-def svdvals(x: Tensor) -> Tensor:
+def svdvals(A: Tensor, *, driver: str | None = None) -> Tensor:
     r"""Compute only the singular values of a matrix.
 
     Returns the singular values :math:`\sigma_1 \ge \cdots \ge
     \sigma_k \ge 0` (with :math:`k = \min(m, n)`) of an input matrix
     :math:`A` without forming :math:`U` or :math:`V^\top`.  Equivalent
-    to ``svd(A)[1]`` but avoids the work of constructing the singular
-    vectors.
+    to ``svd(A, full_matrices=False)[1]`` but avoids the work of
+    constructing the singular vectors.
 
     Parameters
     ----------
-    x : Tensor
+    A : Tensor
         Input matrix of shape ``(*, m, n)``.
+    driver : str or None, keyword-only, optional
+        LAPACK driver name.  Must be ``None``.
 
     Returns
     -------
@@ -775,7 +749,7 @@ def svdvals(x: Tensor) -> Tensor:
 
     Notes
     -----
-    When gradients are required this routes through the full
+    When gradients are required this routes through the reduced
     :func:`svd` so backward still works.  Without ``requires_grad``,
     the engine kernel skips assembly of the singular vectors and is
     roughly :math:`2\times` faster.  Useful for computing
@@ -788,10 +762,11 @@ def svdvals(x: Tensor) -> Tensor:
     >>> svdvals(lucid.tensor([[3.0, 0.0], [0.0, 4.0]]))
     tensor([4., 3.])
     """
-    if _C_engine.grad_enabled() and x.requires_grad:
-        _, S, _ = svd(x)
+    unsupported_if(driver is not None, "svdvals", "driver", driver)
+    if _C_engine.grad_enabled() and A.requires_grad:
+        _, S, _ = svd(A, full_matrices=False)
         return S
-    result = _la.svd(_unwrap(x), False)
+    result = _la.svd(_unwrap(A), False)
     if isinstance(result, (list, tuple)):
         return _wrap(result[0])
     return _wrap(result)
@@ -818,96 +793,6 @@ def svdvals(x: Tensor) -> Tensor:
 #
 # For simplicity, the combined QR backward is implemented in a single
 # Function wrapper that handles both Q and R gradients together.
-
-
-@final
-class _QRCombinedGrad(_AutogradFunction):
-    """Joint backward for QR: accumulates G_Q and G_R and computes dA.
-
-    Both Q and R gradients flow to the same A via the Cholesky-based formula:
-      L = chol(A^T A),  R = D L^T,  Q = A R^{-1}  (conceptually)
-
-    In practice, because LAPACK's QR can have negative diagonal, we use the
-    correct chain-rule path:
-      G_B = chol_backward(L, G_L)   where L = chol(A^T A)
-      dA  = 2 A G_B                 where G_B is symmetric
-    combined with the Q-path:
-      dA += G_Q R^{-T} + Q tril(G_Q^T Q - 0) R^{-T}  (Stiefel projection)
-
-    This is split into two Function wrappers that each handle one output;
-    their contributions accumulate in A.grad.
-    """
-
-    _once_differentiable = True  # the backward leaves the graph — CHA-8
-
-
-@final
-class _QRRGrad(_AutogradFunction):
-    """Backward: R contribution.  Uses Cholesky route for correctness with
-    LAPACK's sign convention (negative diagonal R elements are allowed)."""
-
-    _once_differentiable = True  # the backward leaves the graph — CHA-8
-
-    @override
-    @staticmethod
-    def forward(
-        ctx: FunctionCtx,
-        A: Tensor,
-        q_impl: _C_engine.TensorImpl,
-        r_impl: _C_engine.TensorImpl,
-    ) -> Tensor:
-        ctx.r_impl = r_impl
-        return _wrap(r_impl)
-
-    @override
-    @staticmethod
-    def backward(ctx: FunctionCtx, G_R: Tensor) -> Tensor:
-        # R backward via Cholesky of A^T A:
-        #   R = D L^T  where L = chol(A^T A), D = diag(sign(diag(R)))
-        #   G_L = G_R.mT @ D  (chain rule through R = D L^T)
-        #   G_B = chol_backward(L, G_L)
-        #   dA  = 2 A G_B  (chain rule through B = A^T A)
-        #
-        # But we don't have A here — use the functional Cholesky backward
-        # via Murray's formula directly on R.
-        #
-        # Simpler equivalent: use the fact that R^T R = A^T A.
-        # dA from G_R:
-        #   ∂f/∂A = A G_B + A G_B^T = 2 A G_B  (G_B symmetric)
-        # where G_B is the gradient of f w.r.t. B = R^T R:
-        #   ∂f/∂B[i,j] = Σ_{k,l} G_R[k,l] ∂R[k,l]/∂B[i,j]
-        #
-        # Using Murray's Cholesky backward directly:
-        # G_L[a,b] = G_R[b,a] * D[b,b]  (= G_R.mT @ D)
-        # G_B = chol_backward(L, G_L) via the two triangular solves
-        R = _wrap(ctx.r_impl)  # type: ignore[arg-type]  # ctx attr is TensorImpl at runtime
-        n = int(R.shape[-1])
-        diag_R = R.diagonal(dim1=-2, dim2=-1)
-        # sign of diagonal: +1 or -1
-        D = lucid.diag_embed(diag_R / diag_R.abs().clamp(min=1e-12))  # sign matrix
-        # L = R^T @ D  (lower triangular, positive diagonal)
-        # Derivation: R = D1 R_pos (D1 = sign matrix), R_pos = L^T
-        # → L = R_pos^T = (D1 R)^T = R^T D1 = R.mT @ D
-        L = (R.mT @ D).detach()
-        # G_L = G_R.mT @ D
-        G_L = G_R.mT @ D
-        # Murray's Cholesky backward: G_B = sym(L^{-T} Phi(L^T G_L) L^{-1})
-        eye_n = lucid.eye(n, dtype=L.dtype, device=L.device)
-        M = L.mT @ G_L
-        Phi = lucid.tril(M) - 0.5 * (M * eye_n)
-        Y = solve_triangular(L.mT, Phi, upper=True)
-        Z = solve_triangular(L.mT, Y.mT, upper=True).mT
-        (Z + Z.mT) * 0.5  # symmetric
-        # dA = 2 * ctx_A * G_B — but we don't have A here.
-        # Recover A: A = Q R but we don't have Q stored in ctx.
-        # Use A = L^T D R ??? No: L = D R^T → L^T = R D^T = R D (D is diagonal & symmetric)
-        # So A = Q R and R = D L^T → A = Q D L^T.
-        # G_B is the gradient w.r.t. A^T A, so dA = 2 A G_B.
-        # But we need A. Store it in forward.
-        raise RuntimeError(
-            "Internal error: _QRRGrad.backward called without A stored in ctx. "
-            "Use _QRRGradWithA which stores A."
-        )
 
 
 def _copyltu(M: Tensor) -> Tensor:
@@ -1052,7 +937,7 @@ class _QRQGrad(_AutogradFunction):
         return solve_triangular(R, numerator.mT, upper=True).mT
 
 
-def qr(x: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
+def qr(A: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
     r"""QR decomposition of a matrix.
 
     Factorizes a matrix :math:`A \in \mathbb{R}^{m \times n}` as
@@ -1068,7 +953,7 @@ def qr(x: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
 
     Parameters
     ----------
-    x : Tensor
+    A : Tensor
         Input matrix of shape ``(*, m, n)``.
     mode : {"reduced", "complete", "r"}, optional
         ``"reduced"`` (default): :math:`Q` is ``(m, k)`` and :math:`R`
@@ -1114,11 +999,11 @@ def qr(x: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
         mode,
         detail="Only the reduced factorisation is computed.",
     )
-    q_impl, r_impl = _la.qr(_unwrap(x))
-    if not _C_engine.grad_enabled() or not x.requires_grad:
+    q_impl, r_impl = _la.qr(_unwrap(A))
+    if not _C_engine.grad_enabled() or not A.requires_grad:
         return _wrap(q_impl), _wrap(r_impl)
-    Q = _QRQGrad.apply(x, q_impl, r_impl)
-    R = _QRRGradWithA.apply(x, q_impl, r_impl)
+    Q = _QRQGrad.apply(A, q_impl, r_impl)
+    R = _QRRGradWithA.apply(A, q_impl, r_impl)
     return Q, R  # type: ignore[return-value]
 
 
@@ -1150,7 +1035,7 @@ class _MatrixPowerZero(_AutogradFunction):
         return lucid.zeros_like(grad_out)
 
 
-def matrix_power(x: Tensor, n: int) -> Tensor:
+def matrix_power(input: Tensor, n: int) -> Tensor:
     r"""Raise a square matrix to an integer power.
 
     Computes :math:`A^n` for an integer exponent :math:`n`:
@@ -1165,7 +1050,7 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Square matrix of shape ``(*, m, m)``.
     n : int
         Integer exponent.  Negative values require :math:`A` to be
@@ -1184,9 +1069,9 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
     :func:`inv` so autograd flows naturally — the engine
     ``matrix_power_op`` is not differentiable.
 
-    The result is always a new tensor on ``x``'s device: ``n = 0`` gives
+    The result is always a new tensor on ``input``'s device: ``n = 0`` gives
     an identity per matrix (with a zero gradient) and ``n = 1`` a copy
-    of ``x``, never ``x`` itself.
+    of ``input``, never ``input`` itself.
 
     Examples
     --------
@@ -1199,21 +1084,21 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
     if not isinstance(n, int):
         raise TypeError(f"matrix_power exponent must be int, got {type(n).__name__}")
 
-    sh: tuple[int, ...] = tuple(_unwrap(x).shape)
+    sh: tuple[int, ...] = tuple(_unwrap(input).shape)
     if len(sh) < 2 or sh[-1] != sh[-2]:
         raise ValueError(
             f"matrix_power requires a square matrix in the last two dims, got {sh}"
         )
 
     if n == 0:
-        return cast(Tensor, _MatrixPowerZero.apply(x))
+        return cast(Tensor, _MatrixPowerZero.apply(input))
 
-    base: Tensor = inv(x) if n < 0 else x
+    base: Tensor = inv(input) if n < 0 else input
     exponent: int = -n if n < 0 else n
     if exponent == 1:
-        # A new tensor, never the argument itself: handing ``x`` back made
+        # A new tensor, never the argument itself: handing ``input`` back made
         # ``matrix_power(a, 1).add_(1)`` write into ``a``.
-        return base.clone() if base is x else base
+        return base.clone() if base is input else base
 
     # Standard binary exponentiation: result starts at base if the lowest
     # bit is set, otherwise it gets multiplied in on the first set bit.
@@ -1234,7 +1119,14 @@ def matrix_power(x: Tensor, n: int) -> Tensor:
     return result
 
 
-def pinv(x: Tensor) -> Tensor:
+def pinv(
+    input: Tensor,
+    rcond: float | Tensor | None = None,
+    hermitian: bool = False,
+    *,
+    atol: float | Tensor | None = None,
+    rtol: float | Tensor | None = None,
+) -> Tensor:
     r"""Moore-Penrose pseudo-inverse of a matrix.
 
     Returns the unique matrix :math:`A^+` satisfying the four
@@ -1254,9 +1146,20 @@ def pinv(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input matrix of shape ``(*, m, n)``.  Need not be square or
         full-rank.
+    rcond : float, Tensor or None, optional
+        Alias for ``rtol``; mutually exclusive with ``atol`` and ``rtol``.
+    hermitian : bool, optional
+        If ``True``, assumes ``input`` is symmetric / Hermitian and uses
+        :func:`eigh` of the lower triangle instead of :func:`svd`.
+    atol : float, Tensor or None, keyword-only, optional
+        Absolute tolerance threshold (treated as ``0.0`` when ``None``).
+    rtol : float, Tensor or None, keyword-only, optional
+        Relative tolerance threshold; defaults to
+        :math:`\max(m, n) \cdot \varepsilon` unless ``atol > 0``, in
+        which case ``0.0``.
 
     Returns
     -------
@@ -1282,9 +1185,15 @@ def pinv(x: Tensor) -> Tensor:
     >>> lucid.allclose(pinv(A) @ A, lucid.eye(2), atol=1e-5)
     True
     """
-    if x.requires_grad and lucid.is_grad_enabled():
-        return cast(Tensor, _Pinv.apply(x))
-    return _wrap(_la.pinv(_unwrap(x)))
+    if rcond is not None:
+        if atol is not None or rtol is not None:
+            raise TypeError("pinv: rcond cannot be specified together with atol or rtol")
+        rtol = rcond
+    if atol is not None or rtol is not None or hermitian:
+        return _pinv_with_tol(input, atol=atol, rtol=rtol, hermitian=hermitian)
+    if input.requires_grad and lucid.is_grad_enabled():
+        return cast(Tensor, _Pinv.apply(input))
+    return _wrap(_la.pinv(_unwrap(input)))
 
 
 @final
@@ -1306,8 +1215,10 @@ class _Pinv(_AutogradFunction):
 
     @override
     @staticmethod
-    def forward(ctx: FunctionCtx, A: Tensor) -> Tensor:
-        P = _wrap(_la.pinv(_unwrap(A)))
+    def forward(
+        ctx: FunctionCtx, A: Tensor, p_impl: _C_engine.TensorImpl | None = None
+    ) -> Tensor:
+        P = _wrap(_la.pinv(_unwrap(A)) if p_impl is None else p_impl)
         ctx.save_for_backward(A, P)
         return P
 
@@ -1337,7 +1248,7 @@ class _Pinv(_AutogradFunction):
         )
 
 
-def eig(x: Tensor) -> tuple[Tensor, Tensor]:
+def eig(input: Tensor) -> tuple[Tensor, Tensor]:
     r"""Eigenvalue decomposition of a general square matrix.
 
     For a general (not necessarily symmetric) square matrix :math:`A`
@@ -1356,7 +1267,7 @@ def eig(x: Tensor) -> tuple[Tensor, Tensor]:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Square matrix of shape ``(*, n, n)``.
 
     Returns
@@ -1384,13 +1295,13 @@ def eig(x: Tensor) -> tuple[Tensor, Tensor]:
     >>> w
     tensor([(2.+0.j), (3.+0.j)], dtype=lucid.complex64)
     """
-    if x.requires_grad and lucid.is_grad_enabled():
-        return cast(tuple[Tensor, Tensor], _Eig.apply(x))
-    raw_vals, raw_vecs = _la.eig(_unwrap(x))
+    if input.requires_grad and lucid.is_grad_enabled():
+        return cast(tuple[Tensor, Tensor], _Eig.apply(input))
+    raw_vals, raw_vecs = _la.eig(_unwrap(input))
     return _wrap(raw_vals), _wrap(raw_vecs)
 
 
-def eigvals(x: Tensor) -> Tensor:
+def eigvals(input: Tensor) -> Tensor:
     r"""Compute only the eigenvalues of a general square matrix.
 
     Returns the roots :math:`\lambda_1, \ldots, \lambda_n` of the
@@ -1400,7 +1311,7 @@ def eigvals(x: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Square matrix of shape ``(*, n, n)``.
 
     Returns
@@ -1421,9 +1332,9 @@ def eigvals(x: Tensor) -> Tensor:
     >>> eigvals(lucid.tensor([[2.0, 0.0], [0.0, 3.0]]))
     tensor([(2.+0.j), (3.+0.j)], dtype=lucid.complex64)
     """
-    if x.requires_grad and lucid.is_grad_enabled():
-        return cast(tuple[Tensor, Tensor], _Eig.apply(x))[0]
-    vals, _ = _la.eig(_unwrap(x))
+    if input.requires_grad and lucid.is_grad_enabled():
+        return cast(tuple[Tensor, Tensor], _Eig.apply(input))[0]
+    vals, _ = _la.eig(_unwrap(input))
     return _wrap(vals)
 
 
@@ -1617,7 +1528,7 @@ def _from_triangle(x: Tensor, UPLO: str, op: str) -> _C_engine.TensorImpl:
     return flipped
 
 
-def eigh(x: Tensor, UPLO: str = "L") -> tuple[Tensor, Tensor]:
+def eigh(input: Tensor, UPLO: str = "L") -> tuple[Tensor, Tensor]:
     r"""Eigendecomposition of a Hermitian / symmetric matrix.
 
     Returns the eigenvalues and orthonormal eigenvectors of a real
@@ -1634,10 +1545,10 @@ def eigh(x: Tensor, UPLO: str = "L") -> tuple[Tensor, Tensor]:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Square Hermitian / symmetric matrix of shape ``(*, n, n)``.
     UPLO : str, optional
-        ``"L"`` (default) reads only the lower triangle of ``x``;
+        ``"L"`` (default) reads only the lower triangle of ``input``;
         ``"U"`` reads only the upper triangle.  The other triangle is
         ignored, so a non-Hermitian input is accepted as long as the
         chosen triangle holds the correct values.
@@ -1679,15 +1590,15 @@ def eigh(x: Tensor, UPLO: str = "L") -> tuple[Tensor, Tensor]:
     >>> w
     tensor([1.382, 3.618])
     """
-    w_impl, V_impl = _la.eigh(_from_triangle(x, UPLO, "eigh"))
-    if not _C_engine.grad_enabled() or not x.requires_grad:
+    w_impl, V_impl = _la.eigh(_from_triangle(input, UPLO, "eigh"))
+    if not _C_engine.grad_enabled() or not input.requires_grad:
         return _wrap(w_impl), _wrap(V_impl)
-    w = _EighWGrad.apply(x, w_impl, V_impl)
-    V = _EighVGrad.apply(x, w_impl, V_impl)
+    w = _EighWGrad.apply(input, w_impl, V_impl)
+    V = _EighVGrad.apply(input, w_impl, V_impl)
     return w, V  # type: ignore[return-value]
 
 
-def eigvalsh(x: Tensor, UPLO: str = "L") -> Tensor:
+def eigvalsh(input: Tensor, UPLO: str = "L") -> Tensor:
     r"""Eigenvalues of a Hermitian / symmetric matrix.
 
     Returns only the real eigenvalues :math:`\lambda_1 \le \cdots \le
@@ -1697,7 +1608,7 @@ def eigvalsh(x: Tensor, UPLO: str = "L") -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Symmetric / Hermitian matrix of shape ``(*, n, n)``.
     UPLO : str, optional
         ``"L"`` reads the lower triangle (default), ``"U"`` the upper.
@@ -1709,7 +1620,7 @@ def eigvalsh(x: Tensor, UPLO: str = "L") -> Tensor:
 
     Notes
     -----
-    When ``x.requires_grad`` is true the call routes through
+    When ``input.requires_grad`` is true the call routes through
     :func:`eigh` so that backward via the Loewner formula remains
     available.  Otherwise the engine kernel is invoked directly.
 
@@ -1720,14 +1631,14 @@ def eigvalsh(x: Tensor, UPLO: str = "L") -> Tensor:
     >>> eigvalsh(lucid.tensor([[2.0, 1.0], [1.0, 3.0]]))
     tensor([1.382, 3.618])
     """
-    if _C_engine.grad_enabled() and x.requires_grad:
-        w, _ = eigh(x, UPLO)
+    if _C_engine.grad_enabled() and input.requires_grad:
+        w, _ = eigh(input, UPLO)
         return w
-    vals, _ = _la.eigh(_from_triangle(x, UPLO, "eigvalsh"))
+    vals, _ = _la.eigh(_from_triangle(input, UPLO, "eigvalsh"))
     return _wrap(vals)
 
 
-def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
+def lu_factor(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor]:
     r"""LU factorization with partial pivoting (packed form).
 
     Computes the packed LU factorization
@@ -1745,6 +1656,9 @@ def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     ----------
     A : Tensor
         Matrix of shape ``(*, m, n)``.  Need not be square.
+    pivot : bool, keyword-only, optional
+        Must be ``True`` (the default).  Unpivoted LU is not implemented
+        and raises ``NotImplementedError``.
 
     Returns
     -------
@@ -1790,6 +1704,8 @@ def lu_factor(A: Tensor) -> tuple[Tensor, Tensor]:
     >>> lu_solve(LU, piv, b)
     tensor([[0.8], [1.4]])
     """
+    if not pivot:
+        raise NotImplementedError("lu_factor: pivot=False is not supported")
     LU, pivots, _ = _lu_factor_ex(A, check_errors=True, op="lu_factor")
     return LU, pivots
 
@@ -1925,18 +1841,8 @@ class _LogAbsDet(_AutogradFunction):
         return grad_out / d
 
 
-def _tol_tensor(val: float | Tensor, A: Tensor, dtype: lucid.dtype) -> Tensor:
-    if isinstance(val, Tensor):
-        if val.is_complex():
-            raise TypeError(
-                f"matrix_rank: tolerance tensor of complex dtype is not supported, got {val.dtype}"
-            )
-        return val.to(dtype).unsqueeze(-1)
-    return lucid.full((1,), float(val), dtype=dtype, device=A.device)
-
-
 def matrix_rank(
-    A: Tensor,
+    input: Tensor,
     tol: float | Tensor | None = None,
     hermitian: bool = False,
     *,
@@ -1954,7 +1860,7 @@ def matrix_rank(
 
     Parameters
     ----------
-    A : Tensor
+    input : Tensor
         Input matrix of shape ``(*, m, n)``.
     tol : float, Tensor or None, optional
         Alias for ``atol`` with ``rtol=0``; mutually exclusive with ``atol``/``rtol``.
@@ -1978,9 +1884,9 @@ def matrix_rank(
     >>> matrix_rank(lucid.tensor([[1.0, 2.0], [2.0, 4.0]]))
     tensor(1, dtype=lucid.int64)
     """
-    if A.ndim < 2:
+    if input.ndim < 2:
         raise ValueError(
-            f"matrix_rank: A must have at least 2 dimensions, got shape {tuple(A.shape)}"
+            f"matrix_rank: input must have at least 2 dimensions, got shape {tuple(input.shape)}"
         )
     if tol is not None:
         if atol is not None or rtol is not None:
@@ -1989,23 +1895,12 @@ def matrix_rank(
             )
         atol, rtol = tol, 0.0
     with lucid.no_grad():
-        sv = eigvalsh(A).abs() if hermitian else svdvals(A)
-        atol_t = _tol_tensor(0.0 if atol is None else atol, A, sv.dtype)
-        eps = float(_finfo(sv.dtype).eps)
-        default_rtol = max(int(A.shape[-2]), int(A.shape[-1])) * eps
-        if rtol is not None:
-            rtol_t = _tol_tensor(rtol, A, sv.dtype)
-        elif atol is None:
-            rtol_t = _tol_tensor(default_rtol, A, sv.dtype)
-        else:
-            zero = lucid.zeros_like(atol_t)
-            rtol_t = lucid.where(
-                atol_t > zero, zero, _tol_tensor(default_rtol, A, sv.dtype)
-            )
+        sv = eigvalsh(input).abs() if hermitian else svdvals(input)
         if sv.numel() == 0:
-            return lucid.zeros(tuple(A.shape[:-2]), dtype=lucid.int64, device=A.device)
-        max_sv = _wrap(_C_engine.max(_unwrap(sv), [-1], True))
-        return (sv > lucid.maximum(atol_t, max_sv * rtol_t)).sum(dim=-1)
+            return lucid.zeros(
+                tuple(input.shape[:-2]), dtype=lucid.int64, device=input.device
+            )
+        return (sv > _sv_cutoff(input, sv, atol=atol, rtol=rtol)).sum(dim=-1)
 
 
 _COND_ORDERS: tuple[int | float | str | None, ...] = (
@@ -2021,7 +1916,7 @@ _COND_ORDERS: tuple[int | float | str | None, ...] = (
 )
 
 
-def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
+def cond(input: Tensor, p: int | float | str | None = None) -> Tensor:
     r"""Compute the condition number of a matrix.
 
     The condition number under norm :math:`\|\cdot\|_p` is
@@ -2042,7 +1937,7 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
 
     Parameters
     ----------
-    A : Tensor
+    input : Tensor
         Input matrix of shape ``(*, m, n)``.
     p : int, float, str or None, optional
         Norm order: ``None`` (default) or ``2`` for the spectral norm,
@@ -2061,7 +1956,7 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
         For an unknown ``p``, an input with fewer than two dimensions, or a
         non-square input under any order but :math:`\pm 2`.
     NotImplementedError
-        For a complex ``A``: every order needs its singular values or its
+        For a complex ``input``: every order needs its singular values or its
         inverse, and neither has a complex kernel yet.
 
     Notes
@@ -2091,17 +1986,17 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
             f"cond: unsupported order p={p!r}; expected None, ±1, ±2, ±inf, "
             f"'fro' or 'nuc'"
         )
-    if A.ndim < 2:
+    if input.ndim < 2:
         raise ValueError(
-            f"cond: A must have at least 2 dimensions, got shape {tuple(A.shape)}"
+            f"cond: input must have at least 2 dimensions, got shape {tuple(input.shape)}"
         )
-    square = A.shape[-1] == A.shape[-2]
+    square = input.shape[-1] == input.shape[-2]
     if isinstance(p, str) and not square:
         raise ValueError(
-            f"cond(p={p!r}): A must be a square matrix or a batch of them, got "
-            f"shape {tuple(A.shape)}"
+            f"cond(p={p!r}): input must be a square matrix or a batch of them, got "
+            f"shape {tuple(input.shape)}"
         )
-    if A.is_complex():
+    if input.is_complex():
         # Every order needs a kernel linalg has only for real input: the
         # singular values (spectral orders, "nuc") or the inverse (the
         # rest).  Said here, once and by name, rather than by whichever of
@@ -2111,33 +2006,33 @@ def cond(A: Tensor, p: int | float | str | None = None) -> Tensor:
             f"cond(p={p!r}): a complex A needs a complex {needs}, which linalg "
             "does not have yet"
         )
-    if A.numel() == 0:
+    if input.numel() == 0:
         # No entries, no singular values to compare: 0, as the reference
         # answers — the extreme-value reductions below have no identity and
         # refused an empty axis.
-        return lucid.zeros(tuple(A.shape[:-2]), dtype=A.dtype, device=A.device)
+        return lucid.zeros(tuple(input.shape[:-2]), dtype=input.dtype, device=input.device)
     if p is None or p in (2, -2):
-        _, S, _ = svd(A)
+        _, S, _ = svd(input, full_matrices=False)
         S_impl = _unwrap(S)
         smax = _C_engine.max(S_impl, [-1], False)
         smin = _C_engine.min(S_impl, [-1], False)
         ratio = (smin, smax) if p == -2 else (smax, smin)
         return _wrap(_C_engine.div(*ratio))
     if p == "nuc":
-        _, S, _ = svd(A)
+        _, S, _ = svd(input, full_matrices=False)
         return S.sum(dim=-1) * (1.0 / S).sum(dim=-1)
     if not square:
         raise ValueError(
-            f"cond(p={p!r}): A must be a square matrix or a batch of them, got "
-            f"shape {tuple(A.shape)}"
+            f"cond(p={p!r}): input must be a square matrix or a batch of them, got "
+            f"shape {tuple(input.shape)}"
         )
     # A singular matrix has no inverse; its norm is taken as infinite, and
     # 0·∞ (a zero matrix) counts as infinite too.  inv_ex judges each matrix
     # of a batch on its own.
-    Ainv, info = inv_ex(A)
+    Ainv, info = inv_ex(input)
     failed = (info != 0).reshape(*tuple(info.shape), 1, 1)
     Ainv = lucid.where(failed, float("inf"), Ainv)
-    out = matrix_norm(A, ord=p) * matrix_norm(Ainv, ord=p)
+    out = matrix_norm(input, ord=p) * matrix_norm(Ainv, ord=p)
     return lucid.where(lucid.isnan(out), float("inf"), out)
 
 
@@ -2193,10 +2088,10 @@ def multi_dot(tensors: list[Tensor]) -> Tensor:
 
 
 def solve_triangular(
-    A: Tensor,
+    input: Tensor,
     B: Tensor,
     *,
-    upper: bool = True,
+    upper: bool,
     left: bool = True,
     unitriangular: bool = False,
 ) -> Tensor:
@@ -2212,14 +2107,14 @@ def solve_triangular(
 
     Parameters
     ----------
-    A : Tensor
+    input : Tensor
         Triangular coefficient matrix of shape ``(*, n, n)``.  Only
         the relevant triangle is read; the other half is ignored.
     B : Tensor
-        Right-hand side ``(*, n, k)`` or ``(n,)``; batch dims broadcast with ``A``.
-    upper : bool, keyword-only, optional
-        If ``True`` (default) :math:`A` is upper-triangular; if
-        ``False`` lower-triangular.
+        Right-hand side ``(*, n, k)`` or ``(n,)``; batch dims broadcast with ``input``.
+    upper : bool, keyword-only
+        If ``True`` :math:`A` is upper-triangular; if ``False``
+        lower-triangular.
     left : bool, keyword-only, optional
         If ``True`` (default) solves :math:`AX = B`; if ``False``
         solves :math:`XA = B` via transposition.
@@ -2257,13 +2152,15 @@ def solve_triangular(
     if not left:
         # X A = B  ⟺  Aᵀ Xᵀ = Bᵀ — solve the transposed system, transpose result.
         XT = _la.solve_triangular(
-            _unwrap(A.mT), _unwrap(B.mT), not upper, unitriangular
+            _unwrap(input.mT), _unwrap(B.mT), not upper, unitriangular
         )
         return _wrap(XT).mT
-    return _wrap(_la.solve_triangular(_unwrap(A), _unwrap(B), upper, unitriangular))
+    return _wrap(_la.solve_triangular(_unwrap(input), _unwrap(B), upper, unitriangular))
 
 
-def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:
+def vander(
+    x: Tensor, *, N: int | None = None, increasing: bool = False
+) -> Tensor:
     r"""Construct a Vandermonde matrix from a 1-D vector.
 
     Given a 1-D input :math:`x = (x_1, \ldots, x_n)`, returns the
@@ -2284,9 +2181,9 @@ def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:
     ----------
     x : Tensor
         1-D input of length :math:`n`.
-    N : int or None, optional
+    N : int or None, keyword-only, optional
         Number of columns.  Defaults to :math:`n` (square output).
-    increasing : bool, optional
+    increasing : bool, keyword-only, optional
         If ``True`` powers increase left-to-right (column 0 is
         :math:`x^0`).  Default ``False`` matches the classical
         convention used in polynomial regression.
@@ -2346,7 +2243,9 @@ def vander(x: Tensor, N: int | None = None, increasing: bool = False) -> Tensor:
 _COMPLEX_DTYPES = (lucid.complex64, lucid.complex128)
 
 
-def _cast_for_norm(x: Tensor, dtype: object) -> _C_engine.TensorImpl:
+def _cast_for_norm(
+    x: Tensor, dtype: object, op: str = "vector_norm"
+) -> _C_engine.TensorImpl:
     """``x`` cast to the ``dtype`` a norm was asked to compute in.
 
     The argument used to be accepted and dropped: ``dtype=float64`` on a
@@ -2359,11 +2258,11 @@ def _cast_for_norm(x: Tensor, dtype: object) -> _C_engine.TensorImpl:
     if complex_in != (target in _COMPLEX_DTYPES):
         kind = "complex" if complex_in else "real"
         raise TypeError(
-            f"vector_norm: dtype must be {kind} for a {kind} input, got {target}"
+            f"{op}: dtype must be {kind} for a {kind} input, got {target}"
         )
     if lucid.promote_types(x.dtype, target) != target:
         raise TypeError(
-            f"vector_norm: dtype={target} would narrow the {x.dtype} input; "
+            f"{op}: dtype={target} would narrow the {x.dtype} input; "
             f"pass a dtype it converts to without loss, or cast it first"
         )
     xi = _unwrap(x)
@@ -2372,10 +2271,11 @@ def _cast_for_norm(x: Tensor, dtype: object) -> _C_engine.TensorImpl:
 
 
 def vector_norm(
-    x: Tensor,
+    input: Tensor,
     ord: int | float = 2,
     dim: int | list[int] | tuple[int, ...] | None = None,
     keepdim: bool = False,
+    *,
     dtype: object = None,
 ) -> Tensor:
     r"""Compute a vector :math:`p`-norm along an axis.
@@ -2396,7 +2296,7 @@ def vector_norm(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input tensor.
     ord : int or float, optional
         Order of the norm.  Default ``2``.
@@ -2406,22 +2306,22 @@ def vector_norm(
         input axis rather than a single one.
     keepdim : bool, optional
         If ``True``, reduced dimensions are retained with size 1.
-    dtype : dtype, optional
-        Cast ``x`` to this dtype before reducing, so the whole computation
+    dtype : dtype, keyword-only, optional
+        Cast ``input`` to this dtype before reducing, so the whole computation
         — and the result — is in it; a complex ``dtype`` gives its real
-        counterpart.  It must be complex for a complex ``x`` and real
-        otherwise, and must not narrow ``x``.  ``None`` (default) reduces
-        in ``x``'s own dtype.
+        counterpart.  It must be complex for a complex ``input`` and real
+        otherwise, and must not narrow ``input``.  ``None`` (default) reduces
+        in ``input``'s own dtype.
 
     Returns
     -------
     Tensor
-        Norm along the specified axes — real, also for a complex ``x``.
+        Norm along the specified axes — real, also for a complex ``input``.
 
     Raises
     ------
     TypeError
-        If ``x`` is an integer or bool tensor (a ``DtypeMismatch``), or if
+        If ``input`` is an integer or bool tensor (a ``DtypeMismatch``), or if
         ``dtype`` would narrow it or its kind (real / complex) differs.
     ValueError
         If ``dim`` names one axis twice.
@@ -2440,7 +2340,7 @@ def vector_norm(
     an intermediate sum that does not: the 2-norm of 65 536 half-precision
     ones is 256, not ``inf``.
 
-    A complex ``x`` is reduced through its magnitudes :math:`|x_i|`, as
+    A complex ``input`` is reduced through its magnitudes :math:`|x_i|`, as
     the definition says.  Squaring the entries themselves gave a complex
     "norm" for ``ord=2`` on Metal and an error on the CPU.
 
@@ -2457,9 +2357,9 @@ def vector_norm(
     >>> vector_norm(lucid.tensor([3 + 4j, 0j]))
     tensor(5.)
     """
-    xi = _require_normable(_unwrap(x), "vector_norm")
+    xi = _require_normable(_unwrap(input), "vector_norm")
     if dtype is not None:
-        xi = _cast_for_norm(x, dtype)
+        xi = _cast_for_norm(input, dtype, "vector_norm")
     # Every order below is a function of the magnitudes |x_i| alone, and
     # this is the one place in linalg where a norm takes them: a complex
     # input is replaced by its (real) magnitudes before any order sees it.
@@ -2490,7 +2390,7 @@ def vector_norm(
     return _wrap(_p_norm(r, float(ord), axes, keepdim))
 
 
-def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
+def cross(input: Tensor, other: Tensor, *, dim: int = -1) -> Tensor:
     r"""Compute the cross product of two 3-D vectors.
 
     Returns the standard 3-D vector cross product
@@ -2503,11 +2403,11 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         First operand.  Must have size 3 along ``dim``.
-    y : Tensor
-        Second operand.  Same shape as ``x``.
-    dim : int, optional
+    other : Tensor
+        Second operand.  Same shape as ``input``.
+    dim : int, keyword-only, optional
         Axis along which the 3 components are stored.  Default ``-1``.
 
     Returns
@@ -2529,7 +2429,7 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     >>> cross(lucid.tensor([1.0, 0.0, 0.0]), lucid.tensor([0.0, 1.0, 0.0]))
     tensor([0., 0., 1.])
     """
-    xi, yi = _unwrap(x), _unwrap(y)
+    xi, yi = _unwrap(input), _unwrap(other)
     if len(xi.shape) != len(yi.shape):
         raise _C_engine.ShapeMismatch(
             "linalg.cross: inputs must have the same number of dimensions"
@@ -2559,7 +2459,7 @@ def cross(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
     )
 
 
-def vecdot(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
+def vecdot(x: Tensor, y: Tensor, *, dim: int = -1) -> Tensor:
     r"""Compute a batched vector dot product along an axis.
 
     Reduces the chosen axis with a sum of element-wise products, the
@@ -2576,7 +2476,7 @@ def vecdot(x: Tensor, y: Tensor, dim: int = -1) -> Tensor:
         First operand.
     y : Tensor
         Second operand, broadcast-compatible with ``x``.
-    dim : int, optional
+    dim : int, keyword-only, optional
         Axis to contract.  Default ``-1``.
 
     Returns
@@ -2730,10 +2630,12 @@ def outer(x: Tensor, y: Tensor) -> Tensor:
 
 
 def matrix_norm(
-    x: Tensor,
+    input: Tensor,
     ord: int | float | str = "fro",
     dim: tuple[int, int] = (-2, -1),
     keepdim: bool = False,
+    *,
+    dtype: object = None,
 ) -> Tensor:
     r"""Compute a matrix norm.
 
@@ -2751,7 +2653,7 @@ def matrix_norm(
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Input of shape ``(*, m, n)``.
     ord : int, float or str, optional
         Norm order.  Default ``"fro"``.
@@ -2760,21 +2662,25 @@ def matrix_norm(
         ``(-2, -1)``.
     keepdim : bool, optional
         If ``True``, reduced dims are retained with size 1.
+    dtype : dtype, keyword-only, optional
+        Cast ``input`` to this dtype before computing the norm; must match
+        the real/complex kind of ``input`` and must not narrow it.  ``None``
+        (default) uses ``input``'s own dtype.
 
     Returns
     -------
     Tensor
-        Matrix norm of each batch — real, also for a complex ``x``.
+        Matrix norm of each batch — real, also for a complex ``input``.
 
     Raises
     ------
     DtypeMismatch
-        If ``x`` is an integer or bool tensor (a ``TypeError``).
+        If ``input`` is an integer or bool tensor (a ``TypeError``).
     ValueError
-        If ``x`` has fewer than two dimensions, ``dim`` does not name two
+        If ``input`` has fewer than two dimensions, ``dim`` does not name two
         distinct axes, or ``ord`` is not one of the orders above.
     NotImplementedError
-        If ``ord`` is ``"nuc"``, ``2`` or ``-2`` and ``x`` is complex:
+        If ``ord`` is ``"nuc"``, ``2`` or ``-2`` and ``input`` is complex:
         those orders are read off the singular values, and :func:`svd`
         has no complex kernel yet.
 
@@ -2785,7 +2691,7 @@ def matrix_norm(
     single pass.
 
     The entry-wise orders (``"fro"``, :math:`\pm 1`, :math:`\pm\infty`)
-    are taken through :func:`vector_norm`, so a complex ``x`` is reduced
+    are taken through :func:`vector_norm`, so a complex ``input`` is reduced
     through its magnitudes :math:`|A_{ij}|` exactly as a vector would be.
 
     Examples
@@ -2798,7 +2704,9 @@ def matrix_norm(
     >>> matrix_norm(lucid.tensor([[3 + 4j, 0j], [0j, 0j]]), ord="fro")
     tensor(5.)
     """
-    xi = _require_normable(_unwrap(x), "matrix_norm")
+    xi = _require_normable(_unwrap(input), "matrix_norm")
+    if dtype is not None:
+        xi = _cast_for_norm(input, dtype, "matrix_norm")
     rank = len(xi.shape)
     if rank < 2:
         raise ValueError(
@@ -2841,18 +2749,19 @@ def matrix_norm(
     # input summed x·x instead of |x|²: ``(3.37-0.59j)`` on Metal where
     # the answer is a real 4.123, and an error on the CPU (CHA-231).
     if ord == "fro":
-        return vector_norm(x, 2, [d0, d1], keepdim)
+        return vector_norm(input, 2, [d0, d1], keepdim, dtype=dtype)
 
-    if ord == 1 or ord == -1 or ord == float("inf") or ord == float("-inf"):
+    if ord in (1, -1, float("inf"), float("-inf")):
         # Absolute column sums (ord ±1) are vector 1-norms down the rows
         # (d0), and the extreme is taken across the columns (d1); the
         # absolute row sums of ord ±inf exchange the two axes.
-        along, across = (d0, d1) if ord == 1 or ord == -1 else (d1, d0)
-        sums = _unwrap(vector_norm(x, 1, along, True))
-        pick = _C_engine.max if ord == 1 or ord == float("inf") else _C_engine.min
+        along, across = (d0, d1) if ord in (1, -1) else (d1, d0)
+        sums = _unwrap(vector_norm(input, 1, along, True, dtype=dtype))
+        pick = _C_engine.max if ord in (1, float("inf")) else _C_engine.min
         return _wrap(_drop(pick(sums, [across], True)))
 
-    if ord not in ("nuc", 2, -2):
+    sv_reduce = {"nuc": _C_engine.sum, 2: _C_engine.max, -2: _C_engine.min}.get(ord)
+    if sv_reduce is None:
         raise ValueError(f"matrix_norm: unsupported ord={ord!r}")
     if xi.dtype in (_C_engine.C64, _C_engine.C128):
         # Refused here rather than inside ``svd``, which would say only
@@ -2868,19 +2777,13 @@ def matrix_norm(
     # remaining axes keep their relative order, which is what makes the
     # result's shape the input's with ``d0`` and ``d1`` removed.
     rest = [i for i in range(rank) if i not in (d0, d1)]
-    moved = x
-    if rest + [d0, d1] != list(range(rank)):
-        moved = _wrap(_C_engine.permute(xi, rest + [d0, d1]))
-
-    _, S, _ = svd(moved)
-    sv = _unwrap(S)
-    if ord == "nuc":
-        reduced = _C_engine.sum(sv, [-1], False)
-    elif ord == 2:
-        reduced = _C_engine.max(sv, [-1], False)
-    else:
-        reduced = _C_engine.min(sv, [-1], False)
-
+    moved = (
+        _wrap(xi)
+        if rest + [d0, d1] == list(range(rank))
+        else _wrap(_C_engine.permute(xi, rest + [d0, d1]))
+    )
+    _, S, _ = svd(moved, full_matrices=False)
+    reduced = sv_reduce(_unwrap(S), [-1], False)
     if not keepdim:
         return _wrap(reduced)
     # Put the two reduced axes back where they were, as size 1.  ``rest``
@@ -2892,9 +2795,10 @@ def matrix_norm(
 
 
 def lstsq(
-    A: Tensor,
-    B: Tensor,
+    input: Tensor,
+    b: Tensor,
     rcond: float | None = None,
+    *,
     driver: str | None = None,
 ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
     r"""Solve a least-squares linear system.
@@ -2918,14 +2822,14 @@ def lstsq(
 
     Parameters
     ----------
-    A : Tensor
+    input : Tensor
         Coefficient matrix of shape ``(*, m, n)``.
-    B : Tensor
+    b : Tensor
         Right-hand side of shape ``(*, m, k)`` (or ``(*, m)``).
     rcond : float or None, optional
         Cutoff for small singular values (passed to the underlying
         driver).  ``None`` selects the default driver heuristic.
-    driver : str or None, optional
+    driver : str or None, keyword-only, optional
         Solver choice (``"gels"``, ``"gelsy"``, ``"gelsd"``, ...).
         ``None`` lets the engine pick (currently ``gels``).
 
@@ -2945,7 +2849,7 @@ def lstsq(
     -----
     The solution is :math:`A^+ B`, the minimum-norm least-squares
     solution, for every shape and rank — tall, wide or rank-deficient —
-    and it differentiates in ``A`` and ``B`` (twice).  Only ``solution``
+    and it differentiates in ``input`` and ``b`` (twice).  Only ``solution``
     is populated; the remaining outputs exist for shape compatibility
     with the reference API.
 
@@ -2959,6 +2863,8 @@ def lstsq(
     >>> sol
     tensor([[3.], [3.]])
     """
+    A = input
+    B = b
     unsupported_if(rcond is not None, "lstsq", "rcond", rcond)
     unsupported_if(driver is not None, "lstsq", "driver", driver)
 
@@ -3003,7 +2909,14 @@ def lstsq(
     return sol, empty, empty, empty
 
 
-def lu_solve(LU: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
+def lu_solve(
+    LU: Tensor,
+    pivots: Tensor,
+    B: Tensor,
+    *,
+    left: bool = True,
+    adjoint: bool = False,
+) -> Tensor:
     r"""Solve a linear system from a precomputed LU factorization.
 
     Given the packed factorization :math:`PA = LU` returned by
@@ -3025,6 +2938,12 @@ def lu_solve(LU: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
         (1-based, LAPACK convention).
     B : Tensor
         Right-hand side ``(*, n, k)`` or ``(n,)``, broadcast against ``LU``.
+    left : bool, keyword-only, optional
+        If ``True`` (default), solve :math:`A X = B`; ``False`` solves
+        :math:`X A = B`.
+    adjoint : bool, keyword-only, optional
+        If ``True``, solve with :math:`A^H` instead of :math:`A`.
+        Default ``False``.
 
     Returns
     -------
@@ -3047,6 +2966,8 @@ def lu_solve(LU: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     >>> lu_solve(LU, piv, b)
     tensor([[2.], [3.]])
     """
+    unsupported_if(not left, "lu_solve", "left", left)
+    unsupported_if(adjoint, "lu_solve", "adjoint", adjoint)
     return _wrap(
         _la.lu_solve(
             _unwrap(LU), _unwrap(_check_pivots(pivots, LU, "lu_solve")), _unwrap(B)
@@ -3054,7 +2975,7 @@ def lu_solve(LU: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     )
 
 
-def householder_product(H: Tensor, tau: Tensor) -> Tensor:
+def householder_product(input: Tensor, tau: Tensor) -> Tensor:
     r"""Reconstruct an orthogonal matrix from Householder reflectors.
 
     Computes the implicit product
@@ -3065,13 +2986,13 @@ def householder_product(H: Tensor, tau: Tensor) -> Tensor:
         \qquad H_i \,=\, I - \tau_i\, v_i\, v_i^\top,
 
     where each :math:`v_i` is a Householder vector stored in the
-    :math:`i`-th column of the packed input ``H`` and :math:`\tau_i`
+    :math:`i`-th column of the packed input ``input`` and :math:`\tau_i`
     is its scalar factor.  This is the standard way to materialise the
     :math:`Q` factor from a packed QR (``geqrf``) result.
 
     Parameters
     ----------
-    H : Tensor
+    input : Tensor
         Packed reflector matrix of shape ``(*, m, k)`` — columns
         contain the Householder vectors (typically the output of an
         unpacked ``geqrf``).
@@ -3100,6 +3021,7 @@ def householder_product(H: Tensor, tau: Tensor) -> Tensor:
     >>> Q.shape
     (4, 3)
     """
+    H = input
     # The backend reads ``m`` and ``n`` off the last two dimensions and
     # loops over neither a batch nor a missing axis, so both malformed
     # cases used to be answered instead of refused: a 1-D ``H`` indexed
@@ -3375,7 +3297,7 @@ def _bunch_kaufman_steps(piv: list[int], n: int) -> list[tuple[int, int, int]]:
     return steps
 
 
-def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
+def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor, *, hermitian: bool = False) -> Tensor:
     r"""Solve a symmetric linear system using an LDL factorization.
 
     Given :math:`A = L\,D\,L^\top` produced by :func:`ldl_factor`,
@@ -3412,6 +3334,10 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     B : Tensor
         Right-hand side of shape ``(*, n, k)`` (or ``(n,)``).  Its batch
         dimensions broadcast with those of ``LD``.
+    hermitian : bool, keyword-only, optional
+        If ``True``, treat ``LD`` as a Hermitian :math:`L D L^H`
+        factorisation.  For real inputs this is identical to ``False``.
+        Default ``False``.
 
     Returns
     -------
@@ -3456,6 +3382,7 @@ def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor) -> Tensor:
     >>> ldl_solve(LD, piv, b)
     tensor([[1.], [1.]])
     """
+    del hermitian
     if LD.ndim < 2 or LD.shape[-1] != LD.shape[-2]:
         raise ValueError(
             f"ldl_solve: LD must be a square matrix or a batch of them, got "
@@ -3595,7 +3522,7 @@ def _solve_bunch_kaufman_d(
 # ── linalg.diagonal — batched-view alias of lucid.diagonal ─────────────────
 
 
-def matrix_exp(A: Tensor) -> Tensor:
+def matrix_exp(input: Tensor) -> Tensor:
     r"""Matrix exponential :math:`e^A`.
 
     Returns the matrix exponential
@@ -3610,13 +3537,13 @@ def matrix_exp(A: Tensor) -> Tensor:
 
     1. Scale :math:`A' = A / 2^s` so that :math:`\|A'\| \le \theta_6`.
     2. Approximate :math:`R \approx e^{A'}` via Padé [6/6] using the
-       even/odd polynomial splitting :math:`R = D^{-1} N`.
+      even/odd polynomial splitting :math:`R = D^{-1} N`.
     3. Square :math:`R` a total of :math:`s` times to recover
        :math:`e^A = R^{2^s}`.
 
     Parameters
     ----------
-    A : Tensor
+    input : Tensor
         Square matrix of shape ``(*, n, n)``.
 
     Returns
@@ -3646,6 +3573,7 @@ def matrix_exp(A: Tensor) -> Tensor:
     """
     import math as _math
 
+    A = input
     sh: tuple[int, ...] = tuple(A.shape)
     if len(sh) < 2 or sh[-1] != sh[-2]:
         raise ValueError(
@@ -3768,7 +3696,10 @@ def diagonal(
 # The ``*_ex`` family reads LAPACK's ``info``; ``lu_factor`` and
 # ``ldl_factor`` above are its checked forms.
 from lucid.linalg._ex import (
+    _complete_svd_factors,
     _lu_factor_ex,
+    _pinv_with_tol,
+    _sv_cutoff,
     cholesky_ex,
     inv_ex,
     ldl_factor,

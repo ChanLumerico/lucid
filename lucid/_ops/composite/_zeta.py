@@ -12,7 +12,7 @@ from lucid._ops.composite._opmath import _in_float32, _real
 from lucid._tensor.tensor import Tensor
 
 
-def zeta(x: Tensor, q: Tensor) -> Tensor:
+def zeta(input: Tensor, other: Tensor) -> Tensor:
     r"""Hurwitz zeta function :math:`\zeta(x, q)`.
 
     Computes the Hurwitz zeta function, a two-argument generalisation
@@ -22,18 +22,18 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
 
     Parameters
     ----------
-    x : Tensor
+    input : Tensor
         Exponent; must satisfy :math:`\Re(x) > 1` for the series to
         converge.  Any floating-point dtype.
-    q : Tensor
-        Shift parameter; broadcast-compatible with ``x``.  The
+    other : Tensor
+        Shift parameter; broadcast-compatible with ``input``.  The
         non-positive integers are poles.
 
     Returns
     -------
     Tensor
         :math:`\zeta(x, q)` element-wise, broadcast to the common shape
-        of ``x`` and ``q``.
+        of ``input`` and ``other``.
 
     Notes
     -----
@@ -56,10 +56,10 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
 
     where :math:`a = q + N` and the :math:`B_{2j}` are Bernoulli
     numbers; that is accurate to float64 rounding for :math:`x > 1`
-    and :math:`q > 0`.  A negative non-integer ``q`` is real only for
-    an integer ``x`` and is reduced to positive arguments; otherwise it
-    is NaN.  The non-positive integers ``q`` are poles (``+inf``),
-    ``x = 1`` is ``+inf`` and ``x < 1`` is NaN.  The Riemann zeta is the
+    and :math:`q > 0`.  A negative non-integer ``other`` is real only for
+    an integer ``input`` and is reduced to positive arguments; otherwise it
+    is NaN.  The non-positive integers ``other`` are poles (``+inf``),
+    ``input = 1`` is ``+inf`` and ``input < 1`` is NaN.  The Riemann zeta is the
     special case :math:`\zeta(x) = \zeta(x, 1)`.
 
     Examples
@@ -71,7 +71,7 @@ def zeta(x: Tensor, q: Tensor) -> Tensor:
     >>> zeta(x, q)
     tensor([1.645, 1.202])
     """
-    return _in_float32(_zeta, _real(x), _real(q))
+    return _in_float32(_zeta, _real(input), _real(other))
 
 
 def _zeta(x: Tensor, q: Tensor) -> Tensor:

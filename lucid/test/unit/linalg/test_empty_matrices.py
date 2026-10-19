@@ -46,16 +46,17 @@ def _shapes(out: object) -> object:
 
 
 @pytest.mark.parametrize(
-    "shape,expected",
+    "shape,expected_full,expected_reduced",
     [
-        ((0, 0), [(0, 0), (0,), (0, 0)]),
-        ((0, 3), [(0, 0), (0,), (0, 3)]),
-        ((3, 0), [(3, 0), (0,), (0, 0)]),
+        ((0, 0), [(0, 0), (0,), (0, 0)], [(0, 0), (0,), (0, 0)]),
+        ((0, 3), [(0, 0), (0,), (3, 3)], [(0, 0), (0,), (0, 3)]),
+        ((3, 0), [(3, 3), (0,), (0, 0)], [(3, 0), (0,), (0, 0)]),
     ],
 )
-def test_svd_of_an_empty_matrix(shape, expected) -> None:
-    """Reduced SVD: U is (m, k), Vh is (k, n), and k is zero."""
-    assert _shapes(L.svd(_t(shape))) == expected
+def test_svd_of_an_empty_matrix(shape, expected_full, expected_reduced) -> None:
+    """Full SVD is (m, m), (0,), (n, n); reduced SVD is (m, 0), (0,), (0, n)."""
+    assert _shapes(L.svd(_t(shape))) == expected_full
+    assert _shapes(L.svd(_t(shape), full_matrices=False)) == expected_reduced
 
 
 @pytest.mark.parametrize(
@@ -202,10 +203,17 @@ def test_non_degenerate_matrices_still_decompose(shape) -> None:
     """Guard the guard: the early return must not catch a real matrix."""
     a = np.random.default_rng(0).standard_normal(shape)
     u, s, vh = L.svd(lucid.tensor(a))
+    m, n = shape
     k = min(shape)
+    assert tuple(u.shape) == (m, m)
     assert tuple(s.shape) == (k,)
+    assert tuple(vh.shape) == (n, n)
+    u_np = np.asarray(u.numpy())
+    vh_np = np.asarray(vh.numpy())
+    assert np.allclose(u_np.T @ u_np, np.eye(m), atol=1e-6)
+    assert np.allclose(vh_np @ vh_np.T, np.eye(n), atol=1e-6)
     assert np.allclose(
-        np.asarray(u.numpy()) @ np.diag(np.asarray(s.numpy())) @ np.asarray(vh.numpy()),
+        u_np[:, :k] @ np.diag(np.asarray(s.numpy())) @ vh_np[:k, :],
         a,
         atol=1e-8,
     )

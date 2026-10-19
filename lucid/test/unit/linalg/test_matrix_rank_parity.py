@@ -29,7 +29,7 @@ def _to_ref_dtype(ref: ModuleType, dt: lucid.dtype) -> object:
 def test_matrix_rank_signature_exposes_tol_hermitian_atol_rtol() -> None:
     sig = inspect.signature(LA.matrix_rank)
     params = list(sig.parameters.values())
-    assert [p.name for p in params] == ["A", "tol", "hermitian", "atol", "rtol"]
+    assert [p.name for p in params] == ["input", "tol", "hermitian", "atol", "rtol"]
     assert params[0].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
     assert params[1].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
     assert params[1].default is None
@@ -271,3 +271,86 @@ def test_invalid_inputs_and_tolerance_combinations_are_refused() -> None:
         LA.matrix_rank(lucid.eye(2), rtol=c_tol)
     with pytest.raises(TypeError, match="complex"):
         LA.matrix_rank(lucid.eye(2), tol=c_tol)
+
+
+def test_solve_and_solve_ex_left_false_and_matrix_norm_dtype(
+    ref: ModuleType, device: str
+) -> None:
+    rng = np.random.default_rng(7)
+    a_np = (rng.standard_normal((2, 3, 3)) + 4.0 * np.eye(3)).astype(np.float32)
+    b2_np = rng.standard_normal((2, 4, 3)).astype(np.float32)
+    b1_np = rng.standard_normal((3,)).astype(np.float32)
+
+    a_l = lucid.tensor(a_np, device=device, requires_grad=True)
+    b2_l = lucid.tensor(b2_np, device=device, requires_grad=True)
+    a_r = ref.tensor(a_np, requires_grad=True)
+    b2_r = ref.tensor(b2_np, requires_grad=True)
+
+    x_l = LA.solve(a_l, b2_l, left=False)
+    x_r = ref.linalg.solve(a_r, b2_r, left=False)
+    assert np.allclose(x_l.detach().numpy(), x_r.detach().numpy(), atol=1e-5)
+    x_l.sum().backward()
+    x_r.sum().backward()
+    assert a_l.grad is not None and b2_l.grad is not None
+    assert np.allclose(a_l.grad.numpy(), a_r.grad.numpy(), atol=1e-5)
+    assert np.allclose(b2_l.grad.numpy(), b2_r.grad.numpy(), atol=1e-5)
+
+    x_ex_l, info_l = LA.solve_ex(
+        lucid.tensor(a_np, device=device),
+        lucid.tensor(b2_np, device=device),
+        left=False,
+    )
+    x_ex_r, info_r = ref.linalg.solve_ex(ref.tensor(a_np), ref.tensor(b2_np), left=False)
+    assert np.allclose(x_ex_l.numpy(), x_ex_r.numpy(), atol=1e-5)
+    assert info_l.tolist() == info_r.tolist() == [0, 0]
+
+    with pytest.raises(RuntimeError):
+        LA.solve(
+            lucid.tensor(a_np[0], device=device),
+            lucid.tensor(b1_np, device=device),
+            left=False,
+        )
+    with pytest.raises(RuntimeError):
+        ref.linalg.solve(ref.tensor(a_np[0]), ref.tensor(b1_np), left=False)
+
+    # Batched vector B (shape == A.shape[:-1]) is also refused under left=False,
+    # whereas 2-D B against higher-rank A broadcasts across the batch.
+    with pytest.raises(RuntimeError):
+        LA.solve(
+            lucid.tensor(a_np, device=device),
+            lucid.zeros(2, 3, device=device),
+            left=False,
+        )
+    a4_l = lucid.tensor(a_np[:, None], device=device)
+    b_unbatched_l = lucid.tensor(b2_np[0], device=device)
+    x4_l = LA.solve(a4_l, b_unbatched_l, left=False)
+    x4_r = ref.linalg.solve(ref.tensor(a_np[:, None]), ref.tensor(b2_np[0]), left=False)
+    assert tuple(x4_l.shape) == (2, 1, 4, 3)
+    assert np.allclose(x4_l.numpy(), x4_r.numpy(), atol=1e-5)
+
+    # pinv backward with hermitian=True and atol truncation
+    sym_np = np.array([[2.0, 1.0], [1.0, 3.0]], dtype=np.float32)
+    cot_np = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
+    sym_l = lucid.tensor(sym_np, device=device, requires_grad=True)
+    sym_r = ref.tensor(sym_np, requires_grad=True)
+    (LA.pinv(sym_l, hermitian=True) * lucid.tensor(cot_np, device=device)).sum().backward()
+    (ref.linalg.pinv(sym_r, hermitian=True) * ref.tensor(cot_np)).sum().backward()
+    assert sym_l.grad is not None and sym_r.grad is not None
+    assert np.allclose(sym_l.grad.numpy(), sym_r.grad.numpy(), atol=1e-5)
+
+    tr_np = np.array([[2.0, 0.0], [0.0, 0.1]], dtype=np.float32)
+    tr_l = lucid.tensor(tr_np, device=device, requires_grad=True)
+    tr_r = ref.tensor(tr_np, requires_grad=True)
+    (LA.pinv(tr_l, atol=0.5) * lucid.tensor(cot_np, device=device)).sum().backward()
+    (ref.linalg.pinv(tr_r, atol=0.5) * ref.tensor(cot_np)).sum().backward()
+    assert tr_l.grad is not None and tr_r.grad is not None
+    assert np.allclose(tr_l.grad.numpy(), tr_r.grad.numpy(), atol=1e-5)
+
+    if device == "cpu":
+        mn_l = LA.matrix_norm(lucid.tensor(a_np[0]), ord="fro", dtype=lucid.float64)
+        mn_r = ref.linalg.matrix_norm(ref.tensor(a_np[0]), ord="fro", dtype=ref.float64)
+        assert mn_l.dtype is lucid.float64
+        assert np.allclose(mn_l.numpy(), mn_r.numpy(), atol=1e-12)
+
+
+
