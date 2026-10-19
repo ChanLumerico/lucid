@@ -169,3 +169,45 @@ __version__: str
     init_pyi = (_REPO_ROOT / "lucid" / "__init__.pyi").read_text(encoding="utf-8")
     assert module_all_drift(init_pyi, lucid.__all__) == []
 
+
+def test_tensor_self_annotations_are_limited_to_inplace_and_factory() -> None:
+    """LCD-523: out-of-place Tensor methods return a base ``Tensor`` even when
+    called on a ``Parameter`` subclass, so only ``__new_from_impl__`` and
+    in-place ``*_`` methods may annotate ``-> Self`` (and no parameter may be
+    typed ``Self``)."""
+    import ast
+
+    for rel in ("lucid/_tensor/tensor.py", "lucid/_tensor/tensor.pyi"):
+        tree = ast.parse((_REPO_ROOT / rel).read_text(encoding="utf-8"))
+        tensor_cls = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.ClassDef) and node.name == "Tensor"
+        )
+        for item in tensor_cls.body:
+            if not isinstance(item, ast.FunctionDef):
+                continue
+            ret_names = (
+                {n.id for n in ast.walk(item.returns) if isinstance(n, ast.Name)}
+                if item.returns is not None
+                else set()
+            )
+            if "Self" in ret_names:
+                assert item.name == "__new_from_impl__" or (
+                    item.name.endswith("_") and not item.name.startswith("__")
+                ), f"{rel}: Tensor.{item.name} must not return Self"
+            for arg in (
+                item.args.posonlyargs
+                + item.args.args[1:]
+                + item.args.kwonlyargs
+            ):
+                if arg.annotation is None:
+                    continue
+                arg_names = {
+                    n.id for n in ast.walk(arg.annotation) if isinstance(n, ast.Name)
+                }
+                assert "Self" not in arg_names, (
+                    f"{rel}: Tensor.{item.name} parameter {arg.arg!r} must be Tensor, not Self"
+                )
+
+

@@ -364,7 +364,7 @@ class Tensor:
         >>> lucid.zeros(3, dtype=lucid.int64).dtype
         lucid.int64
         """
-        return _ENGINE_TO_DTYPE[self._impl.dtype]  # type: ignore[return-value]
+        return _ENGINE_TO_DTYPE[self._impl.dtype]
 
     @property
     def device(self) -> _device_cls:
@@ -404,7 +404,7 @@ class Tensor:
         >>> x.metal().device
         device('metal')
         """
-        return _device_from_engine(self._impl.device)  # type: ignore[return-value]
+        return _device_from_engine(self._impl.device)
 
     @property
     def ndim(self) -> int:
@@ -439,7 +439,7 @@ class Tensor:
         return len(self._impl.shape)
 
     @property
-    def T(self) -> Self:
+    def T(self) -> Tensor:
         r"""Tensor with all dimensions reversed.
 
         For a 2-D tensor this is the standard matrix transpose.  For tensors
@@ -469,10 +469,10 @@ class Tensor:
         >>> lucid.arange(24).reshape(2, 3, 4).T.shape
         (4, 3, 2)
         """
-        return Tensor.__new_from_impl__(_C_engine.T(self._impl))  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(_C_engine.T(self._impl))
 
     @property
-    def mT(self) -> Self:
+    def mT(self) -> Tensor:
         r"""Tensor with the last two dimensions transposed.
 
         Equivalent to calling ``lucid.swapaxes(x, -2, -1)``.  Useful for
@@ -497,7 +497,7 @@ class Tensor:
         >>> x.mT.shape
         (4, 5, 3)
         """
-        return Tensor.__new_from_impl__(_C_engine.mT(self._impl))  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(_C_engine.mT(self._impl))
 
     @property
     def is_metal(self) -> bool:
@@ -835,7 +835,7 @@ class Tensor:
     # ── autograd ─────────────────────────────────────────────────────────────
 
     @property
-    def grad(self) -> Self | None:
+    def grad(self) -> Tensor | None:
         r"""Accumulated gradient tensor, or ``None`` if not yet computed.
 
         After calling :meth:`backward`, this attribute holds the gradient of
@@ -879,11 +879,11 @@ class Tensor:
         # Prefer graph-mode gradient (set when backward was run with create_graph=True).
         g_impl = self._impl.grad_as_impl()
         if g_impl is not None:
-            return Tensor.__new_from_impl__(g_impl)  # type: ignore[return-value]
+            return Tensor.__new_from_impl__(g_impl)
         g_impl = self._impl.grad_to_tensor()
         if g_impl is None:
             return None
-        return Tensor.__new_from_impl__(g_impl)  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(g_impl)
 
     @grad.setter
     def grad(self, v: Tensor | None) -> None:
@@ -1273,7 +1273,7 @@ class Tensor:
 
         _backward(self, gradient, retain_graph, create_graph, inputs)
 
-    def detach(self) -> Self:
+    def detach(self) -> Tensor:
         r"""Return a new tensor that shares data but is detached from the autograd graph.
 
         The returned tensor has the same values as ``self`` but
@@ -1330,7 +1330,7 @@ class Tensor:
         >>> w.tolist()
         [1.0, 1.0, 1.0]
         """
-        return Tensor.__new_from_impl__(self._impl.data_alias())  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(self._impl.data_alias())
 
     def detach_(self) -> Self:
         r"""Detach this tensor from the autograd graph in-place.
@@ -1479,7 +1479,7 @@ class Tensor:
         """
         return _clamp_inplace(self, None, max, "clamp_max_")
 
-    def clone(self) -> Self:
+    def clone(self) -> Tensor:
         r"""Return a deep copy of this tensor, preserving autograd history.
 
         Unlike :meth:`detach`, the returned tensor **remains connected** to
@@ -1517,7 +1517,7 @@ class Tensor:
         True
         """
         impl = _C_engine.contiguous(self._impl)
-        return _wrap(impl)  # type: ignore[return-value]
+        return _wrap(impl)
 
     # ── conversion ───────────────────────────────────────────────────────────
 
@@ -1863,7 +1863,7 @@ class Tensor:
         """
         return self._impl.tolist()  # type: ignore[no-any-return]
 
-    def contiguous(self) -> Self:
+    def contiguous(self) -> Tensor:
         r"""Return a tensor whose data is stored in contiguous C-order memory.
 
         If ``self`` is already contiguous (``self.is_contiguous() == True``),
@@ -1904,7 +1904,7 @@ class Tensor:
         copy. After the call ``is_contiguous() == True`` and strides match
         the C-order recurrence shown above.
         """
-        return _wrap(_C_engine.contiguous(self._impl))  # type: ignore[return-value]
+        return _wrap(_C_engine.contiguous(self._impl))
 
     def unfold(self, dimension: int, size: int, step: int) -> Tensor:
         r"""Return a view with an extra dimension containing sliding-window slices.
@@ -1949,7 +1949,7 @@ class Tensor:
         (3, 3)
         >>> # windows: [0,1,2], [2,3,4], [4,5,6]
         """
-        return _wrap(_C_engine.unfold_dim(self._impl, dimension, size, step))  # type: ignore[return-value]
+        return _wrap(_C_engine.unfold_dim(self._impl, dimension, size, step))
 
     def scatter_add(self, dim: int, index: Tensor, src: Tensor) -> Tensor:
         r"""Out-of-place scatter-add: add ``src`` values into ``self`` at positions given by ``index``.
@@ -2001,7 +2001,7 @@ class Tensor:
         return _sa(self, dim, index, src)  # type: ignore[return-value]
 
     @property
-    def data(self) -> Self:
+    def data(self) -> Tensor:
         r"""The tensor's underlying data, detached from gradient tracking.
 
         Returns a tensor over the same storage as ``self``, with
@@ -2027,7 +2027,7 @@ class Tensor:
         >>> x.shape, x.requires_grad
         ((3,), True)
         """
-        return Tensor.__new_from_impl__(self._impl.data_alias())  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(self._impl.data_alias())
 
     @data.setter
     def data(self, value: Tensor) -> None:
@@ -2158,7 +2158,7 @@ class Tensor:
 
     # ── iteration & formatting ────────────────────────────────────────────────
 
-    def __iter__(self) -> Iterator[Self]:
+    def __iter__(self) -> Iterator[Tensor]:
         r"""Iterate over the first dimension of the tensor.
 
         Yields successive slices ``self[i]`` for ``i`` in ``range(shape[0])``,
@@ -2240,7 +2240,7 @@ class Tensor:
         dtype: _dtype_cls | None = None,
         device: _device_cls | str | None = None,
         requires_grad: bool = False,
-    ) -> Self:
+    ) -> Tensor:
         r"""Return an uninitialized tensor of the given shape.
 
         The returned tensor inherits this tensor's ``dtype`` and ``device``
@@ -2283,7 +2283,7 @@ class Tensor:
         return _empty(
             *size,
             dtype=_dtype,
-            device=_device,  # type: ignore[return-value]
+            device=_device,
             requires_grad=requires_grad,
         )
 
@@ -2293,7 +2293,7 @@ class Tensor:
         dtype: _dtype_cls | None = None,
         device: _device_cls | str | None = None,
         requires_grad: bool = False,
-    ) -> Self:
+    ) -> Tensor:
         """Return a zero-filled tensor of the given shape.
 
         The returned tensor inherits this tensor's ``dtype`` and ``device``
@@ -2335,7 +2335,7 @@ class Tensor:
         return _zeros(
             *size,
             dtype=_dtype,
-            device=_device,  # type: ignore[return-value]
+            device=_device,
             requires_grad=requires_grad,
         )
 
@@ -2345,7 +2345,7 @@ class Tensor:
         dtype: _dtype_cls | None = None,
         device: _device_cls | str | None = None,
         requires_grad: bool = False,
-    ) -> Self:
+    ) -> Tensor:
         """Return an all-ones tensor of the given shape.
 
         The returned tensor inherits this tensor's ``dtype`` and ``device``
@@ -2385,7 +2385,7 @@ class Tensor:
         return _ones(
             *size,
             dtype=_dtype,
-            device=_device,  # type: ignore[return-value]
+            device=_device,
             requires_grad=requires_grad,
         )
 
@@ -2397,7 +2397,7 @@ class Tensor:
         dtype: _dtype_cls | None = None,
         device: _device_cls | str | None = None,
         requires_grad: bool = False,
-    ) -> Self:
+    ) -> Tensor:
         r"""Return a tensor of the given shape filled with a constant value.
 
         The returned tensor inherits this tensor's ``dtype`` and ``device``
@@ -2442,7 +2442,7 @@ class Tensor:
             size,
             fill_value,
             dtype=_dtype,
-            device=_device,  # type: ignore[return-value]
+            device=_device,
             requires_grad=requires_grad,
         )
 
@@ -2453,7 +2453,7 @@ class Tensor:
         dtype: _dtype_cls | None = None,
         device: _device_cls | str | None = None,
         requires_grad: bool = False,
-    ) -> Self:
+    ) -> Tensor:
         """Return a new tensor constructed from ``data``, inheriting dtype/device.
 
         Creates a fresh tensor from the provided data, using this tensor's
@@ -2496,7 +2496,7 @@ class Tensor:
         return _tensor_fn(
             data,
             dtype=_dtype,
-            device=_device,  # type: ignore[return-value]
+            device=_device,
             requires_grad=requires_grad,
         )
 
@@ -2726,8 +2726,8 @@ class Tensor:
         if self.is_complex():
             from lucid._ops.composite import conj as _conj
 
-            return _conj(self).mT  # type: ignore[return-value]
-        return self.mT  # type: ignore[return-value]
+            return _conj(self).mT
+        return self.mT
 
     def type(
         self,
@@ -2840,7 +2840,7 @@ class Tensor:
         >>> x.pin_memory() is x
         True
         """
-        return self  # type: ignore[return-value]
+        return self
 
     def is_pinned(self, device: object = None) -> bool:
         r"""Return ``False`` — pinned memory is not applicable on Apple Silicon.
@@ -2918,7 +2918,7 @@ class Tensor:
         result. A view is returned when the source is contiguous;
         otherwise a contiguous copy is materialised first.
         """
-        return Tensor.__new_from_impl__(  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(
             _C_engine.reshape(self._impl, list(other._impl.shape))
         )
 
@@ -3143,7 +3143,7 @@ class Tensor:
             self._impl.assign_from(filled, "fill_")
         return self
 
-    def copy_(self, other: Self, non_blocking: bool = False) -> Self:
+    def copy_(self, other: Tensor, non_blocking: bool = False) -> Self:
         r"""Copy data from ``other`` into ``self`` in-place.
 
         Overwrites ``self``'s storage with ``other``'s values. Broadcasting
@@ -3205,7 +3205,7 @@ class Tensor:
             dst.assign_from(src, "copy_")
         return self
 
-    def index_select(self, dim: int, index: Self) -> Self:
+    def index_select(self, dim: int, index: Tensor) -> Tensor:
         r"""Gather values along ``dim`` using an integer index tensor.
 
         For each position ``i`` along ``dim``, selects ``self[..., index[i], ...]``
@@ -3253,7 +3253,7 @@ class Tensor:
         bcast_shape[dim] = k
         idx_rs = _C_engine.reshape(index._impl, bcast_shape)
         idx_bc = _C_engine.broadcast_to(idx_rs, out_shape)
-        return Tensor.__new_from_impl__(  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(
             _C_engine.gather(self._impl, idx_bc, dim)
         )
 
@@ -3676,7 +3676,7 @@ class Tensor:
             values,
         )
 
-    def masked_select(self, mask: Self) -> Self:
+    def masked_select(self, mask: Tensor) -> Tensor:
         r"""Flatten and select elements where ``mask`` is ``True``.
 
         Returns a 1-D tensor containing the values of ``self`` at positions
@@ -3718,11 +3718,11 @@ class Tensor:
         >>> x.masked_select(mask).tolist()
         [1.0, 3.0]
         """
-        return Tensor.__new_from_impl__(  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(
             _C_engine.masked_select(self._impl, mask._impl)
         )
 
-    def expand_as(self, other: Self) -> Self:
+    def expand_as(self, other: Tensor) -> Tensor:
         r"""Broadcast ``self`` to match ``other.shape``.
 
         Convenience wrapper around :meth:`expand` that takes the target
@@ -3766,11 +3766,11 @@ class Tensor:
         >>> x.expand_as(proto).shape
         (4, 3)
         """
-        return Tensor.__new_from_impl__(  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(
             _C_engine.expand(self._impl, list(other._impl.shape))
         )
 
-    def view_as(self, other: Self) -> Self:
+    def view_as(self, other: Tensor) -> Tensor:
         r"""Return a view of ``self`` with the same shape as ``other``.
 
         Equivalent to ``self.view(other.shape)``: never copies storage and
@@ -3801,11 +3801,11 @@ class Tensor:
         >>> x.view_as(proto).shape
         (2, 3)
         """
-        return Tensor.__new_from_impl__(  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(
             _C_engine.view(self._impl, list(other._impl.shape))
         )
 
-    def type_as(self, other: Self) -> Self:
+    def type_as(self, other: Tensor) -> Tensor:
         r"""Cast ``self`` to the dtype and device of ``other``.
 
         Equivalent to ``self.type(other.type())``: converts both precision
@@ -3840,7 +3840,7 @@ class Tensor:
         """
         return self.to(*_type_target(other.type()))
 
-    def lerp(self, end: Self, weight: float | Self) -> Self:
+    def lerp(self, end: Tensor, weight: float | Tensor) -> Tensor:
         r"""Linearly interpolate between ``self`` and ``end``.
 
         Computes
@@ -3895,11 +3895,11 @@ class Tensor:
                 f"lerp expects floating-point tensors, got {self.dtype} and "
                 f"{end.dtype} — cast them first"
             )
-        diff = Tensor.__new_from_impl__(  # type: ignore[return-value]
+        diff = Tensor.__new_from_impl__(
             _C_engine.sub(end._impl, self._impl)
         )
         if isinstance(weight, Tensor):
-            scaled = Tensor.__new_from_impl__(  # type: ignore[return-value]
+            scaled = Tensor.__new_from_impl__(
                 _C_engine.mul(weight._impl, diff._impl)
             )
         else:
@@ -3909,12 +3909,12 @@ class Tensor:
                 diff._impl.dtype,
                 diff._impl.device,
             )
-            scaled = Tensor.__new_from_impl__(  # type: ignore[return-value]
+            scaled = Tensor.__new_from_impl__(
                 _C_engine.mul(w_impl, diff._impl)
             )
-        return Tensor.__new_from_impl__(_C_engine.add(self._impl, scaled._impl))  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(_C_engine.add(self._impl, scaled._impl))
 
-    def where(self, condition: Self, other: Self | float) -> Self:
+    def where(self, condition: Tensor, other: Tensor | float) -> Tensor:
         r"""Element-wise piecewise selection between ``self`` and ``other``.
 
         For each position, returns the value from ``self`` if the
@@ -3963,7 +3963,7 @@ class Tensor:
         # ``other`` of another dtype raised ``DtypeMismatch``.
         from lucid._ops._adapters import _where_adapter
 
-        return Tensor.__new_from_impl__(  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(
             _where_adapter(condition, self, other)
         )
 
@@ -4031,8 +4031,8 @@ class Tensor:
         return _diff(self, n=n, dim=dim, prepend=prepend, append=append)
 
     def addmm(
-        self, mat1: Self, mat2: Self, *, beta: float = 1.0, alpha: float = 1.0
-    ) -> Self:
+        self, mat1: Tensor, mat2: Tensor, *, beta: float = 1.0, alpha: float = 1.0
+    ) -> Tensor:
         r"""Fused matrix multiply-add.
 
         Computes
@@ -4092,9 +4092,9 @@ class Tensor:
                 list(self_impl.shape), beta, self_impl.dtype, self_impl.device
             )
             self_impl = _C_engine.mul(b_impl, self_impl)
-        return Tensor.__new_from_impl__(_C_engine.add(self_impl, mm_impl))  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(_C_engine.add(self_impl, mm_impl))
 
-    def bmm(self, mat2: Self) -> Self:
+    def bmm(self, mat2: Tensor) -> Tensor:
         r"""Batched matrix multiplication.
 
         Performs a batch of independent matrix multiplications. ``self``
@@ -4133,7 +4133,7 @@ class Tensor:
         >>> a.bmm(b).shape
         (8, 3, 5)
         """
-        return Tensor.__new_from_impl__(_C_engine.matmul(self._impl, mat2._impl))  # type: ignore[return-value]
+        return Tensor.__new_from_impl__(_C_engine.matmul(self._impl, mat2._impl))
 
     # ── zero_() helper ───────────────────────────────────────────────────────
 
@@ -4240,7 +4240,7 @@ def _tensor_unpickle(
     impl = _C_engine.TensorImpl.from_bytes(
         raw_bytes, list(shape), eng_dtype, device, requires_grad
     )
-    return Tensor.__new_from_impl__(impl)  # type: ignore[return-value]
+    return Tensor.__new_from_impl__(impl)
 
 
 # ── inject dunders and methods after class definition ────────────────────────

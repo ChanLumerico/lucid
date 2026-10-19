@@ -417,7 +417,7 @@
    },
    "type-ignore[return-value]": {
     "lucid/_tensor/_methods.py": 2,
-    "lucid/_tensor/tensor.py": 33,
+    "lucid/_tensor/tensor.py": 1,
     "lucid/amp/autocast.py": 1,
     "lucid/autograd/_grad_mode.py": 2,
     "lucid/linalg/__init__.py": 4,
