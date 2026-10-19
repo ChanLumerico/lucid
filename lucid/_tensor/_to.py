@@ -205,20 +205,14 @@ def _type_target(
 
 def _inject_to(cls: type) -> None:
     """Attach .to(), .metal(), .cpu(), and dtype-cast methods to Tensor."""
-    # These methods are annotated ``self: Tensor`` and ``-> Tensor`` while
-    # ``Tensor`` is imported for type checking only, so under PEP 649
-    # nothing could resolve the annotations: ``inspect.signature`` on
-    # ``to``, ``cpu``, ``metal`` and the dtype casts raised NameError.
-    #
-    # The same absence has bitten at runtime before — see the note in
-    # ``to`` below, where a bare ``Tensor`` in a cast made
-    # ``x.to(other_tensor)`` fail. That was patched where it hurt; the
-    # name was still unbound everywhere else.
+    # ``to``, ``cpu``, ``metal`` and the dtype casts are annotated with
+    # ``Tensor`` while it is imported under TYPE_CHECKING only, so PEP 649
+    # would fail with NameError when reading their signatures without this.
     globals().setdefault("Tensor", cls)
 
     def to(
         self: Tensor,
-        *args: _dtype_cls | _device_cls | _C_engine.Device | str | bool,
+        *args: _dtype_cls | _device_cls | _C_engine.Device | str | _builtin_bool,
         **kwargs: object,
     ) -> Tensor:
         """
@@ -555,3 +549,14 @@ def _inject_to(cls: type) -> None:
         ("bool", bool),
     ]:
         setattr(cls, _name, _fn)
+    _reset_class_annotation_cell(cls)
+
+
+def _reset_class_annotation_cell(cls: type) -> None:
+    """Keep injected ``int`` / ``bool`` / ``float`` methods out of ``cls``'s PEP 649 cell."""
+    ann = getattr(cls.__dict__.get("__init__"), "__annotate__", None)
+    closure = getattr(ann, "__closure__", None)
+    if closure:
+        closure[0].cell_contents = {
+            "_UntypedStorage": cls.__dict__["_UntypedStorage"]
+        }

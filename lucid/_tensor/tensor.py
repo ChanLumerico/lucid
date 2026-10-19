@@ -29,7 +29,7 @@ else:
 
             return getattr(numpy, name)
 
-    np = _LazyNumpy()
+    np, NpDTypeLike = _LazyNumpy(), object
 
 from lucid._C import engine as _C_engine
 from lucid._dtype import (

@@ -1276,7 +1276,7 @@
     "lucid/_ops/composite/statistics.py": 16,
     "lucid/_tensor/_dunders.py": 1567,
     "lucid/_tensor/_indexing.py": 130,
-    "lucid/_tensor/_to.py": 313,
+    "lucid/_tensor/_to.py": 308,
     "lucid/_tensor/tensor.py": 25,
     "lucid/autograd/_backward.py": 86,
     "lucid/autograd/checkpoint.py": 39,

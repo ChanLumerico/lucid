@@ -276,3 +276,53 @@ def test_importing_any_subpackage_first_leaves_every_package_whole() -> None:
         broken = [why for why in pool.map(first, subpackages) if why]
     assert len(subpackages) > 15, subpackages
     assert not broken, "\n\n".join(broken)
+
+
+def test_every_tensor_method_and_property_resolves_annotations_without_method_shadowing() -> (
+    None
+):
+    """PEP 649 annotations on ``Tensor`` resolve ``int``, ``bool``, and ``float``
+    to the builtins rather than ``Tensor.int``, ``Tensor.bool``, or ``Tensor.float``
+    (LCD-442)."""
+    import types
+    import typing
+
+    tensor_fns = {
+        getattr(lucid.Tensor, n)
+        for n in dir(lucid.Tensor)
+        if isinstance(getattr(lucid.Tensor, n), types.FunctionType)
+    }
+
+    def contains_tensor_fn(ann: object) -> bool:
+        if isinstance(ann, types.FunctionType) and ann in tensor_fns:
+            return True
+        if isinstance(ann, list):
+            return any(contains_tensor_fn(a) for a in ann)
+        return any(contains_tensor_fn(arg) for arg in typing.get_args(ann))
+
+    failed: list[str] = []
+    shadowed: list[str] = []
+    for name in dir(lucid.Tensor):
+        if name == "__class__":
+            continue
+        attr = getattr(lucid.Tensor, name)
+        targets = [(name, attr)] if callable(attr) else []
+        if isinstance(attr, property):
+            for pfn_name in ("fget", "fset"):
+                pfn = getattr(attr, pfn_name, None)
+                if pfn is not None:
+                    targets.append((f"{name}.{pfn_name}", pfn))
+        for label, fn in targets:
+            try:
+                inspect.signature(fn)
+                hints = typing.get_type_hints(fn)
+            except Exception as exc:  # noqa: BLE001
+                failed.append(f"{label}: {type(exc).__name__}: {exc}")
+                continue
+            for param_name, hint in hints.items():
+                if contains_tensor_fn(hint):
+                    shadowed.append(f"{label}.{param_name}: {hint!r}")
+    assert not failed, "\n".join(failed)
+    assert not shadowed, "\n".join(shadowed)
+    assert typing.get_type_hints(lucid.Tensor.data_ptr) == {"return": int}
+    assert typing.get_type_hints(lucid.Tensor.stride)["return"] == tuple[int, ...] | int
