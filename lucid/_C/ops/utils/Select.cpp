@@ -165,12 +165,18 @@ public:
     std::weak_ptr<TensorImpl> cond_tensor_;
 
     std::vector<Storage> apply(Storage grad_out) override {
-        Storage dx = where_branch_storage(grad_out, cond_, shape_, dtype_, device_, true);
-        Storage dy = where_branch_storage(grad_out, cond_, shape_, dtype_, device_, false);
-        if (x_shape_ != shape_)
-            dx = reduce_grad_to_shape(dx, shape_, x_shape_, dtype_, device_);
-        if (y_shape_ != shape_)
-            dy = reduce_grad_to_shape(dy, shape_, y_shape_, dtype_, device_);
+        Storage dx;
+        if (needs_input_grad(0)) {
+            dx = where_branch_storage(grad_out, cond_, shape_, dtype_, device_, true);
+            if (x_shape_ != shape_)
+                dx = reduce_grad_to_shape(dx, shape_, x_shape_, dtype_, device_);
+        }
+        Storage dy;
+        if (needs_input_grad(1)) {
+            dy = where_branch_storage(grad_out, cond_, shape_, dtype_, device_, false);
+            if (y_shape_ != shape_)
+                dy = reduce_grad_to_shape(dy, shape_, y_shape_, dtype_, device_);
+        }
         return {std::move(dx), std::move(dy)};
     }
 

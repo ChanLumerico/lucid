@@ -123,6 +123,41 @@ concept HasBinaryDispatch =
         { T::dispatch(be, a, b, s, d) } -> std::same_as<Storage>;
     };
 
+template <class T>
+concept HasCpuScalarDispatch =
+    requires(backend::IBackend& be, const Storage& a, const Shape& s, Dtype d, double val) {
+        { T::dispatch_scalar(be, a, s, d, val) } -> std::same_as<Storage>;
+    };
+
+inline std::optional<double> read_cpu_scalar(const CpuStorage& s, Dtype dt) {
+    if (dt == Dtype::F32)
+        return static_cast<double>(*reinterpret_cast<const float*>(s.ptr.get()));
+    if (dt == Dtype::F64)
+        return *reinterpret_cast<const double*>(s.ptr.get());
+    return std::nullopt;
+}
+
+template <HasCpuScalarDispatch Derived>
+inline std::optional<Storage> try_cpu_scalar_dispatch(backend::IBackend& be,
+                                                      const TensorImplPtr& a_ptr,
+                                                      const TensorImplPtr& b_ptr,
+                                                      const Shape& out_shape,
+                                                      Dtype eff_dt) {
+    if (shape_numel(out_shape) <= 1)
+        return std::nullopt;
+    const auto& ca = std::get<CpuStorage>(a_ptr->storage());
+    const auto& cb = std::get<CpuStorage>(b_ptr->storage());
+    if (a_ptr->shape() == out_shape && shape_numel(b_ptr->shape()) == 1) {
+        if (auto s = read_cpu_scalar(cb, eff_dt))
+            return Derived::dispatch_scalar(be, Storage{ca}, out_shape, eff_dt, *s);
+    }
+    if (b_ptr->shape() == out_shape && shape_numel(a_ptr->shape()) == 1) {
+        if (auto s = read_cpu_scalar(ca, eff_dt))
+            return Derived::dispatch_scalar(be, Storage{cb}, out_shape, eff_dt, *s);
+    }
+    return std::nullopt;
+}
+
 // Compute the NumPy-style broadcast shape of two operands.
 //
 // Parameters
@@ -753,11 +788,17 @@ Storage BinaryKernel<Derived>::compute_storage(const TensorImplPtr& a_ptr,
             return Derived::dispatch(backend::Dispatcher::for_device(Device::GPU), a_ptr->storage(),
                                      b_ptr->storage(), out_shape, eff_dt);
         }
+        auto& be = backend::Dispatcher::for_device(Device::CPU);
+        if constexpr (detail::HasCpuScalarDispatch<Derived>) {
+            if (auto r =
+                    detail::try_cpu_scalar_dispatch<Derived>(be, a_ptr, b_ptr, out_shape, eff_dt))
+                return std::move(*r);
+        }
+
         CpuStorage a_buf, b_buf;
         const CpuStorage& a_use = cpu_operand(a_ptr, out_shape, eff_dt, a_buf);
         const CpuStorage& b_use = cpu_operand(b_ptr, out_shape, eff_dt, b_buf);
-        return Derived::dispatch(backend::Dispatcher::for_device(Device::CPU), Storage{a_use},
-                                 Storage{b_use}, out_shape, eff_dt);
+        return Derived::dispatch(be, Storage{a_use}, Storage{b_use}, out_shape, eff_dt);
     } else {
         if (a_ptr->device() == Device::GPU) {
             if constexpr (detail::HasGpuKernel<Derived>) {
@@ -786,8 +827,12 @@ template <class Derived>
 std::vector<Storage> BinaryKernel<Derived>::apply(Storage grad_out) {
     auto [da, db] = static_cast<Derived*>(this)->grad_formula(grad_out);
     auto to_input = [this](Storage g, std::size_t k) {
-        Storage reduced = reduce_grad_to_shape(g, this->out_shape_, this->input_shapes_[k],
-                                               this->dtype_, this->device_);
+        if (!this->needs_input_grad(k))
+            return Storage{};
+        Storage reduced = (this->out_shape_ == this->input_shapes_[k])
+                              ? std::move(g)
+                              : reduce_grad_to_shape(g, this->out_shape_, this->input_shapes_[k],
+                                                     this->dtype_, this->device_);
         return detail::grad_to_input_dtype(std::move(reduced), this->grad_dtypes_[k],
                                            this->input_shapes_[k], this->dtype_, this->device_);
     };
@@ -870,15 +915,14 @@ std::vector<TensorImplPtr> BinaryKernel<Derived>::apply_for_graph(const TensorIm
     auto b_b = (b_k->shape() == this->out_shape_) ? b_k : broadcast_to_op(b_k, this->out_shape_);
 
     auto [da, db] = static_cast<Derived*>(this)->grad_formula_impl(grad_out, a_b, b_b);
-
-    return {
-        detail::graph_grad_to_input_dtype(
-            reduce_impl_to_shape(da, this->out_shape_, this->input_shapes_[0]),
-            this->grad_dtypes_[0]),
-        detail::graph_grad_to_input_dtype(
-            reduce_impl_to_shape(db, this->out_shape_, this->input_shapes_[1]),
-            this->grad_dtypes_[1]),
+    auto to_input = [this](const TensorImplPtr& g, std::size_t k) -> TensorImplPtr {
+        if (!this->needs_input_grad(k) || !g)
+            return nullptr;
+        return detail::graph_grad_to_input_dtype(
+            reduce_impl_to_shape(g, this->out_shape_, this->input_shapes_[k]),
+            this->grad_dtypes_[k]);
     };
+    return {to_input(da, 0), to_input(db, 1)};
 }
 
 }  // namespace lucid

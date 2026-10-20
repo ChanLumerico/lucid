@@ -27,8 +27,8 @@ const OpSchema SubBackward::schema_v1{"sub", 1, AmpPolicy::Promote, true};
 std::pair<Storage, Storage> SubBackward::grad_formula(const Storage& grad_out) {
     const std::size_t n = shape_numel(out_shape_);
     return {
-        clone_storage(grad_out, n, dtype_, device_),
-        negate_storage(grad_out, n, dtype_, device_),
+        needs_input_grad(0) ? grad_out : Storage{},
+        needs_input_grad(1) ? negate_storage(grad_out, n, dtype_, device_) : Storage{},
     };
 }
 

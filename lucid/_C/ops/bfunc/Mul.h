@@ -95,6 +95,11 @@ public:
         return be.mul(a, b, shape, dt);
     }
 
+    static Storage dispatch_scalar(
+        backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt, double s) {
+        return be.mul_scalar(a, shape, dt, s);
+    }
+
     // Compute the storage-level gradients for both operands (product rule).
     //
     // Parameters

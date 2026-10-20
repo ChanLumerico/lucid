@@ -174,6 +174,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - fast-path zero-safe prod, cumprod, scatter_prod grads (LCD-322)
 
+- skip unused grads, zero-copy pass-through & clip_grad (LCD-153)
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats

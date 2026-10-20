@@ -244,10 +244,13 @@ void route(Pending& pending,
         return;
     }
     auto pit = pending.find(next);
-    if (pit == pending.end())
+    if (pit == pending.end()) {
         pending.emplace(next, std::move(grad));
-    else
+    } else {
+        if (auto* cs = std::get_if<CpuStorage>(&pit->second); cs && cs->ptr.use_count() > 1)
+            pit->second = own_grad_copy(pit->second);
         accumulate_into(pit->second, grad);
+    }
 }
 
 void route_for_graph(GraphPending& pending,
@@ -1123,9 +1126,11 @@ void capture_eager(Node& node,
                 leaf_grad = run_leaf_hooks(*leaf, *captured);
             captured = &*leaf_grad;
         }
-        // A barrier that runs is handed the held buffer too, and what it
-        // does with it is its own business.
-        Storage value = runs && node.is_barrier() ? own_grad_copy(*captured) : *captured;
+        // A node that runs is handed the buffer too, and another target may
+        // already hold it.
+        const auto* cs = std::get_if<CpuStorage>(captured);
+        Storage value =
+            (runs || (cs && cs->ptr.use_count() > 1)) ? own_grad_copy(*captured) : *captured;
         results[s] = std::make_shared<TensorImpl>(std::move(value), inp->shape(), inp->dtype(),
                                                   inp->device(), false);
     }

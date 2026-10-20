@@ -31,17 +31,26 @@ const OpSchema MulBackward::schema_v1{"mul", 1, AmpPolicy::Promote, true};
 // original input shapes via reduce_grad_to_shape.
 std::pair<Storage, Storage> MulBackward::grad_formula(const Storage& grad_out) {
     const std::size_t n = shape_numel(out_shape_);
+    const bool need_a = needs_input_grad(0);
+    const bool need_b = needs_input_grad(1);
 
-    auto a_b = saved_input_broadcasted(0);
-    auto b_b = saved_input_broadcasted(1);
-    if (is_complex(dtype_)) {
-        auto& be = backend::Dispatcher::for_device(device_);
-        a_b = be.complex_conj(a_b, out_shape_, dtype_);
-        b_b = be.complex_conj(b_b, out_shape_, dtype_);
-    }
+    auto factor = [&](std::size_t k) -> Storage {
+        if (device_ == Device::CPU && shape_numel(input_shapes_[k]) == 1 && n > 1) {
+            const auto& cs = std::get<CpuStorage>(saved_inputs_[k]);
+            if (auto s = detail::read_cpu_scalar(cs, dtype_))
+                return mul_scalar_storage(grad_out, *s, n, dtype_, device_);
+        }
+
+        Storage bcast = saved_input_broadcasted(k);
+        if (is_complex(dtype_))
+            bcast =
+                backend::Dispatcher::for_device(device_).complex_conj(bcast, out_shape_, dtype_);
+        return multiply_storages(grad_out, bcast, n, dtype_, device_);
+    };
+
     return {
-        multiply_storages(grad_out, b_b, n, dtype_, device_),
-        multiply_storages(grad_out, a_b, n, dtype_, device_),
+        need_a ? factor(1) : Storage{},
+        need_b ? factor(0) : Storage{},
     };
 }
 

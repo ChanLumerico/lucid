@@ -154,6 +154,8 @@ Storage reduce_grad_to_shape(const Storage& grad,
                              const Shape& target_shape,
                              Dtype dtype,
                              Device device) {
+    if (grad_shape == target_shape)
+        return grad;
     return backend::Dispatcher::for_device(device).reduce_grad_to_shape(grad, grad_shape,
                                                                         target_shape, dtype);
 }

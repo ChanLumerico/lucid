@@ -42,6 +42,8 @@ TensorImplPtr call_runner(const TensorHookSlot& slot, const TensorImplPtr& grad,
 
 // The one place an eager gradient goes through a runner.
 Storage run_hooks(const TensorHookSlot& slot, Storage grad, const Shape& shape) {
+    if (auto* cs = std::get_if<CpuStorage>(&grad); cs && cs->ptr.use_count() > 1)
+        grad = own_grad_copy(grad);
     const Dtype dtype = storage_dtype(grad);
     const Device device = storage_device(grad);
     auto given = std::make_shared<TensorImpl>(std::move(grad), shape, dtype, device, false);

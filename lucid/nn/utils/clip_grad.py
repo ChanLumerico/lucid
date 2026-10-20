@@ -19,9 +19,7 @@ _D = _C_engine.Dtype
 _NORMABLE = frozenset({_D.F16, _D.BF16, _D.F32, _D.F64, _D.C64})
 
 
-def _norm_work_dtype(
-    impls: list[_C_engine.TensorImpl], amp_active: bool
-) -> _C_engine.Dtype:
+def _norm_work_dtype(impls: list[_C_engine.TensorImpl], amp_active: bool) -> _C_engine.Dtype:
     dt0 = impls[0].dtype
     if any(i.dtype == _D.F64 for i in impls):
         return _D.F64
@@ -30,44 +28,82 @@ def _norm_work_dtype(
     return dt0
 
 
+def _as_work(impl: _C_engine.TensorImpl, dt: _C_engine.Dtype) -> _C_engine.TensorImpl:
+    return impl if impl.dtype == dt else _C_engine.astype(impl, dt)
+
+
+def _inf_norm(impls: list[_C_engine.TensorImpl], dt: _C_engine.Dtype) -> float:
+    norms = [
+        _C_engine.max(_C_engine.abs(_as_work(i, dt)), [], False)
+        for i in impls
+        if math.prod(i.shape) != 0
+    ]
+    if not norms:
+        return float("-inf")
+    joined = norms[0] if len(norms) == 1 else _C_engine.max(_C_engine.stack(norms, 0), [0], False)
+    return float(_wrap(joined).item())
+
+
+def _lp_norm(impls: list[_C_engine.TensorImpl], dt: _C_engine.Dtype, norm_type: float) -> float:
+    use_sq = norm_type == 2.0 and dt != _D.C64
+    norms = [
+        _C_engine.sum(
+            _C_engine.square(_as_work(i, dt))
+            if use_sq
+            else _C_engine.pow_scalar(_C_engine.abs(_as_work(i, dt)), norm_type),
+            [],
+            False,
+        )
+        for i in impls
+    ]
+    acc = norms[0] if len(norms) == 1 else _C_engine.sum(_C_engine.stack(norms, 0), [0], False)
+    val = float(_wrap(acc).item())
+    return math.sqrt(val) if use_sq else val ** (1.0 / norm_type)
+
+
 def _total_norm(
     impls: list[_C_engine.TensorImpl], norm_type: float, error_if_nonfinite: bool
 ) -> float:
     """The :math:`\\ell_p` norm of ``impls`` taken jointly, as a Python float."""
     amp_active = _C_engine.amp_is_active()
     dt = _norm_work_dtype(impls, amp_active)
-    dev = impls[0].device
     guard = _C_engine.AutocastGuard(dt) if amp_active else None
     try:
-        if norm_type == math.inf:
-            max_val = _C_engine.full([1], float("-inf"), dt, dev)
-            for impl in impls:
-                # An empty gradient adds nothing to the largest magnitude, and
-                # ``max`` of nothing is refused — it has no identity.
-                if math.prod(impl.shape) == 0:
-                    continue
-                g = impl if impl.dtype == dt else _C_engine.astype(impl, dt)
-                m = _C_engine.reshape(_C_engine.max(_C_engine.abs(g), [], False), [1])
-                mv = _C_engine.reshape(max_val, [1])
-                max_val = _C_engine.max(_C_engine.stack([mv, m], 0), [0], False)
-            total_norm = float(_wrap(max_val).item())
-        else:
-            acc = _C_engine.zeros([1], dt, dev)
-            for impl in impls:
-                g = impl if impl.dtype == dt else _C_engine.astype(impl, dt)
-                pow_g = _C_engine.pow_scalar(_C_engine.abs(g), norm_type)
-                s = _C_engine.reshape(_C_engine.sum(pow_g, [], False), [1])
-                acc = _C_engine.add(acc, s)
-            total_norm = float(_wrap(acc).item()) ** (1.0 / norm_type)
+        total_norm = (
+            _inf_norm(impls, dt) if norm_type == math.inf else _lp_norm(impls, dt, norm_type)
+        )
     finally:
         del guard
 
     if error_if_nonfinite and (math.isnan(total_norm) or math.isinf(total_norm)):
         raise RuntimeError(
-            f"The total norm of order {norm_type} for gradients is "
-            f"non-finite ({total_norm})."
+            f"The total norm of order {norm_type} for gradients is non-finite ({total_norm})."
         )
     return total_norm
+
+
+def _scale_clipped_grads(
+    params_with_grad: list[Parameter],
+    grads: list[_C_engine.TensorImpl],
+    clip_coef: float,
+) -> None:
+    amp_active = _C_engine.amp_is_active()
+    coefs: dict[tuple[_C_engine.Dtype, _C_engine.Device], _C_engine.TensorImpl] = {}
+    for p, g_impl in zip(params_with_grad, grads, strict=True):
+        g_dt = g_impl.dtype
+        w_dt = _D.F32 if (amp_active and g_dt in (_D.F16, _D.BF16)) else g_dt
+        guard = _C_engine.AutocastGuard(w_dt) if amp_active else None
+        try:
+            g_w = g_impl if g_dt == w_dt else _C_engine.astype(g_impl, w_dt)
+            key = (w_dt, g_w.device)
+            coef = coefs.get(key)
+            if coef is None:
+                coef = _C_engine.full([], clip_coef, w_dt, g_w.device)
+                coefs[key] = coef
+            scaled = _C_engine.mul(g_w, coef)
+        finally:
+            del guard
+        p._impl.set_grad(scaled if scaled.dtype == g_dt else _C_engine.astype(scaled, g_dt))
 
 
 def clip_grad_norm_(
@@ -141,7 +177,13 @@ def clip_grad_norm_(
     True
     """
     params = list(parameters)
-    params_with_grad = [p for p in params if p.grad is not None]
+    params_with_grad: list[Parameter] = []
+    grads: list[_C_engine.TensorImpl] = []
+    for p in params:
+        g_impl = p._impl.grad_as_impl() or p._impl.grad_to_tensor()
+        if g_impl is not None:
+            params_with_grad.append(p)
+            grads.append(g_impl)
     if not params_with_grad:
         # Preserve the parameters' device/dtype for the zero-norm result —
         # defaulting to CPU/float32 here breaks multi-device / mixed-precision
@@ -154,30 +196,14 @@ def clip_grad_norm_(
 
     dev = params_with_grad[0]._impl.device
     dt = params_with_grad[0]._impl.dtype
-    grads = []
-    for p in params_with_grad:
-        assert p.grad is not None
-        grads.append(_unwrap(p.grad))
     total_norm = _total_norm(grads, norm_type, error_if_nonfinite)
 
     clip_coef = max_norm / (total_norm + 1e-6)
     if clip_coef < 1.0:
-        amp_active = _C_engine.amp_is_active()
-        for p, g_impl in zip(params_with_grad, grads, strict=True):
-            g_dt = g_impl.dtype
-            w_dt = _D.F32 if (amp_active and g_dt in (_D.F16, _D.BF16)) else g_dt
-            guard = _C_engine.AutocastGuard(w_dt) if amp_active else None
-            try:
-                g_w = g_impl if g_dt == w_dt else _C_engine.astype(g_impl, w_dt)
-                coef = _C_engine.full(list(g_w.shape), clip_coef, w_dt, g_w.device)
-                scaled = _C_engine.mul(g_w, coef)
-            finally:
-                del guard
-            p._impl.set_grad(
-                scaled if scaled.dtype == g_dt else _C_engine.astype(scaled, g_dt)
-            )
+        _scale_clipped_grads(params_with_grad, grads, clip_coef)
 
     # 0-d, as documented and as the reference framework returns it: a
+
     # ``(1,)`` norm puts a stray axis into whatever it is stacked or
     # broadcast with.
     return _wrap(_C_engine.full([], total_norm, dt, dev))
@@ -234,9 +260,8 @@ def clip_grad_value_(
     True
     """
     for p in parameters:
-        if p.grad is not None:
-            assert p.grad is not None
-            g_impl = _unwrap(p.grad)
+        g_impl = p._impl.grad_as_impl() or p._impl.grad_to_tensor()
+        if g_impl is not None:
             p._impl.set_grad(_C_engine.clip(g_impl, -clip_value, clip_value))
 
 
@@ -301,9 +326,7 @@ def get_total_norm(
     True
     """
     items: list[Tensor | None] = (
-        [cast("Tensor", tensors)]
-        if _promotion.try_unwrap(tensors) is not None
-        else list(tensors)
+        [cast("Tensor", tensors)] if _promotion.try_unwrap(tensors) is not None else list(tensors)
     )
     impls = [_unwrap(t) for t in items if t is not None]
     if not impls:
@@ -314,8 +337,7 @@ def get_total_norm(
     for impl in impls:
         if impl.dtype not in _NORMABLE:
             raise TypeError(
-                f"get_total_norm: expected floating-point or complex tensors, "
-                f"got {impl.dtype}"
+                f"get_total_norm: expected floating-point or complex tensors, got {impl.dtype}"
             )
     total_norm = _total_norm(impls, norm_type, error_if_nonfinite)
     # 0-d, like :func:`clip_grad_norm_`'s result.

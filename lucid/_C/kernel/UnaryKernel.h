@@ -401,9 +401,13 @@ std::shared_ptr<TensorImpl> UnaryKernel<Derived>::forward(const std::shared_ptr<
 // :func:`reduce_grad_to_shape`.
 template <class Derived>
 std::vector<Storage> UnaryKernel<Derived>::apply(Storage grad_out) {
+    if (!this->needs_input_grad(0))
+        return {Storage{}};
     Storage dx = static_cast<Derived*>(this)->grad_formula(grad_out);
-    Storage reduced = reduce_grad_to_shape(dx, this->out_shape_, this->input_shapes_[0],
-                                           this->dtype_, this->device_);
+    Storage reduced = (this->out_shape_ == this->input_shapes_[0])
+                          ? std::move(dx)
+                          : reduce_grad_to_shape(dx, this->out_shape_, this->input_shapes_[0],
+                                                 this->dtype_, this->device_);
     return {detail::grad_to_input_dtype(std::move(reduced), this->grad_dtypes_[0],
                                         this->input_shapes_[0], this->dtype_, this->device_)};
 }

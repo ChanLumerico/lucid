@@ -541,10 +541,9 @@
     "lucid/_C/nn/RMSNorm.cpp": 1,
     "lucid/_C/ops/bfunc/Bitwise.cpp": 1,
     "lucid/_C/ops/bfunc/Compare.cpp": 1,
-    "lucid/_C/ops/bfunc/Div.cpp": 1,
     "lucid/_C/ops/bfunc/Floordiv.h": 2,
-    "lucid/_C/ops/bfunc/Mul.cpp": 1,
     "lucid/_C/ops/composite/Indexing.cpp": 1,
+
     "lucid/_C/ops/einops/Einsum.cpp": 3,
     "lucid/_C/ops/fft/Fftn.cpp": 3,
     "lucid/_C/ops/fft/Ifftn.cpp": 1,
@@ -1375,8 +1374,9 @@
     "lucid/nn/functional/sparse.py": 7,
     "lucid/nn/modules/attention.py": 158,
     "lucid/nn/modules/transformer.py": 17,
-    "lucid/nn/utils/clip_grad.py": 11,
+    "lucid/nn/utils/clip_grad.py": 1,
     "lucid/nn/utils/fusion.py": 13,
+
     "lucid/nn/utils/parametrize.py": 39,
     "lucid/nn/utils/rnn.py": 6,
     "lucid/nn/utils/spectral_norm.py": 47,

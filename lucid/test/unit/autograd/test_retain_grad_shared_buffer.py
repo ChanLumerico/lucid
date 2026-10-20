@@ -91,14 +91,10 @@ _SCENARIOS: dict[str, Callable[[ModuleType, str, str], dict[str, object]]] = {
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 @pytest.mark.parametrize("name", list(_SCENARIOS))
-def test_matches_the_reference(
-    name: str, dtype: str, ref: ModuleType, device: str
-) -> None:
+def test_matches_the_reference(name: str, dtype: str, ref: ModuleType, device: str) -> None:
     if device == "metal" and dtype == "float64":
         pytest.skip("Metal holds no float64")
-    _compare(
-        _SCENARIOS[name](lucid, device, dtype), _SCENARIOS[name](ref, "cpu", dtype)
-    )
+    _compare(_SCENARIOS[name](lucid, device, dtype), _SCENARIOS[name](ref, "cpu", dtype))
 
 
 # ── without the reference ──────────────────────────────────────────────────
@@ -112,3 +108,36 @@ def test_the_reported_case(device: str) -> None:
     assert y.grad is not None and x.grad is not None
     assert y.grad.tolist() == [3.0, 3.0, 3.0]
     assert x.grad.tolist() == [3.0, 3.0, 3.0]
+
+
+def test_single_requires_grad_operand_and_shared_gradient_isolation(
+    device: str,
+) -> None:
+    x = lucid.tensor([2.0, -3.0, 4.0], requires_grad=True, device=device)
+    c = lucid.tensor(5.0, device=device)
+    g = lucid.tensor([1.0, 2.0, -1.0], device=device)
+
+    (x + c).backward(g)
+    assert x.grad is not None and c.grad is None
+    assert x.grad.tolist() == [1.0, 2.0, -1.0]
+    g.add_(10.0)
+    assert x.grad.tolist() == [1.0, 2.0, -1.0]
+
+    x.grad = None
+    y = lucid.tensor([1.0, 1.0, 1.0], requires_grad=True, device=device)
+    (x + y).sum().backward()
+    assert x.grad is not None and y.grad is not None
+    x.grad.add_(7.0)
+    assert y.grad.tolist() == [1.0, 1.0, 1.0]
+
+    x.grad = None
+    ((x * c) - (c / x) + (x**c) + lucid.fmod(x, c) + lucid.remainder(x, c)).sum().backward()
+    assert x.grad is not None and c.grad is None
+
+    a = lucid.tensor([[1.0, 2.0], [3.0, 4.0]], requires_grad=True, device=device)
+    b = lucid.tensor([[2.0, 0.0], [1.0, 3.0]], device=device)
+    cond = lucid.tensor([[True, False], [False, True]], device=device)
+    lucid.where(cond, a @ b, b @ a).sum().backward()
+    assert a.grad is not None and b.grad is None
+    assert a.grad.tolist() == [[3.0, 3.0], [3.0, 3.0]]
+

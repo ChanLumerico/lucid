@@ -131,6 +131,9 @@ FmodBackward::gpu_kernel(const GpuStorage& a, const GpuStorage& b, const Shape&,
 // with is its ``div(rounding_mode="trunc")``, which for floats is
 // ``trunc(a / b)``.
 std::pair<Storage, Storage> FmodBackward::grad_formula(const Storage& grad_out) {
+    Storage da = needs_input_grad(0) ? grad_out : Storage{};
+    if (!needs_input_grad(1))
+        return {std::move(da), Storage{}};
     const std::size_t n = shape_numel(out_shape_);
     const Storage a_b = saved_input_broadcasted(0);
     const Storage b_b = saved_input_broadcasted(1);
@@ -139,7 +142,7 @@ std::pair<Storage, Storage> FmodBackward::grad_formula(const Storage& grad_out) 
                                               out_shape_, dtype_);
     Storage db =
         negate_storage(multiply_storages(grad_out, q, n, dtype_, device_), n, dtype_, device_);
-    return {reduce_grad_to_shape(grad_out, out_shape_, out_shape_, dtype_, device_), std::move(db)};
+    return {std::move(da), std::move(db)};
 }
 
 std::pair<TensorImplPtr, TensorImplPtr> FmodBackward::grad_formula_impl(
@@ -172,12 +175,15 @@ RemainderBackward::gpu_kernel(const GpuStorage& a, const GpuStorage& b, const Sh
 
 // ``db = -g * (a // b)``, with the exact floored quotient.
 std::pair<Storage, Storage> RemainderBackward::grad_formula(const Storage& grad_out) {
+    Storage da = needs_input_grad(0) ? grad_out : Storage{};
+    if (!needs_input_grad(1))
+        return {std::move(da), Storage{}};
     const std::size_t n = shape_numel(out_shape_);
     const Storage q = divmod_storage(DivMod::FloorDiv, saved_input_broadcasted(0),
                                      saved_input_broadcasted(1), out_shape_, dtype_, device_);
     Storage db =
         negate_storage(multiply_storages(grad_out, q, n, dtype_, device_), n, dtype_, device_);
-    return {reduce_grad_to_shape(grad_out, out_shape_, out_shape_, dtype_, device_), std::move(db)};
+    return {std::move(da), std::move(db)};
 }
 
 std::pair<TensorImplPtr, TensorImplPtr> RemainderBackward::grad_formula_impl(

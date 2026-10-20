@@ -75,43 +75,36 @@ Storage broadcast_for_matmul(const Storage& storage,
 // expanded, recovering tensors with the original input shapes.
 std::vector<Storage> MatmulBackward::apply(Storage grad_out) {
     const auto info = plan_nd_matmul(input_shapes_[0], input_shapes_[1]);
+    auto& be = backend::Dispatcher::for_device(device_);
 
-    Storage a_use = broadcast_for_matmul(saved_inputs_[0], input_shapes_[0], info.a_bcast_shape,
-                                         dtype_, device_);
-    Storage b_use = broadcast_for_matmul(saved_inputs_[1], input_shapes_[1], info.b_bcast_shape,
-                                         dtype_, device_);
+    Storage dA_s;
+    if (needs_input_grad(0)) {
+        Storage b_use = broadcast_for_matmul(saved_inputs_[1], input_shapes_[1], info.b_bcast_shape,
+                                             dtype_, device_);
+        backend::MatmulOpts dA_opts;
+        dA_opts.M = info.M;
+        dA_opts.K = info.N;
+        dA_opts.N = info.K;
+        dA_opts.batch = info.batch;
+        dA_opts.transB = true;
+        dA_s = be.matmul(grad_out, b_use, dA_opts, dtype_);
+        dA_s = reduce_grad_to_shape(dA_s, info.a_bcast_shape, input_shapes_[0], dtype_, device_);
+    }
 
-    NdMatmulInfo dA_info = info;
-    dA_info.M = info.M;
-    dA_info.N = info.K;
-    NdMatmulInfo dB_info = info;
-    dB_info.M = info.K;
-    dB_info.N = info.N;
+    Storage dB_s;
+    if (needs_input_grad(1)) {
+        Storage a_use = broadcast_for_matmul(saved_inputs_[0], input_shapes_[0], info.a_bcast_shape,
+                                             dtype_, device_);
+        backend::MatmulOpts dB_opts;
+        dB_opts.M = info.K;
+        dB_opts.K = info.M;
+        dB_opts.N = info.N;
+        dB_opts.batch = info.batch;
+        dB_opts.transA = true;
+        dB_s = be.matmul(a_use, grad_out, dB_opts, dtype_);
+        dB_s = reduce_grad_to_shape(dB_s, info.b_bcast_shape, input_shapes_[1], dtype_, device_);
+    }
 
-    // dA opts: grad_out [batch, M, N] @ B^T [batch, N, K] → [batch, M, K]
-    backend::MatmulOpts dA_opts;
-    dA_opts.M = info.M;
-    dA_opts.K = info.N;  // grad_out inner dim is N
-    dA_opts.N = info.K;  // output inner dim recovers K
-    dA_opts.batch = info.batch;
-    dA_opts.transB = true;
-
-    // dB opts: A^T [batch, K, M] @ grad_out [batch, M, N] → [batch, K, N]
-    backend::MatmulOpts dB_opts;
-    dB_opts.M = info.K;  // output leading dim is K
-    dB_opts.K = info.M;  // inner dim is M
-    dB_opts.N = info.N;
-    dB_opts.batch = info.batch;
-    dB_opts.transA = true;
-
-    Storage dA_s =
-        backend::Dispatcher::for_device(device_).matmul(grad_out, b_use, dA_opts, dtype_);
-    Storage dB_s =
-        backend::Dispatcher::for_device(device_).matmul(a_use, grad_out, dB_opts, dtype_);
-
-    // Sum over any batch dimensions that were broadcast-expanded.
-    dA_s = reduce_grad_to_shape(dA_s, info.a_bcast_shape, input_shapes_[0], dtype_, device_);
-    dB_s = reduce_grad_to_shape(dB_s, info.b_bcast_shape, input_shapes_[1], dtype_, device_);
     return {std::move(dA_s), std::move(dB_s)};
 }
 

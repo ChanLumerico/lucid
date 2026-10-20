@@ -222,6 +222,12 @@ public:
             return true;
     }
 
+    // Whether input ``i`` has a valid outgoing autograd edge (requires grad).
+    bool needs_input_grad(std::size_t i) const noexcept {
+        const auto& edges = next_edges();
+        return i < edges.size() && edges[i].is_valid();
+    }
+
     // Put back, for graph-mode backward, every saved tensor a write since
     // forward may have changed without :meth:`validate_versions` refusing.
     //

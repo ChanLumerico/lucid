@@ -31,7 +31,7 @@
     "peak_bytes": 65568
   },
   "cnn_sgd/cpu": {
-    "allocations": 87,
+    "allocations": 72,
     "forward_ops": {
       "abs": 1,
       "add": 3,
@@ -61,12 +61,12 @@
       "sum": 2,
       "unsqueeze": 1
     },
-    "frees": 87,
+    "frees": 72,
     "host_syncs": 0,
-    "peak_bytes": 162948
+    "peak_bytes": 146564
   },
   "cnn_sgd/metal": {
-    "allocations": 94,
+    "allocations": 79,
     "forward_ops": {
       "abs": 1,
       "add": 3,
@@ -95,10 +95,10 @@
       "unsqueeze": 1,
       "where": 1
     },
-    "frees": 94,
+    "frees": 79,
     "host_allocations": 0,
     "host_syncs": 1,
-    "peak_bytes": 195716
+    "peak_bytes": 179332
   },
   "compiled_mlp_adam/metal": {
     "allocations": 17,
@@ -113,7 +113,7 @@
     "peak_bytes": 8192
   },
   "gru_adam/cpu": {
-    "allocations": 552,
+    "allocations": 383,
     "forward_ops": {
       "add": 24,
       "full": 6,
@@ -129,12 +129,12 @@
       "tanh": 6,
       "zeros": 1
     },
-    "frees": 552,
+    "frees": 383,
     "host_syncs": 0,
     "peak_bytes": 55060
   },
   "gru_adam/metal": {
-    "allocations": 646,
+    "allocations": 477,
     "forward_ops": {
       "add": 24,
       "full": 6,
@@ -150,7 +150,7 @@
       "tanh": 6,
       "zeros": 1
     },
-    "frees": 646,
+    "frees": 477,
     "host_allocations": 0,
     "host_syncs": 1,
     "peak_bytes": 53780
@@ -189,7 +189,7 @@
     "peak_bytes": 18436
   },
   "mlp_adam/cpu": {
-    "allocations": 64,
+    "allocations": 49,
     "forward_ops": {
       "abs": 1,
       "add": 2,
@@ -215,12 +215,12 @@
       "sum": 2,
       "unsqueeze": 1
     },
-    "frees": 64,
+    "frees": 49,
     "host_syncs": 0,
     "peak_bytes": 14340
   },
   "mlp_adam/metal": {
-    "allocations": 70,
+    "allocations": 55,
     "forward_ops": {
       "abs": 1,
       "add": 2,
@@ -245,13 +245,13 @@
       "unsqueeze": 1,
       "where": 1
     },
-    "frees": 70,
+    "frees": 55,
     "host_allocations": 0,
     "host_syncs": 1,
     "peak_bytes": 8196
   },
   "transformer_adamw/cpu": {
-    "allocations": 102,
+    "allocations": 93,
     "forward_ops": {
       "add": 2,
       "dropout": 3,
@@ -264,12 +264,12 @@
       "scaled_dot_product_attention": 1,
       "split_at": 2
     },
-    "frees": 102,
+    "frees": 93,
     "host_syncs": 0,
     "peak_bytes": 31876
   },
   "transformer_adamw/metal": {
-    "allocations": 142,
+    "allocations": 133,
     "forward_ops": {
       "add": 2,
       "dropout": 3,
@@ -282,10 +282,9 @@
       "scaled_dot_product_attention": 1,
       "split_at": 2
     },
-    "frees": 142,
+    "frees": 133,
     "host_allocations": 0,
     "host_syncs": 1,
     "peak_bytes": 32900
   }
 }
-

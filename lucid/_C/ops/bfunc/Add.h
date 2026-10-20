@@ -101,6 +101,11 @@ public:
         return be.add(a, b, shape, dt);
     }
 
+    static Storage dispatch_scalar(
+        backend::IBackend& be, const Storage& a, const Shape& shape, Dtype dt, double s) {
+        return be.add_scalar(a, shape, dt, s);
+    }
+
     // Compute the storage-level gradients for both operands.
     //
     // Parameters

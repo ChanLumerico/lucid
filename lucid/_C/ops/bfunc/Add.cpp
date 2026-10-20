@@ -33,8 +33,8 @@ const OpSchema AddBackward::schema_v1{"add", 1, AmpPolicy::Promote, true};
 // shape is performed one level up in BinaryKernel<Derived>::apply.
 std::pair<Storage, Storage> AddBackward::grad_formula(const Storage& grad_out) {
     return {
-        reduce_grad_to_shape(grad_out, out_shape_, out_shape_, dtype_, device_),
-        reduce_grad_to_shape(grad_out, out_shape_, out_shape_, dtype_, device_),
+        needs_input_grad(0) ? grad_out : Storage{},
+        needs_input_grad(1) ? grad_out : Storage{},
     };
 }
 

@@ -98,7 +98,9 @@ void accumulate_leaf(TensorImpl& leaf, Storage grad_out) {
     auto& grad = leaf.mutable_grad_storage();
     if (!grad.has_value()) {
         // First gradient arriving at this leaf — take ownership directly
-        // rather than allocating a zero buffer and immediately adding to it.
+        // when uniquely held rather than allocating a zero buffer and adding.
+        if (auto* cs = std::get_if<CpuStorage>(&grad_out); cs && cs->ptr.use_count() > 1)
+            grad_out = own_grad_copy(grad_out);
         grad = std::move(grad_out);
     } else {
         // Subsequent gradient: add in-place into the existing accumulator.

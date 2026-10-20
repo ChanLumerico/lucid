@@ -31,17 +31,27 @@ const OpSchema DivBackward::schema_v1{"div", 1, AmpPolicy::Promote, true};
 // operations are shape-compatible.
 std::pair<Storage, Storage> DivBackward::grad_formula(const Storage& grad_out) {
     const std::size_t n = shape_numel(out_shape_);
+    const bool need_a = needs_input_grad(0);
+    const bool need_b = needs_input_grad(1);
+    if (!need_a && !need_b)
+        return {Storage{}, Storage{}};
 
-    auto a_b = saved_input_broadcasted(0);
     auto b_b = saved_input_broadcasted(1);
     if (is_complex(dtype_)) {
         auto& be = backend::Dispatcher::for_device(device_);
-        a_b = be.complex_conj(a_b, out_shape_, dtype_);
         b_b = be.complex_conj(b_b, out_shape_, dtype_);
     }
 
     // dA = grad_out / b
-    Storage dx = divide_storages(grad_out, b_b, n, dtype_, device_);
+    Storage dx = need_a ? divide_storages(grad_out, b_b, n, dtype_, device_) : Storage{};
+    if (!need_b)
+        return {std::move(dx), Storage{}};
+
+    auto a_b = saved_input_broadcasted(0);
+    if (is_complex(dtype_)) {
+        auto& be = backend::Dispatcher::for_device(device_);
+        a_b = be.complex_conj(a_b, out_shape_, dtype_);
+    }
 
     // dB = -(grad_out * a) / b²
     Storage b_sq = is_complex(dtype_) ? multiply_storages(b_b, b_b, n, dtype_, device_)
