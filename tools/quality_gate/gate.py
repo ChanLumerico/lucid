@@ -18,6 +18,7 @@ from tools.quality_gate.core import (
     Key,
     apply_renames,
     baseline_commit,
+    baseline_raises,
     changed_files,
     class_totals,
     git,
@@ -138,6 +139,16 @@ def _print_drift(drift: list[str]) -> None:
     )
 
 
+def _print_unrecorded_raises(raises: dict[Key, tuple[int, int]]) -> None:
+    print(f"\n✗ the baseline raises {len(raises)} key(s) without a rebaselines entry:")
+    for k, (b, a) in list(raises.items())[:40]:
+        print(f"    + {_fmt_key(k)}  {b} -> {a}")
+    print(
+        "  The baseline only goes down; raising a count requires (orchestrator only)\n"
+        '    .venv/bin/python3 -m tools.quality_gate --rebaseline --reason "<why>"'
+    )
+
+
 def check(
     root: Path,
     collectors: list[Collector],
@@ -151,6 +162,9 @@ def check(
     _warn_versions(baseline, collectors)
     if drift := contract_drift(baseline, collectors):
         _print_drift(drift)
+        return 1
+    if raises := baseline_raises(root, baseline):
+        _print_unrecorded_raises(raises)
         return 1
     run = measure(root, collectors, files, workdir)
     before, stale = _baseline_view(root, baseline, run.measured)
@@ -190,6 +204,9 @@ def update(root: Path, collectors: list[Collector], files: list[str] | None, wor
     if drift := contract_drift(baseline, collectors):
         # A looser contract lowers counts; recording that as a decrease is DS-18.
         _print_drift(drift)
+        return 1
+    if raises := baseline_raises(root, baseline):
+        _print_unrecorded_raises(raises)
         return 1
     run = measure(root, collectors, files, workdir)
     since = baseline_commit(root)
@@ -310,7 +327,10 @@ def diff(root: Path, collectors: list[Collector], ref: str, workdir: Path) -> in
     drift = contract_drift(baseline, collectors)
     if drift:
         _print_drift(drift)
-    bad = len(delta.increases) + len(over.increases) + len(drift)
+    raises = baseline_raises(root, baseline, sha) | baseline_raises(root, baseline)
+    if raises:
+        _print_unrecorded_raises(raises)
+    bad = len(delta.increases) + len(over.increases) + len(drift) + len(raises)
     verdict = "✗" if bad else "✓"
     print(
         f"RESULT {verdict}: {len(delta.increases)} increase(s) vs {ref}, "

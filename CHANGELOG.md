@@ -1058,6 +1058,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - align branch gradients, create_graph retention, and dim/LRN validation
 
+- scan C/C++ headers in jscpd, combine rebaseline merges, and refuse raises
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

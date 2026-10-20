@@ -68,9 +68,9 @@ def test_registry_decorators_are_not_flagged_while_unused_function_is(
         (
             "tensor_public_method",
             "class Tensor:\n"
-            "    def type_as(self) -> int:\n"
+            "    def clamp_min_(self) -> int:\n"
             "        return 0\n"
-            "    def detach_(self) -> int:\n"
+            "    def share_memory_(self) -> int:\n"
             "        return 0\n"
             "Tensor()\n",
             "class _Holder:\n"

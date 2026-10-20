@@ -111,6 +111,21 @@ def test_merge_keeps_a_raise_carried_by_a_rebaseline() -> None:
     assert merged.rebaselines == [REBASE]
 
 
+def test_merge_combines_deltas_when_one_side_carries_a_rebaseline() -> None:
+    """LCD-522: when base has an unrecorded slack (27 vs 26), main rebaselines
+    from 26 -> 27, and a side branch updates 27 -> 26, combining deltas
+    (``o + t - b``) keeps the rebaselined 27 instead of taking ``min(27, 26) = 26``."""
+    merged = merge_baselines(_b({A: 27, B: 31}), _b({A: 27, B: 28}, [REBASE]), _b({A: 26, B: 27}))
+    assert merged.counts == {A: 26, B: 24}
+    # And when base was stale (27 in baseline, 26 in code) and main rebaselined
+    # after a formatting change (27 -> 27 in baseline) while side ran --update
+    # before the formatting change (27 -> 26), or when base was 26, main
+    # rebaselined to 27 (+1), and side lowered another key:
+    merged2 = merge_baselines(_b({A: 26, B: 28}), _b({A: 27, B: 28}, [REBASE]), _b({A: 26, B: 27}))
+    assert merged2.counts == {A: 27, B: 27}
+
+
+
 # ── end to end ──────────────────────────────────────────────────────────────
 
 
@@ -512,6 +527,99 @@ def test_rebase_merges_concurrent_lowerings_through_the_driver(tmp_path: Path) -
     counts = json.loads((root / "tools" / "quality_baseline.json").read_text())["counts"]
     assert counts["counters"]["type-ignore[misc]"] == {"lucid/pkg/a.py": 1, "lucid/pkg/b.py": 2}
     assert gate(root, "--full", "--collectors", FAST).returncode == 0
+
+
+def test_rebase_over_a_rebaseline_combines_deltas_without_hand_edit(tmp_path: Path) -> None:
+    """LCD-522: replay the 2e88ab8bf + 8e0938a48 scenario where main rebaselines
+    a file (3 -> 4) while a side branch lowers it by 1 (3 -> 2) and another file
+    (3 -> 1), then rebases onto main without needing a hand edit."""
+    root = tmp_path / "repo"
+    (root / "lucid" / "pkg").mkdir(parents=True)
+    (root / "tools").mkdir()
+    ig = lambda n: "".join(f"x{i} = 1  # type: ignore[misc]\n" for i in range(n))
+    spacer = "".join(f"line_{i} = {i}\n" for i in range(8))
+    (root / "lucid" / "pkg" / "a.py").write_text(CLEAN + spacer + ig(3))
+    (root / "lucid" / "pkg" / "b.py").write_text(CLEAN + ig(3))
+    (root / ".gitattributes").write_text(
+        "tools/quality_baseline.json merge=lucid-quality-baseline\n"
+    )
+    git(root, "init", "-q", "-b", "main")
+    driver = f"{sys.executable} -m tools.quality_gate --merge-baseline %O %A %B"
+    git(root, "config", "merge.lucid-quality-baseline.driver", driver)
+    assert gate(root, "--rebaseline", "--reason", "init", "--collectors", FAST).returncode == 0
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+
+    # Side branch lowers a.py (3 -> 2) at the bottom and b.py (3 -> 1) via --update:
+    git(root, "checkout", "-q", "-b", "side")
+    (root / "lucid" / "pkg" / "a.py").write_text(CLEAN + spacer + ig(2))
+    (root / "lucid" / "pkg" / "b.py").write_text(CLEAN + ig(1))
+    assert gate(root, "--update", "--collectors", FAST).returncode == 0
+    git(root, "commit", "-qam", "side lowers a and b")
+
+    # Main rebaselines a.py (3 -> 4) at the top with --rebaseline:
+    git(root, "checkout", "-q", "main")
+    (root / "lucid" / "pkg" / "a.py").write_text(
+        "z = 1  # type: ignore[misc]\n" + CLEAN + spacer + ig(3)
+    )
+    assert gate(root, "--rebaseline", "--reason", "main rebaseline", "--collectors", FAST).returncode == 0
+    git(root, "commit", "-qam", "main rebaseline")
+
+    # Rebase side onto main: merged a.py has 3 ignores (2 + 4 - 3 = 3), b.py has 1:
+    git(root, "checkout", "-q", "side")
+    git(root, "rebase", "-q", "main")
+    counts = json.loads((root / "tools" / "quality_baseline.json").read_text())["counts"]
+    assert counts["counters"]["type-ignore[misc]"] == {"lucid/pkg/a.py": 3, "lucid/pkg/b.py": 1}
+    assert gate(root, "--full", "--collectors", FAST).returncode == 0
+    assert gate(root, "--diff", "main", "--collectors", FAST).returncode == 0
+
+
+def test_unrecorded_baseline_raise_fails_check_update_and_diff(repo: Path) -> None:
+    """LCD-522: raising a baseline count without a new ``rebaselines`` entry
+    is refused by ``check``, ``--update``, and ``--diff``."""
+    _append(repo, "lucid/pkg/other.py", "y = 2  # type: ignore[misc]\n")
+    bl_path = repo / "tools" / "quality_baseline.json"
+    data = json.loads(bl_path.read_text())
+    data["counts"]["counters"]["type-ignore[misc]"]["lucid/pkg/other.py"] = 2
+    bl_path.write_text(json.dumps(data, indent=1) + "\n")
+
+    for args in (("--fast",), ("--full", "--collectors", FAST), ("--update", "--fast")):
+        out = gate(repo, *args)
+        assert out.returncode == 1, out.stdout + out.stderr
+        assert "without a rebaselines entry" in out.stdout
+
+    git(repo, "commit", "-qam", "hand-raised baseline")
+    diff = gate(repo, "--diff", "HEAD~1", "--collectors", FAST)
+    assert diff.returncode == 1, diff.stdout + diff.stderr
+    assert "without a rebaselines entry" in diff.stdout
+
+
+@pytest.mark.skipif(
+    shutil.which("npx") is None and not Path("/opt/homebrew/bin/npx").exists(),
+    reason="jscpd runs through npx",
+)
+def test_jscpd_measures_cpp_headers_and_cross_format_clones(tmp_path: Path) -> None:
+    """LCD-522: jscpd scans ``.h``/``.hpp`` headers and detects header↔``.cpp`` clones."""
+    root = tmp_path / "repo"
+    (root / "lucid" / "_C").mkdir(parents=True)
+    (root / "tools").mkdir()
+    cpp_block = "".join(
+        f"    acc_{i} = lhs[{i}] * rhs[{i}] + bias[{i}] - scale_{i};\n" for i in range(12)
+    )
+    fn_body = f"int compute(const int* lhs, const int* rhs, const int* bias, int scale_0) {{\n{cpp_block}    return 0;\n}}\n"
+    (root / "lucid" / "_C" / "a.h").write_text(fn_body)
+    (root / "lucid" / "_C" / "b.cpp").write_text("int ok() { return 1; }\n")
+    git(root, "init", "-q", "-b", "main")
+    assert gate(root, "--rebaseline", "--reason", "t", "--collectors", "jscpd").returncode == 0
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+
+    # Duplicate the header function into a .cpp file (cross-format c-header <-> cpp):
+    (root / "lucid" / "_C" / "b.cpp").write_text(fn_body)
+    out = gate(root, "--fast", "--collectors", "jscpd")
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "lucid/_C/a.h" in out.stdout and "lucid/_C/b.cpp" in out.stdout
+
 
 
 # ── unlaunder: the mypy-driven codemod ──────────────────────────────────────

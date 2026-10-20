@@ -292,13 +292,15 @@ class MergeRefused(Exception):
 
 
 def merge_baselines(base: Baseline, ours: Baseline, theirs: Baseline) -> Baseline:
-    """Per key: a side that did not change it defers to the other; both changed -> min.
+    """Per key: a side that did not change it defers to the other; both changed -> min,
+    unless one side carries a rebaseline, where deltas combine (``o + t - b``).
 
     A missing key is a count of 0, so a key deleted on either side (file gone,
-    count reached zero) stays deleted.  A side may raise a key above *base*
-    only if it also carries a new ``--rebaseline`` record; otherwise the
-    merge is refused rather than resolved, because a raise the ratchet did
-    not authorise must not slip in through a merge.
+    count reached zero) stays deleted unless the other side rebaselined it.
+    A side may raise a key above *base* only if it also carries a new
+    ``--rebaseline`` record; otherwise the merge is refused rather than
+    resolved, because a raise the ratchet did not authorise must not slip in
+    through a merge.
     """
     base_hist = {json.dumps(e, sort_keys=True) for e in base.rebaselines}
     ours_rebased = any(json.dumps(e, sort_keys=True) not in base_hist for e in ours.rebaselines)
@@ -314,6 +316,8 @@ def merge_baselines(base: Baseline, ours: Baseline, theirs: Baseline) -> Baselin
             value = t
         elif t == b:
             value = o
+        elif ours_rebased != theirs_rebased:
+            value = max(0, o + t - b)
         else:
             value = min(o, t)
         if value > 0:
@@ -327,3 +331,30 @@ def merge_baselines(base: Baseline, ours: Baseline, theirs: Baseline) -> Baselin
             history.append(entry)
     newer = theirs if theirs_rebased and not ours_rebased else ours
     return Baseline(merged, dict(newer.tools), dict(newer.thresholds), history)
+
+
+def baseline_raises(root: Path, current: Baseline, ref: str = "HEAD") -> dict[Key, tuple[int, int]]:
+    """Keys raised in *current* above *ref*'s baseline without a new ``rebaselines`` entry."""
+    if not is_git_tree(root):
+        return {}
+    raw = git(root, "show", f"{ref}:{config.BASELINE_PATH}", check=False)
+    if not raw:
+        return {}
+    try:
+        prior = baseline_from_json(json.loads(raw))
+    except (GateError, json.JSONDecodeError):
+        return {}
+    if current.counts == prior.counts:
+        return {}
+    prior_hist = {json.dumps(e, sort_keys=True) for e in prior.rebaselines}
+    if any(json.dumps(e, sort_keys=True) not in prior_hist for e in current.rebaselines):
+        return {}
+    since = git(root, "rev-parse", "--verify", f"{ref}^{{commit}}", check=False).strip()
+    moved = renames(root, since) if since else {}
+    prior_counts = prior.counts | apply_renames(prior.counts, moved)
+    return {
+        k: (prior_counts.get(k, 0), n)
+        for k, n in sorted(current.counts.items())
+        if n > prior_counts.get(k, 0)
+    }
+

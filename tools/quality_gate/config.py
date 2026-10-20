@@ -102,7 +102,8 @@ ENGINE_TEST_ONLY_BINDINGS = {
 JSCPD_VERSION = "5.4.0"
 JSCPD_MIN_LINES = 8
 JSCPD_MIN_TOKENS = 50
-JSCPD_FORMATS = "python,cpp,objectivec"
+JSCPD_FORMATS = "python,cpp,objectivec,c-header,cpp-header"
+JSCPD_CROSS_FORMATS = "cpp,c-header,cpp-header,objectivec"
 
 # ── mypy (full mode only — the slow one) ──────────────────────────────────
 # The documented type check (CLAUDE.md, tools/README.md), run verbatim: the
@@ -206,7 +207,12 @@ def contract() -> dict[str, dict[str, object]]:
             "vulture_ignore_decorators": ",".join(VULTURE_IGNORE_DECORATORS),
             "vulture_whitelist_ast_sha256": ast_digest(VULTURE_WHITELIST),
         },
-        "jscpd": {"jscpd": f"{JSCPD_VERSION} lines>={JSCPD_MIN_LINES} tokens>={JSCPD_MIN_TOKENS}"},
+        "jscpd": {
+            "jscpd": (
+                f"{JSCPD_VERSION} lines>={JSCPD_MIN_LINES} tokens>={JSCPD_MIN_TOKENS} "
+                f"formats={JSCPD_FORMATS} cross={JSCPD_CROSS_FORMATS}"
+            ),
+        },
         "mypy": {"mypy_flags": " ".join(MYPY_FLAGS)},
         "engine": {"engine_test_only_bindings": ",".join(sorted(ENGINE_TEST_ONLY_BINDINGS))},
     }

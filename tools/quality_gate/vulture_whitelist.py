@@ -75,11 +75,9 @@ _.UPNDOWN  # DIAMOND_Weights member in lucid/models/generative/diamond/_weights.
 _.IMAGENET1K_512  # DiT_XL_2_Weights member in lucid/models/generative/dit/_weights.py
 
 # ── Public Tensor methods (probed via inspect in lucid/test/audit) ────────
-_.detach_  # Tensor.detach_ in lucid/_tensor/tensor.py
 _.clamp_min_  # Tensor.clamp_min_ in lucid/_tensor/tensor.py
 _.clamp_max_  # Tensor.clamp_max_ in lucid/_tensor/tensor.py
 _.share_memory_  # Tensor.share_memory_ in lucid/_tensor/tensor.py
-_.type_as  # Tensor.type_as in lucid/_tensor/tensor.py
 
 # ── Public Module / RNN / pruning / autograd / compile / metal / profiler API ─
 _.register_module  # Module.register_module in lucid/nn/module.py
@@ -90,10 +88,8 @@ _.flatten_parameters  # RNNBase.flatten_parameters in lucid/nn/modules/rnn.py
 _.random_unstructured  # lucid.nn.utils.prune.random_unstructured public API
 _.is_pruned  # lucid.nn.utils.prune.is_pruned public API
 _.mark_non_differentiable  # FunctionCtx.mark_non_differentiable in lucid/autograd/function.py
-_.recompile  # FusedStep.recompile in lucid/compile/_entry/fused_step.py
 _.elapsed_time  # MetalEvent.elapsed_time in lucid/metal/__init__.py
 _.time_ms  # OpEvent.time_ms property in lucid/profiler/__init__.py
-_.key_averages  # Profiler.key_averages in lucid/profiler/__init__.py
 _.export_chrome_trace  # Profiler.export_chrome_trace in lucid/profiler/__init__.py
 _.smallest_normal  # finfo.smallest_normal field in lucid/_dtype.py
 

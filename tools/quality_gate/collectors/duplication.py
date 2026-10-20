@@ -51,6 +51,7 @@ class JscpdCollector(Collector):
                 f"jscpd@{config.JSCPD_VERSION}",
                 config.PY_ROOT.rstrip("/"),
                 f"--format={config.JSCPD_FORMATS}",
+                f"--cross-formats={config.JSCPD_CROSS_FORMATS}",
                 "--ignore=lucid/test/**,**/*.pyi",
                 f"--min-lines={config.JSCPD_MIN_LINES}",
                 f"--min-tokens={config.JSCPD_MIN_TOKENS}",
