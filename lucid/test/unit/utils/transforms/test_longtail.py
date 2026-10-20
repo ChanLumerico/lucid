@@ -54,6 +54,12 @@ class TestColorSemantics:
         x = lucid.rand(3, 8, 8)
         out = T.Lambda(image=lambda im: im * 0.0, p=1.0)(x)
         assert float(out.abs().max().item()) < 1e-6
+        kps = T.Keypoints(lucid.tensor([[1.0, 2.0], [3.0, 4.0]]), (8, 8))
+        sample = {"image": T.Image(x), "keypoints": kps}
+        out_sample = T.Lambda(
+            keypoints=lambda k: T.Keypoints(k.data + 5.0, k.canvas_size), p=1.0
+        )(sample)
+        assert out_sample["keypoints"].data.tolist() == [[6.0, 7.0], [8.0, 9.0]]
 
     def test_pixel_dropout_range(self) -> None:
         out = T.PixelDropout(dropout_prob=0.5, p=1.0)(lucid.rand(3, 16, 16))

@@ -1144,6 +1144,7 @@ class Optimizer:
         without the hooks; the default assumes that.  SGD overrides it: its
         engine exports nothing until a momentum buffer exists.
         """
+        del group
         return True
 
     def _warn_engine_state_reset(self) -> None:

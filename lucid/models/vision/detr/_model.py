@@ -698,8 +698,6 @@ class DETRForObjectDetection(ObjectDetectionModel):
               ``loss``      : set-prediction loss when targets provided.
         """
         B = int(x.shape[0])
-        iH = int(x.shape[2])
-        iW = int(x.shape[3])
         check_per_image(type(self).__name__, B, targets=targets)
 
         # 1. Backbone + projection → (B, d, H', W')
@@ -748,7 +746,7 @@ class DETRForObjectDetection(ObjectDetectionModel):
         # 5. Loss
         loss: Tensor | None = None
         if targets is not None:
-            loss = self._set_loss(logits, pred_boxes, targets, (iH, iW))
+            loss = self._set_loss(logits, pred_boxes, targets)
             if want_aux:
                 # Every layer but the last, weighted identically to the final
                 # one — the reference simply sums the per-layer set losses.
@@ -757,9 +755,7 @@ class DETRForObjectDetection(ObjectDetectionModel):
                     h_l = hs_out[li]
                     aux_logits = self.class_embed(h_l)
                     aux_boxes = F.sigmoid(self.bbox_embed(h_l))
-                    loss = loss + self._set_loss(
-                        aux_logits, aux_boxes, targets, (iH, iW)
-                    )
+                    loss = loss + self._set_loss(aux_logits, aux_boxes, targets)
 
         return ObjectDetectionOutput(
             logits=logits,
@@ -776,7 +772,6 @@ class DETRForObjectDetection(ObjectDetectionModel):
         logits: Tensor,
         pred_boxes: Tensor,
         targets: list[dict[str, Tensor]],
-        image_size: tuple[int, int],
     ) -> Tensor:
         """Hungarian-matched set loss across the batch.
 

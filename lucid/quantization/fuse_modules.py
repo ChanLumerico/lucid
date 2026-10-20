@@ -69,7 +69,7 @@ def _fuse_run(mods: Sequence[nn.Module]) -> list[nn.Module]:
 
     ids = [nn.Identity() for _ in range(len(mods) - 1)]
     first = mods[0]
-    # Conv (+ BN) (+ ReLU)
+    # Pattern — Conv (+ BN) (+ ReLU)
     if isinstance(first, _CONV_TYPES):
         conv: nn.Module = first
         rest = list(mods[1:])

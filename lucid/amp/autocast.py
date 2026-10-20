@@ -130,7 +130,6 @@ class autocast:
             If ``device_type`` is neither ``'metal'`` nor ``'cpu'``.
         """
         self._engine_device = _to_engine_device(device_type)
-        self._device_type = device_type
         self._dtype = (
             (bfloat16 if device_type == "cpu" else float16)
             if dtype is None

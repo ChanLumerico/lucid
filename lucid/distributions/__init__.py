@@ -97,9 +97,9 @@ __all__ = [
     "Gumbel",
     "InverseGamma",
     "Kumaraswamy",
-    # discrete (extra)
+    # -- discrete (extra) --
     "Multinomial",
-    # continuous [0,1]
+    # -- continuous [0,1] --
     "ContinuousBernoulli",
     # relaxed (Concrete) — differentiable approximations
     "RelaxedBernoulli",

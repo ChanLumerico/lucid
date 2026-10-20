@@ -326,7 +326,7 @@ def _space_to_depth(x: Tensor, block_size: int) -> Tensor:
     new_w = W // bs
     new_c = C * bs * bs
 
-    # (B, C, H, W)
+    # Shape — (B, C, H, W)
     # → (B, C, new_h, bs, new_w, bs)
     # Divergence, deliberate: this is the textbook pixel-unshuffle
     # (tf.nn.space_to_depth).  darknet's reorg_layer is *not* — its
@@ -520,7 +520,7 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
         aw_t = lucid.tensor([a[0] for a in anchors], device=device).reshape(1, 1, 1, A)
         ah_t = lucid.tensor([a[1] for a in anchors], device=device).reshape(1, 1, 1, A)
 
-        # bx = (sigmoid(tx) + col) * stride_w;  bw = anchor_w * exp(tw) * stride_w
+        # bx — (sigmoid(tx) + col) * stride_w; bw — anchor_w * exp(tw) * stride_w
         bx = (F.sigmoid(raw_r[..., 0]) + col_offsets) * stride_w
         by = (F.sigmoid(raw_r[..., 1]) + row_offsets) * stride_h
         bw = aw_t * lucid.exp(raw_r[..., 2].clamp(min=-10.0, max=10.0)) * stride_w
@@ -804,6 +804,7 @@ class YOLOV2ForObjectDetection(ObjectDetectionModel):
             List of per-image result dicts with ``"boxes"``, ``"scores"``,
             ``"labels"``.
         """
+        del image_size  # pred_boxes are already in pixel coordinates
         cfg = self.config
         B_batch = int(output.logits.shape[0])
         C = cfg.num_classes

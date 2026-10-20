@@ -3494,9 +3494,9 @@ def matrix_exp(input: Tensor) -> Tensor:
         I = eye_2d
 
     # -- Padé polynomials (even/odd split for efficiency) ----------------------
-    # Even = c0*I + c2*A2 + c4*A4 + c6*A6
+    # Even — c0*I + c2*A2 + c4*A4 + c6*A6
     Even: Tensor = _c0 * I + _c2 * A2 + _c4 * A4 + _c6 * A6
-    # Odd  = A * (c1*I + c3*A2 + c5*A4)
+    # Odd  — A * (c1*I + c3*A2 + c5*A4)
     Odd: Tensor = A_sc @ (_c1 * I + _c3 * A2 + _c5 * A4)
 
     # N = Even + Odd,  D = Even - Odd

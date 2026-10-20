@@ -410,3 +410,26 @@ def test_a_non_tensor_is_refused_even_for_an_input_needing_no_gradient(
     k = lucid.ones(2, device=device)
     with pytest.raises(TypeError, match="index 1"):
         Two.apply(x, k).sum().backward()
+
+
+def test_mark_non_differentiable_detaches_marked_outputs(device: str) -> None:
+    class ValueAndIndex(Function):
+        @staticmethod
+        def forward(ctx, x):
+            idx = x * 0.0
+            ctx.mark_non_differentiable(idx)
+            return x * 2.0, idx
+
+        @staticmethod
+        def backward(ctx, grad_val, grad_idx):
+            del ctx, grad_idx
+            return grad_val * 2.0
+
+    x = lucid.ones(3, device=device, requires_grad=True)
+    val, idx = ValueAndIndex.apply(x)
+    assert val.requires_grad
+    assert not idx.requires_grad
+    assert idx.grad_fn is None
+    val.sum().backward()
+    assert x.grad is not None
+    assert x.grad.tolist() == [2.0, 2.0, 2.0]

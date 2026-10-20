@@ -440,8 +440,8 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("clamp_max",   A._clamp_max_adapter, 1, method_name="clamp_max", free_fn_name="clamp_max",
             extra_kwargs=["max"]),
     # scatter_add: arg order differs — adapter reorders before calling engine.
-    # Python:  scatter_add(x, dim, index, src)
-    # Engine:  scatter_add(base, indices, src, dim)
+    # Python call — scatter_add(x, dim, index, src)
+    # Engine call — scatter_add(base, indices, src, dim)
     # n_tensor_args=1 auto-unwraps x; the adapter manually unwraps index/src.
     OpEntry("scatter_add", A._scatter_add_adapter, 1,
             method_name="scatter_add", free_fn_name="scatter_add"),

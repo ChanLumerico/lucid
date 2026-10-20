@@ -40,9 +40,10 @@ class _Container(_NoParams, Transform[Empty]):
 
     @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:  # unused
+        del params
         return img
 
-    def _gate_or_pass(self, inputs: object) -> bool:
+    def _gate_or_pass(self) -> bool:
         """Return True if the container should run this call."""
         return not (self.p < 1.0 and _random.rand() >= self.p)
 
@@ -83,7 +84,7 @@ class OneOf(_Container):
 
     @override
     def __call__(self, inputs: object) -> object:
-        if not self.transforms or not self._gate_or_pass(inputs):
+        if not self.transforms or not self._gate_or_pass():
             return inputs
         r = _random.rand()
         acc = 0.0
@@ -131,7 +132,7 @@ class SomeOf(_Container):
 
     @override
     def __call__(self, inputs: object) -> object:
-        if not self.transforms or not self._gate_or_pass(inputs):
+        if not self.transforms or not self._gate_or_pass():
             return inputs
         pool = list(range(len(self.transforms)))
         picks: list[int] = []
@@ -184,7 +185,7 @@ class Sequential(_Container):
 
     @override
     def __call__(self, inputs: object) -> object:
-        if not self._gate_or_pass(inputs):
+        if not self._gate_or_pass():
             return inputs
         for tf in self.transforms:
             inputs = tf(inputs)
@@ -268,7 +269,7 @@ class ReplayCompose(_Container):
         from lucid.utils.transforms._base import _find_reference
 
         self.replay_data = []
-        if not self._gate_or_pass(inputs):
+        if not self._gate_or_pass():
             return inputs
         out = inputs
         for tf in self.transforms:

@@ -345,6 +345,7 @@ class DeQuantize(nn.Module):
     @classmethod
     def from_float(cls, stub: nn.Module) -> DeQuantize:
         """Build from a :class:`DeQuantStub` (no state to carry)."""
+        del stub
         return cls()
 
 

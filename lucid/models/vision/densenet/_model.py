@@ -207,13 +207,9 @@ class _Features(nn.Module):
             self.pool0(self.relu0(self.norm0(self.conv0(x)))),
         )
         # iterate dense blocks and transitions in registration order
-        transition_idx = 1
         for name, module in self.named_children():
-            if name.startswith("denseblock"):
+            if name.startswith(("denseblock", "transition")):
                 x = cast(Tensor, module(x))
-            elif name.startswith("transition"):
-                x = cast(Tensor, module(x))
-                transition_idx += 1
         # final BN + ReLU (caller applies ReLU after pool)
         x = self.norm5(x)
         return x

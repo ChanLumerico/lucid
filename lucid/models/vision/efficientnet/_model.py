@@ -173,7 +173,7 @@ class _MBConvBlock(nn.Module):
 # Block spec table and builder
 # ---------------------------------------------------------------------------
 
-# (expand_ratio, in_ch, out_ch, n_layers, stride, kernel_size)
+# Tuple layout — (expand_ratio, in_ch, out_ch, n_layers, stride, kernel_size)
 _BASE_SPECS: list[tuple[int, int, int, int, int, int]] = [
     (1, 32, 16, 1, 1, 3),
     (6, 16, 24, 2, 2, 3),
@@ -211,7 +211,7 @@ def _build_features(cfg: EfficientNetConfig) -> tuple[nn.Sequential, int]:
     layers: list[nn.Module] = list(stem)
     in_ch = stem_ch
 
-    for expand, base_in, base_out, base_n, stride, kernel in _BASE_SPECS:
+    for expand, _base_in, base_out, base_n, stride, kernel in _BASE_SPECS:
         out_ch = _round_channels(base_out, w)
         n = _round_layers(base_n, d)
         for i in range(n):

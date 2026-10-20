@@ -1284,7 +1284,7 @@ class CorrCholeskyTransform(Transform):
                 if n_free > 0:
                     # Normalise: L[row, :row] = z_row * sqrt(cumprod(1 - z²))
                     # Actually use the standard normalisation:
-                    # L[row,0] = z[0]
+                    # L[row,0] := z[0]
                     # L[row,1] = z[1]*sqrt(1-z[0]²)
                     # L[row,2] = z[2]*sqrt(1-z[0]²-z[1]²*(...))
                     # i.e. L[row, j] = z[j] * sqrt(1 - Σ_{k<j} L[row,k]²)

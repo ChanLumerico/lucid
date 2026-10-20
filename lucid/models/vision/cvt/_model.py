@@ -265,7 +265,7 @@ class _CvTBlock(nn.Module):
 
     @override
     def forward(self, x: Tensor, H: int, W: int) -> Tensor:
-        # x: (B, N, C)
+        # Input x — (B, N, C)
         n = self.norm1(x)
         attended = self.attn(n, H, W)
         x = x + self.drop_path(attended)
@@ -345,7 +345,7 @@ class _CvTStage(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor | None, int, int]:
-        # x: (B, C_in, H_in, W_in)
+        # Input x — (B, C_in, H_in, W_in)
         x_spatial, H, W = self.embed(x)
         # Flatten to sequence: (B, H*W, C)
         B, C, _H, _W = x_spatial.shape

@@ -876,7 +876,7 @@ class CompiledModule[**P, R](_ModuleWrapper):
 
         entry = self._cache.get(key)
         if entry is None:
-            entry = self._compile_for(key, args, kwargs)
+            entry = self._compile_for(args, kwargs)
             # The first trace may have downgraded symbolic → static (gate
             # rejected the graph, or the symbolic lowering failed): the
             # wildcarded key above is then wrong, so re-key on the resolved
@@ -1048,7 +1048,6 @@ class CompiledModule[**P, R](_ModuleWrapper):
 
     def _compile_for(
         self,
-        key: CacheKey,
         args: tuple[object, ...],
         kwargs: dict[str, object],
     ) -> _CacheEntry | None:
@@ -1056,9 +1055,6 @@ class CompiledModule[**P, R](_ModuleWrapper):
 
         Parameters
         ----------
-        key : CacheKey
-            The signature key for this call (used only for the
-            return-spec record; not consulted internally).
         args, kwargs : tuple, dict
             The user's call arguments to feed through the trace.
 

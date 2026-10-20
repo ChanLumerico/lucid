@@ -1570,4 +1570,4 @@ __all__ = [
 # ``inspect.signature`` raise NameError — which breaks help(), IDEs and
 # the docs build. Imported at the bottom because the module is part of
 # the cycle that ``Tensor`` closes.
-from lucid._tensor.tensor import Tensor  # noqa: E402
+from lucid._tensor.tensor import Tensor

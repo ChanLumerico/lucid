@@ -174,7 +174,6 @@ class _RelAttnBlock(nn.Module):
         self.grid_h = grid_h
         self.grid_w = grid_w
         # Pre-pool grid, needed to fold the sequence back to 2-D for pooling.
-        self._downsample = downsample
         self.in_h = grid_h * 2 if downsample else grid_h
         self.in_w = grid_w * 2 if downsample else grid_w
 
@@ -203,9 +202,10 @@ class _RelAttnBlock(nn.Module):
 
     def _init_rel_idx(self) -> None:
         H, W = self.grid_h, self.grid_w
+        dev = self.rel_bias.device
         # Relative index for each pair of positions
-        coords_h = lucid.arange(H).to(lucid.int64)
-        coords_w = lucid.arange(W).to(lucid.int64)
+        coords_h = lucid.arange(H, device=dev).to(lucid.int64)
+        coords_w = lucid.arange(W, device=dev).to(lucid.int64)
         # Build 2-D position grid (H*W, 2)
         ys = coords_h.reshape(H, 1).expand(H, W).reshape(-1)
         xs = coords_w.reshape(1, W).expand(H, W).reshape(-1)
@@ -253,13 +253,13 @@ class _RelAttnBlock(nn.Module):
             resized.reshape(self.num_heads, (2 * grid_h - 1) * (2 * grid_w - 1))
         )
         self.grid_h, self.grid_w = grid_h, grid_w
-        self.in_h = grid_h * 2 if self._downsample else grid_h
-        self.in_w = grid_w * 2 if self._downsample else grid_w
+        self.in_h = grid_h * 2 if self.downsample else grid_h
+        self.in_w = grid_w * 2 if self.downsample else grid_w
         self._init_rel_idx()
 
     def _rel_pos_bias(self) -> Tensor:
         # rel_idx: (N, N), rel_bias: (num_heads, (2H-1)*(2W-1))
-        # Returns (num_heads, N, N)
+        # Output shape — (num_heads, N, N)
         idx: Tensor = self._rel_idx
         idx_flat = idx.reshape(-1)  # (N*N,)
         # Gather from bias table
@@ -283,7 +283,7 @@ class _RelAttnBlock(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        # x: (B, N, C)
+        # Input x — (B, N, C)
         identity = self._pool(x)
         shortcut = cast(Tensor, self.shortcut(identity))
         h = self._pool(self.norm1(x))
@@ -339,6 +339,7 @@ class _TransformerStage(nn.Module):
             grid_h = input_grid[0]
             grid_w = input_grid[1]
 
+        self.downsample = downsample
         self.grid_h, self.grid_w = grid_h, grid_w
         self.pool: nn.Module = (
             # Eqn (4): "the standard max pooling of stride 2 is directly
@@ -372,6 +373,13 @@ class _TransformerStage(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         # x: (B, C, H, W) — flattened once; the first block pools if needed.
         B, C, H, W = x.shape
+        target_h = H // 2 if self.downsample else H
+        target_w = W // 2 if self.downsample else W
+        if (target_h, target_w) != (self.grid_h, self.grid_w):
+            for blk in self.blocks:
+                if isinstance(blk, _RelAttnBlock):
+                    blk.resample_rel_pos(target_h, target_w)
+            self.grid_h, self.grid_w = target_h, target_w
         seq = x.reshape(B, C, H * W).permute(0, 2, 1)  # (B, N, C)
         for blk in self.blocks:
             seq = cast(Tensor, blk(seq))

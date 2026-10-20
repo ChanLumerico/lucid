@@ -294,7 +294,6 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
         C = self.backbone.out_channels
 
         num_anchors = len(config.rpn_anchor_ratios)
-        self._num_anchors = num_anchors
         self.rpn = _RegionProposalNetwork(C, num_anchors)
 
         sizes: tuple[tuple[int, ...], ...] = tuple(
@@ -683,8 +682,8 @@ class MaskRCNNForObjectDetection(ObjectDetectionModel):
         (1, 48, 40)
         """
         # ``forward`` carries its own proposals out, mirroring Faster R-CNN,
-        # so the documented ``model.postprocess(model(x))`` flow works without
-        # the caller re-running the RPN by hand.
+        # so ``model.postprocess(model(x))`` works without re-running the RPN.
+        del features
         if proposals is None:
             proposals = list(output.proposals) if output.proposals is not None else None
         if proposals is None:

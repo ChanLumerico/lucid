@@ -64,7 +64,7 @@ class _SelectiveKernelAttn(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        # x: (B, num_paths, C, H, W)
+        # Input x — (B, num_paths, C, H, W)
         # Sum paths then global-average-pool → (B, C, 1, 1)
         b = x.shape[0]
         c = x.shape[2]
@@ -225,7 +225,7 @@ class _SelectiveKernel(nn.Module):
         else:
             x_paths = [cast(Tensor, op(x)) for op in self.paths]
 
-        # Stack: (B, num_paths, C, H, W)
+        # Stack — (B, num_paths, C, H, W)
         stacked = lucid.stack(x_paths, dim=1)
         # Attention weights: (B, num_paths, C, 1, 1)
         attn = self.attn(stacked)

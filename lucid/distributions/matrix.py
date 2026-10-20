@@ -506,7 +506,7 @@ class LKJCholesky(Distribution):
         )
         u_hypersphere = u_normal / row_norms
 
-        # Scale: w = sqrt(y) * u_hypersphere
+        # Scale — w := sqrt(y) * u_hypersphere
         w = y.sqrt() * u_hypersphere
 
         # Diagonal: d_i = sqrt(1 − ‖w_i‖²), clamped for numerical stability.
@@ -563,8 +563,8 @@ class LKJCholesky(Distribution):
         # alpha = η + (d - 1) / 2 (scalar part of the beta parameterisation)
         alpha = eta + 0.5 * dm1
 
-        # numerator = mvlgamma(alpha - 0.5, dm1)
-        # denominator = lgamma(alpha) * dm1
+        # numerator — mvlgamma(alpha - 0.5, dm1)
+        # denominator — lgamma(alpha) * dm1
         numerator = _sp.multigammaln(alpha - 0.5, dm1)
         denominator = lucid.lgamma(alpha) * dm1
 

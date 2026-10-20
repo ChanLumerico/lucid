@@ -462,7 +462,7 @@ class PVT(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: PVTConfig) -> None:
         super().__init__(config)
-        self.patch_embed, self.stages, fi, out_dim = _build_pvt(config)
+        self.patch_embed, self.stages, fi, _out_dim = _build_pvt(config)
         self._feature_info = fi
 
         # Reference initialisation: trunc_normal_(0.02) on Linear / patch-embed
@@ -470,7 +470,6 @@ class PVT(PretrainedModel, BackboneMixin):
         # class token and positional table (bare Parameters the framework
         # default never touches — they were sitting at exact zeros).
         init_transformer_trunc_normal(self)
-        self._out_dim = out_dim
 
     @override
     @property

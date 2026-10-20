@@ -884,6 +884,10 @@ class Module:
         """Apply fn to every parameter/buffer in-place (preserves object identity)."""
         for module in self.children():
             module._apply(fn)
+        return self._apply_local(fn)
+
+    def _apply_local(self, fn: Callable[[Tensor], Tensor]) -> Self:
+        """Apply fn to this module's direct parameters and buffers only."""
         for key, param in self._parameters.items():
             if param is None:
                 continue
@@ -1052,6 +1056,7 @@ class Module:
         unchanged rather than crashing the caller.  Any positional or
         keyword arguments are accepted and ignored.
         """
+        del args, kwargs
         return self
 
     def to_empty(
@@ -1065,7 +1070,7 @@ class Module:
         The reference framework uses ``to_empty`` to materialise a
         model originally constructed on the meta device.  Lucid has no
         meta device, so this method exists for API parity and
-        delegates to the standard :meth:`to` when a device is supplied.
+        moves parameters and buffers when a device is supplied.
 
         Parameters
         ----------
@@ -1074,7 +1079,7 @@ class Module:
             When ``None`` (default) the call is a no-op returning
             ``self``.
         recurse : bool, optional
-            Honoured by the underlying :meth:`to` call.  Default
+            Honoured by the underlying :meth:`_apply` call.  Default
             ``True`` — every child module is moved as well.
 
         Returns
@@ -1084,7 +1089,14 @@ class Module:
         """
         if device is None:
             return self
-        return self.to(device)
+        target, _, _ = _to_engine_target((device,), {}, Tensor)
+        if target is None:
+            return self
+
+        def _move(t: Tensor) -> Tensor:
+            return _wrap(_C_engine.to_device(t._impl, target))
+
+        return self._apply(_move) if recurse else self._apply_local(_move)
 
     # ── extra state ───────────────────────────────────────────────────────
 

@@ -124,7 +124,7 @@ __all__ = [
     "quantize_dynamic",
     # QAT
     "prepare_qat",
-    # graph-mode (compile-oriented)
+    # -- graph-mode (compile-oriented) --
     "prepare_fx",
     "convert_fx",
 ]

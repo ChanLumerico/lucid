@@ -576,7 +576,7 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: EfficientFormerConfig) -> None:
         super().__init__(config)
-        stem, stages, hn, fi, out_dim = _build_efficientformer(config)
+        stem, stages, hn, fi, _out_dim = _build_efficientformer(config)
         self.stem = stem
         self.stages = stages
         self.norm = hn
@@ -587,7 +587,6 @@ class EfficientFormer(PretrainedModel, BackboneMixin):
         # class token and positional table (bare Parameters the framework
         # default never touches — they were sitting at exact zeros).
         init_transformer_trunc_normal(self)
-        self._out_dim = out_dim
 
     @override
     @property

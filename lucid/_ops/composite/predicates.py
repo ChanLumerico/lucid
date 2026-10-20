@@ -79,6 +79,7 @@ def is_storage(obj: object, /) -> bool:
     >>> lucid.is_storage(lucid.zeros(3))
     False
     """
+    del obj  # reference-signature parity; Lucid has no separate Storage type
     return False
 
 
@@ -202,6 +203,7 @@ def is_neg(input: Tensor) -> bool:
     >>> lucid.is_neg(-lucid.tensor([1.0, 2.0]))
     False
     """
+    del input  # reference-signature parity; Lucid materialises negation eagerly
     return False
 
 
@@ -234,6 +236,7 @@ def is_conj(input: Tensor) -> bool:
     >>> lucid.is_conj(lucid.tensor([1.0, 2.0]))
     False
     """
+    del input  # reference-signature parity; Lucid materialises conjugation eagerly
     return False
 
 
@@ -630,4 +633,4 @@ __all__ = [
 # ``inspect.signature`` raise NameError — which is what help(), an IDE
 # and the docs build all call. Imported at the bottom because this
 # module is inside the cycle ``Tensor`` closes.
-from lucid._tensor.tensor import Tensor  # noqa: E402,F811
+from lucid._tensor.tensor import Tensor

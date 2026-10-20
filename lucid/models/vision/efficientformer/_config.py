@@ -157,7 +157,7 @@ class EfficientFormerConfig(ModelConfig):
     embed_dims: tuple[int, ...] = (48, 96, 224, 448)
     mlp_ratios: tuple[float, ...] = (4.0, 4.0, 4.0, 4.0)
     # Last-stage attention layout / hyperparameters (fixed across L1/L3/L7
-    # except num_vit, which is 1 / 4 / 8 respectively):
+    # except num_vit, which is 1 / 4 / 8 respectively).
     num_vit: int = 1
     pool_size: int = 3
     key_dim: int = 32

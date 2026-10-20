@@ -25,7 +25,7 @@ Three responsibilities:
 import os
 import sys
 import warnings
-from typing import TYPE_CHECKING, Callable, cast
+from typing import TYPE_CHECKING, cast
 
 from lucid._tensor.tensor import Tensor
 
@@ -207,19 +207,3 @@ class EagerFallbackSet:
         # is content-based on the frozen dataclass so the sort is
         # stable across calls within a session.
         return tuple(sorted(self._sigs, key=hash))
-
-
-def make_eager_runner(model: Module) -> Callable[..., object]:
-    """Return a no-arg-binding callable that defers to ``model(*args, **kwargs)``.
-
-    Useful when a caller wants to capture the *current* eager forward
-    once and reuse it (e.g. for benchmarking).  Reading ``model`` at
-    call time means re-binding follows the user's ``_apply`` / ``to``
-    mutations.
-    """
-
-    def _runner(*args: object, **kwargs: object) -> object:
-        """Forward ``args`` / ``kwargs`` to the captured ``model`` via :func:`run_eager`."""
-        return run_eager(model, args, kwargs)
-
-    return _runner

@@ -1119,6 +1119,7 @@ class _CompiledStepBase:
 
     def _flags(self, group: dict[str, object]) -> _Flags:
         """Structural choices of ``group`` — part of the executable's key."""
+        del group
         return ()
 
     def _state_names(self, flags: _Flags) -> tuple[str, ...]:
@@ -1127,35 +1128,38 @@ class _CompiledStepBase:
 
     def _group_scalar_names(self, flags: _Flags) -> tuple[str, ...]:
         """Per-group scalars the update reads (keys of :meth:`_group_values`)."""
+        del flags
         return ()
 
     def _param_scalar_names(self, flags: _Flags) -> tuple[str, ...]:
         """Per-parameter scalars the update reads (keys of :meth:`_param_values`)."""
+        del flags
         return ()
 
-    def _group_values(
-        self, group: dict[str, object], flags: _Flags
-    ) -> dict[str, float]:
+    def _group_values(self, group: dict[str, object], flags: _Flags) -> dict[str, float]:
         """This step's numbers for ``group``."""
+        del group, flags
         return {}
 
     def _param_values(
         self, i: int, step: int, gv: dict[str, float], flags: _Flags
     ) -> dict[str, float]:
         """Parameter ``i``'s numbers for its ``step``-th step."""
+        del i, step, gv, flags
         return {}
 
     def _init_state(self, i: int, name: str, group: dict[str, object]) -> Tensor:
         """A fresh state buffer for parameter ``i`` — zeros unless overridden."""
+        del name, group
         return _zeros_like(self._params[i])
 
     def _init_pstate(self, i: int, group: dict[str, object]) -> None:
         """Initialise parameter ``i``'s Python scalar state (first step)."""
-        return None
+        del i, group
 
     def _advance(self, i: int, step: int, gv: dict[str, float]) -> None:
         """Update parameter ``i``'s scalar state after its ``step``-th step."""
-        return None
+        del i, step, gv
 
     def _step_entry(self, i: int) -> object:
         """Parameter ``i``'s ``step`` as the eager checkpoint holds it: 0-d int64."""
@@ -1165,20 +1169,15 @@ class _CompiledStepBase:
 
     def _exports_state(self, i: int, name: str) -> bool:
         """Whether parameter ``i``'s buffer ``name`` goes into a checkpoint."""
+        del i, name
         return True
 
     def _loaded_state(self, i: int, name: str) -> None:
         """Note that a checkpoint wrote parameter ``i``'s buffer ``name``."""
-        return None
+        del i, name
 
     def _update(
-        self,
-        p: Tensor,
-        g: Tensor,
-        state: _State,
-        flags: _Flags,
-        gs: _ScalarFn,
-        ps: _ScalarFn,
+        self, p: Tensor, g: Tensor, state: _State, flags: _Flags, gs: _ScalarFn, ps: _ScalarFn
     ) -> _Update:
         """Emit one parameter's update; returns the new parameter and state."""
         raise NotImplementedError

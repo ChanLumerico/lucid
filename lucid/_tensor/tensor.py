@@ -25,7 +25,7 @@ else:
         """
 
         def __getattr__(self, name: str) -> object:
-            import numpy  # noqa: PLC0415 — bridge import, deferred on purpose
+            import numpy
 
             return getattr(numpy, name)
 
@@ -1766,6 +1766,7 @@ class Tensor:
         >>> arr.shape
         (2, 2)
         """
+        del max_version  # DLPack protocol compatibility; emits unversioned DLManagedTensor
         wants_host = dl_device is not None and dl_device[0] != _DLPACK_METAL
         if self.is_metal and not wants_host:
             # Metal tensors export natively: the capsule points at the
@@ -1786,11 +1787,8 @@ class Tensor:
                 "Tensor.__dlpack__: a Metal tensor cannot be exported to the "
                 "host without a copy; pass copy=None or import it on Metal"
             )
-        return (
-            self.numpy().__dlpack__(stream=stream)
-            if stream is not None
-            else self.numpy().__dlpack__()
-        )
+        arr = self.numpy()
+        return arr.__dlpack__(stream=stream) if stream is not None else arr.__dlpack__()
 
     def __dlpack_device__(self) -> tuple[int, int]:
         r"""Return ``(device_type, device_id)`` per the DLPack specification.
@@ -2840,6 +2838,7 @@ class Tensor:
         >>> x.pin_memory() is x
         True
         """
+        del device  # reference-signature parity; unified memory on Apple Silicon
         return self
 
     def is_pinned(self, device: object = None) -> bool:
@@ -2872,6 +2871,7 @@ class Tensor:
         Unified memory makes the concept moot — all host buffers are
         already DMA-accessible to the GPU without page-locking.
         """
+        del device  # reference-signature parity; unified memory on Apple Silicon
         return False
 
     def reshape_as(self, other: Tensor) -> Tensor:
@@ -4244,17 +4244,17 @@ def _tensor_unpickle(
 
 
 # ── inject dunders and methods after class definition ────────────────────────
-from lucid._tensor._repr import tensor_repr as _tensor_repr  # noqa: E402
-from lucid._tensor._dunders import _inject_dunders  # noqa: E402
-from lucid._tensor._methods import _clamp_inplace, _inject_methods  # noqa: E402
-from lucid._tensor._to import _inject_to, _legacy_type_name, _type_target  # noqa: E402
+from lucid._tensor._repr import tensor_repr as _tensor_repr
+from lucid._tensor._dunders import _inject_dunders
+from lucid._tensor._methods import _clamp_inplace, _inject_methods
+from lucid._tensor._to import _inject_to, _legacy_type_name, _type_target
 
 # ``register_hook`` is annotated ``-> _RemovableHandle``, imported under
 # TYPE_CHECKING to keep the module's import graph acyclic.  PEP 649 then
 # has nothing to resolve it against, so ``inspect.signature`` on that one
 # method raised NameError.  Bound here rather than at the top: by this
 # point the class exists and the import cannot cycle back through it.
-from lucid.autograd._hooks import (  # noqa: E402
+from lucid.autograd._hooks import (
     RemovableHandle as _RemovableHandle,
 )
 

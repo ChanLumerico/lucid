@@ -85,7 +85,7 @@ class _PatchMerge(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        # x: (B, H, W, C)
+        # Input x — (B, H, W, C)
         B, H, W, C = x.shape
         # The reference pads before merging when a side is odd; the strided
         # slices below otherwise drop the last row/column silently (or
@@ -554,12 +554,11 @@ class SwinTransformer(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: SwinConfig) -> None:
         super().__init__(config)
-        pe, stages, norm, fi, out_dim = _build_swin(config)
+        pe, stages, norm, fi, _out_dim = _build_swin(config)
         self.patch_embed = pe
         self.stages = stages
         self.norm = norm
         self._feature_info = fi
-        self._out_dim = out_dim
         self.avgpool = nn.AdaptiveAvgPool2d(1)
 
         # Reference initialisation: trunc_normal_(0.02) on Linear/patch-embed

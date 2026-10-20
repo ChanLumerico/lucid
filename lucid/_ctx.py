@@ -66,9 +66,9 @@ class _RandomnessGuard:
 
     def __exit__(
         self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        tb: TracebackType | None,
+        _exc_type: type[BaseException] | None,
+        _exc_val: BaseException | None,
+        _tb: TracebackType | None,
     ) -> None:
         set_randomness(self._prev)
 

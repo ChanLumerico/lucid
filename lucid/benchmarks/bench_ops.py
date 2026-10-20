@@ -72,7 +72,7 @@ def _run_op_suite(n_elements: int = 10_000_000) -> list[dict[str, object]]:
         if mlx_ns is not None and gpu_ns is not None:
             mlx_r = BenchResult(f"{name}_mlx", mlx_ns)
             r["mlx_mean_us"] = mlx_r.mean_us
-            # Overhead = (lucid_gpu - mlx) / mlx * 100
+            # Overhead (%) — (lucid_gpu - mlx) / mlx * 100
             overhead = (
                 (gpu_r.mean_us - mlx_r.mean_us) / max(mlx_r.mean_us, 0.001) * 100.0
             )

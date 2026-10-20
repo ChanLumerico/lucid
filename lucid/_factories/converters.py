@@ -176,7 +176,7 @@ def _require_numpy(operation: str) -> object:
     correct extra rather than the generic ``ModuleNotFoundError``.
     """
     try:
-        import numpy as np  # noqa: PLC0415 — bridge import
+        import numpy as np
     except ImportError as e:
         raise ImportError(
             f"{operation} requires numpy, but numpy is not installed.\n"

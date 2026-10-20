@@ -14,14 +14,9 @@ from typing import ClassVar, override
 
 from lucid.models._meta import model_family_meta
 from lucid.models.generative._common._config import (
-    WORLD_MODEL_IMAGE_SIZE,
     GenerativeActivation,
     WorldModelConfig,
 )
-
-#: The paper's convolutional schedule only lands on this resolution.  Shared
-#: with Dreamer, which cites the same encoder and decoder.
-PLANET_IMAGE_SIZE = WORLD_MODEL_IMAGE_SIZE
 
 
 @model_family_meta(

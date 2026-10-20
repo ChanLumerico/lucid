@@ -446,7 +446,6 @@ class _VelocityField(nn.Module):
         self._levels = levels
         self._blocks_per_down = config.num_res_blocks
         self._blocks_per_up = config.num_res_blocks + 1
-        self._embedding_type = config.embedding_type
         self._scale_by_sigma = config.scale_by_sigma
         self._progressive = config.progressive
         self._progressive_input = config.progressive_input

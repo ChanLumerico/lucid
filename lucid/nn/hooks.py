@@ -82,7 +82,7 @@ class RemovableHandle:
 
     def __init__(
         self,
-        hooks: dict[int, object],  # noqa: PYI001 — accepts any dict[int, T] for any T
+        hooks: dict[int, object],
         key: int,
         extra_sets: tuple[set[int], ...] = (),
     ) -> None:

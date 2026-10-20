@@ -447,7 +447,7 @@ class CSPNet(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: CSPNetConfig) -> None:
         super().__init__(config)
-        stem, stages, fi, final_chs = _build_trunk(config)
+        stem, stages, fi, _final_chs = _build_trunk(config)
         self.stem = stem
         self.stages = stages
         self._feature_info = fi
@@ -459,7 +459,6 @@ class CSPNet(PretrainedModel, BackboneMixin):
         init_cnn_fan_out(self, linear_std=0.01)
         if config.zero_init_last:
             _zero_init_last(self)
-        self._final_chs = final_chs
 
     @property
     @override

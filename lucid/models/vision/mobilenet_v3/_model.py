@@ -119,7 +119,7 @@ class _InvertedResidual(nn.Module):
 
 # ---------------------------------------------------------------------------
 # Architecture specs
-# (in_ch, exp_ch, out_ch, kernel_size, use_se, use_hs, stride)
+# Tuple layout — (in_ch, exp_ch, out_ch, kernel_size, use_se, use_hs, stride)
 # ---------------------------------------------------------------------------
 
 _LARGE_SPECS: list[tuple[int, int, int, int, bool, bool, int]] = [
@@ -190,7 +190,7 @@ def _build_features(cfg: MobileNetV3Config) -> tuple[nn.Sequential, int, int]:
 
     scaled = _apply_width(specs, w)
     in_ch = stem_ch
-    for spec_in, exp_ch, out_ch, k, se, hs, stride in scaled:
+    for _spec_in, exp_ch, out_ch, k, se, hs, stride in scaled:
         # Clamp first in_ch to stem_ch; subsequent blocks chain naturally
         layers.append(_InvertedResidual(in_ch, exp_ch, out_ch, k, stride, se, hs))
         in_ch = out_ch

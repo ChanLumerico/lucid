@@ -984,7 +984,7 @@ def roi_pool(
 
             # Both the Caffe original and reference_vision treat the rounded end
             # coordinate as *inclusive*:
-            #     roi_width = max(roi_end_w - roi_start_w + 1, 1)
+            #     roi_width := max(roi_end_w - roi_start_w + 1, 1)
             # Python slicing is exclusive, so the window was one column and one
             # row short — a RoI rounding to columns 2..5 pooled 2,3,4 instead of
             # 2,3,4,5.  Add the +1 back when converting to a slice bound.
@@ -1090,7 +1090,7 @@ def multi_scale_deformable_attention(
             )
         )  # (bs*num_heads, head_dim, num_queries, num_points)
 
-    # (bs*num_heads, head_dim, num_queries, num_levels*num_points)
+    # Shape — (bs*num_heads, head_dim, num_queries, num_levels*num_points)
     stacked = lucid.stack(sampled, dim=-2).reshape(
         bs * num_heads, head_dim, num_queries, num_levels * num_points
     )
@@ -2544,11 +2544,6 @@ class _ReferenceAnchorGenerator(nn.Module):
                     ]
                 )
         return lucid.tensor(rows)
-
-    def num_anchors_per_location(self) -> list[int]:
-        return [
-            len(s) * len(r) for s, r in zip(self.sizes, self.aspect_ratios, strict=True)
-        ]
 
     def _grid_anchors(
         self, grid_size: tuple[int, int], stride: int, base: Tensor, device: str

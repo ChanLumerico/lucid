@@ -176,6 +176,7 @@ def _default_load_from_state_dict(
     the parameter / buffer with the checkpoint's dtype and device; otherwise
     the data is copied into the existing tensor, which keeps its own.
     """
+    del strict, unexpected_keys  # _load_from_state_dict hook signature parity
     assign = bool(local_metadata.get("assign_to_params_buffers", False))
     persistent_buffers: dict[str, Tensor] = {
         name: b

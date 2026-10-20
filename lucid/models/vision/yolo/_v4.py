@@ -630,7 +630,7 @@ def _decode_predictions(
     col_t = lucid.tensor(col_data, device=device)
     row_t = lucid.tensor(row_data, device=device)
 
-    # bx = scale * sigmoid(tx) - 0.5 * (scale - 1) + cx
+    # bx — scale * sigmoid(tx) - 0.5 * (scale - 1) + cx
     scale = _SCALE_X_Y.get(stride, 1.0)
     bias = 0.5 * (scale - 1.0)
     px = (scale * F.sigmoid(tx) - bias + col_t) * float(stride)

@@ -3222,5 +3222,5 @@ def build_package(
 # for them, so a name that exists under ``TYPE_CHECKING`` alone makes
 # ``inspect.signature`` raise NameError — which is what help(), an IDE
 # and the docs build all call.
-from lucid._tensor.tensor import Tensor  # noqa: E402,F811
-from lucid.nn.module import Module  # noqa: E402,F811
+from lucid._tensor.tensor import Tensor
+from lucid.nn.module import Module

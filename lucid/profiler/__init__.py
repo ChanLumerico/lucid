@@ -315,6 +315,8 @@ class Profiler:
 
     def memory_stats(self) -> MemoryStats | None:
         """Return memory stats if available."""
+        if not self._with_memory:
+            return None
         return MemoryStats(_C_engine.memory_stats(_C_engine.Device.CPU))
 
     def export_chrome_trace(self, path: str) -> None:
@@ -390,6 +392,7 @@ def profile(
     >>> sorted((row.name, row.count, row.total_flops) for row in prof.key_averages())
     [('matmul', 1, 4194304), ('randn', 2, 0)]
     """
+    del activities  # reference-signature parity
     prof = Profiler(with_memory=with_memory)
     with prof:
         yield prof
@@ -429,6 +432,7 @@ def record_function(name: str) -> Iterator[None]:
     """
     # If a profiler is active, we can't easily inject named regions without
     # engine support. This is a best-effort no-op that preserves the API.
+    del name
     yield
 
 

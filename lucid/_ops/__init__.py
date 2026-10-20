@@ -72,7 +72,7 @@ if TYPE_CHECKING:
 
 
 # Matches the first line of a pybind11 docstring:
-#   "name(param: Type [= default], ...) -> ReturnType"
+#   e.g. name(param: Type [= default], ...) -> ReturnType
 # We don't need to parse types — only param names + defaults — because the
 # wrapper forwards everything verbatim.
 _PYBIND_SIG_RE = re.compile(r"^[a-zA-Z_][\w]*\((?P<params>.*)\)\s*->", re.DOTALL)
@@ -372,4 +372,4 @@ _populate_free_fns()
 # for them, so a name that exists under ``TYPE_CHECKING`` alone makes
 # ``inspect.signature`` raise NameError — which is what help(), an IDE
 # and the docs build all call.
-from lucid._tensor.tensor import Tensor  # noqa: E402,F811
+from lucid._tensor.tensor import Tensor

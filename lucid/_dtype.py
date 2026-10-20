@@ -228,7 +228,7 @@ def _resolve_dtype_name(
     # Engine Dtype enum — best-effort reverse lookup (loses bfloat16/float16
     # distinction; both report ``float16``).
     if isinstance(d, _C_engine.Dtype):
-        for nm, lucid_dt in _NAME_TO_DTYPE.items():
+        for lucid_dt in _NAME_TO_DTYPE.values():
             if lucid_dt._engine == d:
                 return lucid_dt._name
     raise TypeError(f"Cannot resolve dtype name for {type(d).__name__}: {d!r}")

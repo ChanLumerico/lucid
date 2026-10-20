@@ -9,13 +9,9 @@ and the mapping from Lucid's own dtypes.
 
 import dataclasses
 import enum
-from typing import TYPE_CHECKING
 
 import lucid
 from lucid._C import engine as _C_engine
-
-if TYPE_CHECKING:
-    from lucid._tensor.tensor import Tensor
 
 __all__ = [
     "Classifier",
@@ -785,39 +781,6 @@ def mil_dtype(dtype: object) -> int:
     return entry[0]
 
 
-def blob_dtype(dtype: object) -> int:
-    """Blob-file element type for a Lucid dtype.
-
-    Not the same numbering as :func:`mil_dtype`: the weight blob calls
-    float32 ``2`` while the program calls it ``11``. Both are carried
-    explicitly rather than derived from one another.
-
-    Parameters
-    ----------
-    dtype : lucid dtype
-        Element type to translate.
-
-    Returns
-    -------
-    int
-        Blob-format dtype code.
-
-    Raises
-    ------
-    TypeError
-        No Core ML storage exists for this dtype.
-    """
-    entry = _DTYPES.get(dtype)
-    if entry is None:
-        raise TypeError(
-            f"lucid.coreml: dtype {dtype} cannot be stored in a Core ML weight blob"
-        )
-    return entry[1]
-
-
-# MIL spells the cast target as a string, not the numeric dtype.
-CAST_NAMES = {FLOAT32: "fp32", _C_engine.coreml.DTYPE_FLOAT16: "fp16"}
-
 FLOAT16: int = _C_engine.coreml.DTYPE_FLOAT16
 BLOB_FLOAT16: int = _C_engine.coreml.BLOB_FLOAT16
 BLOB_FLOAT32: int = _C_engine.coreml.BLOB_FLOAT32
@@ -878,19 +841,3 @@ def trace_dtype(name: str, body_mil: int) -> int:
     if name == "Bool":
         return BOOL
     raise TypeError(f"lucid.coreml: no Core ML element type for a {name} intermediate")
-
-
-def type_spec(tensor: Tensor) -> tuple[int, list[int]]:
-    """Describe a tensor the way the engine binding expects.
-
-    Parameters
-    ----------
-    tensor : Tensor
-        Tensor whose type and shape describe a MIL value.
-
-    Returns
-    -------
-    tuple[int, list[int]]
-        ``(MIL dtype, shape)``. An empty shape means a scalar.
-    """
-    return (mil_dtype(tensor.dtype), [int(d) for d in tensor.shape])

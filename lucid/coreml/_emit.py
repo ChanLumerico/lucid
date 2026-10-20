@@ -269,7 +269,7 @@ _INTEGER_BOUNDS = {"relu": (0, None), "relu6": (0, 6)}
 def _register_unary(lucid_name: str, mil_name: str) -> None:
     """Bind one Lucid unary op to the MIL op of the same meaning."""
 
-    def emit(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    def emit(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
         bounds = _INTEGER_BOUNDS.get(lucid_name)
         if bounds is not None and b.dtype_of(ins[0]) == _MIL_INT32:
             return _integer_clip(b, ins[0], *bounds)
@@ -291,7 +291,7 @@ _EPSILON_UNARY = {"log": "log", "rsqrt": "rsqrt", "reciprocal": "inverse"}
 def _register_epsilon_unary(lucid_name: str, mil_name: str) -> None:
     """Bind a MIL unary that insists on an epsilon Lucid does not have."""
 
-    def emit(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+    def emit(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
         return mil_name, [("x", ins[0]), ("epsilon", b.const_float(0.0))]
 
     EMITTERS[lucid_name] = emit
@@ -302,7 +302,7 @@ for _lucid_name, _mil_name in _EPSILON_UNARY.items():
 
 
 @_emitter("neg")
-def _neg(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _neg(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     # MIL has no negation op; multiplying by -1 is the whole of it.
     return "mul", [("x", ins[0]), ("y", scalar_like(b, ins[0], -1))]
 
@@ -318,7 +318,7 @@ def _integer_clip(b: Builder, value: str, low: int, high: int | None) -> EmitRes
 
 
 @_emitter("log2")
-def _log2(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _log2(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """``log2(x)`` as ``log(x) * 1/ln 2`` — MIL carries no base-2 log."""
     natural = b.emit(
         "log",
@@ -500,7 +500,7 @@ def _reshape(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("dropout")
-def _dropout(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _dropout(_b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     # An exported graph is an inference graph.  Lucid still records the op
     # under ``eval()``; a training-mode one is refused rather than
     # silently turned into an identity the caller did not ask for.
@@ -534,7 +534,7 @@ def _concatenate(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("gelu_exact")
-def _gelu_exact(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _gelu_exact(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     # Lucid's exact GELU is the erf form, which MIL calls EXACT; MIL's
     # default is the tanh approximation, a different function.
     return "gelu", [("x", ins[0]), ("mode", b.const_str("EXACT"))]
@@ -592,7 +592,7 @@ def _argmin(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 @_emitter("rand")
 @_emitter("randn")
-def _randn(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _randn(_b: Builder, op: TracedOp, _ins: list[str]) -> EmitResult:
     """Refused, with the reason measured rather than assumed.
 
     A model that samples inside ``forward`` — a variational encoder
@@ -669,7 +669,7 @@ def _cumsum(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("matmul")
-def _matmul(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _matmul(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     return "matmul", [
         ("x", ins[0]),
         ("y", ins[1]),
@@ -869,17 +869,17 @@ def _filled(b: Builder, op: TracedOp, value: float) -> Constant | EmitResult:
 
 
 @_emitter("zeros")
-def _zeros(b: Builder, op: TracedOp, ins: list[str]) -> Constant | EmitResult:
+def _zeros(b: Builder, op: TracedOp, _ins: list[str]) -> Constant | EmitResult:
     return _filled(b, op, 0.0)
 
 
 @_emitter("full")
-def _full(b: Builder, op: TracedOp, ins: list[str]) -> Constant | EmitResult:
+def _full(b: Builder, op: TracedOp, _ins: list[str]) -> Constant | EmitResult:
     return _filled(b, op, _as_float(_attr(op, "fill_value")))
 
 
 @_emitter("arange")
-def _arange(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
+def _arange(b: Builder, op: TracedOp, _ins: list[str]) -> Constant:
     """The traced sequence, as a constant of the type the trace gave it.
 
     ``const_from_tensor`` writes the body's float type, which was only
@@ -920,7 +920,7 @@ def _arange(b: Builder, op: TracedOp, ins: list[str]) -> Constant:
 
 
 @_emitter("embedding")
-def _embedding(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _embedding(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """A row lookup, which MIL spells ``gather`` along the table's first axis.
 
     ``padding_idx`` is not honoured here: it only matters to the backward
@@ -945,7 +945,7 @@ def _embedding(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("contiguous")
-def _contiguous(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
+def _contiguous(_b: Builder, _op: TracedOp, ins: list[str]) -> Bound:
     """Nothing, because a MIL value has no layout to make contiguous.
 
     Lucid's ``contiguous`` copies a strided tensor into packed storage.
@@ -963,7 +963,7 @@ def _contiguous(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
 
 
 @_emitter("detach")
-def _detach(b: Builder, op: TracedOp, ins: list[str]) -> Bound:
+def _detach(_b: Builder, _op: TracedOp, ins: list[str]) -> Bound:
     """The value itself: an exported graph has no gradient to stop.
 
     ``detach`` is traced (a straight-through estimator's ``x + (q - x).detach()``
@@ -1013,7 +1013,7 @@ def _reduce(b: Builder, op: TracedOp, ins: list[str], mil_type: str) -> EmitResu
 
 
 @_emitter("gelu")
-def _gelu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _gelu(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     # Lucid's plain ``gelu`` is the tanh approximation; ``gelu_exact`` is
     # the erf form and maps to MIL's EXACT mode.
     return "gelu", [("x", ins[0]), ("mode", b.const_str("TANH_APPROXIMATION"))]
@@ -1263,7 +1263,7 @@ def _elu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("selu")
-def _selu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _selu(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """MIL's ``elu`` scaled — there is no ``selu`` in the opset."""
     shaped = b.emit(
         "elu",
@@ -1274,12 +1274,12 @@ def _selu(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("softplus")
-def _softplus(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _softplus(_b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     return "softplus", [("x", ins[0])]
 
 
 @_emitter("mish")
-def _mish(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _mish(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """``x * tanh(softplus(x))`` — there is no ``mish`` in the opset."""
     shape = b.shape_of(ins[0])
     softened = b.emit("softplus", [("x", ins[0])], shape)
@@ -1325,7 +1325,7 @@ def _clip(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("ones")
-def _ones(b: Builder, op: TracedOp, ins: list[str]) -> Constant | EmitResult:
+def _ones(b: Builder, op: TracedOp, _ins: list[str]) -> Constant | EmitResult:
     return _filled(b, op, 1.0)
 
 
@@ -1361,13 +1361,13 @@ def _reduce_every_axis(b: Builder, value: str, mil_name: str) -> EmitResult:
 
 
 @_emitter("isnan")
-def _isnan(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _isnan(_b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """NaN is the one value unequal to itself."""
     return "not_equal", [("x", ins[0]), ("y", ins[0])]
 
 
 @_emitter("isinf")
-def _isinf(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _isinf(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     magnitude = b.emit("abs", [("x", ins[0])], b.shape_of(ins[0]))
     return "equal", [("x", magnitude), ("y", b.const_float(math.inf))]
 
@@ -1394,12 +1394,12 @@ def _truth_reduce(b: Builder, ins: list[str], mil_name: str) -> EmitResult:
 
 
 @_emitter("all")
-def _all(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _all(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     return _truth_reduce(b, ins, "reduce_min")
 
 
 @_emitter("any")
-def _any(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _any(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     return _truth_reduce(b, ins, "reduce_max")
 
 
@@ -1447,7 +1447,7 @@ def _dot_product(b: Builder, left: str, right: str) -> EmitResult:
 
 
 @_emitter("dot")
-def _dot(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _dot(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     return _dot_product(b, ins[0], ins[1])
 
 
@@ -1483,7 +1483,7 @@ def _inner(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("outer")
-def _outer(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _outer(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     n, m = b.shape_of(ins[0])[0], b.shape_of(ins[1])[0]
     column = _as_matrix(b, ins[0], n, 1)
     row = _as_matrix(b, ins[1], 1, m)
@@ -1566,7 +1566,7 @@ def _huber_loss(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("trace")
-def _trace(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _trace(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """The diagonal read from the flattened matrix, every ``cols + 1``-th value."""
     rows, cols = b.shape_of(ins[0])
     flat = b.emit(
@@ -1734,7 +1734,7 @@ def _masked_fill(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("isfinite")
-def _isfinite(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _isfinite(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """``x - x == 0`` — MIL has no ``isfinite``.
 
     Infinity minus itself is NaN and NaN compares false, so the one
@@ -1746,7 +1746,7 @@ def _isfinite(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("trunc")
-def _trunc(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _trunc(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """``floor`` where ``x >= 0``, ``ceil`` elsewhere — MIL has no ``trunc``.
 
     The engine computes it the same way, so ``-0.0`` keeps its sign here too.
@@ -1791,7 +1791,7 @@ def _nan_to_num(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     return "select", [("cond", is_neg), ("a", neginf), ("b", replaced)]
 
 
-def _refuse_non_boolean(b: Builder, op: TracedOp, ins: list[str], symbol: str) -> None:
+def _refuse_non_boolean(b: Builder, op: TracedOp, _ins: list[str], symbol: str) -> None:
     """Stop before writing a logical operation over integers.
 
     ``&`` on two integers combines their bit patterns; ``logical_and``
@@ -1941,12 +1941,12 @@ def _repeat(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("invert")
-def _invert(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _invert(_b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     return "logical_not", [("x", ins[0])]
 
 
 @_emitter("hard_sigmoid")
-def _hard_sigmoid(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _hard_sigmoid(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """``clip((x + 3) / 6, 0, 1)``, which MIL parameterises as alpha and beta."""
     return "sigmoid_hard", [
         ("x", ins[0]),
@@ -1956,7 +1956,7 @@ def _hard_sigmoid(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("hard_swish")
-def _hard_swish(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _hard_swish(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """``x * hard_sigmoid(x)`` — there is no ``hard_swish`` in the opset."""
     gate = b.emit(
         "sigmoid_hard",
@@ -2103,7 +2103,7 @@ def _affine_grid(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
 
 
 @_emitter("bilinear_layer")
-def _bilinear_layer(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _bilinear_layer(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """``y[n,o] = x1[n,i] W[o,i,j] x2[n,j]``, as a matmul and a reduction.
 
     MIL has no bilinear form. Contracting ``j`` first leaves an ordinary
@@ -2395,7 +2395,7 @@ def _horner(
 
 
 @_emitter("erfinv")
-def _erfinv(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
+def _erfinv(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
     """The inverse error function, which MIL does not have.
 
     An approximation, and said so: Giles' single-precision rational form,

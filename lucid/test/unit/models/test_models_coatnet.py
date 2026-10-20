@@ -225,6 +225,8 @@ class TestCoAtNetMixedS3Variants(unittest.TestCase):
         m.eval()
         out = m(lucid.randn(1, 3, 224, 224))
         self.assertEqual(out.logits.shape, (1, 1000))
+        out_resized = m(lucid.randn(1, 3, 160, 160))
+        self.assertEqual(out_resized.logits.shape, (1, 1000))
 
 
 if __name__ == "__main__":

@@ -50,7 +50,7 @@ def _install_mask(module: Module, name: str, mask: Tensor) -> Module:
     module.register_parameter(name + "_orig", Parameter(weight.detach()))
     module.register_buffer(name + "_mask", mask)
 
-    def _pre_hook(mod: Module, inputs: object) -> None:  # noqa: ANN401
+    def _pre_hook(mod: Module, _inputs: object) -> None:
         w: Parameter = getattr(mod, name + "_orig")
         m: Tensor = getattr(mod, name + "_mask")
         object.__setattr__(mod, name, w * m)

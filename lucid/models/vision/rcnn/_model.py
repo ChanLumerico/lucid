@@ -523,8 +523,8 @@ class RCNNForObjectDetection(ObjectDetectionModel):
 
             # 3. FC head → class logits + bbox deltas
             logits_i, deltas_i = self.fc_head(feats)
-            # logits_i : (N_i, num_classes + 1)
-            # deltas_i : (N_i, num_classes * 4)
+            # logits_i — (N_i, num_classes + 1)
+            # deltas_i — (N_i, num_classes * 4)
 
             # 4. Decode one box per class (class-specific regression)
             boxes_i = self._decode_all_class_boxes(props, deltas_i, (H, W))

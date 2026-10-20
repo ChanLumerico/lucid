@@ -163,7 +163,7 @@ def spectral_norm(
     module.register_buffer(name + "_u", u_init)
     module.register_buffer(name + "_v", v_init)
 
-    def _pre_hook(mod: Module, inputs: object) -> None:  # noqa: ANN401
+    def _pre_hook(mod: Module, _inputs: object) -> None:
         w_orig: Parameter = getattr(mod, name + "_orig")
         u: Tensor = getattr(mod, name + "_u")
         v: Tensor = getattr(mod, name + "_v")

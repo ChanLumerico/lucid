@@ -181,4 +181,4 @@ __all__ = ["result_type", "promote_types", "can_cast"]
 # ``inspect.signature`` raise NameError — which is what help(), an IDE
 # and the docs build all call. Imported at the bottom because this
 # module is inside the cycle ``Tensor`` closes.
-from lucid._tensor.tensor import Tensor  # noqa: E402,F811
+from lucid._tensor.tensor import Tensor

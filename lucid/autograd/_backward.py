@@ -543,8 +543,7 @@ def grad(
     tuple[Tensor or None, ...]
         One gradient per element of ``inputs``, in the same order.
         Entries are ``None`` only when ``allow_unused=True`` (and
-        ``materialize_grads=False``) and the input is disconnected from
-        ``outputs``.
+        ``materialize_grads=False``) and the input is disconnected.
 
     Raises
     ------
@@ -572,8 +571,8 @@ def grad(
     via one reverse-mode pass.  Unlike :meth:`Tensor.backward`, it does
     NOT accumulate into ``.grad`` — leaf tensors' existing ``.grad``
     values are preserved across the call.  For chained gradient
-    computations (Hessian-vector products, MAML inner loops, etc.) this
-    is the right primitive.
+    computations (Hessian-vector products, MAML inner loops) this is the
+    right primitive.
 
     Examples
     --------
@@ -601,6 +600,7 @@ def grad(
     >>> gg
     tensor([6., 12., 18.])
     """
+    del only_inputs  # reference-signature parity; grad never populates leaf .grad
     if allow_unused is False and materialize_grads:
         raise ValueError(
             "Expected allow_unused to be True or not passed when "

@@ -325,6 +325,7 @@ def get_total_norm(
     >>> float(g_norm) > 0.0
     True
     """
+    del foreach  # reference-signature parity
     items: list[Tensor | None] = (
         [cast("Tensor", tensors)] if _promotion.try_unwrap(tensors) is not None else list(tensors)
     )

@@ -155,14 +155,6 @@ class SentencePiecePreTokenizer(PreTokenizer):
 # ── Vocab format helpers ───────────────────────────────────────────
 
 
-def _load_unigram_pieces_json(path: str) -> list[tuple[str, float]]:
-    """Parse a HF unified ``tokenizer.json`` for the Unigram
-    ``model.vocab`` block.  Returns ``[(piece, log_prob), ...]``."""
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-    return _pieces_from_model(data.get("model", {}), path)
-
-
 def _pieces_from_model(model: dict[str, object], path: str) -> list[tuple[str, float]]:
     """Read ``[(piece, log_prob), ...]`` out of a parsed ``model`` block."""
     vocab = model.get("vocab", [])

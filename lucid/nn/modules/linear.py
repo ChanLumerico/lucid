@@ -233,6 +233,7 @@ class Identity(Module):
         special case at the call site.  It raised on any argument before.
         """
         super().__init__()
+        del args, kwargs
 
     @override
     def forward(self, input: Tensor) -> Tensor:

@@ -998,7 +998,7 @@ class MaskFormerForSemanticSegmentation(SemanticSegmentationModel):
 
         # 5. Semantic post-processing (reference-exact):
         #    masks_classes = softmax(class)[..., :-1]   (drop no-object)
-        #    masks_probs   = sigmoid(mask)
+        #    masks_probs   — sigmoid(mask)
         #    seg = einsum("bqc,bqhw->bchw")             (at feature resolution)
         K_plus_1 = self._cfg.num_classes + 1
         class_probs: Tensor = F.softmax(class_logits, dim=-1)  # (B, N, K+1)

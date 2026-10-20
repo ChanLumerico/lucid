@@ -538,7 +538,7 @@ class InceptionV3(PretrainedModel, BackboneMixin):
         self.inception_c2 = _InceptionC(768, channels_7x7=160)
         self.inception_c3 = _InceptionC(768, channels_7x7=192)
 
-        # Reduction-B (InceptionD)
+        # Reduction-B — InceptionD
         self.reduction_b = _InceptionD(768)
 
         # InceptionE × 2

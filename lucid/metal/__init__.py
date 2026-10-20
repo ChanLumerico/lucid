@@ -207,7 +207,7 @@ class MetalStream:
 
     def __init__(self, priority: int = 0) -> None:
         """Initialise the instance.  See the class docstring for parameter semantics."""
-        self._priority = priority
+        del priority  # reference-signature parity; MLX uses a single default stream
 
     def __enter__(self) -> MetalStream:
         """Enter the context.  Returns self so the value can be bound via ``with ... as``."""

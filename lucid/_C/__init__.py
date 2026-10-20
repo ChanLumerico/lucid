@@ -69,7 +69,7 @@ if _floor_error is not None:
     raise ImportError(_floor_error)
 
 try:
-    from lucid._C import engine as _C_engine  # noqa: F401
+    from lucid._C import engine as _C_engine
 except ImportError as exc:
     _hint = _engine_load_hint(str(exc))
     if _hint is None:

@@ -389,7 +389,6 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("EmitResult", "lucid.coreml._emit", "EmitResult"),
         ("TracedOp", "lucid.coreml._emit", "TracedOp"),
     ),
-    "lucid.coreml._spec": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.fft": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.func": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.metal": (("lucid", "lucid", None),),

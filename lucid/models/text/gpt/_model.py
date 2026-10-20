@@ -675,7 +675,7 @@ class _GPTMultipleChoiceHead(nn.Module):
 
     @override
     def forward(self, hidden_states: Tensor, mc_token_ids: Tensor) -> Tensor:
-        # hidden_states: (N, C, L, H); mc_token_ids: (N, C)
+        # Shapes — hidden_states (N, C, L, H), mc_token_ids (N, C)
         N, C = int(hidden_states.shape[0]), int(hidden_states.shape[1])
         pooled = token_at(hidden_states, mc_token_ids)  # (N, C, H)
         pooled = self.dropout(pooled)

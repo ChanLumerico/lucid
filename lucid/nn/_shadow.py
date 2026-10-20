@@ -165,6 +165,7 @@ class _PhantomMethod:
         self._impl = impl
 
     def __call__(self, *args: Any, **kwargs: Any) -> PhantomImpl:
+        del args, kwargs
         return self._impl
 
 

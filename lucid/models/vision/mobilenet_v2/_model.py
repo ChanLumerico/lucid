@@ -75,7 +75,7 @@ class _InvertedResidual(nn.Module):
 # Architecture spec  (t=expand_ratio, c=out_ch, n=repeat, s=stride)
 # ---------------------------------------------------------------------------
 
-# (expand_ratio, out_channels, repeat, stride)
+# Tuple layout — (expand_ratio, out_channels, repeat, stride)
 _INVERTED_RESIDUAL_SETTINGS: list[tuple[int, int, int, int]] = [
     (1, 16, 1, 1),
     (6, 24, 2, 2),

@@ -325,9 +325,6 @@ class _EfficientNetBackbone(nn.Module):
         self.stage4 = _make_mbconv_stage(c3, c4, n=d(3), stride=1, expand=6, k=5)
         self.stage5 = _make_mbconv_stage(c4, c5, n=d(4), stride=2, expand=6, k=5)
         self.stage6 = _make_mbconv_stage(c5, c6, n=d(1), stride=1, expand=6, k=3)
-        self.p3_channels: int = c2
-        self.p4_channels: int = c4
-        self.p5_channels: int = c6
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor, Tensor]:
@@ -772,9 +769,7 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
         # 9. Loss
         loss: Tensor | None = None
         if targets is not None:
-            loss = self._compute_loss(
-                all_logits, all_deltas, all_anchors, all_boxes, targets, (iH, iW)
-            )
+            loss = self._compute_loss(all_logits, all_deltas, all_anchors, targets)
 
         return ObjectDetectionOutput(
             logits=all_logits,
@@ -791,9 +786,7 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
         all_logits: Tensor,  # (B, A, K)
         all_deltas: Tensor,  # (B, A, 4)
         all_anchors: Tensor,  # (A, 4)
-        all_boxes: Tensor,  # (B, A, 4)
         targets: list[dict[str, Tensor]],
-        image_size: tuple[int, int],
     ) -> Tensor:
         B = len(targets)
         K = self._cfg.num_classes

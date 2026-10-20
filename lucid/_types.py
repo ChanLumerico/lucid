@@ -28,7 +28,6 @@ from typing import (
     Literal,
     Protocol,
     TYPE_CHECKING,
-    TypedDict,
     runtime_checkable,
 )
 
@@ -183,29 +182,6 @@ class TensorLikeProtocol(HasShape, SupportsNumpyConversion, Protocol):
     def to(self, *args: object, **kwargs: object) -> TensorLikeProtocol:
         """Return a (possibly converted) version of this object on a new device/dtype."""
         ...
-
-
-# ── TypedDict: optimizer parameter group ─────────────────────────────────────
-
-
-class ParamGroupDict(TypedDict, total=False):
-    """TypedDict for optimizer parameter groups.
-
-    ``params`` is the only required key; all other fields are optimizer-specific.
-    """
-
-    params: list[object]  # list[Parameter] at runtime
-    lr: float
-    weight_decay: float
-    momentum: float
-    dampening: float
-    betas: tuple[float, float]
-    eps: float
-    amsgrad: bool
-    nesterov: bool
-    maximize: bool
-    foreach: bool | None
-    fused: bool | None
 
 
 # ── Public type aliases (Tensor-dependent — PEP 695 lazy values) ─────────────

@@ -138,7 +138,7 @@ class _SplitAttn(nn.Module):
         r = self._radix
 
         if r > 1:
-            # (B, radix, C, H, W)
+            # Shape — (B, radix, C, H, W)
             x = x.reshape(b, r, rc // r, h, w)
             x_gap = x.sum(dim=1)  # (B, C, H, W)
         else:

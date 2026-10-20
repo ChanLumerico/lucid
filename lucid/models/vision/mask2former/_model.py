@@ -208,7 +208,7 @@ class _SwinAttention(nn.Module):
 
     @override
     def forward(self, x: Tensor, attn_mask: Tensor | None = None) -> Tensor:
-        # x: (num_windows*B, ws*ws, C)
+        # Input x — (num_windows*B, ws*ws, C)
         nw = int(x.shape[0])
         seq = int(x.shape[1])
         q: Tensor = (
@@ -695,7 +695,7 @@ class _DeformableAttention(nn.Module):
         norm_t: Tensor = lucid.tensor(
             normalizer, dtype=lucid.float32, device=hs.device
         )  # (n_levels, 2)
-        # sampling_locations: ref[:, :, None, :, None, :] + offsets / norm[None,None,None,:,None,:]
+        # sampling_locations — ref[:, :, None, :, None, :] + offsets / norm[None,None,None,:,None,:]
         ref_exp: Tensor = reference_points[:, :, None, :, None, :]
         norm_exp: Tensor = norm_t[None, None, None, :, None, :]
         sampling_locations: Tensor = ref_exp + offsets / norm_exp
@@ -1120,7 +1120,7 @@ class _MaskPredictor(nn.Module):
         pixel_embeddings: Tensor,  # (B, C, H, W)
         target_size: tuple[int, int],
     ) -> tuple[Tensor, Tensor]:
-        # mask_embeddings: (B, N, C)
+        # mask_embeddings — (B, N, C)
         mask_embeddings: Tensor = self.mask_embedder(outputs.permute(1, 0, 2))
         b = int(pixel_embeddings.shape[0])
         c = int(pixel_embeddings.shape[1])
@@ -1530,8 +1530,8 @@ class Mask2FormerForSemanticSegmentation(SemanticSegmentationModel):
         # 4. Semantic post-processing:
         #    masks_queries_logits are bilinearly upsampled FIRST, then
         #      masks_classes = softmax(class)[..., :-1]   (drop no-object)
-        #      masks_probs   = sigmoid(mask)
-        #      seg = einsum("bqc,bqhw->bchw")
+        #      masks_probs   — sigmoid(mask)
+        #      seg           — einsum("bqc,bqhw->bchw")
         #    The ordering (upsample → sigmoid → combine) is the reference's.
         #    Divergence, deliberate: the reference upsamples to a hard-coded
         #    384x384 — the size its own preprocessor resizes every image to —

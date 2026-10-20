@@ -191,7 +191,7 @@ def register_parametrization(
     # container's ``original`` is the new trainable Parameter.
     del module._parameters[tensor_name]
 
-    def _pre_hook(mod: Module, inputs: object) -> None:  # noqa: ANN401
+    def _pre_hook(mod: Module, _inputs: object) -> None:
         cont: ParametrizationContainer = getattr(mod, _PARAM_HOOK_ATTR)[tensor_name]
         object.__setattr__(mod, tensor_name, cont())
 

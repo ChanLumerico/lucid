@@ -332,3 +332,21 @@ def test_a_module_without_forward_says_so():
 
     with pytest.raises(NotImplementedError):
         Bare()(_x())
+
+
+def test_to_empty_honours_recurse_false():
+    target_dev = "metal" if lucid.metal.is_available() else "cpu"
+
+    class Parent(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.root_param = nn.Parameter(lucid.ones(2))
+            self.child = nn.Linear(2, 2)
+
+    m = Parent()
+    assert m.to_empty(device=target_dev, recurse=False) is m
+    assert m.root_param.device.type == target_dev
+    if target_dev == "metal":
+        assert m.child.weight.device.type == "cpu"
+    assert m.to_empty(device=target_dev, recurse=True) is m
+    assert m.child.weight.device.type == target_dev

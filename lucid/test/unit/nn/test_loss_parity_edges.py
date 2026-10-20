@@ -1156,3 +1156,16 @@ class TestLossesUnderAutocast:
         assert math.isfinite(loss.item())
         assert z.grad is not None
         assert all(math.isfinite(v) for v in _vals(z.grad))  # type: ignore[union-attr]
+
+
+def test_kl_div_honours_deprecated_size_average(device: str) -> None:
+    log_q = F.log_softmax(lucid.tensor([[2.0, 0.5, 0.1]], device=device), dim=1)
+    p = lucid.tensor([[0.8, 0.15, 0.05]], device=device)
+    assert _close(
+        F.kl_div(log_q, p, size_average=False).item(),
+        F.kl_div(log_q, p, reduction="sum").item(),
+    )
+    assert _close(
+        F.kl_div(log_q, p, size_average=True, reduction="sum").item(),
+        F.kl_div(log_q, p, reduction="mean").item(),
+    )

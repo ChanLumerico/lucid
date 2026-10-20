@@ -482,13 +482,6 @@ def _wrap(impl: _C_engine.TensorImpl) -> Tensor:
     return Tensor.__new_from_impl__(impl)
 
 
-def _wrap_or_none(
-    impl: _C_engine.TensorImpl | None,
-) -> Tensor | None:
-    """Wrap TensorImpl in Tensor, or return None."""
-    return _wrap(impl) if impl is not None else None
-
-
 def normalize_factory_kwargs(
     dt: dtype | type[dtype] | _C_engine.Dtype | str | None = None,
     dev: device | _C_engine.Device | str | None = None,

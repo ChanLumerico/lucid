@@ -79,7 +79,7 @@ _CFG_CSPDARKNET_53 = CSPNetConfig(
 
 
 # ---------------------------------------------------------------------------
-# Backbones (task="base")
+# Backbones — task="base"
 # ---------------------------------------------------------------------------
 
 
@@ -211,7 +211,7 @@ def cspdarknet_53(pretrained: bool = False, **overrides: object) -> CSPNet:
 
 
 # ---------------------------------------------------------------------------
-# Classifiers (task="image-classification")
+# Classifiers — task="image-classification"
 # ---------------------------------------------------------------------------
 
 

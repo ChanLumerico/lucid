@@ -1033,19 +1033,15 @@ def kl_div(
         or its log when ``log_target=True``.  Same shape as ``input``, or
         one that broadcasts with it (another raises ``ValueError``).
     size_average : bool or None, optional
-        Deprecated.  Retained for signature compatibility; ignored
-        — use ``reduction`` instead.
+        Deprecated; overrides ``reduction`` to ``"mean"`` or ``"sum"``.
     reduction : str, optional
-        ``"none"``, ``"mean"``, ``"sum"``, or ``"batchmean"``
-        (default ``"mean"``).  ``"batchmean"`` divides the summed
-        loss by the leading (batch) dimension and is the *only*
-        reduction that yields the mathematically correct KL value
-        in expectation; a 0-d input has no batch dimension, and its
-        ``"batchmean"`` is the sum.
+        ``"none"``, ``"mean"``, ``"sum"``, or ``"batchmean"`` (default
+        ``"mean"``). ``"batchmean"`` divides the summed loss by the
+        leading (batch) dimension (or the sum for a 0-d input) and is
+        the only reduction that yields the mathematically correct KL
+        value in expectation.
     log_target : bool, optional
-        When ``True``, treat ``target`` as already-logged
-        (:math:`\log p`).  This often avoids a redundant
-        :math:`\log` / :math:`\exp` round-trip.
+        When ``True``, treat ``target`` as already-logged (:math:`\log p`).
 
     Returns
     -------
@@ -1081,6 +1077,8 @@ def kl_div(
     >>> kl_div(log_q, p, reduction="batchmean")
     tensor(0.02391)
     """
+    if size_average is not None:
+        reduction = "mean" if size_average else "sum"
     _check_reduction(reduction, "kl_div", batchmean=True)
     x, target = _operands("kl_div", input, target)
     _check_target(x, target, "kl_div")
@@ -1595,10 +1593,10 @@ def poisson_nll_loss(
     xi = _unwrap(x)
     ti = _unwrap(target)
     if log_input:
-        # loss = exp(x) - target * x
+        # Formula — exp(x) - target * x
         loss = _C_engine.sub(_C_engine.exp(xi), _C_engine.mul(ti, xi))
     else:
-        # loss = x - target * log(x + eps)
+        # Formula — x - target * log(x + eps)
         log_xeps = _C_engine.log(
             _C_engine.add(xi, _C_engine.full(xi.shape, eps, xi.dtype, xi.device))
         )

@@ -389,7 +389,7 @@ class _SE(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        # x: (B, C, H, W)
+        # Input x — (B, C, H, W)
         s = F.adaptive_avg_pool2d(x, (1, 1))
         s = F.silu(self.fc1(s))
         s = F.sigmoid(self.fc2(s))
@@ -556,7 +556,7 @@ class _MaxViTBlock(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        # x: (B, C_in, H, W)
+        # Input x — (B, C_in, H, W)
         ws = self.ws
 
         # 1. MBConv (NCHW)
@@ -826,7 +826,7 @@ class MaxViT(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: MaxViTConfig) -> None:
         super().__init__(config)
-        stem, stages, fi, out_dim = _build_maxvit(config)
+        stem, stages, fi, _out_dim = _build_maxvit(config)
         self.stem = stem
         self.stages = stages
         self._feature_info = fi
@@ -836,7 +836,6 @@ class MaxViT(PretrainedModel, BackboneMixin):
         # class token and positional table (bare Parameters the framework
         # default never touches — they were sitting at exact zeros).
         init_transformer_trunc_normal(self)
-        self._out_dim = out_dim
         # No classifier here: this is the ``BackboneMixin`` half, and neither
         # ``forward_features`` nor ``forward`` ever called the head.  The
         # docstring justified it as "parameter sharing", but the classifier

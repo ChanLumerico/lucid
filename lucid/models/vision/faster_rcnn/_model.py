@@ -302,7 +302,6 @@ class FasterRCNNForObjectDetection(ObjectDetectionModel):
         C = self.backbone.out_channels
 
         num_anchors = len(config.rpn_anchor_ratios)  # 1 scale per level x ratios
-        self._num_anchors = num_anchors
         self.rpn = _RegionProposalNetwork(C, num_anchors)
 
         # One anchor size per FPN level (5 levels including pool).

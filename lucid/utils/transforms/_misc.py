@@ -19,7 +19,13 @@ from lucid.utils.transforms import _random
 from lucid.utils.transforms import functional as F
 from lucid.utils.transforms._base import Empty, Transform, _NoParams, _find_reference
 from lucid.utils.transforms._crop import Crop
-from lucid.utils.transforms._datatypes import BoundingBoxes, Image, Mask, to_xyxy
+from lucid.utils.transforms._datatypes import (
+    BoundingBoxes,
+    Image,
+    Keypoints,
+    Mask,
+    to_xyxy,
+)
 from lucid.utils.transforms._geometric import Resize
 
 
@@ -48,7 +54,7 @@ class Lambda(_NoParams, Transform[Empty]):
         image: Callable[[Tensor], Tensor] | None = None,
         mask: Callable[[Tensor], Tensor] | None = None,
         bboxes: Callable[[BoundingBoxes], BoundingBoxes] | None = None,
-        keypoints: Callable[[object], object] | None = None,
+        keypoints: Callable[[Keypoints], Keypoints] | None = None,
         name: str | None = None,
         p: float = 1.0,
     ) -> None:
@@ -61,15 +67,23 @@ class Lambda(_NoParams, Transform[Empty]):
 
     @override
     def _apply_image(self, img: Tensor, params: Empty) -> Tensor:
+        del params
         return self.image_fn(img) if self.image_fn is not None else img
 
     @override
     def _apply_mask(self, mask: Tensor, params: Empty) -> Tensor:
+        del params
         return self.mask_fn(mask) if self.mask_fn is not None else mask
 
     @override
     def _apply_boxes(self, boxes: BoundingBoxes, params: Empty) -> BoundingBoxes:
+        del params
         return self.bboxes_fn(boxes) if self.bboxes_fn is not None else boxes
+
+    @override
+    def _apply_keypoints(self, kps: Keypoints, params: Empty) -> Keypoints:
+        del params
+        return self.keypoints_fn(kps) if self.keypoints_fn is not None else kps
 
     @override
     def __repr__(self) -> str:

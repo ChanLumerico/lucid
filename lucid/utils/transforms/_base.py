@@ -143,14 +143,17 @@ class Transform[P](abc.ABC):
 
     def _apply_mask(self, mask: Tensor, params: P) -> Tensor:
         """Apply to a mask (default identity; overridden by geometric)."""
+        del params
         return mask
 
     def _apply_boxes(self, boxes: BoundingBoxes, params: P) -> BoundingBoxes:
         """Apply to boxes (default identity; overridden by geometric)."""
+        del params
         return boxes
 
     def _apply_keypoints(self, kps: Keypoints, params: P) -> Keypoints:
         """Apply to keypoints (default identity; overridden by geometric)."""
+        del params
         return kps
 
     def _dispatch(self, obj: object, params: P) -> object:
@@ -249,6 +252,7 @@ class _NoParams:
     """Mixin: deterministic transforms have no per-call parameters."""
 
     def make_params(self, img: Tensor) -> Empty:
+        del img
         return NO_PARAMS
 
 

@@ -140,7 +140,7 @@ class MaskRCNNConfig(ModelConfig):
     num_classes: int = 91
     in_channels: int = 3
 
-    # Backbone (ResNet-50-FPN)
+    # Backbone — ResNet-50-FPN
     backbone_layers: tuple[int, int, int, int] = (3, 4, 6, 3)  # ResNet-50
     backbone_bn_eps: float = 0.0  # reference FrozenBatchNorm2d uses eps=0
     fpn_out_channels: int = 256

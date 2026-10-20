@@ -112,7 +112,7 @@ class RCNNConfig(ModelConfig):
     roi_size: int = 227
     # Appendix A: the tight box is dilated so the warped crop carries
     # exactly p pixels of context on each side.  The released code uses
-    # crop_padding = 16.
+    # crop_padding of 16.
     context_pad: int = 16
     dropout: float = 0.5
     score_thresh: float = 0.05

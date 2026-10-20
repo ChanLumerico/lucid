@@ -125,7 +125,7 @@ def weight_norm(module: Module, name: str = "weight", dim: int = 0) -> Module:
     module.register_parameter(name + "_g", g_param)
     module.register_parameter(name + "_v", v_param)
 
-    def _pre_hook(mod: Module, inputs: Any) -> None:  # noqa: ANN401
+    def _pre_hook(mod: Module, _inputs: Any) -> None:
         # Recompute weight from the current g/v before every forward.
         g: Parameter = getattr(mod, name + "_g")
         v: Parameter = getattr(mod, name + "_v")

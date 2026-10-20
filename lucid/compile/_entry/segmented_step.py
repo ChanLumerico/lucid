@@ -448,6 +448,7 @@ def make_segmented_step(
         tensors_have_active_hooks,
     )
 
+    del dynamic  # API symmetry with make_step; segmented steps are per-shape static
     if not isinstance(model, nn.Sequential):
         raise TypeError(
             "make_step(segments>1) requires an nn.Sequential model so the "
@@ -488,9 +489,7 @@ def make_segmented_step(
 
     seg_objs: list[_Segment] = []
     for gi, mods in enumerate(groups):
-        gparams: list[Tensor] = []
-        for m in mods:
-            gparams.extend(m.parameters())
+        gparams: list[Tensor] = [p for m in mods for p in m.parameters()]
         seg_objs.append(
             _Segment(
                 index=gi,

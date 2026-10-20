@@ -286,7 +286,34 @@ class FunctionCtx:
         raise AttributeError(f"FunctionCtx has no attribute '{name}'")
 
 
-def _make_apply(cls: type) -> classmethod:  # type: ignore[type-arg]
+def _register_or_detach(
+    output: object,
+    klass: type,
+    ctx: FunctionCtx,
+    tensor_inputs: list[Tensor],
+    is_tensor_arg: list[bool],
+) -> None:
+    """Attach the custom backward node to differentiable outputs and detach the rest."""
+    non_diff_ids = {id(t._impl) for t in ctx._non_differentiable}
+    if isinstance(output, Tensor):
+        if id(output._impl) not in non_diff_ids:
+            _register(output, klass, ctx, tensor_inputs, is_tensor_arg)  # type: ignore[arg-type]
+        else:
+            output.detach_()
+        return
+    if isinstance(output, tuple):
+        # A ``forward`` may return non-tensor entries alongside
+        # tensors; only the tensors can carry a gradient, and
+        # ``backward`` is handed one gradient per *tensor* output.
+        outs = tuple(o for o in output if isinstance(o, Tensor))
+        if outs and any(id(o._impl) not in non_diff_ids for o in outs):
+            _register(outs, klass, ctx, tensor_inputs, is_tensor_arg)  # type: ignore[arg-type]
+        for o in outs:
+            if id(o._impl) in non_diff_ids:
+                o.detach_()
+
+
+def _make_apply() -> classmethod:  # type: ignore[type-arg]
     """Build the per-subclass ``apply`` classmethod injected by ``FunctionMeta``."""
 
     def apply(
@@ -305,15 +332,7 @@ def _make_apply(cls: type) -> classmethod:  # type: ignore[type-arg]
             # Which positional arguments were tensors, so ``backward`` may
             # answer with one gradient per argument (``None`` for the rest).
             is_tensor_arg = [isinstance(a, Tensor) for a in args]
-            if isinstance(output, Tensor):
-                _register(output, klass, ctx, tensor_inputs, is_tensor_arg)  # type: ignore[arg-type]
-            elif isinstance(output, tuple):
-                # A ``forward`` may return non-tensor entries alongside
-                # tensors; only the tensors can carry a gradient, and
-                # ``backward`` is handed one gradient per *tensor* output.
-                outs = tuple(o for o in output if isinstance(o, Tensor))
-                if outs:
-                    _register(outs, klass, ctx, tensor_inputs, is_tensor_arg)  # type: ignore[arg-type]
+            _register_or_detach(output, klass, ctx, tensor_inputs, is_tensor_arg)
             # The node exists now, so ``backward`` will read the saved
             # tensors: note their versions, as a built-in op does when it
             # saves its inputs, so a write in between is refused there.
@@ -341,7 +360,7 @@ class FunctionMeta(type):
         """Install the dispatching :meth:`apply` on the freshly built subclass."""
         super().__init__(name, bases, dct)
         if name != "Function":
-            cls.apply = _make_apply(cls)
+            cls.apply = _make_apply()
 
 
 class Function(metaclass=FunctionMeta):

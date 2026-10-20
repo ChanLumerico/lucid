@@ -260,7 +260,7 @@ def _build_darknet(
             layers.append(_conv_block(ch, out_ch, k, s, p))
             ch = out_ch
         elif isinstance(entry, list):
-            # [conv1_spec, conv2_spec, repeats]
+            # Format — [conv1_spec, conv2_spec, repeats]
             # The list ends with an int (repeat count); preceding elements are specs
             repeats = int(entry[-1])
             specs: list[tuple[int, int, int, int]] = [
@@ -677,6 +677,7 @@ class YOLOForObjectDetection(ObjectDetectionModel):
             List of per-image result dicts with ``"boxes"``, ``"scores"``,
             ``"labels"``.
         """
+        del image_size  # pred_boxes are already in pixel coordinates
         cfg = self.config
         B_batch = int(output.logits.shape[0])
         C = cfg.num_classes

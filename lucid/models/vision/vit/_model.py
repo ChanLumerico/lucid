@@ -137,7 +137,7 @@ class _Attention(nn.Module):
         # (B, N, 3*C) → (B, N, 3, H, D) → (3, B, H, N, D)
         qkv = self.qkv(x)
         qkv = qkv.reshape(B, N, 3, H, D).permute(2, 0, 3, 1, 4)
-        # Each: (B, H, N, D)
+        # Each — (B, H, N, D)
         q: Tensor = qkv[0]
         k: Tensor = qkv[1]
         v: Tensor = qkv[2]
@@ -416,14 +416,13 @@ class ViT(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: ViTConfig) -> None:
         super().__init__(config)
-        pe, ct, pos, drop, blocks, norm, num_patches = _build_trunk(config)
+        pe, ct, pos, drop, blocks, norm, _num_patches = _build_trunk(config)
         self.patch_embed = pe
         self.cls_token = ct
         self.pos_embed = pos
         self.pos_drop = drop
         self.blocks = blocks
         self.norm = norm
-        self._num_patches = num_patches
         self._classifier = config.classifier
         self._feature_info = [
             FeatureInfo(stage=1, num_channels=config.dim, reduction=config.patch_size),

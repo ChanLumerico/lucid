@@ -71,7 +71,7 @@ from lucid._threads import (
 # The engine already exposes ``set_deterministic`` / ``is_deterministic``;
 # wrap them under the standard ``use_deterministic_algorithms`` /
 # ``are_deterministic_algorithms_enabled`` names without an alias hop.
-def use_deterministic_algorithms(mode: bool, *, warn_only: bool = False) -> None:  # type: ignore # noqa: F821
+def use_deterministic_algorithms(mode: bool, *, warn_only: bool = False) -> None:  # type: ignore
     """Globally toggle deterministic kernel selection.
 
     Lucid does not ship a separate ``warn_only`` mode — callers either
@@ -91,10 +91,11 @@ def use_deterministic_algorithms(mode: bool, *, warn_only: bool = False) -> None
     """
     # ``bool`` here resolves to ``lucid.bool`` (the dtype alias) — use the
     # builtin saved at module top.
+    del warn_only  # reference-signature parity; Lucid has no warn-only tier
     _C_engine.set_deterministic(_py_bool(mode))
 
 
-def are_deterministic_algorithms_enabled() -> bool:  # type: ignore # noqa: F821
+def are_deterministic_algorithms_enabled() -> bool:  # type: ignore
     """Return whether deterministic kernel selection is currently active.
 
     Reflects the engine-side flag toggled by

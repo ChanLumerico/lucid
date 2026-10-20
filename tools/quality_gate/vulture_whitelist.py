@@ -82,12 +82,10 @@ _.share_memory_  # Tensor.share_memory_ in lucid/_tensor/tensor.py
 # ── Public Module / RNN / pruning / autograd / compile / metal / profiler API ─
 _.register_module  # Module.register_module in lucid/nn/module.py
 _.share_memory  # Module.share_memory in lucid/nn/module.py
-_.to_empty  # Module.to_empty in lucid/nn/module.py
 _.register_load_state_dict_post_hook  # Module hook API in lucid/nn/module.py
 _.flatten_parameters  # RNNBase.flatten_parameters in lucid/nn/modules/rnn.py
 _.random_unstructured  # lucid.nn.utils.prune.random_unstructured public API
 _.is_pruned  # lucid.nn.utils.prune.is_pruned public API
-_.mark_non_differentiable  # FunctionCtx.mark_non_differentiable in lucid/autograd/function.py
 _.elapsed_time  # MetalEvent.elapsed_time in lucid/metal/__init__.py
 _.time_ms  # OpEvent.time_ms property in lucid/profiler/__init__.py
 _.export_chrome_trace  # Profiler.export_chrome_trace in lucid/profiler/__init__.py

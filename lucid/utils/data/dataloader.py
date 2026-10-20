@@ -110,7 +110,7 @@ def default_convert(data: object) -> object:
     if isinstance(data, Tensor):
         return data
     if _is_numpy_numeric(data):
-        import numpy as np  # noqa: PLC0415 — lazy bridge import
+        import numpy as np
 
         # ``asarray`` turns a numpy scalar into a 0-d array, which keeps its
         # dtype and its zero rank; the bare scalar converts to neither.
@@ -243,7 +243,7 @@ def default_collate(
     if _is_numpy_numeric(elem):
         # User opted into a numpy bridge by handing us an ndarray or a
         # numpy scalar (``y[i]`` on a label array); stacking keeps its dtype.
-        import numpy as np  # noqa: PLC0415 — lazy bridge import
+        import numpy as np
 
         return Tensor(np.stack(batch, axis=0))  # type: ignore[arg-type]
 
@@ -354,6 +354,7 @@ class _IterableFetcher:
         self._ended = False
 
     def fetch(self, index: object = None) -> object:
+        del index  # _BaseDatasetFetcher.fetch(index) interface parity
         if self._ended:
             raise StopIteration
         if not self._auto:
@@ -499,7 +500,7 @@ def _init_worker(
     random.seed(seed)
     _manual_seed(seed)
     try:
-        import numpy as np  # noqa: PLC0415 — lazy, optional
+        import numpy as np
 
         np.random.seed(seed % (2**32))
     except ImportError:

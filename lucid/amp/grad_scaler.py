@@ -191,7 +191,6 @@ class GradScaler:
         self._growth_interval = growth_interval
         self._enabled = enabled
         self._growth_tracker = 0
-        self._scale_seq_len: int = 0
         # Whether any optimizer overflowed since the last update() — the one
         # bit update() reads.  ``lucid.compile``'s fused step, which unscales
         # inside its own graph, writes it directly before calling update().

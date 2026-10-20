@@ -382,7 +382,7 @@ class InceptionNeXt(PretrainedModel, BackboneMixin):
 
     def __init__(self, config: InceptionNeXtConfig) -> None:
         super().__init__(config)
-        stem, stages, fi, out_dim = _build_inception_next(config)
+        stem, stages, fi, _out_dim = _build_inception_next(config)
         self.stem = stem
         self.stages = stages
         self._feature_info = fi
@@ -392,7 +392,6 @@ class InceptionNeXt(PretrainedModel, BackboneMixin):
         # class token and positional table (bare Parameters the framework
         # default never touches — they were sitting at exact zeros).
         init_transformer_trunc_normal(self)
-        self._out_dim = out_dim
 
     @override
     @property
