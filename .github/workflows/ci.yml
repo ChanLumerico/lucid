@@ -245,6 +245,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -287,7 +289,7 @@ jobs:
         # export smoke file runs the runner out of memory. --parallel-mode
         # writes a data file per process and ``combine`` joins them.
         run: |
-          python -m pip install coverage
+          python -m pip install coverage "diff-cover>=9"
           mkdir -p build/coverage
           IGNORES="--ignore=lucid/test/parity --ignore=lucid/test/integration --ignore=lucid/test/perf --ignore=lucid/test/unit/models"
           COREML=lucid/test/unit/coreml
@@ -298,6 +300,14 @@ jobs:
           python -m coverage combine
           python -m coverage xml -o build/coverage/coverage.xml
           python -m coverage report
+          if git rev-parse --verify origin/main >/dev/null 2>&1; then
+            python -m diff_cover.diff_cover_tool build/coverage/coverage.xml \
+              --compare-branch=origin/main \
+              --fail-under=90 \
+              --show-uncovered \
+              --include "lucid/**" \
+              --exclude "lucid/test/**" "lucid/models/**" "lucid/benchmarks/**" "**/*.pyi"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:

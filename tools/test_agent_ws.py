@@ -370,3 +370,55 @@ def test_doctor_trusts_matching_source_stamp_or_abi_over_mtime(
     assert not agent_ws._check_engine_freshness(wt_root)
 
 
+def test_land_check_reports_and_enforces_diff_cover_threshold(
+    scratch: Scratch,
+) -> None:
+    """LCD-269: ``land --check`` runs ``diff-cover`` on changed ``lucid/*.py`` files
+    and requires >= 90% changed-line coverage."""
+    (scratch.main / ".gitignore").write_text("build/\ncoverage.xml\n")
+    (scratch.main / "lucid").mkdir(parents=True, exist_ok=True)
+    (scratch.main / "lucid" / "mod.py").write_text("def f(x: int) -> int:\n    return x\n")
+    assert scratch.git(scratch.main, "add", ".gitignore", "lucid/mod.py").returncode == 0
+    assert scratch.git(scratch.main, "commit", "-q", "-m", "add mod").returncode == 0
+    assert scratch.git(scratch.a, "rebase", "main").returncode == 0
+
+    (scratch.a / "lucid" / "mod.py").write_text(
+        "def f(x: int) -> int:\n    y = x + 1\n    return y\n"
+    )
+    assert scratch.git(scratch.a, "add", "lucid/mod.py").returncode == 0
+    assert scratch.git(scratch.a, "commit", "-q", "-m", "change mod").returncode == 0
+
+    cov_dir = scratch.a / "build" / "coverage"
+    cov_dir.mkdir(parents=True, exist_ok=True)
+    xml_template = (
+        '<?xml version="1.0" ?>\n'
+        '<coverage version="7.0">\n'
+        '  <packages><package name="lucid"><classes>\n'
+        '    <class name="mod.py" filename="lucid/mod.py">\n'
+        "      <lines>\n"
+        '        <line number="1" hits="1"/>\n'
+        '        <line number="2" hits="{hits}"/>\n'
+        '        <line number="3" hits="{hits}"/>\n'
+        "      </lines>\n"
+        "    </class>\n"
+        "  </classes></package></packages>\n"
+        "</coverage>\n"
+    )
+
+    # 0% changed-line coverage -> refused with exit 8
+    (cov_dir / "coverage.xml").write_text(xml_template.format(hits=0))
+    bad = land(scratch, "--check")
+    bad_out = bad.stdout + bad.stderr
+    assert bad.returncode == 8, bad_out
+    assert "lucid/mod.py" in bad_out
+    assert "below 90%" in bad_out
+
+    # 100% changed-line coverage -> passes with exit 0
+    (cov_dir / "coverage.xml").write_text(xml_template.format(hits=1))
+    good = land(scratch, "--check")
+    good_out = good.stdout + good.stderr
+    assert good.returncode == 0, good_out
+    assert "100%" in good_out
+
+
+

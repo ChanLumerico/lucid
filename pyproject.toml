@@ -288,3 +288,15 @@ exclude_also = [
     "raise NotImplementedError",
     "@(abc\\.)?abstractmethod",
 ]
+
+[tool.diff_cover]
+compare_branch = "main"
+fail_under = 90
+show_uncovered = true
+include = ["lucid/**"]
+exclude = [
+    "lucid/test/**",
+    "lucid/models/**",
+    "lucid/benchmarks/**",
+    "**/*.pyi",
+]

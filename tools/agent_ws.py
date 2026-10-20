@@ -99,6 +99,9 @@ MERGE_DRIVERS = {
 }
 SLOP_EXIT = 6
 BASELINE_EXIT = 7
+DIFF_COVER_EXIT = 8
+DIFF_COVER_THRESHOLD = 90
+COVERAGE_OMIT_PREFIXES = ("lucid/test/", "lucid/models/", "lucid/benchmarks/")
 
 # Machine-local and outside the synced project tree: locks must never travel
 # to the other Mac through .sync.
@@ -958,11 +961,16 @@ def cmd_land(args: argparse.Namespace) -> int:
         # The branch's own delta: against where it forked, so main's later
         # fixes do not read as this branch's slop.
         fork = git("merge-base", MAIN_BRANCH, "HEAD", cwd=wt).strip()
-        inconsistent = audit_baseline_errors(wt, diff_names(wt, fork, "HEAD"))
+        touched_fork = diff_names(wt, fork, "HEAD")
+        inconsistent = audit_baseline_errors(wt, touched_fork)
         if inconsistent:
             print(f"✗ {inconsistent}")
             return BASELINE_EXIT
-        return judge_slop(wt, py, fork, args.allow_slop)
+        slop_rc = judge_slop(wt, py, fork, args.allow_slop)
+        cov_rc, cov_out = diff_coverage_report(wt, py, fork, touched_fork)
+        if cov_out:
+            print(cov_out)
+        return slop_rc or cov_rc
 
     ensure_merge_drivers(main.path)
     with held_lock(LAND_LOCK, f"land {wt.name}", wait=True):
@@ -1201,6 +1209,116 @@ def cmd_setup(args: argparse.Namespace) -> int:
         git("config", "--local", key, value, cwd=root)
         print(f"git config {key} = {value}")
     return 0
+
+
+def _measurable_lucid_py(touched: set[str]) -> list[str]:
+    """Changed Python source files under ``lucid/`` subject to coverage."""
+    return sorted(
+        p
+        for p in touched
+        if p.startswith("lucid/")
+        and p.endswith(".py")
+        and not p.startswith(COVERAGE_OMIT_PREFIXES)
+    )
+
+
+def _resolve_coverage_xml(wt: Path, py: str, touched: set[str]) -> Path | None:
+    """Locate or generate a Cobertura ``coverage.xml`` for *wt*."""
+    for rel in ("build/coverage/coverage.xml", "coverage.xml"):
+        cand = wt / rel
+        if cand.is_file():
+            return cand
+    out_xml = STATE_DIR / f"coverage-{wt.name}.xml"
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    if (wt / ".coverage").is_file() or any(wt.glob(".coverage.*")):
+        if any(wt.glob(".coverage.*")):
+            subprocess.run(
+                [py, "-m", "coverage", "combine"],
+                cwd=wt,
+                capture_output=True,
+                check=False,
+            )
+        proc = subprocess.run(
+            [py, "-m", "coverage", "xml", "-o", str(out_xml)],
+            cwd=wt,
+            capture_output=True,
+            check=False,
+        )
+        if proc.returncode == 0 and out_xml.is_file():
+            return out_xml
+    tests = sorted(
+        p
+        for p in touched
+        if p.startswith("lucid/test/") and p.endswith(".py") and (wt / p).is_file()
+    )
+    if tests and (wt / "pyproject.toml").is_file():
+        data_file = STATE_DIR / f".coverage-{wt.name}"
+        data_file.unlink(missing_ok=True)
+        env = {**repo_env(), "COVERAGE_FILE": str(data_file)}
+        run_proc = subprocess.run(
+            [py, "-m", "coverage", "run", "--source=lucid", "-m", "pytest", "-q", *tests],
+            cwd=wt,
+            env=env,
+            capture_output=True,
+            check=False,
+        )
+        if run_proc.returncode == 0 and data_file.is_file():
+            xml_proc = subprocess.run(
+                [py, "-m", "coverage", "xml", "-o", str(out_xml)],
+                cwd=wt,
+                env=env,
+                capture_output=True,
+                check=False,
+            )
+            data_file.unlink(missing_ok=True)
+            if xml_proc.returncode == 0 and out_xml.is_file():
+                return out_xml
+    return None
+
+
+def diff_coverage_report(
+    wt: Path, py: str, base: str, touched: set[str]
+) -> tuple[int, str]:
+    """Run ``diff-cover`` on *wt* against *base* when ``lucid/*.py`` changed (LCD-269)."""
+    measured = _measurable_lucid_py(touched)
+    if not measured:
+        return 0, "(no covered lucid/*.py changes — diff-cover skipped)"
+    xml_path = _resolve_coverage_xml(wt, py, touched)
+    if xml_path is None:
+        return (
+            0,
+            f"(diff-cover: {len(measured)} lucid/*.py file(s) changed; no coverage.xml or touched tests to measure)",
+        )
+    proc = subprocess.run(
+        [
+            py,
+            "-m",
+            "diff_cover.diff_cover_tool",
+            str(xml_path),
+            f"--compare-branch={base}",
+            f"--fail-under={DIFF_COVER_THRESHOLD}",
+            "--show-uncovered",
+            "--include",
+            "lucid/**",
+            "--exclude",
+            "lucid/test/**",
+            "lucid/models/**",
+            "lucid/benchmarks/**",
+            "**/*.pyi",
+        ],
+        cwd=wt,
+        env=repo_env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    out = (proc.stdout + proc.stderr).rstrip()
+    if proc.returncode == 0:
+        return 0, out
+    return (
+        DIFF_COVER_EXIT,
+        f"{out}\n✗ diff-cover: changed-line coverage is below {DIFF_COVER_THRESHOLD}%",
+    )
 
 
 def quality_delta(wt: Path, py: str, base: str) -> tuple[int, str]:
