@@ -402,7 +402,6 @@ def test_a_bad_argument_is_refused(
         assert isinstance(info.value, RuntimeError)
 
 
-@pytest.mark.xfail(strict=True, reason="LCD-458: engine FFT has no F64/C128 path")
 def test_a_float64_signal_gives_a_complex128_spectrum() -> None:
     x = lucid.tensor(_signal((40,)).astype(np.float64))
     spec = lucid.stft(
@@ -411,7 +410,6 @@ def test_a_float64_signal_gives_a_complex128_spectrum() -> None:
     assert spec.dtype == lucid.complex128
 
 
-@pytest.mark.xfail(strict=True, reason="LCD-458: engine FFT has no F64/C128 path")
 def test_a_complex128_spectrum_inverts_to_float64() -> None:
     spec = lucid.complex(
         lucid.zeros(5, 11, dtype=lucid.float64), lucid.zeros(5, 11, dtype=lucid.float64)

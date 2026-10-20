@@ -21,7 +21,7 @@ TensorImplPtr irfftn_op(const TensorImplPtr& a,
     Validator::input(a, "irfftn.a").non_null();
     OpScopeFull scope{"irfftn", a->device(), a->dtype(), a->shape()};
 
-    const Dtype out_dtype = fft_detail::dtype_for_irfft(a->dtype());
+    const Dtype out_dtype = fft_detail::dtype_for_irfft(a->dtype(), a->device());
     const int rank = static_cast<int>(a->shape().size());
     if (rank == 0)
         ErrorBuilder("irfftn").invalid_argument("input must be at least 1-D");
@@ -32,16 +32,23 @@ TensorImplPtr irfftn_op(const TensorImplPtr& a,
 
     const Shape out_shape = fft_detail::irfft_out_shape(a->shape(), n, axes, "irfftn");
 
-    auto in_arr = fft_detail::as_mlx_input(a);
-    using ::mlx::core::fft::FFTNorm;
-    ::mlx::core::array out_arr =
-        n.empty()
-            ? ::mlx::core::fft::irfftn(in_arr, axes, FFTNorm::Backward, fft_detail::kMlxFftStream)
-            : ::mlx::core::fft::irfftn(in_arr, fft_detail::mlx_n_from_lucid(n), axes,
-                                       FFTNorm::Backward, fft_detail::kMlxFftStream);
-
-    Storage out =
-        fft_detail::finalise_result(std::move(out_arr), out_dtype, out_shape, a->device());
+    Storage out;
+    if (PhantomMode::is_enabled()) {
+        out = Storage{
+            PhantomStorage{shape_numel(out_shape) * dtype_size(out_dtype), out_dtype, a->device()}};
+    } else if (out_dtype == Dtype::F64) {
+        out = fft_detail::cpu_irfftn_c128(a, n, axes, out_shape);
+    } else {
+        auto in_arr = fft_detail::as_mlx_input(a);
+        using ::mlx::core::fft::FFTNorm;
+        ::mlx::core::array out_arr =
+            n.empty()
+                ? ::mlx::core::fft::irfftn(in_arr, axes, FFTNorm::Backward,
+                                           fft_detail::kMlxFftStream)
+                : ::mlx::core::fft::irfftn(in_arr, fft_detail::mlx_n_from_lucid(n, "irfftn"), axes,
+                                           FFTNorm::Backward, fft_detail::kMlxFftStream);
+        out = fft_detail::finalise_result(std::move(out_arr), out_dtype, out_shape, a->device());
+    }
     auto result = fft_detail::fresh(std::move(out), out_shape, out_dtype, a->device());
     // Record the trace I/O explicitly.  Without it the node keeps the
     // empty input list ``on_op_enter`` seeded and its result never

@@ -11,6 +11,7 @@
 #include <mlx/array.h>
 #include <mlx/ops.h>
 
+#include "../backend/Dispatcher.h"
 #include "../core/Profiler.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
@@ -28,13 +29,11 @@ namespace lucid::bindings {
 // complex tensor; for real tensors this is a no-op identity.  Lives in the
 // fft binding rather than as a top-level op because it has only one consumer.
 static TensorImplPtr conj_complex(const TensorImplPtr& a) {
-    if (a->dtype() != Dtype::C64)
+    if (!is_complex(a->dtype()))
         return a;  // real conjugate ≡ identity
     OpScopeFull scope{"fft._conj_complex", a->device(), a->dtype(), a->shape()};
-    auto in_arr = fft_detail::as_mlx_input(a);
-    auto out = ::mlx::core::conjugate(in_arr, fft_detail::kMlxFftStream);
-    Storage out_st =
-        fft_detail::finalise_result(std::move(out), a->dtype(), a->shape(), a->device());
+    Storage out_st = backend::Dispatcher::for_device(a->device())
+                         .complex_conj(a->storage(), a->shape(), a->dtype());
     return fft_detail::fresh(std::move(out_st), a->shape(), a->dtype(), a->device());
 }
 

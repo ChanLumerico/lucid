@@ -461,8 +461,9 @@ def stft(
         X[\omega, m] = \sum_{k=0}^{n_{fft}-1}
             w[k]\, x[m \cdot \text{hop} + k]\, e^{-2\pi i\, \omega k / n_{fft}}.
 
-    Differentiable in ``input`` and ``window``.  A float64 signal needs a
-    float64 FFT, which the engine does not have yet (LCD-458).
+    Differentiable in ``input`` and ``window``.  A ``float64`` signal on CPU
+    produces a ``complex128`` spectrum via the Accelerate double-precision
+    FFT path.
 
     Examples
     --------

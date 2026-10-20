@@ -128,6 +128,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add fused multiply-add op and 5-D grid_sample FMA (LCD-433)
 
+- add CPU vDSP double-precision float64/complex128 FFT
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster
