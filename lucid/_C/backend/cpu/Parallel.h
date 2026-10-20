@@ -65,14 +65,24 @@ inline std::size_t parallel_workers() {
 // 524k elements took 0.40 ms where the performance cores alone finish in
 // half that.  Smaller chunks let libdispatch hand the fast cores more of
 // them.  A chunk is never smaller than ``grain``.
+inline std::size_t parallel_chunk_count(std::size_t n, std::size_t grain) {
+    if (n == 0)
+        return 0;
+    const std::size_t chunks =
+        std::min(n / std::max<std::size_t>(grain, 1), 4 * parallel_workers());
+    return std::max<std::size_t>(1, chunks);
+}
+
 template <class F>
 void parallel_for(std::size_t n, std::size_t grain, F&& fn) {
     if (n == 0)
         return;
-    const std::size_t chunks =
-        std::min(n / std::max<std::size_t>(grain, 1), 4 * parallel_workers());
+    const std::size_t chunks = parallel_chunk_count(n, grain);
     if (chunks <= 1) {
-        fn(std::size_t{0}, n);
+        if constexpr (std::is_invocable_v<F&, std::size_t, std::size_t, std::size_t>)
+            fn(std::size_t{0}, std::size_t{0}, n);
+        else
+            fn(std::size_t{0}, n);
         return;
     }
     struct Context {
@@ -81,13 +91,17 @@ void parallel_for(std::size_t n, std::size_t grain, F&& fn) {
         std::size_t chunks;
     };
     Context context{&fn, n, chunks};
-    dispatch_apply_f(chunks, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), &context,
-                     [](void* raw, std::size_t i) {
-                         const auto* c = static_cast<const Context*>(raw);
-                         const std::size_t begin = c->n * i / c->chunks;
-                         const std::size_t end = c->n * (i + 1) / c->chunks;
-                         (*c->fn)(begin, end);
-                     });
+    dispatch_apply_f(
+        chunks, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), &context,
+        [](void* raw, std::size_t i) {
+            const auto* c = static_cast<const Context*>(raw);
+            const std::size_t begin = c->n * i / c->chunks;
+            const std::size_t end = c->n * (i + 1) / c->chunks;
+            if constexpr (std::is_invocable_v<F&, std::size_t, std::size_t, std::size_t>)
+                (*c->fn)(i, begin, end);
+            else
+                (*c->fn)(begin, end);
+        });
 }
 
 }  // namespace lucid::backend::cpu

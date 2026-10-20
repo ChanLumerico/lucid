@@ -184,6 +184,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - use LSD radix sort for CPU sort, argsort, and unique
 
+- parallelise and vectorise CPU softmax and layer_norm
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats

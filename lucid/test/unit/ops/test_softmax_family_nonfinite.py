@@ -37,6 +37,8 @@ _ROWS = {
     "neg_inf_finite_max": [-_INF, 1.0, 2.0],
     "all_neg_inf": [-_INF, -_INF, -_INF],
     "nan": [1.0, _NAN, 2.0],
+    "nan_leading": [_NAN, 1.0, 2.0],
+    "nan_and_pos_inf": [1.0, _NAN, _INF],
 }
 
 _OPS = {
@@ -125,3 +127,40 @@ def test_gradient_matches_reference(ref, device, dtype, op, row, layout):
     y.backward(lucid.tensor(g, dtype=getattr(lucid, dtype), device=device))
     yr.backward(ref.tensor(g, dtype=ref.float64).to(getattr(ref, dtype)))
     _check(_as_f64(x.grad), _as_f64(xr.grad), dtype)
+
+
+def test_cross_entropy_nonfinite_and_parallel_layer_norm_determinism(ref) -> None:
+    """Guard for LCD-154: cross_entropy on non-finite rows and bitwise-deterministic
+    multi-chunk CPU layer_norm / rms_norm backward."""
+    logits = [[_INF, 1.0, 2.0], [-_INF, -_INF, -_INF], [-_INF, 1.0, 2.0], [1.0, 2.0, 3.0]]
+    target = [1, 0, 2, 1]
+    x = lucid.tensor(logits, dtype=lucid.float32, requires_grad=True)
+    t = lucid.tensor(target, dtype=lucid.int64)
+    xr = ref.tensor(logits, dtype=ref.float32, requires_grad=True)
+    tr = ref.tensor(target, dtype=ref.int64)
+    loss = F.cross_entropy(x, t, reduction="none")
+    rloss = ref.nn.functional.cross_entropy(xr, tr, reduction="none")
+    _check(_as_f64(loss), _as_f64(rloss), "float32")
+    loss.sum().backward()
+    rloss.sum().backward()
+    _check(_as_f64(x.grad), _as_f64(xr.grad), "float32")
+
+    lucid.manual_seed(0)
+    ln_x = lucid.randn(512, 256, requires_grad=True)
+    ln_g = lucid.randn(512, 256)
+    ln_w = lucid.randn(256, requires_grad=True)
+    ln_b = lucid.randn(256, requires_grad=True)
+    y1 = F.layer_norm(ln_x, (256,), ln_w, ln_b)
+    y1.backward(ln_g)
+    dx1 = ln_x.grad.numpy().copy()
+    dw1 = ln_w.grad.numpy().copy()
+    db1 = ln_b.grad.numpy().copy()
+    ln_x.grad = None
+    ln_w.grad = None
+    ln_b.grad = None
+    y2 = F.layer_norm(ln_x, (256,), ln_w, ln_b)
+    y2.backward(ln_g)
+    assert np.array_equal(y1.detach().numpy(), y2.detach().numpy())
+    assert np.array_equal(dx1, ln_x.grad.numpy())
+    assert np.array_equal(dw1, ln_w.grad.numpy())
+    assert np.array_equal(db1, ln_b.grad.numpy())

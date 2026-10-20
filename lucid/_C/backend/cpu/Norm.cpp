@@ -1,70 +1,106 @@
 // lucid/_C/backend/cpu/Norm.cpp
 //
 // Implements the LayerNorm and RMSNorm forward and backward passes declared in
-// Norm.h.
-//
-// LayerNorm f32 forward uses a fast path (layer_norm_forward_f32_fast) that
-// calls vDSP helpers (vmean_f32, vdotpr_f32, vsadd_f32, vsmul_f32, vmadd_f32)
-// to exploit Apple Silicon NEON; the f64 forward uses a generic template.
-//
-// The LayerNorm backward uses the standard closed-form gradient:
-//   dx_i = rstd * (N * dxn_i - sum(dxn) - xn_i * sum(dxn * xn)) / N
-// where xn_i = (x_i - mean) * rstd is the normalised activation and dxn_i =
-// gamma_i * g_i is the pre-affine upstream gradient.
-//
-// The RMSNorm backward uses:
-//   dx_i = rstd * (gamma_i * g_i - x_i * rstd^2 * cross / N)
-// where cross = sum_j(gamma_j * g_j * x_j).
+// Norm.h, parallelised across rows via cpu::parallel_for and vectorised with
+// Apple Silicon NEON SIMD accumulators.
 
 #include "Norm.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <vector>
 
-#include <Accelerate/Accelerate.h>
+#include <arm_neon.h>
 
-#include "Vdsp.h"
-#include "Vforce.h"
+#include "Parallel.h"
 
 namespace lucid::backend::cpu {
 
 namespace {
 
-// Fast vDSP-accelerated f32 forward path.  Uses a temporary `centered` buffer
-// for (x - mean) to allow reuse with vdotpr_f32 for the variance computation.
-void layer_norm_forward_f32_fast(const float* x,
-                                 const float* gamma,
-                                 const float* beta,
-                                 float* y,
-                                 float* saved_mean,
-                                 float* saved_rstd,
-                                 std::size_t outer,
-                                 std::size_t N,
-                                 double eps) {
-    const float inv_N = 1.0f / static_cast<float>(N);
+inline constexpr std::size_t kNormElemGrain = 65536;
+inline constexpr std::size_t kNormMaxChunks = 8;
 
-    std::vector<float> centered(N);
-    for (std::size_t o = 0; o < outer; ++o) {
-        const float* xb = x + o * N;
-        float* yb = y + o * N;
-
-        const float mean = vmean_f32(xb, N);
-        saved_mean[o] = mean;
-
-        const float neg_mean = -mean;
-        vsadd_f32(xb, neg_mean, centered.data(), N);
-
-        const float var = vdotpr_f32(centered.data(), centered.data(), N) * inv_N;
-        const float rstd = 1.0f / std::sqrt(var + static_cast<float>(eps));
-        saved_rstd[o] = rstd;
-
-        vsmul_f32(centered.data(), rstd, yb, N);
-
-        vmadd_f32(yb, gamma, beta, yb, N);
-    }
+inline std::size_t norm_grain(std::size_t outer, std::size_t N) noexcept {
+    const std::size_t min_grain =
+        std::max<std::size_t>(1, kNormElemGrain / std::max<std::size_t>(N, 1));
+    const std::size_t cap_grain = std::max<std::size_t>(1, outer / kNormMaxChunks);
+    return std::max(min_grain, cap_grain);
 }
 
-// Generic typed LayerNorm forward; used for f64 and any future non-f32 path.
+template <typename T>
+struct NormSimd;
+
+template <>
+struct NormSimd<float> {
+    using Vec = float32x4_t;
+    static constexpr std::size_t kWidth = 4;
+    static Vec zero() noexcept { return vdupq_n_f32(0.0f); }
+    static Vec dup(float v) noexcept { return vdupq_n_f32(v); }
+    static Vec load(const float* p) noexcept { return vld1q_f32(p); }
+    static void store(float* p, Vec v) noexcept { vst1q_f32(p, v); }
+    static Vec add(Vec a, Vec b) noexcept { return vaddq_f32(a, b); }
+    static Vec sub(Vec a, Vec b) noexcept { return vsubq_f32(a, b); }
+    static Vec mul(Vec a, Vec b) noexcept { return vmulq_f32(a, b); }
+    static Vec fma(Vec acc, Vec a, Vec b) noexcept { return vfmaq_f32(acc, a, b); }
+    static float hsum(Vec v) noexcept { return vaddvq_f32(v); }
+};
+
+template <>
+struct NormSimd<double> {
+    using Vec = float64x2_t;
+    static constexpr std::size_t kWidth = 2;
+    static Vec zero() noexcept { return vdupq_n_f64(0.0); }
+    static Vec dup(double v) noexcept { return vdupq_n_f64(v); }
+    static Vec load(const double* p) noexcept { return vld1q_f64(p); }
+    static void store(double* p, Vec v) noexcept { vst1q_f64(p, v); }
+    static Vec add(Vec a, Vec b) noexcept { return vaddq_f64(a, b); }
+    static Vec sub(Vec a, Vec b) noexcept { return vsubq_f64(a, b); }
+    static Vec mul(Vec a, Vec b) noexcept { return vmulq_f64(a, b); }
+    static Vec fma(Vec acc, Vec a, Vec b) noexcept { return vfmaq_f64(acc, a, b); }
+    static double hsum(Vec v) noexcept { return vaddvq_f64(v); }
+};
+
+template <typename T>
+inline T row_sum(const T* __restrict xb, std::size_t N) noexcept {
+    using S = NormSimd<T>;
+    constexpr std::size_t W = S::kWidth;
+    auto acc0 = S::zero();
+    auto acc1 = S::zero();
+    std::size_t i = 0;
+    for (; i + 2 * W <= N; i += 2 * W) {
+        acc0 = S::add(acc0, S::load(xb + i));
+        acc1 = S::add(acc1, S::load(xb + i + W));
+    }
+    T sum = S::hsum(S::add(acc0, acc1));
+    for (; i < N; ++i)
+        sum += xb[i];
+    return sum;
+}
+
+template <typename T>
+inline T row_sqdiff(const T* __restrict xb, T mean, std::size_t N) noexcept {
+    using S = NormSimd<T>;
+    constexpr std::size_t W = S::kWidth;
+    const auto vm = S::dup(mean);
+    auto acc0 = S::zero();
+    auto acc1 = S::zero();
+    std::size_t i = 0;
+    for (; i + 2 * W <= N; i += 2 * W) {
+        const auto d0 = S::sub(S::load(xb + i), vm);
+        const auto d1 = S::sub(S::load(xb + i + W), vm);
+        acc0 = S::fma(acc0, d0, d0);
+        acc1 = S::fma(acc1, d1, d1);
+    }
+    T var_sum = S::hsum(S::add(acc0, acc1));
+    for (; i < N; ++i) {
+        const T d = xb[i] - mean;
+        var_sum += d * d;
+    }
+    return var_sum;
+}
+
 template <typename T>
 void layer_norm_forward(const T* x,
                         const T* gamma,
@@ -75,35 +111,102 @@ void layer_norm_forward(const T* x,
                         std::size_t outer,
                         std::size_t N,
                         double eps) {
+    if (outer == 0 || N == 0)
+        return;
     const T inv_N = T{1} / static_cast<T>(N);
-    for (std::size_t o = 0; o < outer; ++o) {
-        const T* xb = x + o * N;
-        T mean = T{};
-        for (std::size_t i = 0; i < N; ++i)
-            mean += xb[i];
-        mean *= inv_N;
-
-        T var = T{};
-        for (std::size_t i = 0; i < N; ++i) {
-            const T d = xb[i] - mean;
-            var += d * d;
+    const T eps_t = static_cast<T>(eps);
+    parallel_for(outer, norm_grain(outer, N), [&](std::size_t lo, std::size_t hi) {
+        const T* __restrict gm = gamma;
+        const T* __restrict bt = beta;
+        for (std::size_t o = lo; o < hi; ++o) {
+            const T* __restrict xb = x + o * N;
+            T* __restrict yb = y + o * N;
+            const T mean = row_sum(xb, N) * inv_N;
+            const T var = row_sqdiff(xb, mean, N) * inv_N;
+            const T rstd = T{1} / std::sqrt(var + eps_t);
+            for (std::size_t i = 0; i < N; ++i)
+                yb[i] = gm[i] * ((xb[i] - mean) * rstd) + bt[i];
+            saved_mean[o] = mean;
+            saved_rstd[o] = rstd;
         }
-        var *= inv_N;
-        const T rstd = T{1} / std::sqrt(var + static_cast<T>(eps));
+    });
+}
 
-        T* yb = y + o * N;
-        for (std::size_t i = 0; i < N; ++i) {
-            const T xn = (xb[i] - mean) * rstd;
-            yb[i] = gamma[i] * xn + beta[i];
-        }
-        saved_mean[o] = mean;
-        saved_rstd[o] = rstd;
+template <typename T>
+inline void layer_norm_bwd_row(const T* __restrict xb,
+                               const T* __restrict gb,
+                               const T* __restrict gm,
+                               T* __restrict dxb,
+                               T* __restrict dg,
+                               T* __restrict db,
+                               T m,
+                               T r,
+                               T inv_N,
+                               std::size_t N) noexcept {
+    using S = NormSimd<T>;
+    constexpr std::size_t W = S::kWidth;
+    const auto vm = S::dup(m);
+    const auto vr = S::dup(r);
+    auto v_sdxn = S::zero();
+    auto v_sdxn_xn = S::zero();
+    std::size_t i = 0;
+    for (; i + W <= N; i += W) {
+        const auto vx = S::load(xb + i);
+        const auto vg = S::load(gb + i);
+        const auto vgm = S::load(gm + i);
+        const auto vxn = S::mul(S::sub(vx, vm), vr);
+        const auto vdxn = S::mul(vgm, vg);
+        v_sdxn = S::add(v_sdxn, vdxn);
+        v_sdxn_xn = S::fma(v_sdxn_xn, vdxn, vxn);
+        S::store(dg + i, S::fma(S::load(dg + i), vg, vxn));
+        S::store(db + i, S::add(S::load(db + i), vg));
+    }
+    T sum_dxn = S::hsum(v_sdxn);
+    T sum_dxn_xn = S::hsum(v_sdxn_xn);
+    for (; i < N; ++i) {
+        const T xn_i = (xb[i] - m) * r;
+        const T g_i = gb[i];
+        const T dxn_i = gm[i] * g_i;
+        sum_dxn += dxn_i;
+        sum_dxn_xn += dxn_i * xn_i;
+        dg[i] += g_i * xn_i;
+        db[i] += g_i;
+    }
+    const T c1 = sum_dxn * inv_N;
+    const T c2 = sum_dxn_xn * inv_N;
+    for (std::size_t k = 0; k < N; ++k) {
+        const T xn_k = (xb[k] - m) * r;
+        const T dxn_k = gm[k] * gb[k];
+        dxb[k] = r * (dxn_k - c1 - xn_k * c2);
     }
 }
 
-// Generic typed LayerNorm backward.  Accumulates dgamma and dbeta across all
-// outer rows; recomputes xn_i = (x_i - mean)*rstd inline to avoid an extra
-// buffer allocation.
+template <typename T, typename RowFn>
+void reduce_norm_bwd_rows(
+    T* param_grads, std::size_t param_stride, std::size_t outer, std::size_t N, RowFn&& row_fn) {
+    std::memset(param_grads, 0, param_stride * sizeof(T));
+    if (outer == 0 || N == 0)
+        return;
+    const std::size_t grain = norm_grain(outer, N);
+    const std::size_t chunks = parallel_chunk_count(outer, grain);
+    if (chunks <= 1) {
+        for (std::size_t o = 0; o < outer; ++o)
+            row_fn(o, param_grads);
+        return;
+    }
+    std::vector<T> partials(chunks * param_stride, T{});
+    parallel_for(outer, grain, [&](std::size_t c, std::size_t lo, std::size_t hi) {
+        T* __restrict chunk_grads = partials.data() + c * param_stride;
+        for (std::size_t o = lo; o < hi; ++o)
+            row_fn(o, chunk_grads);
+    });
+    for (std::size_t c = 0; c < chunks; ++c) {
+        const T* __restrict src = partials.data() + c * param_stride;
+        for (std::size_t i = 0; i < param_stride; ++i)
+            param_grads[i] += src[i];
+    }
+}
+
 template <typename T>
 void layer_norm_backward(const T* x,
                          const T* gamma,
@@ -115,64 +218,72 @@ void layer_norm_backward(const T* x,
                          T* dbeta,
                          std::size_t outer,
                          std::size_t N) {
+    if (N == 0)
+        return;
     const T inv_N = T{1} / static_cast<T>(N);
-
-    for (std::size_t i = 0; i < N; ++i) {
-        dgamma[i] = T{};
-        dbeta[i] = T{};
-    }
-
-    for (std::size_t o = 0; o < outer; ++o) {
-        const T* xb = x + o * N;
-        const T* gb = g + o * N;
-        const T m = saved_mean[o];
-        const T r = saved_rstd[o];
-
-        T sum_dxn = T{};
-        T sum_dxn_xn = T{};
-        for (std::size_t i = 0; i < N; ++i) {
-            const T xn_i = (xb[i] - m) * r;
-            const T dxn_i = gamma[i] * gb[i];
-            sum_dxn += dxn_i;
-            sum_dxn_xn += dxn_i * xn_i;
-        }
-
-        T* dxb = dx + o * N;
-        for (std::size_t i = 0; i < N; ++i) {
-            const T xn_i = (xb[i] - m) * r;
-            const T dxn_i = gamma[i] * gb[i];
-            dxb[i] = inv_N * r * (static_cast<T>(N) * dxn_i - sum_dxn - xn_i * sum_dxn_xn);
-
-            dgamma[i] += gb[i] * xn_i;
-            dbeta[i] += gb[i];
-        }
-    }
+    std::vector<T> combined(2 * N, T{});
+    reduce_norm_bwd_rows(combined.data(), 2 * N, outer, N, [&](std::size_t o, T* buf) {
+        layer_norm_bwd_row(x + o * N, g + o * N, gamma, dx + o * N, buf, buf + N, saved_mean[o],
+                           saved_rstd[o], inv_N, N);
+    });
+    std::memcpy(dgamma, combined.data(), N * sizeof(T));
+    std::memcpy(dbeta, combined.data() + N, N * sizeof(T));
 }
 
-// Generic typed RMSNorm forward: rstd = 1 / sqrt(mean(x^2) + eps).
 template <typename T>
 void rms_norm_forward(
     const T* x, const T* gamma, T* y, T* saved_rstd, std::size_t outer, std::size_t N, double eps) {
+    if (outer == 0 || N == 0)
+        return;
     const T inv_N = T{1} / static_cast<T>(N);
-    for (std::size_t o = 0; o < outer; ++o) {
-        const T* xb = x + o * N;
-        T sumsq = T{};
-        for (std::size_t i = 0; i < N; ++i)
-            sumsq += xb[i] * xb[i];
-        const T meansq = sumsq * inv_N;
-        const T rstd = T{1} / std::sqrt(meansq + static_cast<T>(eps));
-
-        T* yb = y + o * N;
-        for (std::size_t i = 0; i < N; ++i) {
-            yb[i] = gamma[i] * xb[i] * rstd;
+    const T eps_t = static_cast<T>(eps);
+    parallel_for(outer, norm_grain(outer, N), [&](std::size_t lo, std::size_t hi) {
+        const T* __restrict gm = gamma;
+        for (std::size_t o = lo; o < hi; ++o) {
+            const T* __restrict xb = x + o * N;
+            T* __restrict yb = y + o * N;
+            const T meansq = row_sqdiff(xb, T{0}, N) * inv_N;
+            const T rstd = T{1} / std::sqrt(meansq + eps_t);
+            for (std::size_t i = 0; i < N; ++i)
+                yb[i] = gm[i] * xb[i] * rstd;
+            saved_rstd[o] = rstd;
         }
-        saved_rstd[o] = rstd;
-    }
+    });
 }
 
-// Generic typed RMSNorm backward: computes dx and accumulates dgamma.
-// cross = sum_j(gamma_j * g_j * x_j) is the per-row contraction needed to
-// back-propagate through the normalisation denominator.
+template <typename T>
+inline void rms_norm_bwd_row(const T* __restrict xb,
+                             const T* __restrict gb,
+                             const T* __restrict gm,
+                             T* __restrict dxb,
+                             T* __restrict dg,
+                             T r,
+                             T inv_N,
+                             std::size_t N) noexcept {
+    using S = NormSimd<T>;
+    constexpr std::size_t W = S::kWidth;
+    const auto vr = S::dup(r);
+    auto vcross = S::zero();
+    std::size_t i = 0;
+    for (; i + W <= N; i += W) {
+        const auto vx = S::load(xb + i);
+        const auto vg = S::load(gb + i);
+        const auto vgm = S::load(gm + i);
+        vcross = S::fma(vcross, S::mul(vgm, vg), vx);
+        S::store(dg + i, S::fma(S::load(dg + i), S::mul(vg, vx), vr));
+    }
+    T cross = S::hsum(vcross);
+    for (; i < N; ++i) {
+        const T g_i = gb[i];
+        const T x_i = xb[i];
+        cross += (gm[i] * g_i) * x_i;
+        dg[i] += g_i * x_i * r;
+    }
+    const T scaled = inv_N * r * r * cross;
+    for (std::size_t k = 0; k < N; ++k)
+        dxb[k] = r * (gm[k] * gb[k] - xb[k] * scaled);
+}
+
 template <typename T>
 void rms_norm_backward(const T* x,
                        const T* gamma,
@@ -182,29 +293,12 @@ void rms_norm_backward(const T* x,
                        T* dgamma,
                        std::size_t outer,
                        std::size_t N) {
+    if (N == 0)
+        return;
     const T inv_N = T{1} / static_cast<T>(N);
-    for (std::size_t i = 0; i < N; ++i)
-        dgamma[i] = T{};
-
-    for (std::size_t o = 0; o < outer; ++o) {
-        const T* xb = x + o * N;
-        const T* gb = g + o * N;
-        const T r = saved_rstd[o];
-
-        T cross = T{};
-        for (std::size_t i = 0; i < N; ++i) {
-            const T dxn_i = gamma[i] * gb[i];
-            cross += dxn_i * xb[i];
-        }
-        const T scaled = inv_N * r * r * cross;
-
-        T* dxb = dx + o * N;
-        for (std::size_t i = 0; i < N; ++i) {
-            const T dxn_i = gamma[i] * gb[i];
-            dxb[i] = r * (dxn_i - xb[i] * scaled);
-            dgamma[i] += gb[i] * xb[i] * r;
-        }
-    }
+    reduce_norm_bwd_rows(dgamma, N, outer, N, [&](std::size_t o, T* buf) {
+        rms_norm_bwd_row(x + o * N, g + o * N, gamma, dx + o * N, buf, saved_rstd[o], inv_N, N);
+    });
 }
 
 }  // namespace
@@ -218,7 +312,7 @@ void layer_norm_forward_f32(const float* x,
                             std::size_t outer,
                             std::size_t N,
                             double eps) {
-    layer_norm_forward_f32_fast(x, gamma, beta, y, saved_mean, saved_rstd, outer, N, eps);
+    layer_norm_forward<float>(x, gamma, beta, y, saved_mean, saved_rstd, outer, N, eps);
 }
 
 void layer_norm_forward_f64(const double* x,

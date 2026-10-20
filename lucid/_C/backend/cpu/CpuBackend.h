@@ -103,6 +103,7 @@
 #include "ScatterReduce.h"
 #include "SdpaMask.h"
 #include "Shape.h"
+#include "Softmax.h"
 #include "SortSelect.h"
 #include "Vdsp.h"
 #include "Vforce.h"
@@ -3031,77 +3032,15 @@ public:
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         const std::size_t axis_dim =
             static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        std::size_t outer = 1, inner = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
-            inner *= static_cast<std::size_t>(shape[d]);
-
-        if (dt == Dtype::F32) {
-            const float* in = reinterpret_cast<const float*>(cs.ptr.get());
-            float* out = reinterpret_cast<float*>(ptr.get());
-            if (inner == 1) {
-                for (std::size_t o = 0; o < outer; ++o) {
-                    const float* row = in + o * axis_dim;
-                    float* dst = out + o * axis_dim;
-                    const float m = cpu::vmaxval_f32(row, axis_dim);
-                    const float neg_m = -m;
-                    cpu::vsadd_f32(row, neg_m, dst, axis_dim);
-                    cpu::vexp_f32(dst, dst, axis_dim);
-                    const float inv_s = 1.0f / cpu::vsum_f32(dst, axis_dim);
-                    cpu::vsmul_f32(dst, inv_s, dst, axis_dim);
-                }
-            } else {
-                for (std::size_t o = 0; o < outer; ++o) {
-                    for (std::size_t i = 0; i < inner; ++i) {
-                        const float* base = in + o * axis_dim * inner + i;
-                        float m = base[0];
-                        for (std::size_t r = 1; r < axis_dim; ++r) {
-                            const float v = base[r * inner];
-                            if (v > m)
-                                m = v;
-                        }
-                        float* obase = out + o * axis_dim * inner + i;
-                        float s = 0.0f;
-                        for (std::size_t r = 0; r < axis_dim; ++r) {
-                            const float e = std::exp(base[r * inner] - m);
-                            obase[r * inner] = e;
-                            s += e;
-                        }
-                        const float inv = 1.0f / s;
-                        for (std::size_t r = 0; r < axis_dim; ++r)
-                            obase[r * inner] *= inv;
-                    }
-                }
-            }
-        } else if (dt == Dtype::F64) {
-            const double* in = reinterpret_cast<const double*>(cs.ptr.get());
-            double* out = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t o = 0; o < outer; ++o) {
-                for (std::size_t i = 0; i < inner; ++i) {
-                    const double* base = in + o * axis_dim * inner + i;
-                    double m = base[0];
-                    for (std::size_t r = 1; r < axis_dim; ++r) {
-                        const double v = base[r * inner];
-                        if (v > m)
-                            m = v;
-                    }
-                    double* obase = out + o * axis_dim * inner + i;
-                    double s = 0.0;
-                    for (std::size_t r = 0; r < axis_dim; ++r) {
-                        const double e = std::exp(base[r * inner] - m);
-                        obase[r * inner] = e;
-                        s += e;
-                    }
-                    const double inv = 1.0 / s;
-                    for (std::size_t r = 0; r < axis_dim; ++r)
-                        obase[r * inner] *= inv;
-                }
-            }
-        } else {
+        const auto [outer, inner] = cpu::around_axis(shape, axis);
+        if (dt == Dtype::F32)
+            cpu::softmax_cpu(reinterpret_cast<const float*>(cs.ptr.get()),
+                             reinterpret_cast<float*>(ptr.get()), outer, axis_dim, inner);
+        else if (dt == Dtype::F64)
+            cpu::softmax_cpu(reinterpret_cast<const double*>(cs.ptr.get()),
+                             reinterpret_cast<double*>(ptr.get()), outer, axis_dim, inner);
+        else
             ErrorBuilder("cpu_backend::softmax").not_implemented("dtype not supported");
-        }
-
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
@@ -3110,10 +3049,6 @@ public:
                              const Shape& shape,
                              int axis,
                              Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
         if (detail::is_half_like(dt))
             return detail::back_to_f16(softmax_backward(detail::as_f32(z), detail::as_f32(grad_out),
                                                         shape, axis, Dtype::F32),
@@ -3124,39 +3059,17 @@ public:
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         const std::size_t axis_dim =
             static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        std::size_t outer = 1, inner = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
-            inner *= static_cast<std::size_t>(shape[d]);
-
-        auto run = [&](auto* dx, const auto* zp, const auto* gp) {
-            using T = std::remove_pointer_t<decltype(dx)>;
-            for (std::size_t o = 0; o < outer; ++o) {
-                for (std::size_t i = 0; i < inner; ++i) {
-                    const T* zb = zp + o * axis_dim * inner + i;
-                    const T* gb = gp + o * axis_dim * inner + i;
-                    T sum = T{};
-                    for (std::size_t r = 0; r < axis_dim; ++r)
-                        sum += gb[r * inner] * zb[r * inner];
-                    T* xb = dx + o * axis_dim * inner + i;
-                    for (std::size_t r = 0; r < axis_dim; ++r)
-                        xb[r * inner] = zb[r * inner] * (gb[r * inner] - sum);
-                }
-            }
-        };
-
+        const auto [outer, inner] = cpu::around_axis(shape, axis);
         if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(ptr.get()),
-                reinterpret_cast<const float*>(z_cpu.ptr.get()),
-                reinterpret_cast<const float*>(g_cpu.ptr.get()));
+            cpu::softmax_backward_cpu(reinterpret_cast<const float*>(z_cpu.ptr.get()),
+                                      reinterpret_cast<const float*>(g_cpu.ptr.get()),
+                                      reinterpret_cast<float*>(ptr.get()), outer, axis_dim, inner);
         else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(ptr.get()),
-                reinterpret_cast<const double*>(z_cpu.ptr.get()),
-                reinterpret_cast<const double*>(g_cpu.ptr.get()));
+            cpu::softmax_backward_cpu(reinterpret_cast<const double*>(z_cpu.ptr.get()),
+                                      reinterpret_cast<const double*>(g_cpu.ptr.get()),
+                                      reinterpret_cast<double*>(ptr.get()), outer, axis_dim, inner);
         else
             ErrorBuilder("cpu_backend::softmax_backward").not_implemented("dtype not supported");
-
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
@@ -3165,10 +3078,6 @@ public:
                                  const Shape& shape,
                                  int axis,
                                  Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
         if (detail::is_half_like(dt))
             return detail::back_to_f16(log_softmax_backward(detail::as_f32(y),
                                                             detail::as_f32(grad_out), shape, axis,
@@ -3180,35 +3089,17 @@ public:
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         const std::size_t axis_dim =
             static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        std::size_t outer = 1, inner = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
-            inner *= static_cast<std::size_t>(shape[d]);
-
-        auto kernel = [&](auto* dx, const auto* gy, const auto* g) {
-            using T = std::remove_pointer_t<decltype(dx)>;
-            for (std::size_t o = 0; o < outer; ++o) {
-                for (std::size_t i = 0; i < inner; ++i) {
-                    T sum_g = T(0);
-                    for (std::size_t r = 0; r < axis_dim; ++r)
-                        sum_g += g[o * axis_dim * inner + r * inner + i];
-                    for (std::size_t r = 0; r < axis_dim; ++r) {
-                        std::size_t idx = o * axis_dim * inner + r * inner + i;
-                        dx[idx] = g[idx] - std::exp(gy[idx]) * sum_g;
-                    }
-                }
-            }
-        };
-
+        const auto [outer, inner] = cpu::around_axis(shape, axis);
         if (dt == Dtype::F32)
-            kernel(reinterpret_cast<float*>(ptr.get()),
-                   reinterpret_cast<const float*>(yc.ptr.get()),
-                   reinterpret_cast<const float*>(gc.ptr.get()));
+            cpu::log_softmax_backward_cpu(reinterpret_cast<const float*>(yc.ptr.get()),
+                                          reinterpret_cast<const float*>(gc.ptr.get()),
+                                          reinterpret_cast<float*>(ptr.get()), outer, axis_dim,
+                                          inner);
         else if (dt == Dtype::F64)
-            kernel(reinterpret_cast<double*>(ptr.get()),
-                   reinterpret_cast<const double*>(yc.ptr.get()),
-                   reinterpret_cast<const double*>(gc.ptr.get()));
+            cpu::log_softmax_backward_cpu(reinterpret_cast<const double*>(yc.ptr.get()),
+                                          reinterpret_cast<const double*>(gc.ptr.get()),
+                                          reinterpret_cast<double*>(ptr.get()), outer, axis_dim,
+                                          inner);
         else
             ErrorBuilder("cpu_backend::log_softmax_backward")
                 .not_implemented("dtype not supported");
@@ -3216,8 +3107,6 @@ public:
     }
 
     Storage log_softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
-        // Accelerate has no half kernel here; widen at the door and round
-        // once on the way out.  See detail::widen_half.
         if (detail::is_half_like(dt)) {
             const std::size_t half_n = shape_numel(shape);
             return detail::narrow_half(
@@ -3230,40 +3119,13 @@ public:
         auto ptr = allocate_aligned_bytes(nb, Device::CPU);
         const std::size_t axis_dim =
             static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        std::size_t outer = 1, inner = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
-            inner *= static_cast<std::size_t>(shape[d]);
-
-        auto kernel = [&](auto* out, const auto* in) {
-            using T = std::remove_pointer_t<decltype(out)>;
-            for (std::size_t o = 0; o < outer; ++o) {
-                for (std::size_t i = 0; i < inner; ++i) {
-                    const T* base = in + o * axis_dim * inner + i;
-                    T m = base[0];
-                    for (std::size_t r = 1; r < axis_dim; ++r) {
-                        T v = base[r * inner];
-                        if (v > m)
-                            m = v;
-                    }
-                    T s = T(0);
-                    for (std::size_t r = 0; r < axis_dim; ++r)
-                        s += std::exp(base[r * inner] - m);
-                    const T log_sum = m + std::log(s);
-                    T* obase = out + o * axis_dim * inner + i;
-                    for (std::size_t r = 0; r < axis_dim; ++r)
-                        obase[r * inner] = base[r * inner] - log_sum;
-                }
-            }
-        };
-
+        const auto [outer, inner] = cpu::around_axis(shape, axis);
         if (dt == Dtype::F32)
-            kernel(reinterpret_cast<float*>(ptr.get()),
-                   reinterpret_cast<const float*>(cs.ptr.get()));
+            cpu::log_softmax_cpu(reinterpret_cast<const float*>(cs.ptr.get()),
+                                 reinterpret_cast<float*>(ptr.get()), outer, axis_dim, inner);
         else if (dt == Dtype::F64)
-            kernel(reinterpret_cast<double*>(ptr.get()),
-                   reinterpret_cast<const double*>(cs.ptr.get()));
+            cpu::log_softmax_cpu(reinterpret_cast<const double*>(cs.ptr.get()),
+                                 reinterpret_cast<double*>(ptr.get()), outer, axis_dim, inner);
         else
             ErrorBuilder("cpu_backend::log_softmax").not_implemented("dtype not supported");
         return Storage{CpuStorage{ptr, nb, dt}};
