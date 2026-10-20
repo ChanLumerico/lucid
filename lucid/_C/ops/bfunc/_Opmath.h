@@ -17,10 +17,12 @@
 // Floor division is the exact float32 floor quotient, rounded once — the
 // same rule as every other floating-point ``//`` in Lucid (backend/DivMod.h).
 //
-// The 0-d operand must not require grad: its gradient would be a reduction
-// over ``T`` in float32, which nothing sends yet.  Under autocast, when the
-// policy moves the half dtype elsewhere, both operands are cast to the
-// autocast dtype and the ordinary same-dtype op runs.
+// When the 0-d operand requires grad, its gradient is reduced over ``T`` in
+// float32 (and cast back to float64 when ``S`` is float64 on the CPU) so a
+// learnable 0-d float32 parameter keeps op-math in forward and backward
+// (LCD-300).  Under autocast, when the policy moves the half dtype elsewhere,
+// both operands are cast to the autocast dtype and the ordinary same-dtype op
+// runs.
 //
 // The Metal stream fuses widen, op and narrow into one kernel with the 0-d
 // operand as a kernel input.  The old route through a same-dtype pair spent
@@ -50,6 +52,7 @@
 #include "../../core/Dtype.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/OpSchema.h"
+#include "../../core/PhantomMode.h"
 #include "../../core/SchemaGuard.h"
 #include "../../core/Scope.h"
 #include "../../core/Storage.h"
@@ -58,6 +61,8 @@
 #include "../gfunc/Gfunc.h"
 #include "../ufunc/Arith.h"
 #include "../ufunc/Astype.h"
+#include "../ufunc/Reductions.h"
+#include "../ufunc/ToDevice.h"
 #include "Div.h"
 #include "Mul.h"
 
@@ -188,6 +193,8 @@ inline Storage compute(Op op,
                        const Storage& s,
                        Dtype s_dt,
                        Device device) {
+    if (PhantomMode::is_enabled() || storage_is_phantom(x) || storage_is_phantom(s))
+        return phantom_storage(shape, h, device);
     if (device == Device::GPU) {
         return gpu_fn::wrap(gpu_fn::fused(op, scalar_first, {gpu_fn::arr(x), gpu_fn::arr(s)}), h);
     }
@@ -221,6 +228,9 @@ inline Storage reciprocal_grad(const Storage& g,
                                const Storage& s,
                                Dtype s_dt,
                                Device device) {
+    if (PhantomMode::is_enabled() || storage_is_phantom(g) || storage_is_phantom(t) ||
+        storage_is_phantom(s))
+        return phantom_storage(shape, h, device);
     if (device == Device::GPU) {
         return gpu_fn::wrap(backend::mlx_fused({gpu_fn::arr(g), gpu_fn::arr(t), gpu_fn::arr(s)},
                                                gpu_fn::ReciprocalGrad{})[0],
@@ -234,8 +244,9 @@ inline Storage reciprocal_grad(const Storage& g,
     return be.astype(be.div(neg_sg, t_sq, shape, Dtype::F32), shape, Dtype::F32, h);
 }
 
-// One node per op.  Slot ``t_index_`` is ``T``; the other slot is the 0-d,
-// which never requires grad and so gets no gradient.
+// One node per op.  Slot ``t_index_`` is ``T``; slot ``1 - t_index_`` is the
+// 0-d operand ``S``, whose gradient is reduced in float32 (and cast back to
+// ``s_dtype_`` when ``S`` is float64 on the CPU).
 template <Op K>
 class ScalarBackward : public kernel::NaryKernel<ScalarBackward<K>, 2> {
 public:
@@ -247,28 +258,73 @@ public:
     std::string node_name() const override { return std::string(schema_v1.name); }
 
     std::vector<Storage> apply(Storage grad_out) override {
+        const auto& edges = this->next_edges();
+        const std::size_t s_index = 1 - t_index_;
         std::vector<Storage> grads(2, Storage{CpuStorage{}});
-        grads[t_index_] = grad_t(grad_out);
+        if (edges.size() > t_index_ && edges[t_index_].is_valid())
+            grads[t_index_] = grad_t(grad_out);
+        if (edges.size() > s_index && edges[s_index].is_valid())
+            grads[s_index] = grad_s(grad_out);
         return grads;
     }
 
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        const auto& edges = this->next_edges();
+        const std::size_t s_index = 1 - t_index_;
         const TensorImplPtr& t = this->saved_impl_inputs_[t_index_];
-        const TensorImplPtr& s = this->saved_impl_inputs_[1 - t_index_];
+        const TensorImplPtr& s = this->saved_impl_inputs_[s_index];
         std::vector<TensorImplPtr> grads(2);
-        if constexpr (K == Op::Mul) {
-            grads[t_index_] = mul_op(grad_out, s);
-        } else if constexpr (K == Op::Div) {
-            grads[t_index_] = scalar_first() ? neg_op(div_op(mul_op(grad_out, s), mul_op(t, t)))
-                                             : div_op(grad_out, s);
-        } else {
-            grads[t_index_] = zeros_like_op(t);
-        }
+        if (edges.size() > t_index_ && edges[t_index_].is_valid())
+            grads[t_index_] = graph_grad_t(grad_out, t, s);
+        if (edges.size() > s_index && edges[s_index].is_valid())
+            grads[s_index] = graph_grad_s(grad_out, t, s);
         return grads;
     }
 
 private:
     bool scalar_first() const { return t_index_ == 1; }
+
+    TensorImplPtr graph_grad_t(const TensorImplPtr& grad_out,
+                               const TensorImplPtr& t,
+                               const TensorImplPtr& s) const {
+        if constexpr (K == Op::Mul) {
+            return mul_op(grad_out, s);
+        } else if constexpr (K == Op::Div) {
+            if (!scalar_first())
+                return div_op(grad_out, s);
+            const TensorImplPtr g32 = astype_op(grad_out, Dtype::F32);
+            const TensorImplPtr t32 = astype_op(t, Dtype::F32);
+            const TensorImplPtr s32 = s->dtype() == Dtype::F32 ? s : astype_op(s, Dtype::F32);
+            return astype_op(neg_op(div_op(mul_op(g32, s32), mul_op(t32, t32))), this->dtype_);
+        } else {
+            return zeros_like_op(t);
+        }
+    }
+
+    TensorImplPtr graph_grad_s(const TensorImplPtr& grad_out,
+                               const TensorImplPtr& t,
+                               const TensorImplPtr& s) const {
+        if constexpr (K == Op::FloorDiv) {
+            return zeros_like_op(s);
+        } else {
+            const TensorImplPtr g32 = astype_op(grad_out, Dtype::F32);
+            const TensorImplPtr t32 = astype_op(t, Dtype::F32);
+            TensorImplPtr term;
+            if constexpr (K == Op::Mul) {
+                term = mul_op(g32, t32);
+            } else {
+                if (scalar_first()) {
+                    term = div_op(g32, t32);
+                } else {
+                    const TensorImplPtr s32 =
+                        s->dtype() == Dtype::F32 ? s : astype_op(s, Dtype::F32);
+                    term = neg_op(div_op(mul_op(g32, t32), mul_op(s32, s32)));
+                }
+            }
+            const TensorImplPtr ds = sum_op(term, {}, false);
+            return s->dtype() == Dtype::F32 ? ds : astype_op(ds, s->dtype());
+        }
+    }
 
     Storage grad_t(const Storage& g) const {
         const Storage& s = this->saved_inputs_[1 - t_index_];
@@ -283,6 +339,59 @@ private:
                            this->device_);
         } else {
             return make_zero_storage(this->out_shape_, this->dtype_, this->device_);
+        }
+    }
+
+    Storage grad_s(const Storage& g) const {
+        if constexpr (K == Op::FloorDiv) {
+            return make_zero_storage(Shape{}, s_dtype_, this->device_);
+        } else {
+            if (PhantomMode::is_enabled() || storage_is_phantom(g))
+                return phantom_storage(Shape{}, s_dtype_, this->device_);
+            const Storage& t = this->saved_inputs_[t_index_];
+            if (this->device_ == Device::GPU) {
+                namespace mx = ::mlx::core;
+                const mx::array g32 = backend::widen_half(gpu_fn::arr(g));
+                const mx::array t32 = backend::widen_half(gpu_fn::arr(t));
+                mx::array term = g32;
+                if constexpr (K == Op::Mul) {
+                    term = mx::multiply(g32, t32);
+                } else {
+                    if (scalar_first()) {
+                        term = mx::divide(g32, t32);
+                    } else {
+                        const mx::array& s32 = gpu_fn::arr(this->saved_inputs_[1 - t_index_]);
+                        term = mx::negative(mx::divide(mx::multiply(g32, t32), mx::square(s32)));
+                    }
+                }
+                return gpu_fn::wrap(mx::sum(term), s_dtype_);
+            }
+            const std::size_t n = shape_numel(this->out_shape_);
+            if (n == 0)
+                return make_zero_storage(Shape{}, s_dtype_, Device::CPU);
+            auto& be = backend::Dispatcher::for_device(Device::CPU);
+            const Shape flat{static_cast<std::int64_t>(n)};
+            const Storage g32 = be.astype(g, flat, this->dtype_, Dtype::F32);
+            const Storage t32 = be.astype(t, flat, this->dtype_, Dtype::F32);
+            Storage term{CpuStorage{}};
+            if constexpr (K == Op::Mul) {
+                term = be.mul(g32, t32, flat, Dtype::F32);
+            } else {
+                if (scalar_first()) {
+                    term = be.div(g32, t32, flat, Dtype::F32);
+                } else {
+                    const Storage& s = this->saved_inputs_[1 - t_index_];
+                    const Storage s32 =
+                        s_dtype_ == Dtype::F32 ? s : be.astype(s, Shape{}, s_dtype_, Dtype::F32);
+                    const Storage s_sq_0d = be.mul(s32, s32, Shape{}, Dtype::F32);
+                    const Storage s_sq{detail::broadcast_cpu(std::get<CpuStorage>(s_sq_0d), Shape{},
+                                                             flat, Dtype::F32)};
+                    const Storage gt = be.mul(g32, t32, flat, Dtype::F32);
+                    term = be.neg(be.div(gt, s_sq, flat, Dtype::F32), flat, Dtype::F32);
+                }
+            }
+            Storage sum32 = be.reduce_sum(term, flat, {{0}, false}, Dtype::F32);
+            return s_dtype_ == Dtype::F32 ? sum32 : be.astype(sum32, Shape{}, Dtype::F32, s_dtype_);
         }
     }
 };
@@ -302,13 +411,18 @@ TensorImplPtr forward(const Pair& p, const TensorImplPtr& a, const TensorImplPtr
     bwd->t_index_ = p.scalar_first ? 1 : 0;
     bwd->s_dtype_ = p.s->dtype();
     ScalarBackward<K>* node = bwd.get();
-    // Only what grad_t reads is saved: the 0-d for a product or a quotient,
-    // and the tensor too for ``s / t``, whose derivative is ``-s / t^2``.
-    // A write into ``t`` after ``t * s`` is then not refused, as the
-    // reference does not refuse it.
+    // Only what a needed gradient reads is saved: ``grad_t`` reads ``s`` for a
+    // product or quotient (and ``t`` too for ``s / t``), while ``grad_s`` reads
+    // ``t`` (and ``s`` too for ``t / s``).  A write into ``t`` after ``t * s``
+    // when ``s`` does not require grad is then not refused, while a write into
+    // ``t`` when ``s`` requires grad is refused, matching the reference.
+    const std::size_t s_idx = p.scalar_first ? 0 : 1;
+    const std::size_t t_idx = 1 - s_idx;
     std::array<bool, 2> saves{};
-    saves[p.scalar_first ? 0 : 1] = K != Op::FloorDiv;
-    saves[p.scalar_first ? 1 : 0] = K == Op::Div && p.scalar_first;
+    saves[s_idx] = (K != Op::FloorDiv && p.t->requires_grad()) ||
+                   (K == Op::Div && !p.scalar_first && p.s->requires_grad());
+    saves[t_idx] = (K == Op::Div && p.scalar_first && p.t->requires_grad()) ||
+                   (K != Op::FloorDiv && p.s->requires_grad());
     // wire_autograd takes the node's dtype from the first input, which is
     // the 0-d when it leads; the gradient lives in the half dtype.
     if (kernel::NaryKernel<ScalarBackward<K>, 2>::wire_autograd(std::move(bwd), {a, b}, out, saves))
@@ -325,8 +439,6 @@ TensorImplPtr try_scalar(const TensorImplPtr& a, const TensorImplPtr& b, SameDty
     std::optional<Pair> p = match(a, b);
     if (!p)
         return nullptr;
-    if (p->s->requires_grad())
-        ErrorBuilder(std::string(op_name(K))).fail("op-math scalar operand cannot require grad");
     TensorImplPtr a_use = a;
     TensorImplPtr b_use = b;
     if (p->t->device() == Device::GPU && p->s->device() == Device::CPU) {

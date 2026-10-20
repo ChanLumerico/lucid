@@ -129,20 +129,31 @@ def test_a_0d_float32_tensor_takes_the_same_path(
 
 
 @pytest.mark.parametrize("half", list(_HALF))
-def test_a_0d_operand_that_requires_grad_is_rounded_first(
-    half: str, device: str, ref: ModuleType
+@pytest.mark.parametrize("op", ["*", "/", "rdiv"])
+def test_a_0d_operand_that_requires_grad_keeps_op_math_and_gets_f32_grad(
+    half: str, op: str, device: str, ref: ModuleType
 ) -> None:
-    # The engine's op-math cannot send its gradient yet, so the 0-d is
-    # rounded to the half dtype as before rather than refused.
-    t = lucid.tensor(_VALUES, dtype=lucid.float32, device=device).to(_HALF[half])
+    expected = _expected(ref, half, op, 0.1)
+    assert expected is not None
+    t = lucid.tensor(
+        _VALUES, dtype=lucid.float32, device=device, requires_grad=True
+    ).to(_HALF[half])
+    t.retain_grad()
     z = lucid.tensor(0.1, dtype=lucid.float32, device=device, requires_grad=True)
-    out = t * z
+    out = t * z if op == "*" else (t / z if op == "/" else z / t)
     out.sum().backward()
-    rt = ref.tensor(_VALUES, dtype=_ref_half(ref, half))
-    expected = (rt * ref.tensor(0.1).to(rt.dtype)).float().tolist()
+    rt = ref.tensor(_VALUES, dtype=_ref_half(ref, half)).float()
+    rz = ref.tensor(0.1, dtype=ref.float32, requires_grad=True)
+    rout_w = rt * rz if op == "*" else (rt / rz if op == "/" else rz / rt)
+    rout_w.sum().backward()
     assert out.dtype == _HALF[half]
-    assert out.detach().to(lucid.float32).tolist() == expected
-    assert z.grad is not None
+    assert _same(out.detach().to(lucid.float32).tolist(), expected)
+    assert z.grad is not None and rz.grad is not None
+    assert z.grad.dtype == lucid.float32
+    assert z.grad.shape == ()
+    assert z.grad.item() == pytest.approx(rz.grad.item(), rel=1e-6, abs=1e-6)
+    assert t.grad is not None
+    assert t.grad.dtype == _HALF[half]
 
 
 @pytest.mark.parametrize("half", list(_HALF))

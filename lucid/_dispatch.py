@@ -237,11 +237,10 @@ def _is_opmath_operand(
 
     The engine's mul/div/floordiv read a 0-d float32 (float64 on the CPU)
     operand at its own width beside a half tensor on the same device (or a
-    0-d CPU scalar beside a Metal half tensor).  One that requires grad is
-    refused there — its gradient would be a reduction nothing sends yet — so
-    it is rounded to the half dtype instead, as before.
+    0-d CPU scalar beside a Metal half tensor), including when the 0-d
+    operand requires grad (LCD-300).
     """
-    if impl.shape or impl.requires_grad:
+    if impl.shape:
         return False
     if impl.device != peer_device and impl.device != _C_engine.Device.CPU:
         return False

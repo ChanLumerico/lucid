@@ -168,3 +168,41 @@ def test_coreml_float16_op_math_matches_eager_bit_for_bit(
         exported.close()
     assert isinstance(got, lucid.Tensor)
     _assert_bits_equal(got, want)
+
+
+class _LearnableScalarOpModule(nn.Module):
+    def __init__(self, op_name: str, scalar_val: float) -> None:
+        super().__init__()
+        self._op_fn = OPS[op_name]
+        self.scale = nn.Parameter(
+            lucid.tensor(scalar_val, dtype=lucid.float32, device=COMPILE_DEVICE)
+        )
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return self._op_fn(x, self.scale).sum()
+
+
+@pytest.mark.parametrize("dtype", [lucid.float16, lucid.bfloat16], ids=["f16", "bf16"])
+@pytest.mark.parametrize("op_name", ["mul", "rmul", "truediv", "rtruediv"])
+def test_compiled_step_with_learnable_0d_f32_parameter_matches_eager(
+    dtype: object, op_name: str
+) -> None:
+    x = lucid.tensor(VALUES, dtype=dtype, device=COMPILE_DEVICE)
+    eager_model = _LearnableScalarOpModule(op_name, 0.1)
+    eager_loss = eager_model(x)
+    eager_loss.backward()
+    assert eager_model.scale.grad is not None
+
+    comp_model = _LearnableScalarOpModule(op_name, 0.1)
+    step = lucid.compile.make_step(comp_model, lambda pred, _: pred)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", fallback.CompileFallbackWarning)
+        comp_loss = step(x, x)
+        comp_loss.backward()
+    assert comp_model.scale.grad is not None
+    assert comp_model.scale.grad.dtype == lucid.float32
+    _assert_bits_equal(comp_loss.detach(), eager_loss.detach())
+    assert comp_model.scale.grad.item() == pytest.approx(
+        eager_model.scale.grad.item(), rel=1e-5, abs=1e-5
+    )
+

@@ -31,6 +31,22 @@ struct BinaryGradPair {
     MPSGraphTensor* db = nil;
 };
 
+inline bool is_0d_f32_tensor(MPSGraphTensor* t) {
+    return t != nil && t.dataType == MPSDataTypeFloat32 && t.shape != nil && t.shape.count == 0;
+}
+
+inline bool is_half_f32_0d_pair(const OpNode& node,
+                                MPSDataType chain_dt,
+                                MPSGraphTensor* a_t,
+                                MPSGraphTensor* b_t) {
+    if (chain_dt != MPSDataTypeFloat16 && chain_dt != MPSDataTypeBFloat16)
+        return false;
+    if (node.name != "mul" && node.name != "div")
+        return false;
+    return (a_t.dataType == chain_dt && is_0d_f32_tensor(b_t)) ||
+           (b_t.dataType == chain_dt && is_0d_f32_tensor(a_t));
+}
+
 // All binary-arith VJPs share the same accumulation pattern: compute
 // the full-shape gradient w.r.t. each input, then unreduce back to the
 // pre-broadcast shape and accumulate.  Factored as a helper so each
@@ -43,20 +59,36 @@ struct BinaryGradPair {
 // gradient body must run in ``c.go.dataType`` (the chain's dtype), so
 // we cast both forward activations to that dtype before invoking the
 // per-op body.
+//
+// Half op-math (``mul`` / ``div`` on a half tensor and a 0-d ``float32``
+// operand, LCD-300): eager widens ``grad_out`` and ``T`` to ``float32``,
+// reduces ``dS`` in ``float32``, and rounds ``dT`` once back to the half
+// dtype.  Keep that width here before ``unreduce`` so a learnable 0-d
+// ``float32`` parameter accumulates its ``float32`` gradient in compiled
+// steps.
 template <class Body>
-inline bool accumulate_binary(BackwardContext& bctx, const OpNode& node,
-                               const std::vector<void*>& grad_outs, Body body) {
+inline bool accumulate_binary(BackwardContext& bctx,
+                              const OpNode& node,
+                              const std::vector<void*>& grad_outs,
+                              Body body) {
     BinaryVjpCtx c = unpack_binary_vjp(bctx, node, grad_outs);
-    if (!c.ok) return false;
+    if (!c.ok)
+        return false;
     const MPSDataType chain_dt = c.go.dataType;
-    c.a = cast_if_needed(c.g, c.a, chain_dt);
-    c.b = cast_if_needed(c.g, c.b, chain_dt);
+    const bool opmath = is_half_f32_0d_pair(node, chain_dt, c.a, c.b);
+    const MPSDataType a_target_dt = opmath ? c.a.dataType : chain_dt;
+    const MPSDataType b_target_dt = opmath ? c.b.dataType : chain_dt;
+    const MPSDataType work_dt = opmath ? MPSDataTypeFloat32 : chain_dt;
+    c.go = cast_if_needed(c.g, c.go, work_dt);
+    c.a = cast_if_needed(c.g, c.a, work_dt);
+    c.b = cast_if_needed(c.g, c.b, work_dt);
     BinaryGradPair g = body(c);
-    if (g.da == nil || g.db == nil) return false;
-    bctx.accumulate_grad(c.a_id,
-                          bctx.unreduce(from_tensor(g.da), c.a_shape, c.out_shape));
-    bctx.accumulate_grad(c.b_id,
-                          bctx.unreduce(from_tensor(g.db), c.b_shape, c.out_shape));
+    if (g.da == nil || g.db == nil)
+        return false;
+    MPSGraphTensor* da = as_tensor(bctx.unreduce(from_tensor(g.da), c.a_shape, c.out_shape));
+    MPSGraphTensor* db = as_tensor(bctx.unreduce(from_tensor(g.db), c.b_shape, c.out_shape));
+    bctx.accumulate_grad(c.a_id, from_tensor(cast_if_needed(c.g, da, a_target_dt)));
+    bctx.accumulate_grad(c.b_id, from_tensor(cast_if_needed(c.g, db, b_target_dt)));
     return true;
 }
 
@@ -66,12 +98,11 @@ inline bool accumulate_binary(BackwardContext& bctx, const OpNode& node,
 class AddVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "add"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
-        return accumulate_binary(bctx, node, grad_outs,
-            [](const BinaryVjpCtx& c) -> BinaryGradPair {
-                return { c.go, c.go };
-            });
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
+        return accumulate_binary(
+            bctx, node, grad_outs,
+            [](const BinaryVjpCtx& c) -> BinaryGradPair { return {c.go, c.go}; });
     }
 };
 
@@ -81,12 +112,12 @@ public:
 class SubVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "sub"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
         return accumulate_binary(bctx, node, grad_outs,
-            [](const BinaryVjpCtx& c) -> BinaryGradPair {
-                return { c.go, [c.g negativeWithTensor:c.go name:nil] };
-            });
+                                 [](const BinaryVjpCtx& c) -> BinaryGradPair {
+                                     return {c.go, [c.g negativeWithTensor:c.go name:nil]};
+                                 });
     }
 };
 
@@ -97,14 +128,14 @@ public:
 class NextafterVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "nextafter"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
-        return accumulate_binary(bctx, node, grad_outs,
-            [](const BinaryVjpCtx& c) -> BinaryGradPair {
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
+        return accumulate_binary(
+            bctx, node, grad_outs, [](const BinaryVjpCtx& c) -> BinaryGradPair {
                 MPSGraphTensor* zero = [c.g constantWithScalar:0.0 dataType:c.go.dataType];
-                return { c.go, [c.g multiplicationWithPrimaryTensor:c.go
-                                                    secondaryTensor:zero
-                                                               name:nil] };
+                return {c.go, [c.g multiplicationWithPrimaryTensor:c.go
+                                                   secondaryTensor:zero
+                                                              name:nil]};
             });
     }
 };
@@ -115,14 +146,12 @@ public:
 class MulVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "mul"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
-        return accumulate_binary(bctx, node, grad_outs,
-            [](const BinaryVjpCtx& c) -> BinaryGradPair {
-                return {
-                    [c.g multiplicationWithPrimaryTensor:c.go secondaryTensor:c.b name:nil],
-                    [c.g multiplicationWithPrimaryTensor:c.go secondaryTensor:c.a name:nil]
-                };
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
+        return accumulate_binary(
+            bctx, node, grad_outs, [](const BinaryVjpCtx& c) -> BinaryGradPair {
+                return {[c.g multiplicationWithPrimaryTensor:c.go secondaryTensor:c.b name:nil],
+                        [c.g multiplicationWithPrimaryTensor:c.go secondaryTensor:c.a name:nil]};
             });
     }
 };
@@ -133,20 +162,24 @@ public:
 class DivVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "div"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
-        return accumulate_binary(bctx, node, grad_outs,
-            [](const BinaryVjpCtx& c) -> BinaryGradPair {
-                MPSGraphTensor* da =
-                    [c.g divisionWithPrimaryTensor:c.go secondaryTensor:c.b name:nil];
-                MPSGraphTensor* g_times_a =
-                    [c.g multiplicationWithPrimaryTensor:c.go secondaryTensor:c.a name:nil];
-                MPSGraphTensor* b_sq =
-                    [c.g multiplicationWithPrimaryTensor:c.b secondaryTensor:c.b name:nil];
-                MPSGraphTensor* div_b_sq =
-                    [c.g divisionWithPrimaryTensor:g_times_a secondaryTensor:b_sq name:nil];
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
+        return accumulate_binary(
+            bctx, node, grad_outs, [](const BinaryVjpCtx& c) -> BinaryGradPair {
+                MPSGraphTensor* da = [c.g divisionWithPrimaryTensor:c.go
+                                                    secondaryTensor:c.b
+                                                               name:nil];
+                MPSGraphTensor* g_times_a = [c.g multiplicationWithPrimaryTensor:c.go
+                                                                 secondaryTensor:c.a
+                                                                            name:nil];
+                MPSGraphTensor* b_sq = [c.g multiplicationWithPrimaryTensor:c.b
+                                                            secondaryTensor:c.b
+                                                                       name:nil];
+                MPSGraphTensor* div_b_sq = [c.g divisionWithPrimaryTensor:g_times_a
+                                                          secondaryTensor:b_sq
+                                                                     name:nil];
                 MPSGraphTensor* db = [c.g negativeWithTensor:div_b_sq name:nil];
-                return { da, db };
+                return {da, db};
             });
     }
 };
@@ -157,30 +190,37 @@ public:
 class PowVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "pow"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
-        return accumulate_binary(bctx, node, grad_outs,
-            [](const BinaryVjpCtx& c) -> BinaryGradPair {
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
+        return accumulate_binary(
+            bctx, node, grad_outs, [](const BinaryVjpCtx& c) -> BinaryGradPair {
                 // c.a / c.b already cast to chain dtype by accumulate_binary.
                 MPSDataType dt = c.go.dataType;
                 MPSGraphTensor* one = [c.g constantWithScalar:1.0 dataType:dt];
-                MPSGraphTensor* bm1 =
-                    [c.g subtractionWithPrimaryTensor:c.b secondaryTensor:one name:nil];
-                MPSGraphTensor* a_pow_bm1 =
-                    [c.g powerWithPrimaryTensor:c.a secondaryTensor:bm1 name:nil];
-                MPSGraphTensor* b_times_apow =
-                    [c.g multiplicationWithPrimaryTensor:c.b secondaryTensor:a_pow_bm1 name:nil];
-                MPSGraphTensor* da =
-                    [c.g multiplicationWithPrimaryTensor:b_times_apow secondaryTensor:c.go name:nil];
+                MPSGraphTensor* bm1 = [c.g subtractionWithPrimaryTensor:c.b
+                                                        secondaryTensor:one
+                                                                   name:nil];
+                MPSGraphTensor* a_pow_bm1 = [c.g powerWithPrimaryTensor:c.a
+                                                        secondaryTensor:bm1
+                                                                   name:nil];
+                MPSGraphTensor* b_times_apow = [c.g multiplicationWithPrimaryTensor:c.b
+                                                                    secondaryTensor:a_pow_bm1
+                                                                               name:nil];
+                MPSGraphTensor* da = [c.g multiplicationWithPrimaryTensor:b_times_apow
+                                                          secondaryTensor:c.go
+                                                                     name:nil];
 
                 MPSGraphTensor* log_a = [c.g logarithmWithTensor:c.a name:nil];
-                MPSGraphTensor* a_pow_b =
-                    [c.g powerWithPrimaryTensor:c.a secondaryTensor:c.b name:nil];
-                MPSGraphTensor* prod =
-                    [c.g multiplicationWithPrimaryTensor:log_a secondaryTensor:a_pow_b name:nil];
-                MPSGraphTensor* db =
-                    [c.g multiplicationWithPrimaryTensor:prod secondaryTensor:c.go name:nil];
-                return { da, db };
+                MPSGraphTensor* a_pow_b = [c.g powerWithPrimaryTensor:c.a
+                                                      secondaryTensor:c.b
+                                                                 name:nil];
+                MPSGraphTensor* prod = [c.g multiplicationWithPrimaryTensor:log_a
+                                                            secondaryTensor:a_pow_b
+                                                                       name:nil];
+                MPSGraphTensor* db = [c.g multiplicationWithPrimaryTensor:prod
+                                                          secondaryTensor:c.go
+                                                                     name:nil];
+                return {da, db};
             });
     }
 };
@@ -196,27 +236,26 @@ template <bool IS_MAX>
 class MinMaxVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return IS_MAX ? "maximum" : "minimum"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
-        return accumulate_binary(bctx, node, grad_outs,
-            [](const BinaryVjpCtx& c) -> BinaryGradPair {
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
+        return accumulate_binary(
+            bctx, node, grad_outs, [](const BinaryVjpCtx& c) -> BinaryGradPair {
                 MPSGraphTensor* lhs = IS_MAX ? c.a : c.b;
                 MPSGraphTensor* rhs = IS_MAX ? c.b : c.a;
                 const MPSDataType dt = c.go.dataType;
-                MPSGraphTensor* take_a = [c.g castTensor:[c.g greaterThanOrEqualToWithPrimaryTensor:lhs
-                                                                                   secondaryTensor:rhs
-                                                                                              name:nil]
-                                                  toType:dt
-                                                    name:nil];
+                MPSGraphTensor* take_a =
+                    [c.g castTensor:[c.g greaterThanOrEqualToWithPrimaryTensor:lhs
+                                                               secondaryTensor:rhs
+                                                                          name:nil]
+                             toType:dt
+                               name:nil];
                 MPSGraphTensor* take_b = [c.g castTensor:[c.g lessThanWithPrimaryTensor:lhs
-                                                                         secondaryTensor:rhs
-                                                                                    name:nil]
+                                                                        secondaryTensor:rhs
+                                                                                   name:nil]
                                                   toType:dt
                                                     name:nil];
-                return {
-                    [c.g multiplicationWithPrimaryTensor:c.go secondaryTensor:take_a name:nil],
-                    [c.g multiplicationWithPrimaryTensor:c.go secondaryTensor:take_b name:nil]
-                };
+                return {[c.g multiplicationWithPrimaryTensor:c.go secondaryTensor:take_a name:nil],
+                        [c.g multiplicationWithPrimaryTensor:c.go secondaryTensor:take_b name:nil]};
             });
     }
 };
@@ -227,12 +266,13 @@ public:
 class NegVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "neg"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
         if (node.inputs.size() != 1 || grad_outs.empty() || grad_outs[0] == nullptr)
             return false;
         TensorId x_id = node.inputs[0];
-        if (x_id < 0) return false;
+        if (x_id < 0)
+            return false;
         MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
         MPSGraphTensor* go = as_tensor(grad_outs[0]);
         MPSGraphTensor* neg = [g negativeWithTensor:go name:nil];
@@ -256,8 +296,8 @@ inline MPSGraphTensor* zeros_like_t(MPSGraph* g, MPSGraphTensor* t) {
 class WhereVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "where"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
         if (node.inputs.size() != 3 || grad_outs.empty() || grad_outs[0] == nullptr)
             return false;
         MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
@@ -274,15 +314,14 @@ public:
             MPSGraphTensor* fwd = as_tensor(bctx.forward(id));
             if (fwd == nil)
                 return false;
-            MPSGraphTensor* d = side == 1
-                                    ? [g selectWithPredicateTensor:c
-                                               truePredicateTensor:go
-                                              falsePredicateTensor:zero
-                                                              name:nil]
-                                    : [g selectWithPredicateTensor:c
-                                               truePredicateTensor:zero
-                                              falsePredicateTensor:go
-                                                              name:nil];
+            MPSGraphTensor* d = side == 1 ? [g selectWithPredicateTensor:c
+                                                     truePredicateTensor:go
+                                                    falsePredicateTensor:zero
+                                                                    name:nil]
+                                          : [g selectWithPredicateTensor:c
+                                                     truePredicateTensor:zero
+                                                    falsePredicateTensor:go
+                                                                    name:nil];
             void* red = bctx.unreduce(from_tensor(d), shape_of_mps(fwd), out_shape);
             if (red == nullptr)
                 return false;
@@ -295,8 +334,8 @@ public:
 class MaskedFillVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "masked_fill"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
         if (node.inputs.size() != 2 || grad_outs.empty() || grad_outs[0] == nullptr ||
             node.inputs[0] < 0)
             return false;

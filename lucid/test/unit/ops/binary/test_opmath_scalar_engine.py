@@ -246,18 +246,64 @@ class TestGradients:
             sc.add_(1.0)
             out.backward(lucid.ones_like(out))
 
+    @pytest.mark.parametrize("dtype", _HALF, ids=["f16", "bf16"])
     @pytest.mark.parametrize("op", _OPS)
-    def test_scalar_requiring_grad_is_refused(self, device: str, op: str) -> None:
+    @pytest.mark.parametrize("scalar_first", [False, True], ids=["T_op_S", "S_op_T"])
+    def test_scalar_requiring_grad_receives_widened_gradient(
+        self, device: str, dtype: lucid.dtype, op: str, scalar_first: bool
+    ) -> None:
+        t = _half([1.5, -2.25, 3.09375], dtype, device, grad=True)
+        sc = lucid.tensor(0.1, dtype=lucid.float32, device=device, requires_grad=True)
+        out = _call(op, sc, t) if scalar_first else _call(op, t, sc)
+        seed = _half([0.5, -1.25, 2.0], dtype, device)
+        out.backward(seed)
+
+        wide_g = seed.to(lucid.float32)
+        wide_t = t.detach().to(lucid.float32)
+        sc_det = sc.detach()
+        if op == "mul":
+            expected_s = (wide_g * wide_t).sum()
+        elif op == "div" and scalar_first:
+            expected_s = (wide_g / wide_t).sum()
+        elif op == "div":
+            expected_s = (-(wide_g * wide_t) / (sc_det * sc_det)).sum()
+        else:
+            expected_s = lucid.tensor(0.0, dtype=lucid.float32, device=device)
+
+        assert sc.grad is not None
+        assert sc.grad.dtype == lucid.float32
+        assert sc.grad.shape == ()
+        assert sc.grad.item() == pytest.approx(expected_s.item(), rel=1e-6, abs=1e-6)
+        assert t.grad is not None
+        assert t.grad.dtype == dtype
+
+    @pytest.mark.parametrize("op", ["mul", "div"])
+    @pytest.mark.parametrize("scalar_first", [False, True])
+    def test_create_graph_differentiates_with_respect_to_scalar(
+        self, device: str, op: str, scalar_first: bool
+    ) -> None:
+        t = _half([2.0, 4.0], lucid.float16, device, grad=True)
+        sc = lucid.tensor(0.5, dtype=lucid.float32, device=device, requires_grad=True)
+        out = _call(op, sc, t) if scalar_first else _call(op, t, sc)
+        dt, dsc = lucid.autograd.grad(
+            out, [t, sc], [lucid.ones_like(out)], create_graph=True
+        )
+        assert dsc.dtype == lucid.float32
+        assert dsc.shape == ()
+        expected_dsc = 6.0 if op == "mul" else (0.75 if scalar_first else -24.0)
+        assert dsc.item() == pytest.approx(expected_dsc, rel=1e-6)
+        (ddsc_dt,) = lucid.autograd.grad(dsc, [t])
+        assert ddsc_dt.dtype == lucid.float16
+
+    def test_tensor_mutated_after_forward_is_caught_when_scalar_requires_grad(
+        self, device: str
+    ) -> None:
         t = _half([1.0, 2.0], lucid.float16, device)
-        sc = lucid.tensor(0.1, device=device, requires_grad=True)
-        with pytest.raises(
-            RuntimeError, match="op-math scalar operand cannot require grad"
-        ):
-            _call(op, t, sc)
-        with pytest.raises(
-            RuntimeError, match="op-math scalar operand cannot require grad"
-        ):
-            _call(op, sc, t)
+        sc = lucid.tensor(0.1, dtype=lucid.float32, device=device, requires_grad=True)
+        out = _call("mul", t, sc)
+        with pytest.raises(RuntimeError):
+            t.add_(1.0)
+            out.backward(lucid.ones_like(out))
 
 
 def _mixed_pairs(device: str) -> list[tuple[lucid.Tensor, lucid.Tensor]]:
