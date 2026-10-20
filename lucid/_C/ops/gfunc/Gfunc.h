@@ -148,9 +148,9 @@ LUCID_API TensorImplPtr empty_op(const Shape& shape,
 // Parameters
 // ----------
 // N : int64_t
-//     Number of rows.
+//     Number of rows (must be $\ge 0$).
 // M : int64_t
-//     Number of columns.  If ``M <= 0``, ``M`` is set to ``N``.
+//     Number of columns (must be $\ge 0$).
 // k : int64_t
 //     Diagonal index.  ``k = 0`` is the main diagonal; positive ``k``
 //     is above, negative ``k`` is below.

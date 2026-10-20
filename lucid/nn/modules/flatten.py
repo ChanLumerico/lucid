@@ -210,11 +210,7 @@ class Unflatten(Module):
         Tensor
             Tensor with the configured dimensions flattened or unflattened.
         """
-        shape = list(input.shape)
-        new_shape = (
-            shape[: self.dim] + list(self.unflattened_size) + shape[self.dim + 1 :]
-        )
-        return _wrap(_C_engine.reshape(_unwrap(input), new_shape))
+        return input.unflatten(self.dim, self.unflattened_size)
 
     @override
     def extra_repr(self) -> str:

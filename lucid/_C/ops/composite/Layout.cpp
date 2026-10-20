@@ -81,18 +81,40 @@ TensorImplPtr unflatten_op(const TensorImplPtr& a, int dim, const Shape& sizes) 
     if (ndim == 0)
         ErrorBuilder("unflatten").fail("cannot unflatten a 0-d tensor: it has no dimension");
     const int d = wrap_dim(dim, ndim, "unflatten");
-
-    std::int64_t product = 1;
-    for (auto s : sizes)
-        product *= s;
-    if (product != a->shape()[static_cast<std::size_t>(d)])
+    if (sizes.empty())
+        ErrorBuilder("unflatten").invalid_argument("sizes must be non-empty");
+    const std::int64_t dim_len = a->shape()[static_cast<std::size_t>(d)];
+    Shape resolved;
+    resolved.reserve(sizes.size());
+    int wildcard_pos = -1;
+    std::int64_t known_product = 1;
+    for (std::size_t i = 0; i < sizes.size(); ++i) {
+        if (sizes[i] == -1) {
+            if (wildcard_pos != -1)
+                ErrorBuilder("unflatten").invalid_argument("only one -1 is allowed");
+            wildcard_pos = static_cast<int>(i);
+            resolved.push_back(0);
+        } else if (sizes[i] < 0) {
+            ErrorContextGuard ctx{"unflatten"};
+            throw_negative_dim(sizes);
+        } else {
+            known_product *= sizes[i];
+            resolved.push_back(sizes[i]);
+        }
+    }
+    if (wildcard_pos != -1) {
+        if (known_product == 0 || dim_len % known_product != 0)
+            ErrorBuilder("unflatten").fail("sizes do not multiply to dim length");
+        resolved[static_cast<std::size_t>(wildcard_pos)] = dim_len / known_product;
+    } else if (known_product != dim_len) {
         ErrorBuilder("unflatten").fail("sizes do not multiply to dim length");
+    }
 
     Shape new_shape;
-    new_shape.reserve(static_cast<std::size_t>(ndim) - 1 + sizes.size());
+    new_shape.reserve(static_cast<std::size_t>(ndim) - 1 + resolved.size());
     for (int i = 0; i < d; ++i)
         new_shape.push_back(a->shape()[static_cast<std::size_t>(i)]);
-    for (auto s : sizes)
+    for (auto s : resolved)
         new_shape.push_back(s);
     for (int i = d + 1; i < ndim; ++i)
         new_shape.push_back(a->shape()[static_cast<std::size_t>(i)]);

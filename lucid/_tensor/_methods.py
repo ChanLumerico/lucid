@@ -1096,7 +1096,7 @@ def _bernoulli_(
     def _draw(base: Tensor) -> Tensor:
         out = (
             lucid.bernoulli(p.expand(base.shape), generator=generator).to(base.dtype)
-            if isinstance(p, Tensor)
+            if isinstance(p, lucid.Tensor)
             else lucid.bernoulli(base, p, generator=generator)
         )
         return base * 0 + out if base.requires_grad and base.is_floating_point() else out

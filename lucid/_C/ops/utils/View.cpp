@@ -62,12 +62,13 @@ Shape resolve_reshape_shape(const Shape& in_shape, const std::vector<std::int64_
     for (std::size_t i = 0; i < new_shape.size(); ++i) {
         if (new_shape[i] == -1) {
             if (wildcard_pos != -1) {
-                ErrorBuilder("reshape").fail("only one -1 is allowed");
+                ErrorBuilder("reshape").invalid_argument("only one -1 is allowed");
             }
             wildcard_pos = static_cast<int>(i);
             resolved.push_back(0);  // placeholder; filled in below
         } else if (new_shape[i] < 0) {
-            ErrorBuilder("reshape").invalid_argument("negative dim other than -1 is invalid");
+            ErrorContextGuard ctx{"reshape"};
+            throw_negative_dim(new_shape);
         } else {
             known_product *= new_shape[i];
             resolved.push_back(new_shape[i]);
@@ -362,6 +363,7 @@ TensorImplPtr as_strided_op(const TensorImplPtr& a,
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"as_strided", device, dt, size};
+    const auto n_out = static_cast<std::int64_t>(shape_numel(size));
     if (size.size() != stride.size())
         ErrorBuilder("as_strided").fail("size and stride need the same length");
 
@@ -379,7 +381,7 @@ TensorImplPtr as_strided_op(const TensorImplPtr& a,
     std::int64_t last = offset;
     bool empty = false;
     for (std::size_t d = 0; d < size.size(); ++d) {
-        if (size[d] < 0 || stride[d] < 0)
+        if (stride[d] < 0)
             ErrorBuilder("as_strided").invalid_argument("size and stride must be non-negative");
         if (size[d] == 0)
             empty = true;
@@ -392,7 +394,6 @@ TensorImplPtr as_strided_op(const TensorImplPtr& a,
     scope.set_attr("stride", stride);
     scope.set_attr("storage_offset", offset);
 
-    const auto n_out = static_cast<std::int64_t>(shape_numel(size));
     const auto n_in = static_cast<std::int64_t>(shape_numel(a->shape()));
     const bool needs_grad = GradMode::is_enabled() && a->requires_grad();
 

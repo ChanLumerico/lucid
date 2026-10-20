@@ -150,6 +150,7 @@ TensorImplPtr broadcast_to_op(const TensorImplPtr& a, const Shape& shape) {
     const Dtype dt = a->dtype();
     const Device device = a->device();
     OpScopeFull scope{"broadcast_to", device, dt, shape};
+    check_concrete_shape(shape);
 
     // Wrap the broadcast storage, wiring autograd and the tracer to ``a``.
     auto build_with_grad = [&](Storage&& out_storage) {
@@ -191,6 +192,8 @@ TensorImplPtr expand_op(const TensorImplPtr& a, const Shape& shape) {
     Validator::input(a, "expand.a").non_null();
     if (!a->views_by_stride())
         return broadcast_to_op(a, shape);
+    OpScopeFull scope{"broadcast_to", a->device(), a->dtype(), shape};
+    check_concrete_shape(shape);
     const std::size_t nin = a->shape().size();
     const std::size_t nout = shape.size();
     if (nin > nout)
@@ -204,7 +207,6 @@ TensorImplPtr expand_op(const TensorImplPtr& a, const Shape& shape) {
         else if (have != 1)
             throw ShapeMismatch(shape, a->shape(), "expand");
     }
-    OpScopeFull scope{"broadcast_to", a->device(), a->dtype(), shape};
     auto out = TensorImpl::make_view(a, shape, std::move(stride), 0);
     auto bwd = std::make_shared<BroadcastBackward>();
     bwd->input_shape_ = a->shape();

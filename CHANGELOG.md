@@ -1082,6 +1082,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - amax/amin keepdim, 0-sized matrix_norm, and int64 prod precision (LCD-56)
 
+- refuse negative sizes and infer unflatten -1 (LCD-528)
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

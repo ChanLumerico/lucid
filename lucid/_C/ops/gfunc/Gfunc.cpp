@@ -99,6 +99,7 @@ inline TensorImplPtr made_from_nothing(TensorImplPtr out) {
 // after allocation.
 TensorImplPtr zeros_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"zeros", device, dt, shape};
+    check_concrete_shape(shape);
     auto s = make_zero_storage(shape, dt, device);
     auto out = finalize(std::move(s), shape, dt, device, requires_grad);
     // Same rationale as full_op below — without this, downstream
@@ -117,6 +118,7 @@ TensorImplPtr zeros_op(const Shape& shape, Dtype dt, Device device, bool require
 // and on the GPU uses MLX ones or from_cpu with a pre-filled buffer.
 TensorImplPtr ones_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"ones", device, dt, shape};
+    check_concrete_shape(shape);
     auto s = make_ones_storage(shape, dt, device);
     auto out = finalize(std::move(s), shape, dt, device, requires_grad);
     if (auto* trc = ::lucid::compile::current_tracer()) {
@@ -134,6 +136,7 @@ TensorImplPtr ones_op(const Shape& shape, Dtype dt, Device device, bool requires
 TensorImplPtr
 full_op(const Shape& shape, double fill_value, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"full", device, dt, shape};
+    check_concrete_shape(shape);
     // 3.5 Phase 1.3: report fill value for the compile-path Full emitter.
     scope.set_attr("fill_value", fill_value);
     auto s = backend::Dispatcher::for_device(device).full(shape, dt, fill_value);
@@ -158,25 +161,20 @@ full_op(const Shape& shape, double fill_value, Dtype dt, Device device, bool req
 // The "empty" name signals contract: callers must not depend on the values.
 TensorImplPtr empty_op(const Shape& shape, Dtype dt, Device device, bool requires_grad) {
     OpScopeFull scope{"empty", device, dt, shape};
+    check_concrete_shape(shape);
     auto s = make_zero_storage(shape, dt, device);
     return made_from_nothing(finalize(std::move(s), shape, dt, device, requires_grad));
 }
 
 // Create an N×M matrix with ones on diagonal k.
 //
-// Defaults M to N when M <= 0 to match numpy.eye behaviour.
 // k=0 is the main diagonal; k>0 places ones above; k<0 places ones below.
 // Both N and M must be non-negative.  IBackend::eye handles the actual fill.
 TensorImplPtr eye_op(
     std::int64_t N, std::int64_t M, std::int64_t k, Dtype dt, Device device, bool requires_grad) {
-    // Negative means "not given" (the binding's default); 0 is a width, and
-    // ``eye(3, 0)`` is 3 x 0 — it came back 3 x 3 when 0 counted as unset.
-    if (M < 0)
-        M = N;
-    if (N < 0)
-        ErrorBuilder("eye").invalid_argument("N and M must be >= 0");
     Shape shape{N, M};
     OpScopeFull scope{"eye", device, dt, shape};
+    check_concrete_shape(shape);
     auto s = backend::Dispatcher::for_device(device).eye(N, M, k, dt);
     return made_from_nothing(finalize(std::move(s), shape, dt, device, requires_grad));
 }
@@ -303,10 +301,9 @@ arange_op(double start, double stop, double step, Dtype dt, Device device, bool 
 //             for the value computation and step is defined as 0.
 TensorImplPtr linspace_op(
     double start, double stop, std::int64_t num, Dtype dt, Device device, bool requires_grad) {
-    if (num < 0)
-        ErrorBuilder("linspace").invalid_argument("num must be >= 0");
     Shape shape{num};
     OpScopeFull scope{"linspace", device, dt, shape};
+    check_concrete_shape(shape);
     // The compile emitter bakes the same sequence as a constant; the length
     // is the output dim.
     scope.set_attr("start", start);
@@ -415,10 +412,9 @@ TensorImplPtr logspace_op(double start,
                           Dtype dt,
                           Device device,
                           bool requires_grad) {
-    if (num < 0)
-        ErrorBuilder("logspace").invalid_argument("num must be >= 0");
     Shape shape{num};
     OpScopeFull scope{"logspace", device, dt, shape};
+    check_concrete_shape(shape);
 
     const double step = (num > 1) ? (stop - start) / static_cast<double>(num - 1) : 0.0;
 

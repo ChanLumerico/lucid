@@ -9,6 +9,8 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include <optional>
+
 #include "../core/Dtype.h"
 #include "../core/Shape.h"
 #include "../core/TensorImpl.h"
@@ -66,10 +68,13 @@ void register_gfunc(py::module_& m) {
 
     // eye, arange, linspace, and diag delegate directly to their C++ ops
     // without shape conversion because they take scalar dimension arguments.
-    // eye: M=-1 means square (N×N); k is the diagonal offset.
-    m.def("eye", &eye_op, py::arg("N"), py::arg("M") = -1, py::arg("k") = 0,
-          py::arg("dtype") = Dtype::F32, py::arg("device") = Device::CPU,
-          py::arg("requires_grad") = false);
+    // eye: omitted M defaults to square (N×N); k is the diagonal offset.
+    m.def(
+        "eye",
+        [](std::int64_t N, std::optional<std::int64_t> M, std::int64_t k, Dtype dt, Device device,
+           bool requires_grad) { return eye_op(N, M.value_or(N), k, dt, device, requires_grad); },
+        py::arg("N"), py::arg("M") = py::none(), py::arg("k") = 0, py::arg("dtype") = Dtype::F32,
+        py::arg("device") = Device::CPU, py::arg("requires_grad") = false);
 
     m.def("arange", &arange_op, py::arg("start"), py::arg("stop"), py::arg("step") = 1.0,
           py::arg("dtype") = Dtype::F32, py::arg("device") = Device::CPU,

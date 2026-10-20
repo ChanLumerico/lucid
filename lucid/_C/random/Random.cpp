@@ -118,6 +118,7 @@ compile::RngRecipe recipe_of(compile::RngRecipe::Kind kind, double a, double b) 
 // Fill with U(0, 1) uniform samples.
 TensorImplPtr rand_op(const Shape& shape, Dtype dt, Device device, Generator* gen) {
     OpScopeFull scope{"rand", device, dt, shape};
+    check_concrete_shape(shape);
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
     auto s = uniform_storage(shape, 0.0, 1.0, dt, device, resolve_gen(gen));
     auto out = finalize(std::move(s), shape, dt, device);
@@ -131,6 +132,7 @@ uniform_op(const Shape& shape, double low, double high, Dtype dt, Device device,
     if (high <= low)
         ErrorBuilder("uniform").invalid_argument("high must be > low");
     OpScopeFull scope{"uniform", device, dt, shape};
+    check_concrete_shape(shape);
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
     scope.set_attr("low", low);
     scope.set_attr("high", high);
@@ -144,6 +146,7 @@ uniform_op(const Shape& shape, double low, double high, Dtype dt, Device device,
 // Fill with N(0, 1) standard-normal samples.
 TensorImplPtr randn_op(const Shape& shape, Dtype dt, Device device, Generator* gen) {
     OpScopeFull scope{"randn", device, dt, shape};
+    check_concrete_shape(shape);
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
     auto s = normal_storage(shape, 0.0, 1.0, dt, device, resolve_gen(gen));
     auto out = finalize(std::move(s), shape, dt, device);
@@ -157,6 +160,7 @@ normal_op(const Shape& shape, double mean, double std, Dtype dt, Device device, 
     if (std < 0.0)
         ErrorBuilder("normal").invalid_argument("std must be >= 0");
     OpScopeFull scope{"normal", device, dt, shape};
+    check_concrete_shape(shape);
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
     scope.set_attr("mean", mean);
     scope.set_attr("std", std);
@@ -174,6 +178,7 @@ TensorImplPtr randint_op(const Shape& shape,
                          Device device,
                          Generator* gen) {
     OpScopeFull scope{"randint", device, dt, shape};
+    check_concrete_shape(shape);
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
     scope.set_attr("low", low);
     scope.set_attr("high", high);
@@ -189,6 +194,7 @@ TensorImplPtr randint_op(const Shape& shape,
 // Fill with independent Bernoulli(p) samples.
 TensorImplPtr bernoulli_op(const Shape& shape, double p, Dtype dt, Device device, Generator* gen) {
     OpScopeFull scope{"bernoulli", device, dt, shape};
+    check_concrete_shape(shape);
     scope.set_attr("seed", static_cast<std::int64_t>(resolve_gen(gen).counter()));
     scope.set_attr("p", p);
     auto s = random_bernoulli_storage(shape, p, dt, device, resolve_gen(gen));

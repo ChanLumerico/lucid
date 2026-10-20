@@ -32,9 +32,6 @@ DEVICES = ["cpu", "metal"]
 # beside a valid extent.
 SIZES = [(-1,), (2, -3)]
 
-_FOLLOW_UP = "LCD-518 follow-up after LCD-466 c2"
-_API_FOLLOW_UP = "LCD-518 follow-up (api)"
-
 
 def _first_negative(sizes: tuple[int, ...]) -> int:
     return next(s for s in sizes if s < 0)
@@ -87,6 +84,7 @@ ENTRY_POINTS: dict[str, Builder] = {
     "broadcast_to": lambda m, dev, s: m.broadcast_to(_x(m, dev), _no_keep(s)),
     "view": lambda m, dev, s: _x(m, dev).view(*_reshape_target(s)),
     "reshape": lambda m, dev, s: _x(m, dev).reshape(*_reshape_target(s)),
+    "unflatten": lambda m, dev, s: _x(m, dev).unflatten(0, _reshape_target(s)),
     "as_strided": lambda m, dev, s: _x(m, dev).as_strided(s, (1,) * len(s)),
     "nn.Linear": lambda m, dev, s: m.nn.Linear(*_pair(s), device=dev),
     "nn.Conv1d": lambda m, dev, s: m.nn.Conv1d(*_pair(s), 3, device=dev),
@@ -94,76 +92,15 @@ ENTRY_POINTS: dict[str, Builder] = {
     "nn.Embedding": lambda m, dev, s: m.nn.Embedding(*_pair(s), device=dev),
 }
 
-# Doors whose refusal lives in a file another card holds, or in the Python
-# layer: pinned so the fix shows up as an XPASS.
-_CLASS_XFAIL: dict[tuple[str, tuple[int, ...] | None], str] = {
-    # Layout.cpp:170/175/197/205 raise ShapeMismatch for a negative target.
-    ("expand", None): f"{_FOLLOW_UP}: expand raises ShapeMismatch",
-    ("broadcast_to", None): f"{_FOLLOW_UP}: broadcast_to raises ShapeMismatch",
-    # View.cpp:65 refuses a second -1 with a plain LucidError.
-    ("view", (-1,)): f"{_FOLLOW_UP}: view(-1, -1) raises LucidError",
-    ("reshape", (-1,)): f"{_FOLLOW_UP}: reshape(-1, -1) raises LucidError",
-    # Gfunc.cpp:173 reads a negative M as "not given": eye(2, -3) is 2 x 2.
-    ("eye", (2, -3)): f"{_FOLLOW_UP}: eye(2, -3) builds a 2 x 2 identity",
-    # lucid/_factories/random.py:976 pre-validates with ValueError.
-    ("randperm", None): f"{_API_FOLLOW_UP}: randperm raises ValueError",
-}
-
-# Doors whose Metal backend reaches MLX before the engine checks the shape,
-# so MLX's text ("[full] Negative dimensions not allowed.") wins there; the
-# factories' entries are in Gfunc.cpp / Random.cpp.
-_MLX_TEXT_ON_METAL = {
-    "zeros",
-    "ones",
-    "empty",
-    "full",
-    "rand",
-    "randn",
-    "randint",
-    "new_zeros",
-    "new_ones",
-    "new_empty",
-    "new_full",
-    "nn.Linear",
-    "nn.Conv1d",
-    "nn.Conv2d",
-    "nn.Embedding",
-}
-
-# Doors that refuse with their op's own words, which do not yet name the
-# offending size.
-_MESSAGE_XFAIL: dict[str, str] = {
-    "eye": f"{_FOLLOW_UP}: eye says 'N and M must be >= 0'",
-    "linspace": f"{_FOLLOW_UP}: linspace says 'num must be >= 0'",
-    "logspace": f"{_FOLLOW_UP}: logspace says 'num must be >= 0'",
-    "as_strided": f"{_FOLLOW_UP}: as_strided says 'size and stride must be non-negative'",
-    "view": f"{_FOLLOW_UP}: reshape says 'negative dim other than -1 is invalid'",
-    "reshape": f"{_FOLLOW_UP}: reshape says 'negative dim other than -1 is invalid'",
-}
-
-
-def _class_xfail(name: str, sizes: tuple[int, ...]) -> str | None:
-    return _CLASS_XFAIL.get((name, sizes)) or _CLASS_XFAIL.get((name, None))
-
 
 def _cases(check: str) -> list[object]:
+    del check
     params = []
     for name in ENTRY_POINTS:
         for sizes in SIZES:
             for dev in DEVICES:
-                reason = _class_xfail(name, sizes)
-                if check == "message" and reason is None:
-                    if dev == "metal" and name in _MLX_TEXT_ON_METAL:
-                        reason = f"{_FOLLOW_UP}: MLX refuses first on Metal"
-                    else:
-                        reason = _MESSAGE_XFAIL.get(name)
-                marks = (
-                    [pytest.mark.xfail(strict=True, reason=reason)] if reason else []
-                )
                 params.append(
-                    pytest.param(
-                        name, sizes, dev, marks=marks, id=f"{name}-{sizes}-{dev}"
-                    )
+                    pytest.param(name, sizes, dev, id=f"{name}-{sizes}-{dev}")
                 )
     return params
 
@@ -190,7 +127,8 @@ def test_negative_size_raises_invalid_argument(
 # extent, or the count that would have made one.
 _NAMES_THE_SIZE = re.compile(
     r"^[a-z_]+: (Trying to create tensor with negative dimension -\d+: \[|"
-    r"Repeats must be non-negative, got -\d+)"
+    r"Repeats must be non-negative, got -\d+|"
+    r"only one -1 is allowed)"
 )
 
 
@@ -243,9 +181,13 @@ def test_wildcards_still_resolve(dev: str) -> None:
     x = lucid.ones(2, 3, device=dev)
     assert x.reshape(-1).shape == (6,)
     assert x.view(3, -1).shape == (3, 2)
+    assert x.unflatten(1, (-1, 1)).shape == (2, 3, 1)
+    assert x.unflatten(1, (3, -1)).shape == (2, 3, 1)
+    assert lucid.nn.Unflatten(-1, (-1, 1))(x).shape == (2, 3, 1)
     assert x.expand(-1, -1).shape == (2, 3)
     assert x.expand(4, -1, -1).shape == (4, 2, 3)
     assert lucid.zeros(0, 3, device=dev).tile((-1, 1)).shape == (0, 3)
+    assert lucid.zeros(2, 0, device=dev).unflatten(1, (-1, 3)).shape == (2, 0, 3)
 
 
 @pytest.mark.parametrize("dev", DEVICES)

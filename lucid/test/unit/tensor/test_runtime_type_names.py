@@ -66,6 +66,15 @@ def test_the_other_to_forms_still_work(target: object) -> None:
     assert x.to(target) is not None  # type: ignore[arg-type]
 
 
+def test_bernoulli_inplace_accepts_a_probability_tensor() -> None:
+    """``x.bernoulli_(p_tensor)`` must not reference a TYPE_CHECKING-only ``Tensor``."""
+    x = lucid.zeros(4)
+    p = lucid.ones(4)
+    out = x.bernoulli_(p)
+    assert out is x
+    assert np.allclose(x.numpy(), [1.0, 1.0, 1.0, 1.0])
+
+
 # ── the static guard ─────────────────────────────────────────────────────────
 
 

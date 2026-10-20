@@ -986,7 +986,9 @@ def randperm(
     """
     _check_random()
     if n < 0:
-        raise ValueError(f"randperm requires n >= 0, got {n}")
+        raise _C_engine.InvalidArgument(
+            f"randperm: Trying to create tensor with negative dimension {n}: [{n}]"
+        )
     _dt, _dev, _ = normalize_factory_kwargs(dtype, device)
     if n == 0:
         impl = _C_engine.zeros([0], _dt, _dev)
