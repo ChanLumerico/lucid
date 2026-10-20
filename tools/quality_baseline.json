@@ -206,7 +206,7 @@
     "lucid/utils/transforms/_presets.py": 1
    },
    "file-loc-over-cap": {
-    "lucid/_C/backend/cpu/CpuBackend.h": 10399,
+    "lucid/_C/backend/cpu/CpuBackend.h": 10231,
     "lucid/_C/backend/gpu/GpuBackend.h": 4498,
     "lucid/_ops/composite/elementwise.py": 73,
     "lucid/_tensor/_dunders.py": 189,
@@ -362,7 +362,7 @@
     "lucid/_C/autograd/ModuleHookNode.cpp": 1,
     "lucid/_C/backend/IBackend.h": 13,
     "lucid/_C/backend/PhantomBackend.h": 2,
-    "lucid/_C/backend/cpu/CpuBackend.h": 110,
+    "lucid/_C/backend/cpu/CpuBackend.h": 108,
     "lucid/_C/backend/cpu/CtcLoss.h": 2,
     "lucid/_C/backend/cpu/Im2Col.cpp": 12,
     "lucid/_C/backend/cpu/Im2Col.h": 7,
@@ -793,7 +793,7 @@
    "function-ccn": {
     "lucid/_C/autograd/CustomFunction.cpp": 1,
     "lucid/_C/autograd/FusionPass.cpp": 1,
-    "lucid/_C/backend/cpu/CpuBackend.h": 35,
+    "lucid/_C/backend/cpu/CpuBackend.h": 33,
     "lucid/_C/backend/cpu/Pool.cpp": 3,
     "lucid/_C/backend/gpu/AxisIndex.h": 1,
     "lucid/_C/backend/gpu/GpuBackend.h": 4,
@@ -906,7 +906,7 @@
    "function-ccn-excess": {
     "lucid/_C/autograd/CustomFunction.cpp": 1,
     "lucid/_C/autograd/FusionPass.cpp": 4,
-    "lucid/_C/backend/cpu/CpuBackend.h": 266,
+    "lucid/_C/backend/cpu/CpuBackend.h": 231,
     "lucid/_C/backend/cpu/Pool.cpp": 4,
     "lucid/_C/backend/gpu/AxisIndex.h": 3,
     "lucid/_C/backend/gpu/GpuBackend.h": 14,
@@ -1018,7 +1018,7 @@
    },
    "function-length": {
     "lucid/_C/autograd/CustomFunction.cpp": 1,
-    "lucid/_C/backend/cpu/CpuBackend.h": 15,
+    "lucid/_C/backend/cpu/CpuBackend.h": 14,
     "lucid/_C/backend/gpu/GpuBackend.h": 7,
     "lucid/_C/bindings/bind.cpp": 1,
     "lucid/_C/bindings/bind_compile.cpp": 2,
@@ -1147,7 +1147,7 @@
    },
    "function-length-excess": {
     "lucid/_C/autograd/CustomFunction.cpp": 27,
-    "lucid/_C/backend/cpu/CpuBackend.h": 505,
+    "lucid/_C/backend/cpu/CpuBackend.h": 428,
     "lucid/_C/backend/gpu/GpuBackend.h": 370,
     "lucid/_C/bindings/bind.cpp": 57,
     "lucid/_C/bindings/bind_compile.cpp": 644,

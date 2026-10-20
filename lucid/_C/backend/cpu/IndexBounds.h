@@ -40,7 +40,11 @@ struct IndexReader {
             return reinterpret_cast<const std::int16_t*>(data)[i];
         case Dtype::I8:
             return reinterpret_cast<const std::int8_t*>(data)[i];
-        default:  // Bool; index_reader admits nothing else
+        case Dtype::F32:
+            return static_cast<std::int64_t>(reinterpret_cast<const float*>(data)[i]);
+        case Dtype::F64:
+            return static_cast<std::int64_t>(reinterpret_cast<const double*>(data)[i]);
+        default:  // Bool; index_reader / real_index_reader admit nothing else
             return reinterpret_cast<const std::uint8_t*>(data)[i];
         }
     }
@@ -61,12 +65,40 @@ inline IndexReader index_reader(const char* op, const CpuStorage& s) {
     }
 }
 
+// A reader for ``s`` that also truncates floating-point indices toward zero
+// (used by ``one_hot`` and class-index loss targets).
+inline IndexReader real_index_reader(const char* op, const CpuStorage& s) {
+    switch (s.dtype) {
+    case Dtype::I8:
+    case Dtype::I16:
+    case Dtype::I32:
+    case Dtype::I64:
+    case Dtype::Bool:
+    case Dtype::F32:
+    case Dtype::F64:
+        return IndexReader{s.ptr.get(), s.dtype};
+    default:
+        ErrorBuilder(op).dtype_mismatch(Dtype::I64, s.dtype, "indices must be a real tensor");
+    }
+}
+
 // ``id`` as one of ``rows`` table rows or classes, or IndexError.  Nothing
 // lies below zero: a row or a class is never counted from the end.
 inline std::int64_t checked_row(const char* op, std::int64_t id, std::int64_t rows) {
     if (id < 0 || id >= rows)
         ErrorBuilder(op).index_error("index " + std::to_string(id) + " is out of range [0, " +
                                      std::to_string(rows) + ")");
+    return id;
+}
+
+// Wrap a signed index against ``extent`` and refuse anything still outside
+// ``[0, extent)``.
+inline std::int64_t
+checked_axis(const char* op, std::int64_t id, std::int64_t extent, const char* msg) {
+    if (id < 0)
+        id += extent;
+    if (id < 0 || id >= extent)
+        ErrorBuilder(op).index_error(msg);
     return id;
 }
 

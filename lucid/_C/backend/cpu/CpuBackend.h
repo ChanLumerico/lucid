@@ -3526,14 +3526,9 @@ public:
                     output_shape[static_cast<std::size_t>(d) + 1];
             }
         }
+        (void)index_dtype;
         const std::size_t total = shape_numel(output_shape);
-        auto load_idx = [&](std::size_t flat) -> std::int64_t {
-            if (index_dtype == Dtype::I32)
-                return reinterpret_cast<const std::int32_t*>(is.ptr.get())[flat];
-            if (index_dtype == Dtype::I64)
-                return reinterpret_cast<const std::int64_t*>(is.ptr.get())[flat];
-            ErrorBuilder("cpu_backend::gather").not_implemented("indices dtype must be I32 or I64");
-        };
+        const auto load_idx = cpu::index_reader("cpu_backend::gather", is);
 
         const std::int64_t axis_extent =
             ndim > 0 ? static_cast<std::int64_t>(input_shape[static_cast<std::size_t>(axis)]) : 0;
@@ -3559,17 +3554,14 @@ public:
         // the walk an index_select of a (3, 375, 500) image took 11 ms, and a
         // bicubic resize is eight of them (CHA-5).
         if (const auto rows = detail::GatherRows::of(input_shape, output_shape, axis)) {
-            auto run = [&](auto* dst, const auto* src, const auto* ix) {
+            auto run = [&](auto* dst, const auto* src) {
                 for (std::size_t o = 0; o < rows->outer; ++o) {
                     for (std::size_t j = 0; j < rows->taken; ++j) {
                         const std::size_t row = (o * rows->taken + j) * rows->inner;
                         for (std::size_t i = 0; i < rows->inner; ++i) {
-                            std::int64_t k = static_cast<std::int64_t>(ix[row + i]);
-                            if (k < 0)
-                                k += axis_extent;
-                            if (k < 0 || k >= axis_extent)
-                                ErrorBuilder("cpu_backend::gather")
-                                    .index_error("index out of range for the gathered axis");
+                            const std::int64_t k = cpu::checked_axis(
+                                "cpu_backend::gather", load_idx(row + i), axis_extent,
+                                "index out of range for the gathered axis");
                             dst[row + i] =
                                 src[(o * rows->extent + static_cast<std::size_t>(k)) * rows->inner +
                                     i];
@@ -3577,32 +3569,23 @@ public:
                     }
                 }
             };
-            auto with_index = [&](auto* dst, const auto* src) {
-                if (index_dtype == Dtype::I64)
-                    run(dst, src, reinterpret_cast<const std::int64_t*>(is.ptr.get()));
-                else if (index_dtype == Dtype::I32)
-                    run(dst, src, reinterpret_cast<const std::int32_t*>(is.ptr.get()));
-                else
-                    ErrorBuilder("cpu_backend::gather")
-                        .not_implemented("indices dtype must be I32 or I64");
-            };
             bool copied = true;
             switch (elem) {
             case 1:
-                with_index(reinterpret_cast<std::uint8_t*>(ptr.get()),
-                           reinterpret_cast<const std::uint8_t*>(as.ptr.get()));
+                run(reinterpret_cast<std::uint8_t*>(ptr.get()),
+                    reinterpret_cast<const std::uint8_t*>(as.ptr.get()));
                 break;
             case 2:
-                with_index(reinterpret_cast<std::uint16_t*>(ptr.get()),
-                           reinterpret_cast<const std::uint16_t*>(as.ptr.get()));
+                run(reinterpret_cast<std::uint16_t*>(ptr.get()),
+                    reinterpret_cast<const std::uint16_t*>(as.ptr.get()));
                 break;
             case 4:
-                with_index(reinterpret_cast<std::uint32_t*>(ptr.get()),
-                           reinterpret_cast<const std::uint32_t*>(as.ptr.get()));
+                run(reinterpret_cast<std::uint32_t*>(ptr.get()),
+                    reinterpret_cast<const std::uint32_t*>(as.ptr.get()));
                 break;
             case 8:
-                with_index(reinterpret_cast<std::uint64_t*>(ptr.get()),
-                           reinterpret_cast<const std::uint64_t*>(as.ptr.get()));
+                run(reinterpret_cast<std::uint64_t*>(ptr.get()),
+                    reinterpret_cast<const std::uint64_t*>(as.ptr.get()));
                 break;
             default:
                 copied = false;  // complex128: the walk below handles any width
@@ -3613,17 +3596,9 @@ public:
 
         std::vector<std::int64_t> coord(ndim, 0);
         for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
-            std::int64_t k = load_idx(out_flat);
-            if (k < 0)
-                k += input_shape[static_cast<std::size_t>(axis)];
-            // Refuse rather than read outside the buffer.  This memcpy'd
-            // from wherever the index pointed: gathering along an axis of
-            // extent 0 segfaulted, and an index of 99 into a 2x3 quietly
-            // returned 0.0 read from past the allocation.  Same defect
-            // shape as scatter_add above, on the reading side.
-            if (k < 0 || k >= axis_extent)
-                ErrorBuilder("cpu_backend::gather")
-                    .index_error("index out of range for the gathered axis");
+            const std::int64_t k =
+                cpu::checked_axis("cpu_backend::gather", load_idx(out_flat), axis_extent,
+                                  "index out of range for the gathered axis");
             std::size_t a_flat = 0;
             for (std::size_t d = 0; d < ndim; ++d) {
                 std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
@@ -3674,14 +3649,8 @@ public:
                     output_shape[static_cast<std::size_t>(d) + 1];
             }
         }
-        auto load_idx = [&](std::size_t flat) -> std::int64_t {
-            if (index_dtype == Dtype::I32)
-                return reinterpret_cast<const std::int32_t*>(idx.ptr.get())[flat];
-            if (index_dtype == Dtype::I64)
-                return reinterpret_cast<const std::int64_t*>(idx.ptr.get())[flat];
-            ErrorBuilder("cpu_backend::gather_backward")
-                .not_implemented("indices dtype must be I32 or I64");
-        };
+        (void)index_dtype;
+        const auto load_idx = cpu::index_reader("cpu_backend::gather_backward", idx);
 
         const std::size_t total = shape_numel(output_shape);
         // The forward pass reads at the index; this one *writes* at it, so
@@ -3703,92 +3672,57 @@ public:
         // The forward pass's fast case, accumulating instead of reading.
         if (const auto rows = detail::GatherRows::of(input_shape, output_shape, axis);
             rows && (dt == Dtype::F32 || dt == Dtype::F64)) {
-            auto run = [&](auto* dst, const auto* gp, const auto* ix) {
+            auto run = [&](auto* dst, const auto* gp) {
                 for (std::size_t o = 0; o < rows->outer; ++o) {
                     for (std::size_t j = 0; j < rows->taken; ++j) {
                         const std::size_t row = (o * rows->taken + j) * rows->inner;
                         for (std::size_t i = 0; i < rows->inner; ++i) {
-                            std::int64_t k = static_cast<std::int64_t>(ix[row + i]);
-                            if (k < 0)
-                                k += axis_extent;
-                            if (k < 0 || k >= axis_extent)
-                                ErrorBuilder("cpu_backend::gather_backward")
-                                    .index_error("index out of range for the gathered axis");
+                            const std::int64_t k = cpu::checked_axis(
+                                "cpu_backend::gather_backward", load_idx(row + i), axis_extent,
+                                "index out of range for the gathered axis");
                             dst[(o * rows->extent + static_cast<std::size_t>(k)) * rows->inner +
                                 i] += gp[row + i];
                         }
                     }
                 }
             };
-            auto with_index = [&](auto* dst, const auto* gp) {
-                if (index_dtype == Dtype::I64)
-                    run(dst, gp, reinterpret_cast<const std::int64_t*>(idx.ptr.get()));
-                else if (index_dtype == Dtype::I32)
-                    run(dst, gp, reinterpret_cast<const std::int32_t*>(idx.ptr.get()));
-                else
-                    ErrorBuilder("cpu_backend::gather_backward")
-                        .not_implemented("indices dtype must be I32 or I64");
-            };
             if (dt == Dtype::F32)
-                with_index(reinterpret_cast<float*>(std::get<CpuStorage>(out).ptr.get()),
-                           reinterpret_cast<const float*>(g.ptr.get()));
+                run(reinterpret_cast<float*>(std::get<CpuStorage>(out).ptr.get()),
+                    reinterpret_cast<const float*>(g.ptr.get()));
             else
-                with_index(reinterpret_cast<double*>(std::get<CpuStorage>(out).ptr.get()),
-                           reinterpret_cast<const double*>(g.ptr.get()));
+                run(reinterpret_cast<double*>(std::get<CpuStorage>(out).ptr.get()),
+                    reinterpret_cast<const double*>(g.ptr.get()));
             return out;
         }
 
-        std::vector<std::int64_t> coord(ndim, 0);
+        auto walk = [&](auto* dst, const auto* gp) {
+            std::vector<std::int64_t> coord(ndim, 0);
+            for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
+                const std::int64_t k =
+                    cpu::checked_axis("cpu_backend::gather_backward", load_idx(out_flat),
+                                      axis_extent, "index out of range for the gathered axis");
+                std::size_t input_flat = 0;
+                for (std::size_t d = 0; d < ndim; ++d) {
+                    const std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
+                    input_flat +=
+                        static_cast<std::size_t>(c) * static_cast<std::size_t>(input_stride[d]);
+                }
+                dst[input_flat] += gp[out_flat];
+                for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 1; d >= 0; --d) {
+                    if (++coord[static_cast<std::size_t>(d)] <
+                        output_shape[static_cast<std::size_t>(d)]) {
+                        break;
+                    }
+                    coord[static_cast<std::size_t>(d)] = 0;
+                }
+            }
+        };
         if (dt == Dtype::F32) {
-            const auto* gp = reinterpret_cast<const float*>(g.ptr.get());
-            auto* dst = reinterpret_cast<float*>(std::get<CpuStorage>(out).ptr.get());
-            for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
-                std::int64_t k = load_idx(out_flat);
-                if (k < 0)
-                    k += input_shape[static_cast<std::size_t>(axis)];
-                if (k < 0 || k >= axis_extent)
-                    ErrorBuilder("cpu_backend::gather_backward")
-                        .index_error("index out of range for the gathered axis");
-                std::size_t input_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d) {
-                    const std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
-                    input_flat +=
-                        static_cast<std::size_t>(c) * static_cast<std::size_t>(input_stride[d]);
-                }
-                dst[input_flat] += gp[out_flat];
-                for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 1; d >= 0; --d) {
-                    if (++coord[static_cast<std::size_t>(d)] <
-                        output_shape[static_cast<std::size_t>(d)]) {
-                        break;
-                    }
-                    coord[static_cast<std::size_t>(d)] = 0;
-                }
-            }
+            walk(reinterpret_cast<float*>(std::get<CpuStorage>(out).ptr.get()),
+                 reinterpret_cast<const float*>(g.ptr.get()));
         } else if (dt == Dtype::F64) {
-            const auto* gp = reinterpret_cast<const double*>(g.ptr.get());
-            auto* dst = reinterpret_cast<double*>(std::get<CpuStorage>(out).ptr.get());
-            for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
-                std::int64_t k = load_idx(out_flat);
-                if (k < 0)
-                    k += input_shape[static_cast<std::size_t>(axis)];
-                if (k < 0 || k >= axis_extent)
-                    ErrorBuilder("cpu_backend::gather_backward")
-                        .index_error("index out of range for the gathered axis");
-                std::size_t input_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d) {
-                    const std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
-                    input_flat +=
-                        static_cast<std::size_t>(c) * static_cast<std::size_t>(input_stride[d]);
-                }
-                dst[input_flat] += gp[out_flat];
-                for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 1; d >= 0; --d) {
-                    if (++coord[static_cast<std::size_t>(d)] <
-                        output_shape[static_cast<std::size_t>(d)]) {
-                        break;
-                    }
-                    coord[static_cast<std::size_t>(d)] = 0;
-                }
-            }
+            walk(reinterpret_cast<double*>(std::get<CpuStorage>(out).ptr.get()),
+                 reinterpret_cast<const double*>(g.ptr.get()));
         } else {
             ErrorBuilder("cpu_backend::gather_backward").not_implemented("dtype not supported");
         }
@@ -4643,35 +4577,17 @@ public:
         // read as one, giving a silently wrong result; an int8 one had
         // four read as one, producing an index far outside the base and an
         // out-of-bounds write — a bus error reachable from Python.
-        const auto load_index = [&](std::size_t at) -> std::int64_t {
-            switch (ci.dtype) {
-            case Dtype::I8:
-                return reinterpret_cast<const std::int8_t*>(ci.ptr.get())[at];
-            case Dtype::I16:
-                return reinterpret_cast<const std::int16_t*>(ci.ptr.get())[at];
-            case Dtype::I64:
-                return reinterpret_cast<const std::int64_t*>(ci.ptr.get())[at];
-            case Dtype::Bool:
-                return reinterpret_cast<const std::uint8_t*>(ci.ptr.get())[at] ? 1 : 0;
-            default:
-                return reinterpret_cast<const std::int32_t*>(ci.ptr.get())[at];
-            }
-        };
+        const auto load_index = cpu::index_reader("cpu_backend::scatter_add", ci);
 
         auto run = [&](auto* dst, const auto* sp) {
+            const auto len = static_cast<std::int64_t>(base_dim);
             for (std::size_t o = 0; o < outer; ++o) {
                 for (std::size_t j = 0; j < inner; ++j) {
                     for (std::size_t k = 0; k < idx_dim; ++k) {
                         const std::size_t src_flat = (o * idx_dim + k) * inner + j;
-                        std::int64_t tgt = load_index(src_flat);
-                        if (tgt < 0)
-                            tgt += static_cast<std::int64_t>(base_dim);
-                        // Refuse rather than write outside the buffer.  An
-                        // index this loop cannot satisfy is a caller error,
-                        // and the previous behaviour was to corrupt memory.
-                        if (tgt < 0 || static_cast<std::size_t>(tgt) >= base_dim)
-                            ErrorBuilder("cpu_backend::scatter_add")
-                                .index_error("index out of range for the scattered axis");
+                        const std::int64_t tgt =
+                            cpu::checked_axis("cpu_backend::scatter_add", load_index(src_flat), len,
+                                              "index out of range for the scattered axis");
                         const std::size_t dst_flat = outer_off[o] +
                                                      static_cast<std::size_t>(tgt) * dim_stride +
                                                      inner_off[j];
@@ -4761,10 +4677,10 @@ private:
     // ``k`` ascends for every (outer, inner) line, so a position named twice
     // keeps the value written last, as the reference's CPU kernel does.
     // ``j`` innermost keeps the src reads and the base writes sequential.
-    template <std::size_t W, typename I>
+    template <std::size_t W>
     static void scatter_set_lines(std::byte* dst,
                                   const std::byte* src,
-                                  const I* idx,
+                                  cpu::IndexReader read_idx,
                                   const AxisScatterWalk& w) {
         const std::size_t outer = w.outer_off.size();
         const std::size_t inner = w.inner_off.size();
@@ -4773,51 +4689,15 @@ private:
             for (std::size_t k = 0; k < w.idx_dim; ++k) {
                 const std::size_t row = (o * w.idx_dim + k) * inner;
                 for (std::size_t j = 0; j < inner; ++j) {
-                    auto tgt = static_cast<std::int64_t>(idx[row + j]);
-                    if (tgt < 0)
-                        tgt += len;
-                    // Refuse rather than write outside the buffer.
-                    if (tgt < 0 || tgt >= len)
-                        ErrorBuilder("cpu_backend::scatter_set")
-                            .index_error("index out of range for the scattered axis");
+                    const std::int64_t tgt =
+                        cpu::checked_axis("cpu_backend::scatter_set", read_idx(row + j), len,
+                                          "index out of range for the scattered axis");
                     const std::size_t at = w.outer_off[o] +
                                            static_cast<std::size_t>(tgt) * w.dim_stride +
                                            w.inner_off[j];
                     std::memcpy(dst + at * W, src + (row + j) * W, W);
                 }
             }
-        }
-    }
-
-    // ``scatter_set_lines`` for the index's own dtype.  An index read at the
-    // wrong width pairs or splits its values — a wrong answer, or a write
-    // far outside the base.
-    template <std::size_t W>
-    static void scatter_set_by_index(std::byte* dst,
-                                     const std::byte* src,
-                                     const CpuStorage& ci,
-                                     const AxisScatterWalk& w) {
-        const std::byte* ip = ci.ptr.get();
-        switch (ci.dtype) {
-        case Dtype::I32:
-            scatter_set_lines<W>(dst, src, reinterpret_cast<const std::int32_t*>(ip), w);
-            break;
-        case Dtype::I64:
-            scatter_set_lines<W>(dst, src, reinterpret_cast<const std::int64_t*>(ip), w);
-            break;
-        case Dtype::I16:
-            scatter_set_lines<W>(dst, src, reinterpret_cast<const std::int16_t*>(ip), w);
-            break;
-        case Dtype::I8:
-            scatter_set_lines<W>(dst, src, reinterpret_cast<const std::int8_t*>(ip), w);
-            break;
-        case Dtype::Bool:
-            scatter_set_lines<W>(dst, src, reinterpret_cast<const std::uint8_t*>(ip), w);
-            break;
-        default:
-            ErrorBuilder("cpu_backend::scatter_set")
-                .fail("indices must be an integer tensor, got " +
-                      std::string(dtype_name(ci.dtype)));
         }
     }
 
@@ -4879,13 +4759,9 @@ private:
                 for (std::size_t k = 0; k < w.idx_dim; ++k) {
                     const std::size_t row = (o * w.idx_dim + k) * inner;
                     for (std::size_t j = 0; j < inner; ++j) {
-                        std::int64_t tgt = read_idx(row + j);
-                        if (tgt < 0)
-                            tgt += len;
-                        // Refuse rather than write outside the buffer.
-                        if (tgt < 0 || tgt >= len)
-                            ErrorBuilder(name).index_error(
-                                "index out of range for the scattered axis");
+                        const std::int64_t tgt =
+                            cpu::checked_axis(name, read_idx(row + j), len,
+                                              "index out of range for the scattered axis");
                         const std::size_t at = w.outer_off[o] +
                                                static_cast<std::size_t>(tgt) * w.dim_stride +
                                                w.inner_off[j];
@@ -4980,23 +4856,24 @@ public:
         if (dim < 0)
             dim += ndim;
         const AxisScatterWalk walk = axis_scatter_walk(base_shape, idx_shape, dim);
+        const auto read_idx = cpu::index_reader("cpu_backend::scatter_set", ci);
         std::byte* dst = ptr.get();
         const std::byte* sp = cs.ptr.get();
         switch (esz) {
         case 1:
-            scatter_set_by_index<1>(dst, sp, ci, walk);
+            scatter_set_lines<1>(dst, sp, read_idx, walk);
             break;
         case 2:
-            scatter_set_by_index<2>(dst, sp, ci, walk);
+            scatter_set_lines<2>(dst, sp, read_idx, walk);
             break;
         case 4:
-            scatter_set_by_index<4>(dst, sp, ci, walk);
+            scatter_set_lines<4>(dst, sp, read_idx, walk);
             break;
         case 8:
-            scatter_set_by_index<8>(dst, sp, ci, walk);
+            scatter_set_lines<8>(dst, sp, read_idx, walk);
             break;
         case 16:
-            scatter_set_by_index<16>(dst, sp, ci, walk);
+            scatter_set_lines<16>(dst, sp, read_idx, walk);
             break;
         default:
             ErrorBuilder("cpu_backend::scatter_set").not_implemented("dtype not supported");
@@ -10382,30 +10259,7 @@ public:
         const auto& is_ = std::get<CpuStorage>(indices);
         auto out_cpu = alloc_cpu(M * static_cast<std::size_t>(num_classes), out_dtype);
         std::memset(out_cpu.ptr.get(), 0, out_cpu.nbytes);
-        auto read_idx = [&](std::size_t i) -> std::int64_t {
-            switch (is_.dtype) {
-            case Dtype::I8:
-                return reinterpret_cast<const std::int8_t*>(is_.ptr.get())[i];
-            case Dtype::I16:
-                return reinterpret_cast<const std::int16_t*>(is_.ptr.get())[i];
-            case Dtype::I32:
-                return reinterpret_cast<const std::int32_t*>(is_.ptr.get())[i];
-            case Dtype::I64:
-                return reinterpret_cast<const std::int64_t*>(is_.ptr.get())[i];
-            // Float and bool indices used to fall to the default, which read
-            // the bytes as int32: 2.7 became a huge class number and its row
-            // stayed zero, where Metal truncates it to class 2.
-            case Dtype::Bool:
-                return reinterpret_cast<const std::uint8_t*>(is_.ptr.get())[i];
-            case Dtype::F32:
-                return static_cast<std::int64_t>(reinterpret_cast<const float*>(is_.ptr.get())[i]);
-            case Dtype::F64:
-                return static_cast<std::int64_t>(reinterpret_cast<const double*>(is_.ptr.get())[i]);
-            default:
-                ErrorBuilder("cpu_backend::one_hot")
-                    .dtype_mismatch(Dtype::I64, is_.dtype, "indices must be a real tensor");
-            }
-        };
+        const auto read_idx = cpu::real_index_reader("cpu_backend::one_hot", is_);
         for (std::size_t i = 0; i < M; ++i) {
             // A class outside [0, num_classes) is refused, as the reference
             // refuses it.  It used to leave its row zero, the same answer as
@@ -10956,28 +10810,6 @@ private:
         return out;
     }
 
-    static std::int64_t read_target_index(const CpuStorage& target, std::size_t i) {
-        switch (target.dtype) {
-        case Dtype::I8:
-            return static_cast<std::int64_t>(
-                reinterpret_cast<const std::int8_t*>(target.ptr.get())[i]);
-        case Dtype::I16:
-            return static_cast<std::int64_t>(
-                reinterpret_cast<const std::int16_t*>(target.ptr.get())[i]);
-        case Dtype::I32:
-            return static_cast<std::int64_t>(
-                reinterpret_cast<const std::int32_t*>(target.ptr.get())[i]);
-        case Dtype::I64:
-            return reinterpret_cast<const std::int64_t*>(target.ptr.get())[i];
-        case Dtype::F32:
-            return static_cast<std::int64_t>(reinterpret_cast<const float*>(target.ptr.get())[i]);
-        case Dtype::F64:
-            return static_cast<std::int64_t>(reinterpret_cast<const double*>(target.ptr.get())[i]);
-        default:
-            ErrorBuilder("cpu_backend::class_loss_target").not_implemented("dtype not supported");
-        }
-    }
-
     // The class of target ``i``, or -1 where the target is ``ignore_index``.
     // A class outside [0, channels) is refused with IndexError, as the
     // reference refuses it.  The losses read the probability and the class
@@ -10988,7 +10820,7 @@ private:
     // target instead (policy B, GpuBackend's ``gpu_axis_index``).
     static std::int64_t class_target(
         const char* op, const CpuStorage& target, std::size_t i, int ignore_index, int channels) {
-        const std::int64_t y = read_target_index(target, i);
+        const std::int64_t y = cpu::real_index_reader(op, target)(i);
         if (y == ignore_index)
             return -1;
         return cpu::checked_row(op, y, channels);

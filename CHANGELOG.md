@@ -1220,6 +1220,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - decompose god functions in tensor, compile, and coreml
 - eliminate vulture, ARG, ERA001, and RUF100 findings
 - type module attributes and generic containers
+- fold CPU index readers into IndexBounds.h
 
 ---
 
