@@ -123,9 +123,7 @@ def _lgamma_lanczos(x: Tensor) -> Tensor:
     series = lucid.full_like(x, _LANCZOS_P[0])
     for k in range(1, len(_LANCZOS_P)):
         series = series + _LANCZOS_P[k] / (z + float(k))
-    return (
-        0.5 * math.log(2.0 * math.pi) + (z + 0.5) * lucid.log(t) - t + lucid.log(series)
-    )
+    return 0.5 * math.log(2.0 * math.pi) + (z + 0.5) * lucid.log(t) - t + lucid.log(series)
 
 
 # B_2, B_4, ..., B_12.  Every odd Bernoulli number past B_1 is zero, which
@@ -174,18 +172,17 @@ def _positive(n: int, x: Tensor) -> Tensor:
     xr = x + float(_SHIFT)
     r = 1.0 / xr
     r2 = r * r
-    pow_r2 = lucid.ones_like(x)
     if n == 0:
         # psi(x) = psi(x + K) - sum_{k<K} 1/(x + k), and
         # psi(z) ~ log z - 1/(2z) - sum_k B_2k / (2k z^2k).
-        shift = lucid.zeros_like(x)
-        for k in range(_SHIFT):
+        shift = 1.0 / x
+        for k in range(1, _SHIFT):
             shift = shift + 1.0 / (x + float(k))
-        series = lucid.log(xr) - 0.5 * r
-        for k, b in enumerate(_BERNOULLI_2K, start=1):
-            pow_r2 = pow_r2 * r2
-            series = series - (b / (2.0 * k)) * pow_r2
-        return series - shift
+        b_cnt = len(_BERNOULLI_2K)
+        poly = lucid.full_like(x, _BERNOULLI_2K[-1] / (2.0 * b_cnt))
+        for k in range(b_cnt - 1, 0, -1):
+            poly = poly * r2 + (_BERNOULLI_2K[k - 1] / (2.0 * k))
+        return lucid.log(xr) - 0.5 * r - r2 * poly - shift
 
     # psi^(n)(x) = psi^(n)(x + K) + (-1)^(n+1) n! sum_{k<K} 1/(x + k)^(n+1), and
     # psi^(n)(z) ~ (-1)^(n+1) [ (n-1)!/z^n + n!/(2 z^(n+1))
@@ -196,16 +193,18 @@ def _positive(n: int, x: Tensor) -> Tensor:
     # grows like a factorial is evaluated once, in log space.
     sign = 1.0 if n % 2 == 1 else -1.0
     n_fact = float(math.factorial(n))
-    shift = lucid.zeros_like(x)
-    for k in range(_SHIFT):
+    shift = (sign * n_fact) * (1.0 / x) ** (n + 1)
+    for k in range(1, _SHIFT):
         shift = shift + (sign * n_fact) * (1.0 / (x + float(k))) ** (n + 1)
     lead = lucid.exp(math.lgamma(n) - n * lucid.log(xr))
-    bracket = 1.0 + (n / 2.0) * r
-    for k, b in enumerate(_BERNOULLI_2K, start=1):
-        pow_r2 = pow_r2 * r2
-        # (2k+n-1)! / (n-1)! is a product of 2k integers, not a factorial.
-        ratio = float(math.prod(range(n, 2 * k + n)))
-        bracket = bracket + (b * ratio / float(math.factorial(2 * k))) * pow_r2
+    coeffs = [
+        b * float(math.prod(range(n, 2 * k + n))) / float(math.factorial(2 * k))
+        for k, b in enumerate(_BERNOULLI_2K, start=1)
+    ]
+    poly = lucid.full_like(x, coeffs[-1])
+    for c in reversed(coeffs[:-1]):
+        poly = poly * r2 + c
+    bracket = 1.0 + (n / 2.0) * r + r2 * poly
     return sign * lead * bracket + shift
 
 
@@ -335,9 +334,10 @@ class _IgamConstants:
 def _horner_float(coeffs: tuple[float, ...], y: Tensor) -> Tensor:
     """``sum_i coeffs[i] * y**i`` — coefficients lowest power first."""
     acc = lucid.full_like(y, coeffs[-1])
-    for c in reversed(coeffs[:-1]):
+    for c in reversed(coeffs[1:-1]):
         acc = acc * y + c
-    return acc
+    acc = acc * y
+    return acc + coeffs[0] if coeffs[0] != 0.0 else acc
 
 
 def _lanczos_sum_expg_scaled(a: Tensor) -> Tensor:
@@ -368,9 +368,7 @@ def _igam_fac(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor:
     # flushes the subnormal — P(174.49, 105.92) came out 0 for 6.7e-10.
     direct = lucid.exp(a - x + a * lucid.log(x / fac))
     numfac = (x - a - _LANCZOS13_G + 0.5) / fac
-    scaled = lucid.exp(
-        a * (lucid.log1p(numfac) - numfac) + x * (0.5 - _LANCZOS13_G) / fac
-    )
+    scaled = lucid.exp(a * (lucid.log1p(numfac) - numfac) + x * (0.5 - _LANCZOS13_G) / fac)
     near_value = res * lucid.where(moderate, direct, scaled)
     return lucid.where(far, far_value, near_value)
 
@@ -451,8 +449,9 @@ def _igamc_series(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor:
             if _all_true(done):
                 break
     logx = lucid.log(x)
-    head = -lucid.expm1(a * logx - _lgamma1p(a))
-    return head - lucid.exp(a * logx - lucid.lgamma(a)) * total
+    lg1p = _lgamma1p(a)
+    head = -lucid.expm1(a * logx - lg1p)
+    return head - a * lucid.exp(a * logx - lg1p) * total
 
 
 def _igamc_continued_fraction(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor:
@@ -519,9 +518,7 @@ def _igam_asymptotic(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
     zero = lucid.zeros_like(a)
     near_sig = lucid.abs(sigma) < _IGAM_ETA_SERIES
     eta_sq_series = (
-        sigma
-        * sigma
-        * _horner_float(_ETA_SQ_COEFFS, lucid.where(near_sig, sigma, zero))
+        sigma * sigma * _horner_float(_ETA_SQ_COEFFS, lucid.where(near_sig, sigma, zero))
     )
     eta_sq_log = -2.0 * (lucid.log1p(sigma) - sigma)
     eta_sq = lucid.where(near_sig, eta_sq_series, eta_sq_log)
@@ -550,12 +547,7 @@ def _igam_interior(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
     """P or Q off the edges of the domain, by the branch ``igam`` picks."""
     k = _IgamConstants(a.dtype)
     edge = (
-        lucid.isnan(a)
-        | lucid.isnan(x)
-        | lucid.isinf(a)
-        | lucid.isinf(x)
-        | (a <= 0.0)
-        | (x <= 0.0)
+        lucid.isnan(a) | lucid.isnan(x) | lucid.isinf(a) | lucid.isinf(x) | (a <= 0.0) | (x <= 0.0)
     )
     rel = lucid.abs(x - a) / a
     asym_large = (rel < _IGAM_LARGE_RATIO / lucid.sqrt(a)) | (

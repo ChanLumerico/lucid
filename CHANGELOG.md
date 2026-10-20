@@ -176,6 +176,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - skip unused grads, zero-copy pass-through & clip_grad (LCD-153)
 
+- horner bernoulli series & reuse powers in zeta (LCD-389)
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats

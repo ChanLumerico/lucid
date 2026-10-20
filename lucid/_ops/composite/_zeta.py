@@ -157,18 +157,24 @@ def _hurwitz_zeta_positive(x: Tensor, q: Tensor) -> Tensor:
     every term, which put zeta(2) at 1.6450854 against pi^2/6 = 1.6449341.
     """
     n_prefix = 12
-    s = lucid.zeros_like(q)
-    for k in range(n_prefix):
-        s = s + (q + float(k)) ** (-x)
+    neg_x = -x
+    s = q**neg_x
+    for k in range(1, n_prefix):
+        s = s + (q + float(k)) ** neg_x
     a = q + float(n_prefix)
+    a_neg_x = a**neg_x
+    inv_a = 1.0 / a
+    inv_a2 = inv_a * inv_a
     head = a ** (1.0 - x) / (x - 1.0)
-    half = 0.5 * a ** (-x)
-    tail = lucid.zeros_like(s)
+    half = 0.5 * a_neg_x
+    a_pow = a_neg_x * inv_a
+
     rising = x
-    for j, c in enumerate(_ZETA_TAIL_COEFFS):
-        if j > 0:
-            rising = rising * (x + float(2 * j - 1)) * (x + float(2 * j))
-        tail = tail + c * rising * a ** (-x - float(2 * j + 1))
+    tail = _ZETA_TAIL_COEFFS[0] * rising * a_pow
+    for j, c in enumerate(_ZETA_TAIL_COEFFS[1:], start=1):
+        rising = rising * (x + float(2 * j - 1)) * (x + float(2 * j))
+        a_pow = a_pow * inv_a2
+        tail = tail + c * rising * a_pow
     return s + head + half + tail
 
 
