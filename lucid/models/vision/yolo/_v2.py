@@ -63,7 +63,7 @@ where the responsible anchor is the one with highest IoU vs GT.
 """
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, cast, final, override
+from typing import TYPE_CHECKING, ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -298,7 +298,7 @@ class _Darknet19(nn.Module):
         x = self.stage3(x)
         x = self.stage4(x)
         route = self.stage5(x)  # (B, 512, H/16, W/16)
-        x = cast(Tensor, self.pool56(route))
+        x = self.pool56(route)
         out = self.stage6(x)  # (B, 1024, H/32, W/32)
         return route, out
 

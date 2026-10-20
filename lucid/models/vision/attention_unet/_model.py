@@ -43,7 +43,7 @@ Rank
   both; only the rank differs.
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -182,7 +182,7 @@ class _EncoderBlock(nn.Module):
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         """Returns (pooled, skip)."""
         skip: Tensor = self.conv(x)
-        pooled: Tensor = cast(Tensor, self.pool(skip))
+        pooled: Tensor = self.pool(skip)
         return pooled, skip
 
 
@@ -212,8 +212,8 @@ class _DecoderBlock(nn.Module):
             _AttentionGate(skip_ch, in_ch, inter_ch, dims) if gated else None
         )
         if bilinear:
-            self.up: nn.Module = nn.Upsample(
-                scale_factor=2, mode=_interp_mode(dims), align_corners=True
+            self.up: nn.Upsample | nn.ConvTranspose2d | nn.ConvTranspose3d = (
+                nn.Upsample(scale_factor=2, mode=_interp_mode(dims), align_corners=True)
             )
             self.conv = _DoubleConv(in_ch + skip_ch, out_ch, dims)
         else:
@@ -231,7 +231,7 @@ class _DecoderBlock(nn.Module):
         Returns:
             (B, out_ch, 2H', 2W')
         """
-        x_up: Tensor = cast(Tensor, self.up(x))
+        x_up: Tensor = self.up(x)
         # The deepest stage is handed the projected gating signal; shallower
         # stages gate on the previous decoder output, as the reference does.
         g_src = x if gate is None else gate
@@ -387,7 +387,7 @@ class AttentionUNetForSemanticSegmentation(SemanticSegmentationModel):
         # training.  The reference returns the fused map as *the* prediction,
         # so the deeper levels reach the output directly and the mechanism is
         # part of inference.
-        self.dsv: list[nn.Module] = []
+        self.dsv: list[nn.Conv2d | nn.Conv3d] = []
         if config.deep_supervision:
             for level in range(1, depth):
                 proj = _conv_nd(dims)(enc_channels[level], config.num_classes, 1)
@@ -461,7 +461,7 @@ class AttentionUNetForSemanticSegmentation(SemanticSegmentationModel):
             # backwards from there to reach the coarser ones.
             maps = [to_input_size(logits)]
             for level, proj in enumerate(self.dsv, start=1):
-                coarse = cast(Tensor, proj(dec_outputs[-(level + 1)]))
+                coarse = proj(dec_outputs[-(level + 1)])
                 maps.append(to_input_size(coarse))
             logits = self.fuse(lucid.cat(maps, dim=1))
 

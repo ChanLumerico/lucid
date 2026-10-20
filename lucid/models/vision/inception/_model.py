@@ -15,7 +15,7 @@ Architecture overview (299×299 input):
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -133,7 +133,7 @@ class _InceptionB(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         b1 = self.branch1(x)
         b2 = self.branch2_c(self.branch2_b(self.branch2_a(x)))
-        b3 = cast(Tensor, self.branch3(x))
+        b3 = self.branch3(x)
         return lucid.cat([b1, b2, b3], dim=1)
 
 
@@ -223,7 +223,7 @@ class _InceptionD(nn.Module):
         t = F.relu(self.branch2_c_bn(self.branch2_c(t)))
         b2 = self.branch2_d(t)
 
-        b3 = cast(Tensor, self.branch3(x))
+        b3 = self.branch3(x)
         return lucid.cat([b1, b2, b3], dim=1)
 
 
@@ -563,18 +563,12 @@ class InceptionV3(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = self.stem(x)
-        x = self.inception_a0(x)
-        x = self.inception_a1(x)
-        x = self.inception_a2(x)
-        x = self.reduction_a(x)
-        x = self.inception_c0(x)
-        x = self.inception_c1(x)
-        x = self.inception_c2(x)
+        x = self.inception_a0(self.stem(x))
+        x = self.inception_a2(self.inception_a1(x))
+        x = self.inception_c0(self.reduction_a(x))
+        x = self.inception_c2(self.inception_c1(x))
         x = self.inception_c3(x)
-        x = self.reduction_b(x)
-        x = self.inception_e0(x)
-        x = self.inception_e1(x)
+        x = self.inception_e1(self.inception_e0(self.reduction_b(x)))
         return self.avgpool(x)
 
     @override
@@ -741,7 +735,7 @@ class InceptionV3ForImageClassification(
         x = self.inception_e1(x)
         x = self.avgpool(x)
         x = self.drop(x.flatten(1))
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

@@ -247,6 +247,7 @@ class DiTModel(PretrainedModel):
         self.label_embed = nn.Embedding(config.num_classes + 1, config.hidden_size)
 
         mode = config.conditioning
+        self.blocks: nn.ModuleList[DiTBlock | _CrossAttentionBlock | _PlainBlock]
         if mode in ("adaln_zero", "adaln"):
             self.blocks = nn.ModuleList(
                 [

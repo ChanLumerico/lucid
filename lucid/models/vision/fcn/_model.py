@@ -31,7 +31,7 @@ Losses (training)
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -59,7 +59,7 @@ class _Bottleneck(nn.Module):
         mid_ch: int,
         stride: int = 1,
         dilation: int = 1,
-        downsample: nn.Module | None = None,
+        downsample: nn.Sequential | None = None,
     ) -> None:
         super().__init__()
         out_ch = mid_ch * self.expansion
@@ -86,7 +86,7 @@ class _Bottleneck(nn.Module):
         out = F.relu(self.bn2(self.conv2(out)))
         out = self.bn3(self.conv3(out))
         if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
+            identity = self.downsample(x)
         return F.relu(out + identity)
 
 
@@ -110,7 +110,7 @@ def _make_layer(
     out_ch = mid_ch * 4
     if first_dilation is None:
         first_dilation = dilation
-    ds: nn.Module | None = None
+    ds: nn.Sequential | None = None
     if stride != 1 or in_ch != out_ch:
         ds = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, 1, stride=stride, bias=False),
@@ -178,7 +178,7 @@ class _DilatedResNet(nn.Module):
             c5: (B, c5_channels, H/8, W/8) — layer4 output.
         """
         x = self.stem(x)
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         c4: Tensor = self.layer3(x)

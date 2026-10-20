@@ -166,7 +166,7 @@ class _CouplingNet(nn.Module):
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         h = self.stem(x)
         for block in self.blocks:
-            h = cast(Tensor, block(h))
+            h = block(h)
         if self.norm_out is not None:
             h = self.norm_out(h)
         h = generative_activation(self._act_name, h)
@@ -438,14 +438,14 @@ class RealNVPModel(PretrainedModel):
         self.logit = _LogitTransform(config.data_constraint, config.num_bits)
 
         _c, height, width = config.image_shape
-        scales: list[nn.Module] = []
+        scales: list[nn.ModuleList[_AffineCoupling | _FlowBatchNorm]] = []
         # Per-scale bookkeeping so ``encode`` can stay a flat loop.
         self._scale_shapes: list[tuple[int, int, int]] = []
 
         channels = config.in_channels
         for idx in range(config.num_scales):
             dim = config.base_dim * 2**idx
-            stages: list[nn.Module] = []
+            stages: list[_AffineCoupling | _FlowBatchNorm] = []
             last = idx == config.num_scales - 1
 
             # Checkerboard block — three couplings, or four at the last scale.
@@ -548,10 +548,10 @@ class RealNVPModel(PretrainedModel):
         for idx in range(self._num_scales):
             last = idx == self._num_scales - 1
             checker_stages = (4 if last else 3) * (2 if self._use_batch_norm else 1)
-            stages = cast(nn.ModuleList, self.scales[idx])
+            stages = self.scales[idx]
 
             for stage in list(stages)[:checker_stages]:
-                h, inc = cast(tuple[Tensor, Tensor], stage(h))
+                h, inc = stage(h)
                 log_det = log_det + inc
 
             if last:
@@ -560,7 +560,7 @@ class RealNVPModel(PretrainedModel):
 
             h = _squeeze(h)
             for stage in list(stages)[checker_stages:]:
-                h, inc = cast(tuple[Tensor, Tensor], stage(h))
+                h, inc = stage(h)
                 log_det = log_det + inc
 
             # Reference divergence, not a paper violation: §3.6 / Fig. 4b
@@ -610,7 +610,7 @@ class RealNVPModel(PretrainedModel):
         for idx in range(self._num_scales - 1, -1, -1):
             last = idx == self._num_scales - 1
             checker_stages = (4 if last else 3) * (2 if self._use_batch_norm else 1)
-            stages = list(cast(nn.ModuleList, self.scales[idx]))
+            stages = list(self.scales[idx])
 
             if not last:
                 h = lucid.cat([blocks[idx], h], dim=1)
@@ -624,10 +624,8 @@ class RealNVPModel(PretrainedModel):
         return self.logit.inverse(h)
 
     @staticmethod
-    def _inverse_stage(stage: nn.Module, h: Tensor) -> Tensor:
-        if isinstance(stage, _AffineCoupling):
-            return stage.inverse(h)
-        return cast(_FlowBatchNorm, stage).inverse(h)
+    def _inverse_stage(stage: _AffineCoupling | _FlowBatchNorm, h: Tensor) -> Tensor:
+        return stage.inverse(h)
 
     def log_prob(self, x: Tensor) -> Tensor:
         r"""Exact per-sample log-likelihood :math:`\log p_X(x)` in nats."""

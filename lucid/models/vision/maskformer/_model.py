@@ -129,7 +129,7 @@ class _ResNetEmbedder(nn.Module):
     @override
     def forward(self, x: Tensor) -> Tensor:
         x = self.embedder(x)
-        return cast(Tensor, self.pool(x))
+        return self.pool(x)
 
 
 class _ResNetBottleneck(nn.Module):
@@ -151,7 +151,7 @@ class _ResNetBottleneck(nn.Module):
     ) -> None:
         super().__init__()
         out_ch = mid_ch * self.expansion
-        self.shortcut: nn.Module | None
+        self.shortcut: _ConvNorm | None
         if downsample:
             self.shortcut = _ConvNorm(in_ch, out_ch, 1, stride=stride, activation=False)
         else:
@@ -164,7 +164,7 @@ class _ResNetBottleneck(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        identity = x if self.shortcut is None else cast(Tensor, self.shortcut(x))
+        identity = x if self.shortcut is None else self.shortcut(x)
         out: Tensor = self.layer(x)
         return F.relu(out + identity)
 
@@ -207,7 +207,7 @@ class _ResNetEncoderStages(nn.Module):
         s1 = _ResNetStage(s0.out_channels, 128, layers[1], stride=2)
         s2 = _ResNetStage(s1.out_channels, 256, layers[2], stride=2)
         s3 = _ResNetStage(s2.out_channels, 512, layers[3], stride=2)
-        self.stages = nn.ModuleList([s0, s1, s2, s3])
+        self.stages: nn.ModuleList[_ResNetStage] = nn.ModuleList([s0, s1, s2, s3])
         self.out_channels: list[int] = [
             s0.out_channels,
             s1.out_channels,
@@ -220,7 +220,7 @@ class _ResNetEncoderStages(nn.Module):
         feats: list[Tensor] = []
         out = x
         for stage in self.stages:
-            out = cast(Tensor, stage(out))
+            out = stage(out)
             feats.append(out)
         return feats
 
@@ -314,9 +314,9 @@ class _FPNModel(nn.Module):
     ) -> None:
         super().__init__()
         self.stem = _FPNConvLayer(in_features, feature_size)
-        self.layers = nn.Sequential(
-            *[_FPNLayer(feature_size, lw) for lw in lateral_widths[::-1]]
-        )
+        fpn_layers = [_FPNLayer(feature_size, lw) for lw in lateral_widths[::-1]]
+        self.layers = nn.Sequential(*fpn_layers)
+        self._fpn_layers: list[_FPNLayer] = fpn_layers
 
     @override
     def forward(self, features: list[Tensor]) -> list[Tensor]:
@@ -325,8 +325,8 @@ class _FPNModel(nn.Module):
         other_features = features[:-1]
         output: Tensor = self.stem(last_feature)
         rev = other_features[::-1]
-        for i, layer in enumerate(self.layers):
-            output = cast(Tensor, layer(output, rev[i]))
+        for i, layer in enumerate(self._fpn_layers):
+            output = layer(output, rev[i])
             fpn_features.append(output)
         return fpn_features
 
@@ -552,7 +552,7 @@ class _TransformerDecoder(nn.Module):
         dropout: float = 0.0,
     ) -> None:
         super().__init__()
-        self.layers = nn.ModuleList(
+        self.layers: nn.ModuleList[_DecoderLayer] = nn.ModuleList(
             [_DecoderLayer(d_model, n_head, dim_ff, dropout) for _ in range(depth)]
         )
         self.layernorm = nn.LayerNorm(d_model)
@@ -574,7 +574,7 @@ class _TransformerDecoder(nn.Module):
         out = hidden
         stages: list[Tensor] = []
         for layer in self.layers:
-            out = cast(Tensor, layer(out, memory, spatial_pos, query_pos))
+            out = layer(out, memory, spatial_pos, query_pos)
             stages.append(self.layernorm(out))
         return stages
 
@@ -603,7 +603,7 @@ class _TransformerModule(nn.Module):
         self.input_projection = nn.Conv2d(in_features, d_model, 1)
         # ``encoder_depth = 0`` (the reference semantic setting) leaves this
         # empty and the C5 memory reaches the decoder untouched.
-        self.encoder = nn.ModuleList(
+        self.encoder: nn.ModuleList[nn.TransformerEncoderLayer] = nn.ModuleList(
             [
                 nn.TransformerEncoderLayer(
                     d_model,
@@ -627,7 +627,7 @@ class _TransformerModule(nn.Module):
         device = feat.device.type
 
         # Query positions: (N, d) → (B, N, d)
-        q_weight: Tensor = cast(Tensor, self.queries_embedder.weight)
+        q_weight: Tensor = self.queries_embedder.weight
         query_pos = q_weight.unsqueeze(0).repeat(B, 1, 1)
         hidden = lucid.zeros(query_pos.shape, device=device)
 
@@ -636,7 +636,7 @@ class _TransformerModule(nn.Module):
         spatial_pos = pos.reshape(B, c, h * w).permute(0, 2, 1)
         memory = feat.reshape(B, c, h * w).permute(0, 2, 1)
         for enc in self.encoder:
-            memory = cast(Tensor, enc(memory + spatial_pos))
+            memory = enc(memory + spatial_pos)
 
         return self.decoder(hidden, memory, spatial_pos, query_pos)
 

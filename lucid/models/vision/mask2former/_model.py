@@ -146,6 +146,8 @@ class _SwinRelativePositionBias(nn.Module):
     recreated here (a non-persistent buffer in the reference — never loaded).
     """
 
+    relative_position_index: Tensor
+
     def __init__(self, num_heads: int, window_size: int) -> None:
         super().__init__()
         self.window_size = window_size
@@ -163,8 +165,8 @@ class _SwinRelativePositionBias(nn.Module):
 
     @override
     def forward(self) -> Tensor:
-        idx: Tensor = cast(Tensor, self.relative_position_index)
-        table: Tensor = cast(Tensor, self.relative_position_bias_table)
+        idx: Tensor = self.relative_position_index
+        table: Tensor = self.relative_position_bias_table
         bias: Tensor = table[idx]  # (window_area*window_area, num_heads)
         bias = bias.reshape(self.window_area, self.window_area, self.num_heads)
         # -> (1, num_heads, window_area, window_area)
@@ -406,12 +408,12 @@ class _SwinStage(nn.Module):
         downsample: bool,
     ) -> None:
         super().__init__()
-        blocks: list[nn.Module] = []
+        blocks: list[_SwinLayer] = []
         for i in range(depth):
             shift = 0 if (i % 2 == 0) else window_size // 2
             blocks.append(_SwinLayer(dim, num_heads, window_size, shift, mlp_ratio))
-        self.blocks = nn.ModuleList(blocks)
-        self.downsample: nn.Module | None = (
+        self.blocks: nn.ModuleList[_SwinLayer] = nn.ModuleList(blocks)
+        self.downsample: _SwinPatchMerging | None = (
             _SwinPatchMerging(dim) if downsample else None
         )
 
@@ -421,11 +423,11 @@ class _SwinStage(nn.Module):
     ) -> tuple[Tensor, Tensor, tuple[int, int]]:
         h, w = dims
         for block in self.blocks:
-            blk = cast(_SwinLayer, block)
+            blk = block
             x = blk(x, dims)
         before = x
         if self.downsample is not None:
-            ds = cast(_SwinPatchMerging, self.downsample)
+            ds = self.downsample
             x = ds(before, dims)
             new_dims = ((h + 1) // 2, (w + 1) // 2)
         else:
@@ -446,7 +448,7 @@ class _SwinEncoder(nn.Module):
         mlp_ratio: float,
     ) -> None:
         super().__init__()
-        stages: list[nn.Module] = []
+        stages: list[_SwinStage] = []
         dim = embed_dim
         num_layers = len(depths)
         for i in range(num_layers):
@@ -462,7 +464,7 @@ class _SwinEncoder(nn.Module):
             )
             if i < num_layers - 1:
                 dim *= 2
-        self.layers = nn.ModuleList(stages)
+        self.layers: nn.ModuleList[_SwinStage] = nn.ModuleList(stages)
 
     @override
     def forward(
@@ -471,7 +473,7 @@ class _SwinEncoder(nn.Module):
         """Return per-stage (before-downsample hidden state, spatial dims)."""
         out: list[tuple[Tensor, tuple[int, int]]] = []
         for stage in self.layers:
-            stg = cast(_SwinStage, stage)
+            stg = stage
             x, before, new_dims = stg(x, dims)
             out.append((before, dims))
             dims = new_dims
@@ -526,10 +528,10 @@ class _SwinBackbone(nn.Module):
         )
         channels = [int(embed_dim * 2**i) for i in range(len(depths))]
         self.out_channels: list[int] = channels
-        norms: dict[str, nn.Module] = {}
+        norms: dict[str, nn.LayerNorm] = {}
         for i, ch in enumerate(channels):
             norms[f"stage{i + 1}"] = nn.LayerNorm(ch)
-        self.hidden_states_norms = nn.ModuleDict(norms)
+        self.hidden_states_norms: nn.ModuleDict[nn.LayerNorm] = nn.ModuleDict(norms)
 
     @override
     def forward(self, x: Tensor) -> list[Tensor]:
@@ -540,7 +542,7 @@ class _SwinBackbone(nn.Module):
             b = int(hidden.shape[0])
             c = int(hidden.shape[2])
             norm = self.hidden_states_norms[f"stage{i + 1}"]
-            normed: Tensor = cast(Tensor, norm(hidden))  # (B, H*W, C)
+            normed: Tensor = norm(hidden)  # (B, H*W, C)
             spatial: Tensor = normed.reshape(b, h, w, c).permute(0, 3, 1, 2)
             feature_maps.append(spatial)
         return feature_maps
@@ -753,7 +755,7 @@ class _PixelDecoderEncoder(nn.Module):
         self, embed_dim: int, num_heads: int, ffn_dim: int, depth: int
     ) -> None:
         super().__init__()
-        self.layers = nn.ModuleList(
+        self.layers: nn.ModuleList[_PixelDecoderEncoderLayer] = nn.ModuleList(
             [
                 _PixelDecoderEncoderLayer(embed_dim, num_heads, ffn_dim)
                 for _ in range(depth)
@@ -796,7 +798,7 @@ class _PixelDecoderEncoder(nn.Module):
         if b > 1:
             reference_points = reference_points.repeat(b, 1, 1, 1)
         for layer in self.layers:
-            enc_layer = cast(_PixelDecoderEncoderLayer, layer)
+            enc_layer = layer
             hidden_states = enc_layer(
                 hidden_states,
                 position_embeddings,
@@ -832,7 +834,7 @@ class _PixelDecoder(nn.Module):
 
         # Input projections: highest-stride first (reversed last 3 channels)
         transformer_in_channels = feature_channels[-self.num_feature_levels :]
-        projections: list[nn.Module] = []
+        projections: list[nn.Sequential] = []
         for in_ch in transformer_in_channels[::-1]:
             projections.append(
                 nn.Sequential(
@@ -853,8 +855,8 @@ class _PixelDecoder(nn.Module):
         self.num_fpn_levels = int(math.log2(stride) - math.log2(common_stride))
         self.feature_channels = feature_channels
 
-        lateral_convs: list[nn.Module] = []
-        output_convs: list[nn.Module] = []
+        lateral_convs: list[nn.Sequential] = []
+        output_convs: list[nn.Sequential] = []
         for idx in range(self.num_fpn_levels):
             in_ch = feature_channels[idx]
             lateral = nn.Sequential(
@@ -887,7 +889,7 @@ class _PixelDecoder(nn.Module):
         selected = features[::-1][: self.num_feature_levels]
         for level, x in enumerate(selected):
             proj = self.input_projections[level]
-            inputs_embeds.append(cast(Tensor, proj(x)))
+            inputs_embeds.append(proj(x))
             h = int(x.shape[2])
             w = int(x.shape[3])
             position_embeddings.append(self.position_embedding(b, h, w, device))
@@ -899,7 +901,7 @@ class _PixelDecoder(nn.Module):
         # Flatten: (B, C, H, W) -> (B, H*W, C)
         flat_embeds: list[Tensor] = []
         flat_pos: list[Tensor] = []
-        level_embed_w = cast(Tensor, self.level_embed)
+        level_embed_w = self.level_embed
         for i, e in enumerate(inputs_embeds):
             c = int(e.shape[1])
             hw = int(e.shape[2]) * int(e.shape[3])
@@ -931,7 +933,7 @@ class _PixelDecoder(nn.Module):
         for idx, feature in enumerate(fpn_features):
             lateral = self._lateral_convolutions[idx]
             output_conv = self._output_convolutions[idx]
-            current_fpn: Tensor = cast(Tensor, lateral(feature))
+            current_fpn: Tensor = lateral(feature)
             up = F.interpolate(
                 outputs[-1],
                 size=(int(current_fpn.shape[2]), int(current_fpn.shape[3])),
@@ -939,7 +941,7 @@ class _PixelDecoder(nn.Module):
                 align_corners=False,
             )
             out = current_fpn + up
-            outputs.append(cast(Tensor, output_conv(out)))
+            outputs.append(output_conv(out))
 
         multi_scale_features = outputs[: self.num_feature_levels]
         mask_features: Tensor = self.mask_projection(outputs[-1])
@@ -1203,15 +1205,12 @@ class _MaskedAttentionDecoder(nn.Module):
             attn_mask_bool = attention_mask != 0.0
 
             layer = self.layers[idx]
-            hidden_states = cast(
-                Tensor,
-                layer(
-                    hidden_states,
-                    encoder_hidden_states[level_index],
-                    multi_stage_positional_embeddings[level_index],
-                    query_position_embeddings,
-                    attn_mask_bool,
-                ),
+            hidden_states = layer(
+                hidden_states,
+                encoder_hidden_states[level_index],
+                multi_stage_positional_embeddings[level_index],
+                query_position_embeddings,
+                attn_mask_bool,
             )
 
             intermediate_hidden_states = self.layernorm(hidden_states)
@@ -1257,7 +1256,7 @@ class _TransformerModule(nn.Module):
         multi_stage_pos: list[Tensor] = []
         size_list: list[tuple[int, int]] = []
 
-        level_w = cast(Tensor, self.level_embed.weight)
+        level_w = self.level_embed.weight
         for i in range(self.num_feature_levels):
             feat = multi_scale_features[i]
             c = int(feat.shape[1])
@@ -1274,9 +1273,9 @@ class _TransformerModule(nn.Module):
             multi_stage_features.append(feat_lvl.permute(2, 0, 1))
 
         # Query embeddings (N, B, C)
-        q_pos: Tensor = cast(Tensor, self.queries_embedder.weight).unsqueeze(1)
+        q_pos: Tensor = self.queries_embedder.weight.unsqueeze(1)
         q_pos = q_pos.repeat(1, b, 1)
-        q_feat: Tensor = cast(Tensor, self.queries_features.weight).unsqueeze(1)
+        q_feat: Tensor = self.queries_features.weight.unsqueeze(1)
         q_feat = q_feat.repeat(1, b, 1)
 
         return self.decoder(

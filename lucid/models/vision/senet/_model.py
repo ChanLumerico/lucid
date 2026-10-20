@@ -7,7 +7,7 @@ The SE output is multiplied channel-wise with the block's feature map.
 rd_channels = C // reduction (matches the canonical SE-ResNet design).
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -71,7 +71,7 @@ class _SEBasicBlock(nn.Module):
         in_channels: int,
         out_channels: int,
         stride: int = 1,
-        downsample: nn.Module | None = None,
+        downsample: nn.Sequential | None = None,
         reduction: int = 16,
     ) -> None:
         super().__init__()
@@ -117,7 +117,7 @@ class _SEBasicBlock(nn.Module):
         out = self.se(out)
 
         if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
+            identity = self.downsample(x)
 
         out = out + identity
         return self.relu(out)
@@ -139,7 +139,7 @@ class _SEBottleneck(nn.Module):
         in_channels: int,
         out_channels: int,
         stride: int = 1,
-        downsample: nn.Module | None = None,
+        downsample: nn.Sequential | None = None,
         reduction: int = 16,
         legacy_stride: bool = False,
     ) -> None:
@@ -186,7 +186,7 @@ class _SEBottleneck(nn.Module):
         out = self.se(out)
 
         if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
+            identity = self.downsample(x)
 
         out = out + identity
         return self.relu(out)
@@ -227,7 +227,7 @@ def _make_layer(
     """Build one SE-ResNet stage. Returns (layer, new_in_channels)."""
     final_channels = out_channels * block_cls.expansion
 
-    downsample: nn.Module | None = None
+    downsample: nn.Sequential | None = None
     if stride != 1 or in_channels != final_channels:
         downsample = nn.Sequential(
             nn.Conv2d(in_channels, final_channels, 1, stride=stride, bias=False),
@@ -260,7 +260,7 @@ def _build_body(
 ) -> tuple[
     nn.Conv2d,
     nn.BatchNorm2d,
-    nn.Module,
+    nn.MaxPool2d,
     nn.Sequential,
     nn.Sequential,
     nn.Sequential,
@@ -283,7 +283,7 @@ def _build_body(
         config.in_channels, stem_channels, 7, stride=2, padding=3, bias=False
     )
     bn1 = nn.BatchNorm2d(stem_channels)
-    pool: nn.Module = (
+    pool: nn.MaxPool2d = (
         nn.MaxPool2d(3, stride=2, padding=0, ceil_mode=True)
         if config.legacy_pool
         else nn.MaxPool2d(3, stride=2, padding=1)
@@ -441,7 +441,7 @@ class SENet(PretrainedModel, BackboneMixin):
     @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = F.relu(self.bn1(self.conv1(x)))
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -542,7 +542,7 @@ class SENetForImageClassification(ImageClassificationModel, ClassificationHeadMi
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
         x = F.relu(self.bn1(self.conv1(x)))
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)

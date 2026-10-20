@@ -309,7 +309,7 @@ class _ResBlock(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
         self.conv2 = _conv3x3(out_channels, out_channels, scale=init_scale)
 
-        self.skip: nn.Module | None = None
+        self.skip: nn.Conv2d | None = None
         if in_channels != out_channels or up or down:
             self.skip = _conv1x1(in_channels, out_channels)
 
@@ -328,7 +328,7 @@ class _ResBlock(nn.Module):
         h = self.dropout(h)
         h = self.conv2(h)
         if self.skip is not None:
-            x = cast(Tensor, self.skip(x))
+            x = self.skip(x)
         out = x + h
         return out / math.sqrt(2.0) if self._skip_rescale else out
 
@@ -452,29 +452,40 @@ class _VelocityField(nn.Module):
         self._time_floor = config.time_eps * _TIME_SCALE
 
         taps = config.fir_kernel
-        block_args = {
-            "act_fn": config.act_fn,
-            "dropout": config.dropout,
-            "group_limit": config.resnet_groups,
-            "skip_rescale": config.skip_rescale,
-            "init_scale": config.init_scale,
-            "taps": taps,
-            "fir": config.fir,
-        }
-        attn_args = {
-            "group_limit": config.resnet_groups,
-            "skip_rescale": config.skip_rescale,
-            "init_scale": config.init_scale,
-        }
+
+        def _res(
+            in_ch: int, out_ch: int, *, up: bool = False, down: bool = False
+        ) -> _ResBlock:
+            return _ResBlock(
+                in_ch,
+                out_ch,
+                time_dim,
+                act_fn=config.act_fn,
+                dropout=config.dropout,
+                group_limit=config.resnet_groups,
+                skip_rescale=config.skip_rescale,
+                init_scale=config.init_scale,
+                taps=taps,
+                fir=config.fir,
+                up=up,
+                down=down,
+            )
+
+        def _attn(c: int) -> _AttnBlock:
+            return _AttnBlock(
+                c,
+                group_limit=config.resnet_groups,
+                skip_rescale=config.skip_rescale,
+                init_scale=config.init_scale,
+            )
 
         if config.embedding_type == "fourier":
-            self.fourier: nn.Module | None = _FourierProjection(
+            self.fourier: _FourierProjection | None = _FourierProjection(
                 base, config.fourier_scale
             )
             embed_dim = 2 * base
         else:
-            self.fourier = None
-            embed_dim = base
+            self.fourier, embed_dim = None, base
         # ``config.act_fn`` drives every other activation in the net; the
         # time MLP was the one place that hardcoded SiLU, so asking for a
         # different activation silently left this branch alone.
@@ -501,38 +512,36 @@ class _VelocityField(nn.Module):
 
         # Pyramid resamplers carry the image itself, so they keep the
         # sample's channel count and hold no convolution.
-        self.pyramid_down: nn.Module | None = (
+        self.pyramid_down: _Resample | None = (
             _Resample(config.in_channels, taps, up=False, fir=config.fir)
             if config.progressive_input == "input_skip"
             else None
         )
-        self.pyramid_up: nn.Module | None = (
+        self.pyramid_up: _Resample | None = (
             _Resample(config.in_channels, taps, up=True, fir=config.fir)
             if config.progressive == "output_skip"
             else None
         )
 
-        self.down_res: nn.ModuleList = nn.ModuleList()
-        self.down_attn: nn.ModuleList = nn.ModuleList()
-        self.down_sample: nn.ModuleList = nn.ModuleList()
-        self.down_combine: nn.ModuleList = nn.ModuleList()
+        self.down_res: nn.ModuleList[_ResBlock] = nn.ModuleList()
+        self.down_attn: nn.ModuleList[_AttnBlock | nn.Identity] = nn.ModuleList()
+        self.down_sample: nn.ModuleList[_ResBlock] = nn.ModuleList()
+        self.down_combine: nn.ModuleList[nn.Conv2d | nn.Identity] = nn.ModuleList()
         skip_channels: list[int] = [base]
         ch = base
         for level, mult in enumerate(config.channel_mult):
             out_ch = base * mult
             for _ in range(config.num_res_blocks):
-                self.down_res.append(_ResBlock(ch, out_ch, time_dim, **block_args))  # type: ignore[arg-type]
+                self.down_res.append(_res(ch, out_ch))
                 ch = out_ch
                 self.down_attn.append(
-                    _AttnBlock(ch, **attn_args)  # type: ignore[arg-type]
+                    _attn(ch)
                     if spatial in config.attention_resolutions
                     else nn.Identity()
                 )
                 skip_channels.append(ch)
             if level != levels - 1:
-                self.down_sample.append(
-                    _ResBlock(ch, ch, time_dim, down=True, **block_args)  # type: ignore[arg-type]
-                )
+                self.down_sample.append(_res(ch, ch, down=True))
                 self.down_combine.append(
                     _conv1x1(config.in_channels, ch)
                     if config.progressive_input == "input_skip"
@@ -541,31 +550,26 @@ class _VelocityField(nn.Module):
                 skip_channels.append(ch)
                 spatial //= 2
             else:
-                self.down_sample.append(nn.Identity())
                 self.down_combine.append(nn.Identity())
 
-        self.mid_block1 = _ResBlock(ch, ch, time_dim, **block_args)  # type: ignore[arg-type]
-        self.mid_attn = _AttnBlock(ch, **attn_args)  # type: ignore[arg-type]
-        self.mid_block2 = _ResBlock(ch, ch, time_dim, **block_args)  # type: ignore[arg-type]
+        self.mid_block1 = _res(ch, ch)
+        self.mid_attn = _attn(ch)
+        self.mid_block2 = _res(ch, ch)
 
-        self.up_res: nn.ModuleList = nn.ModuleList()
-        self.up_attn: nn.ModuleList = nn.ModuleList()
-        self.up_sample: nn.ModuleList = nn.ModuleList()
-        self.pyramid_norm: nn.ModuleList = nn.ModuleList()
-        self.pyramid_conv: nn.ModuleList = nn.ModuleList()
+        self.up_res: nn.ModuleList[_ResBlock] = nn.ModuleList()
+        self.up_attn: nn.ModuleList[_AttnBlock | nn.Identity] = nn.ModuleList()
+        self.up_sample: nn.ModuleList[_ResBlock] = nn.ModuleList()
+        self.pyramid_norm: nn.ModuleList[nn.GroupNorm | nn.Identity] = nn.ModuleList()
+        self.pyramid_conv: nn.ModuleList[nn.Conv2d | nn.Identity] = nn.ModuleList()
         for level, mult in list(enumerate(config.channel_mult))[::-1]:
             out_ch = base * mult
             for _ in range(self._blocks_per_up):
                 skip_ch = skip_channels.pop()
-                self.up_res.append(
-                    _ResBlock(ch + skip_ch, out_ch, time_dim, **block_args)  # type: ignore[arg-type]
-                )
+                self.up_res.append(_res(ch + skip_ch, out_ch))
                 ch = out_ch
             # One attention per resolution here, unlike the encoder.
             self.up_attn.append(
-                _AttnBlock(ch, **attn_args)  # type: ignore[arg-type]
-                if spatial in config.attention_resolutions
-                else nn.Identity()
+                _attn(ch) if spatial in config.attention_resolutions else nn.Identity()
             )
             if config.progressive == "output_skip":
                 self.pyramid_norm.append(
@@ -578,18 +582,14 @@ class _VelocityField(nn.Module):
                 self.pyramid_norm.append(nn.Identity())
                 self.pyramid_conv.append(nn.Identity())
             if level != 0:
-                self.up_sample.append(
-                    _ResBlock(ch, ch, time_dim, up=True, **block_args)  # type: ignore[arg-type]
-                )
+                self.up_sample.append(_res(ch, ch, up=True))
                 spatial *= 2
-            else:
-                self.up_sample.append(nn.Identity())
 
         if config.progressive == "output_skip":
             # The pyramid already carries the output; a trunk head would
             # be dead weight.
-            self.norm_out: nn.Module = nn.Identity()
-            self.conv_out: nn.Module = nn.Identity()
+            self.norm_out: nn.GroupNorm | nn.Identity = nn.Identity()
+            self.conv_out: nn.Conv2d | nn.Identity = nn.Identity()
         else:
             self.norm_out = nn.GroupNorm(
                 _groups(ch, config.resnet_groups), ch, eps=1e-6
@@ -606,7 +606,7 @@ class _VelocityField(nn.Module):
             # training or sampling ever produces, so clamping to it
             # changes nothing in range and removes the singularity below.
             floor = lucid.full_like(scaled, max(self._time_floor, 1e-12))
-            return cast(Tensor, self.fourier(lucid.log(lucid.maximum(scaled, floor))))
+            return self.fourier(lucid.log(lucid.maximum(scaled, floor)))
         return _sinusoidal(scaled, self._config.base_channels)
 
     @override
@@ -641,17 +641,16 @@ class _VelocityField(nn.Module):
         idx = 0
         for level in range(self._levels):
             for _ in range(self._blocks_per_down):
-                h = cast(Tensor, self.down_res[idx](h, t_emb))
-                h = cast(Tensor, self.down_attn[idx](h))
+                h = self.down_res[idx](h, t_emb)
+                h = self.down_attn[idx](h)
                 skips.append(h)
                 idx += 1
             if level != self._levels - 1:
-                h = cast(Tensor, self.down_sample[level](h, t_emb))
+                h = self.down_sample[level](h, t_emb)
                 if pyramid_in is not None:
-                    pyramid_in = cast(
-                        Tensor, cast(nn.Module, self.pyramid_down)(pyramid_in)
-                    )
-                    h = h + cast(Tensor, self.down_combine[level](pyramid_in))
+                    assert self.pyramid_down is not None
+                    pyramid_in = self.pyramid_down(pyramid_in)
+                    h = h + self.down_combine[level](pyramid_in)
                 skips.append(h)
 
         h = self.mid_block1(h, t_emb)
@@ -663,33 +662,26 @@ class _VelocityField(nn.Module):
         for order, level in enumerate(range(self._levels - 1, -1, -1)):
             for _ in range(self._blocks_per_up):
                 h = lucid.cat([h, skips.pop()], dim=1)
-                h = cast(Tensor, self.up_res[idx](h, t_emb))
+                h = self.up_res[idx](h, t_emb)
                 idx += 1
-            h = cast(Tensor, self.up_attn[order](h))
+            h = self.up_attn[order](h)
             if self._progressive == "output_skip":
-                contribution = cast(
-                    Tensor,
-                    self.pyramid_conv[order](
-                        generative_activation(
-                            self._act_name, cast(Tensor, self.pyramid_norm[order](h))
-                        )
-                    ),
+                contribution = self.pyramid_conv[order](
+                    generative_activation(self._act_name, self.pyramid_norm[order](h))
                 )
                 if pyramid_out is None:
                     pyramid_out = contribution
                 else:
-                    pyramid_out = (
-                        cast(Tensor, cast(nn.Module, self.pyramid_up)(pyramid_out))
-                        + contribution
-                    )
+                    assert self.pyramid_up is not None
+                    pyramid_out = self.pyramid_up(pyramid_out) + contribution
             if level != 0:
-                h = cast(Tensor, self.up_sample[order](h, t_emb))
+                h = self.up_sample[order](h, t_emb)
 
         if pyramid_out is not None:
             out = pyramid_out
         else:
-            h = generative_activation(self._act_name, cast(Tensor, self.norm_out(h)))
-            out = cast(Tensor, self.conv_out(h))
+            h = generative_activation(self._act_name, self.norm_out(h))
+            out = self.conv_out(h)
 
         if self._scale_by_sigma:
             # NCSN++ output scaling, which every released 256x256 config turns

@@ -160,7 +160,7 @@ class _VectorField(nn.Module):
     def forward(self, t: Tensor, z: Tensor) -> Tensor:
         h = z
         for index, block in enumerate(self._ordered):
-            h = cast(Tensor, block(t, h))
+            h = block(t, h)
             if index != self._last:
                 h = generative_activation(self._act_name, h)
         return h
@@ -202,6 +202,8 @@ class _CNFDynamics(nn.Module):
         tracks this because it is the honest cost of a continuous flow:
         depth is not a hyper-parameter but whatever the solver spends.
     """
+
+    basis: Tensor
 
     def __init__(self, config: NeuralODEConfig) -> None:
         super().__init__()
@@ -298,7 +300,7 @@ class _CNFDynamics(nn.Module):
         """
         seeds = self._seeds
         if seeds is None or seeds[0].shape != dz.shape:
-            basis = cast(Tensor, self.basis)
+            basis = self.basis
             ones = lucid.ones_like(dz[:, :1])
             seeds = [
                 basis[index].reshape(1, self._dim) * ones for index in range(self._dim)

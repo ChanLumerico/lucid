@@ -13,7 +13,7 @@ Architecture differs from AlexNet in the first two conv layers:
     FC8   : 4096    → num_classes
 """
 
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -241,7 +241,7 @@ class ZFNetForImageClassification(ImageClassificationModel, ClassificationHeadMi
         x = x.flatten(1)
         x = self.drop6(F.relu(self.fc6(x)))
         x = self.drop7(F.relu(self.fc7(x)))
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

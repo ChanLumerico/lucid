@@ -994,7 +994,7 @@ def roi_pool(
             y2 = max(y1 + 1, min(y2 + 1, feat_H))
 
             crop: Tensor = feat[:, y1:y2, x1:x2]  # (C, rH, rW)
-            pooled = cast(Tensor, pool(crop.unsqueeze(0))).squeeze(0)
+            pooled = pool(crop.unsqueeze(0)).squeeze(0)
             results.append(pooled.unsqueeze(0))
 
     if not results:
@@ -1173,8 +1173,7 @@ class FPN(nn.Module):
         """
         # Lateral projections
         laterals: list[Tensor] = [
-            cast(Tensor, lat(f))
-            for lat, f in zip(self.lateral_convs, features, strict=True)
+            lat(f) for lat, f in zip(self.lateral_convs, features, strict=True)
         ]
 
         # Top-down: merge from coarsest to finest
@@ -1185,14 +1184,13 @@ class FPN(nn.Module):
 
         # 3×3 output convolutions (anti-aliasing)
         outs: list[Tensor] = [
-            cast(Tensor, conv(lat))
-            for conv, lat in zip(self.output_convs, laterals, strict=True)
+            conv(lat) for conv, lat in zip(self.output_convs, laterals, strict=True)
         ]
 
         # Extra coarser levels
         extra_in = outs[-1]
         for conv in self.extra_convs:
-            extra_in = F.relu(cast(Tensor, conv(extra_in)))
+            extra_in = F.relu(conv(extra_in))
             outs.append(extra_in)
 
         return outs
@@ -2347,6 +2345,11 @@ class _FrozenBatchNorm2d(nn.Module):
     :math:`10^{-5}` elsewhere.
     """
 
+    weight: Tensor
+    bias: Tensor
+    running_mean: Tensor
+    running_var: Tensor
+
     def __init__(self, num_features: int, eps: float = 1e-5) -> None:
         super().__init__()
         self.num_features = num_features
@@ -2358,13 +2361,11 @@ class _FrozenBatchNorm2d(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        w = cast(Tensor, self.weight).reshape(1, -1, 1, 1)
-        b = cast(Tensor, self.bias).reshape(1, -1, 1, 1)
-        rm = cast(Tensor, self.running_mean).reshape(1, -1, 1, 1)
-        rv = cast(Tensor, self.running_var).reshape(1, -1, 1, 1)
+        w, b = self.weight.reshape(1, -1, 1, 1), self.bias.reshape(1, -1, 1, 1)
+        rm = self.running_mean.reshape(1, -1, 1, 1)
+        rv = self.running_var.reshape(1, -1, 1, 1)
         scale = w * (rv + self.eps).rsqrt()
-        bias = b - rm * scale
-        return x * scale + bias
+        return x * scale + (b - rm * scale)
 
 
 class _ResNetBottleneck(nn.Module):
@@ -2377,7 +2378,7 @@ class _ResNetBottleneck(nn.Module):
         in_ch: int,
         mid_ch: int,
         stride: int = 1,
-        downsample: nn.Module | None = None,
+        downsample: nn.Sequential | None = None,
         bn_eps: float = 0.0,
     ) -> None:
         super().__init__()
@@ -2397,7 +2398,7 @@ class _ResNetBottleneck(nn.Module):
         out = F.relu(self.bn2(self.conv2(out)))
         out = self.bn3(self.conv3(out))
         if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
+            identity = self.downsample(x)
         return F.relu(out + identity)
 
 
@@ -2405,7 +2406,7 @@ def _make_resnet_layer(
     in_ch: int, mid_ch: int, num_blocks: int, stride: int, bn_eps: float
 ) -> tuple[nn.Sequential, int]:
     out_ch = mid_ch * 4
-    ds: nn.Module | None = None
+    ds: nn.Sequential | None = None
     if stride != 1 or in_ch != out_ch:
         ds = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, 1, stride=stride, bias=False),
@@ -2447,7 +2448,7 @@ class _ResNetBody(nn.Module):
     @override
     def forward(self, x: Tensor) -> list[Tensor]:
         x = self.relu(self.bn1(self.conv1(x)))
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         c2 = self.layer1(x)
         c3 = self.layer2(c2)
         c4 = self.layer3(c3)
@@ -2487,15 +2488,14 @@ class _FeaturePyramidNetwork(nn.Module):
         ``LastLevelMaxPool`` output.
         """
         n = len(features)
-        last_inner = cast(Tensor, self.inner_blocks[n - 1](features[n - 1]))
-        results: list[Tensor] = [cast(Tensor, self.layer_blocks[n - 1](last_inner))]
+        last_inner = self.inner_blocks[n - 1](features[n - 1])
+        results: list[Tensor] = [self.layer_blocks[n - 1](last_inner)]
         for idx in range(n - 2, -1, -1):
-            inner_lateral = cast(Tensor, self.inner_blocks[idx](features[idx]))
-            fh = int(inner_lateral.shape[2])
-            fw = int(inner_lateral.shape[3])
+            inner_lateral = self.inner_blocks[idx](features[idx])
+            fh, fw = int(inner_lateral.shape[2]), int(inner_lateral.shape[3])
             inner_top_down = F.interpolate(last_inner, size=(fh, fw), mode="nearest")
             last_inner = inner_lateral + inner_top_down
-            results.insert(0, cast(Tensor, self.layer_blocks[idx](last_inner)))
+            results.insert(0, self.layer_blocks[idx](last_inner))
         # LastLevelMaxPool: stride-2 subsample of the coarsest FPN output.
         pool = F.max_pool2d(results[-1], kernel_size=1, stride=2, padding=0)
         results.append(pool)

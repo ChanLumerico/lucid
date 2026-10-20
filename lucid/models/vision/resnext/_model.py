@@ -7,7 +7,7 @@ convolution.  The intermediate width is determined by:
 where base_width = 64 (the channel count at the first stage).
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -37,7 +37,7 @@ class _ResNeXtBottleneck(nn.Module):
         in_channels: int,
         out_channels: int,
         stride: int = 1,
-        downsample: nn.Module | None = None,
+        downsample: nn.Sequential | None = None,
         cardinality: int = 32,
         width_per_group: int = 4,
     ) -> None:
@@ -72,7 +72,7 @@ class _ResNeXtBottleneck(nn.Module):
         out = self.bn3(self.conv3(out))
 
         if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
+            identity = self.downsample(x)
 
         out = out + identity
         return self.relu(out)
@@ -101,7 +101,7 @@ def _make_layer(
     """Build one ResNeXt stage. Returns (layer, new_in_channels)."""
     final_channels = out_channels * _ResNeXtBottleneck.expansion
 
-    downsample: nn.Module | None = None
+    downsample: nn.Sequential | None = None
     if stride != 1 or in_channels != final_channels:
         downsample = nn.Sequential(
             nn.Conv2d(in_channels, final_channels, 1, stride=stride, bias=False),
@@ -302,7 +302,7 @@ class ResNeXt(PretrainedModel, BackboneMixin):
     @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = self.stem(x)
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -410,14 +410,14 @@ class ResNeXtForImageClassification(ImageClassificationModel, ClassificationHead
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
         x = self.stem(x)
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
         x = self.avgpool(x)
         x = x.flatten(1)
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

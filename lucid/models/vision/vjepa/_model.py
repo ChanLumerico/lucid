@@ -16,7 +16,7 @@ the attentive probe the paper evaluates with.
 import math
 import random
 from dataclasses import dataclass
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid
 import lucid.nn as nn
@@ -117,6 +117,8 @@ class _TubeletEmbed(nn.Module):
 class _Encoder(nn.Module):
     """A ViT over tubelets, with no class token."""
 
+    pos_embed: Tensor
+
     def __init__(self, config: VJEPAConfig) -> None:
         super().__init__()
         hidden = int(config.dim * config.mlp_ratio)
@@ -131,7 +133,7 @@ class _Encoder(nn.Module):
             _Block(config.dim, config.num_heads, hidden, config.layer_norm_eps)
             for _ in range(config.depth)
         ]
-        self.blocks = nn.ModuleList([*blocks])
+        self.blocks: nn.ModuleList[_Block] = nn.ModuleList([*blocks])
         self.norm = nn.LayerNorm(config.dim, eps=config.layer_norm_eps)
 
         # Same initialisation as I-JEPA's tower, down to the tubelet
@@ -148,11 +150,11 @@ class _Encoder(nn.Module):
         Masking drops tokens rather than attending around them, so the
         context encoder's sequence is genuinely shorter than the clip.
         """
-        tokens = self.patch_embed(x) + cast(Tensor, self.pos_embed)
+        tokens = self.patch_embed(x) + self.pos_embed
         if indices is not None:
             tokens = _gather_tokens(tokens, indices)
         for block in self.blocks:
-            tokens = cast(Tensor, block(tokens))
+            tokens = block(tokens)
         return self.norm(tokens)
 
 
@@ -164,6 +166,8 @@ class _Predictor(nn.Module):
     not asked in quite the same voice.  They start at zero there, which
     is the one place V-JEPA differs from I-JEPA's initialisation.
     """
+
+    predictor_pos_embed: Tensor
 
     def __init__(self, config: VJEPAConfig, num_mask_tokens: int) -> None:
         super().__init__()
@@ -183,7 +187,7 @@ class _Predictor(nn.Module):
             _Block(width, heads, hidden, config.layer_norm_eps)
             for _ in range(config.predictor_depth)
         ]
-        self.predictor_blocks = nn.ModuleList([*blocks])
+        self.predictor_blocks: nn.ModuleList[_Block] = nn.ModuleList([*blocks])
         self.predictor_norm = nn.LayerNorm(width, eps=config.layer_norm_eps)
         self.predictor_proj = nn.Linear(width, config.dim)
 
@@ -208,7 +212,7 @@ class _Predictor(nn.Module):
                 f"mask_index must name one of the {self.num_mask_tokens} mask "
                 f"tokens, got {mask_index}"
             )
-        positions = cast(Tensor, self.predictor_pos_embed)
+        positions = self.predictor_pos_embed
         batch = int(context.shape[0])
         tokens = self.predictor_embed(context)
         tokens = tokens + _gather_tokens(
@@ -219,7 +223,7 @@ class _Predictor(nn.Module):
 
         count = int(target_indices.shape[1])
         width = int(tokens.shape[2])
-        queries = cast(Tensor, self.mask_tokens[mask_index]) + lucid.zeros(
+        queries = self.mask_tokens[mask_index] + lucid.zeros(
             batch, count, width, dtype=tokens.dtype, device=tokens.device
         )
         queries = queries + _gather_tokens(
@@ -230,7 +234,7 @@ class _Predictor(nn.Module):
 
         hidden = lucid.cat([tokens, queries], dim=1)
         for block in self.predictor_blocks:
-            hidden = cast(Tensor, block(hidden))
+            hidden = block(hidden)
         hidden = self.predictor_norm(hidden)
         return self.predictor_proj(hidden[:, -count:])
 
@@ -279,7 +283,7 @@ class _AttentivePooler(nn.Module):
                 0, 2, 1, 3
             )
 
-        query_in = cast(Tensor, self.query_token) + lucid.zeros(
+        query_in = self.query_token + lucid.zeros(
             batch, 1, width, dtype=tokens.dtype, device=tokens.device
         )
         q = heads(self.query(query_in), 1)

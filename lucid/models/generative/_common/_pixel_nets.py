@@ -21,7 +21,7 @@ families that share them have different config classes, and a shared
 building block should not know which one it is being built from.
 """
 
-from typing import cast, final, override
+from typing import final, override
 
 import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
@@ -140,7 +140,7 @@ class PixelEncoder(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         h, b, t = _fold(x)
         for conv in self.convs:
-            h = generative_activation(self._act_name, cast(Tensor, conv(h)))
+            h = generative_activation(self._act_name, conv(h))
         return _unfold(h.reshape(int(h.shape[0]), self.embed_size), b, t)
 
 
@@ -209,7 +209,7 @@ class PixelDecoder(nn.Module):
         h = h.reshape(int(h.shape[0]), self._lift_width, 1, 1)
         last = len(self.deconvs) - 1
         for i, deconv in enumerate(self.deconvs):
-            h = cast(Tensor, deconv(h))
+            h = deconv(h)
             if i != last:
                 h = generative_activation(self._act_name, h)
         return _unfold(h, b, t)
@@ -277,6 +277,6 @@ class DenseHead(nn.Module):
     def forward(self, feature: Tensor) -> Tensor:
         h, b, t = _fold(feature)
         for layer in self.layers:
-            h = generative_activation(self._act_name, cast(Tensor, layer(h)))
+            h = generative_activation(self._act_name, layer(h))
         out = self.out(h)
         return out.reshape(b, t) if self._squeeze else _unfold(out, b, t)

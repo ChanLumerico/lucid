@@ -3,7 +3,7 @@ Linear and related fully-connected layers.
 """
 
 import math
-from typing import cast, override
+from typing import override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import DeviceLike, DTypeLike
@@ -857,6 +857,9 @@ class NoisyLinear(Module):
     (2, 3)
     """
 
+    epsilon_in: Tensor
+    epsilon_out: Tensor
+
     def __init__(
         self,
         in_features: int,
@@ -917,12 +920,12 @@ class NoisyLinear(Module):
     @property
     def noise_in(self) -> Tensor:
         """The input noise sample, narrowed from the buffer registry."""
-        return cast(Tensor, self.epsilon_in)
+        return self.epsilon_in
 
     @property
     def noise_out(self) -> Tensor:
         """The output noise sample, narrowed from the buffer registry."""
-        return cast(Tensor, self.epsilon_out)
+        return self.epsilon_out
 
     def resample(self) -> None:
         """Draw a fresh noise sample — one per optimisation step, or episode.

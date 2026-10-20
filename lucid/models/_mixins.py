@@ -212,7 +212,7 @@ class ClassificationHeadMixin:
     (2, 10)
     """
 
-    classifier: nn.Module
+    classifier: nn.Linear | nn.Sequential
 
     def _build_classifier(
         self,

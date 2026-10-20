@@ -41,7 +41,7 @@ State-dict naming matches timm inception_resnet_v2 exactly:
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, TypedDict, final, override
 
 import lucid
 import lucid.nn as nn
@@ -247,7 +247,7 @@ class _Mixed6a(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         b0 = self.branch0(x)
         b1 = self.branch1(x)
-        b2 = cast(Tensor, self.branch2(x))
+        b2 = self.branch2(x)
         return lucid.cat([b0, b1, b2], dim=1)  # 384+384+320 = 1088
 
 
@@ -321,7 +321,7 @@ class _Mixed7a(nn.Module):
         b0 = self.branch0(x)
         b1 = self.branch1(x)
         b2 = self.branch2(x)
-        b3 = cast(Tensor, self.branch3(x))
+        b3 = self.branch3(x)
         return lucid.cat([b0, b1, b2, b3], dim=1)  # 384+288+320+1088 = 2080
 
 
@@ -404,7 +404,23 @@ class InceptionResNetOutput(ImageClassificationOutput):
 # ---------------------------------------------------------------------------
 
 
-def _build_body(config: InceptionResNetConfig) -> dict[str, nn.Module]:
+class _BodyModules(TypedDict):
+    conv2d_1a: _ConvBnReLU
+    conv2d_2a: _ConvBnReLU
+    conv2d_2b: _ConvBnReLU
+    conv2d_3b: _ConvBnReLU
+    conv2d_4a: _ConvBnReLU
+    mixed_5b: _Mixed5b
+    repeat: nn.Sequential
+    mixed_6a: _Mixed6a
+    repeat_1: nn.Sequential
+    mixed_7a: _Mixed7a
+    repeat_2: nn.Sequential
+    block8: _Block8
+    conv2d_7b: _ConvBnReLU
+
+
+def _build_body(config: InceptionResNetConfig) -> _BodyModules:
     """Return the ordered modules that make up the Inception-ResNet v2 body."""
     s_a = config.scale_a
     s_b = config.scale_b
@@ -530,22 +546,22 @@ class InceptionResNetV2(PretrainedModel, BackboneMixin):
         super().__init__(config)
         body = _build_body(config)
         # Stem conv layers
-        self.conv2d_1a: nn.Module = body["conv2d_1a"]
-        self.conv2d_2a: nn.Module = body["conv2d_2a"]
-        self.conv2d_2b: nn.Module = body["conv2d_2b"]
+        self.conv2d_1a = body["conv2d_1a"]
+        self.conv2d_2a = body["conv2d_2a"]
+        self.conv2d_2b = body["conv2d_2b"]
         self._pool1 = nn.MaxPool2d(3, stride=2)
-        self.conv2d_3b: nn.Module = body["conv2d_3b"]
-        self.conv2d_4a: nn.Module = body["conv2d_4a"]
+        self.conv2d_3b = body["conv2d_3b"]
+        self.conv2d_4a = body["conv2d_4a"]
         self._pool2 = nn.MaxPool2d(3, stride=2)
         # Inception body
-        self.mixed_5b: nn.Module = body["mixed_5b"]
-        self.repeat: nn.Module = body["repeat"]
-        self.mixed_6a: nn.Module = body["mixed_6a"]
-        self.repeat_1: nn.Module = body["repeat_1"]
-        self.mixed_7a: nn.Module = body["mixed_7a"]
-        self.repeat_2: nn.Module = body["repeat_2"]
-        self.block8: nn.Module = body["block8"]
-        self.conv2d_7b: nn.Module = body["conv2d_7b"]
+        self.mixed_5b = body["mixed_5b"]
+        self.repeat = body["repeat"]
+        self.mixed_6a = body["mixed_6a"]
+        self.repeat_1 = body["repeat_1"]
+        self.mixed_7a = body["mixed_7a"]
+        self.repeat_2 = body["repeat_2"]
+        self.block8 = body["block8"]
+        self.conv2d_7b = body["conv2d_7b"]
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
 
@@ -561,26 +577,26 @@ class InceptionResNetV2(PretrainedModel, BackboneMixin):
         return self._feature_info
 
     def _forward_stem(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.conv2d_1a(x))
-        x = cast(Tensor, self.conv2d_2a(x))
-        x = cast(Tensor, self.conv2d_2b(x))
-        x = cast(Tensor, self._pool1(x))
-        x = cast(Tensor, self.conv2d_3b(x))
-        x = cast(Tensor, self.conv2d_4a(x))
-        x = cast(Tensor, self._pool2(x))
+        x = self.conv2d_1a(x)
+        x = self.conv2d_2a(x)
+        x = self.conv2d_2b(x)
+        x = self._pool1(x)
+        x = self.conv2d_3b(x)
+        x = self.conv2d_4a(x)
+        x = self._pool2(x)
         return x
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = self._forward_stem(x)
-        x = cast(Tensor, self.mixed_5b(x))
-        x = cast(Tensor, self.repeat(x))
-        x = cast(Tensor, self.mixed_6a(x))
-        x = cast(Tensor, self.repeat_1(x))
-        x = cast(Tensor, self.mixed_7a(x))
-        x = cast(Tensor, self.repeat_2(x))
-        x = cast(Tensor, self.block8(x))
-        x = cast(Tensor, self.conv2d_7b(x))
+        x = self.mixed_5b(x)
+        x = self.repeat(x)
+        x = self.mixed_6a(x)
+        x = self.repeat_1(x)
+        x = self.mixed_7a(x)
+        x = self.repeat_2(x)
+        x = self.block8(x)
+        x = self.conv2d_7b(x)
         # ``feature_info`` describes the pre-pool pyramid, and the mixin
         # documents this as returning the deepest stage's *feature map*.
         # Pooling here collapsed it to 1x1, so the declared reduction was
@@ -669,39 +685,39 @@ class InceptionResNetV2ForImageClassification(ImageClassificationModel):
         super().__init__(config)
         body = _build_body(config)
         # Stem
-        self.conv2d_1a: nn.Module = body["conv2d_1a"]
-        self.conv2d_2a: nn.Module = body["conv2d_2a"]
-        self.conv2d_2b: nn.Module = body["conv2d_2b"]
+        self.conv2d_1a = body["conv2d_1a"]
+        self.conv2d_2a = body["conv2d_2a"]
+        self.conv2d_2b = body["conv2d_2b"]
         self._pool1 = nn.MaxPool2d(3, stride=2)
-        self.conv2d_3b: nn.Module = body["conv2d_3b"]
-        self.conv2d_4a: nn.Module = body["conv2d_4a"]
+        self.conv2d_3b = body["conv2d_3b"]
+        self.conv2d_4a = body["conv2d_4a"]
         self._pool2 = nn.MaxPool2d(3, stride=2)
         # Inception body
-        self.mixed_5b: nn.Module = body["mixed_5b"]
-        self.repeat: nn.Module = body["repeat"]
-        self.mixed_6a: nn.Module = body["mixed_6a"]
-        self.repeat_1: nn.Module = body["repeat_1"]
-        self.mixed_7a: nn.Module = body["mixed_7a"]
-        self.repeat_2: nn.Module = body["repeat_2"]
-        self.block8: nn.Module = body["block8"]
-        self.conv2d_7b: nn.Module = body["conv2d_7b"]
+        self.mixed_5b = body["mixed_5b"]
+        self.repeat = body["repeat"]
+        self.mixed_6a = body["mixed_6a"]
+        self.repeat_1 = body["repeat_1"]
+        self.mixed_7a = body["mixed_7a"]
+        self.repeat_2 = body["repeat_2"]
+        self.block8 = body["block8"]
+        self.conv2d_7b = body["conv2d_7b"]
 
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         if config.dropout > 0.0:
-            self.dropout: nn.Module = nn.Dropout(config.dropout)
+            self.dropout: nn.Dropout | nn.Identity = nn.Dropout(config.dropout)
         else:
             self.dropout = nn.Identity()
         # Named `classif` to match timm
         self.classif = nn.Linear(1536, config.num_classes)
 
     def _forward_stem(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.conv2d_1a(x))
-        x = cast(Tensor, self.conv2d_2a(x))
-        x = cast(Tensor, self.conv2d_2b(x))
-        x = cast(Tensor, self._pool1(x))
-        x = cast(Tensor, self.conv2d_3b(x))
-        x = cast(Tensor, self.conv2d_4a(x))
-        x = cast(Tensor, self._pool2(x))
+        x = self.conv2d_1a(x)
+        x = self.conv2d_2a(x)
+        x = self.conv2d_2b(x)
+        x = self._pool1(x)
+        x = self.conv2d_3b(x)
+        x = self.conv2d_4a(x)
+        x = self._pool2(x)
         return x
 
     def reset_classifier(self, num_classes: int) -> None:
@@ -721,17 +737,17 @@ class InceptionResNetV2ForImageClassification(ImageClassificationModel):
         labels: Tensor | None = None,
     ) -> InceptionResNetOutput:
         x = self._forward_stem(x)
-        x = cast(Tensor, self.mixed_5b(x))
-        x = cast(Tensor, self.repeat(x))
-        x = cast(Tensor, self.mixed_6a(x))
-        x = cast(Tensor, self.repeat_1(x))
-        x = cast(Tensor, self.mixed_7a(x))
-        x = cast(Tensor, self.repeat_2(x))
-        x = cast(Tensor, self.block8(x))
-        x = cast(Tensor, self.conv2d_7b(x))
+        x = self.mixed_5b(x)
+        x = self.repeat(x)
+        x = self.mixed_6a(x)
+        x = self.repeat_1(x)
+        x = self.mixed_7a(x)
+        x = self.repeat_2(x)
+        x = self.block8(x)
+        x = self.conv2d_7b(x)
         x = self.avgpool(x)
         x = x.flatten(1)
-        x = cast(Tensor, self.dropout(x))
+        x = self.dropout(x)
         logits = self.classif(x)
 
         loss: Tensor | None = None

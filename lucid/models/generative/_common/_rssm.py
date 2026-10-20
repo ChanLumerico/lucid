@@ -539,13 +539,17 @@ class RSSM(nn.Module):
             self.pre_cell = nn.Linear(self.stoch_width + action_dim, hidden_size)
             self.cell = nn.GRUCell(hidden_size, deter_size)
 
-        self.prior_head = nn.Sequential(
-            nn.Linear(deter_size, hidden_size),
-            nn.Linear(hidden_size, head_width),
+        self.prior_head: nn.ModuleList[nn.Linear] = nn.ModuleList(
+            [
+                nn.Linear(deter_size, hidden_size),
+                nn.Linear(hidden_size, head_width),
+            ]
         )
-        self.posterior_head = nn.Sequential(
-            nn.Linear(deter_size + embed_size, hidden_size),
-            nn.Linear(hidden_size, head_width),
+        self.posterior_head: nn.ModuleList[nn.Linear] = nn.ModuleList(
+            [
+                nn.Linear(deter_size + embed_size, hidden_size),
+                nn.Linear(hidden_size, head_width),
+            ]
         )
 
     # ── internals ────────────────────────────────────────────────────────
@@ -621,10 +625,8 @@ class RSSM(nn.Module):
         blocks = self.blocks
         scaled = action / action.abs().clip(1.0, None).detach()
 
-        def project(layer: nn.Module, norm: nn.Module, x: Tensor) -> Tensor:
-            return generative_activation(
-                self._act_name, cast(Tensor, norm(cast(Tensor, layer(x))))
-            )
+        def project(layer: nn.Linear, norm: nn.RMSNorm, x: Tensor) -> Tensor:
+            return generative_activation(self._act_name, norm(layer(x)))
 
         parts = lucid.cat(
             [
@@ -650,13 +652,15 @@ class RSSM(nn.Module):
         candidate = lucid.tanh(reset * candidate)
         return update * candidate + (1.0 - update) * deter
 
-    def _head(self, head: nn.Module, x: Tensor) -> Tensor:
+    def _head(self, head: nn.ModuleList[nn.Linear], x: Tensor) -> Tensor:
         """Run a two-layer head and return its raw output."""
-        first, second = cast(nn.Sequential, head)[0], cast(nn.Sequential, head)[1]
-        h = generative_activation(self._act_name, cast(Tensor, first(x)))
-        return cast(Tensor, second(h))
+        first, second = head[0], head[1]
+        h = generative_activation(self._act_name, first(x))
+        return second(h)
 
-    def _latent(self, head: nn.Module, x: Tensor, sample: bool) -> RSSMState:
+    def _latent(
+        self, head: nn.ModuleList[nn.Linear], x: Tensor, sample: bool
+    ) -> RSSMState:
         """Read a head and turn it into the latent half of a state.
 
         Parameters

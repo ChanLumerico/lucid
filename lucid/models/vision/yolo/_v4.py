@@ -49,7 +49,7 @@ Loss (training)
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -451,9 +451,9 @@ class _SPP(nn.Module):
     @override
     def forward(self, x: Tensor) -> Tensor:
         x = self.pre(x)  # (B, half, H, W)
-        p5 = cast(Tensor, self.pool5(x))
-        p9 = cast(Tensor, self.pool9(x))
-        p13 = cast(Tensor, self.pool13(x))
+        p5 = self.pool5(x)
+        p9 = self.pool9(x)
+        p13 = self.pool13(x)
         concat = lucid.cat([x, p5, p9, p13], dim=1)  # (B, 4*half, H, W)
         return self.post(concat)  # (B, out_ch, H, W)
 

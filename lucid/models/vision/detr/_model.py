@@ -106,7 +106,7 @@ class _ResNetC5(nn.Module):
     @override
     def forward(self, x: Tensor) -> Tensor:
         x = F.relu(self.bn1(self.conv1(x)))
-        x = cast(Tensor, self.pool(x))
+        x = self.pool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -288,9 +288,7 @@ class _DETREncoder(nn.Module):
     ) -> Tensor:
         output = src
         for layer in self.layers:
-            output = cast(
-                Tensor, layer(output, pos=pos, key_padding_mask=key_padding_mask)
-            )
+            output = layer(output, pos=pos, key_padding_mask=key_padding_mask)
         return output
 
 
@@ -329,15 +327,12 @@ class _DETRDecoder(nn.Module):
         output = tgt
         intermediate: list[Tensor] = []
         for layer in self.layers:
-            output = cast(
-                Tensor,
-                layer(
-                    output,
-                    memory,
-                    pos=pos,
-                    query_pos=query_pos,
-                    memory_key_padding_mask=memory_key_padding_mask,
-                ),
+            output = layer(
+                output,
+                memory,
+                pos=pos,
+                query_pos=query_pos,
+                memory_key_padding_mask=memory_key_padding_mask,
             )
             if return_intermediate:
                 intermediate.append(self.norm(output))
@@ -712,7 +707,7 @@ class DETRForObjectDetection(ObjectDetectionModel):
         pos_embed = self._pos_embed(B, fH, fW, device)
 
         # 3. Transformer — returns (B, N, d)
-        queries: Tensor = cast(Tensor, self.query_embed.weight)  # (N, d)
+        queries: Tensor = self.query_embed.weight  # (N, d)
         # The shipped eval preset pads every image onto a 1333x1333 canvas, so
         # without a key-padding mask each query attends to zero padding as if it
         # were image content.  ``pixel_mask`` is True on real pixels; it is

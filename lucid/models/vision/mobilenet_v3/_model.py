@@ -8,7 +8,7 @@ Key innovations:
   - NAS-designed architecture for Large and Small variants.
 """
 
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -471,7 +471,7 @@ class MobileNetV3ForImageClassification(
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
         x = self.features(x)
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

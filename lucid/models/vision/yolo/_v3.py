@@ -315,7 +315,7 @@ class _Dark53Block(nn.Module):
 
 def _make_dark53_stage(
     in_ch: int, out_ch: int, n_blocks: int
-) -> tuple[nn.Sequential, nn.Module]:
+) -> tuple[nn.Sequential, _ConvBnLeaky]:
     """Build one Darknet-53 stage.
 
     Returns:
@@ -369,7 +369,7 @@ class _Darknet53(nn.Module):
         x = self.conv1(self.conv0(x))
 
         x = self.stage1_blocks(x)
-        x = cast(Tensor, self.down1(x))
+        x = self.down1(x)
 
         # The detection taps come *after* their residual stack, not before the
         # preceding downsample: Darknet-53 predicts from the 8×256 stage
@@ -377,15 +377,15 @@ class _Darknet53(nn.Module):
         # yields stride-4/8 maps that the decoder then scales by 8/16, doubling
         # every predicted centre.
         x = self.stage2_blocks(x)
-        x = cast(Tensor, self.down2(x))
+        x = self.down2(x)
 
         x = self.stage3_blocks(x)
         p3_raw = x  # (B, 256, H/8, W/8)
-        x = cast(Tensor, self.down3(x))
+        x = self.down3(x)
 
         x = self.stage4_blocks(x)
         p4_raw = x  # (B, 512, H/16, W/16)
-        x = cast(Tensor, self.down4(x))
+        x = self.down4(x)
 
         p5 = self.stage5_blocks(x)  # (B, 1024, H/32, W/32)
 
@@ -433,16 +433,16 @@ class _Darknet53Tiny(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
-        x = cast(Tensor, self.pool1(self.conv1(x)))
-        x = cast(Tensor, self.pool2(self.conv2(x)))
-        x = cast(Tensor, self.pool3(self.conv3(x)))
-        x = cast(Tensor, self.pool4(self.conv4(x)))
+        x = self.pool1(self.conv1(x))
+        x = self.pool2(self.conv2(x))
+        x = self.pool3(self.conv3(x))
+        x = self.pool4(self.conv4(x))
         x = self.conv5(x)
         p4_raw = x  # (B, 256, H/16, W/16)
-        x = cast(Tensor, self.pool5(x))
+        x = self.pool5(x)
         x = self.conv6(x)
         x = F.pad(x, (0, 1, 0, 1), mode="constant", value=_NEG_FILL)
-        x = cast(Tensor, self.pool6(x))
+        x = self.pool6(x)
         x = self.conv7(x)
         p5 = self.conv8(x)  # (B, 256, H/32, W/32)
         return p4_raw, p5

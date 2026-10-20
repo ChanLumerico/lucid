@@ -17,7 +17,7 @@ Split-Attention convolution (SplitAttn):
   - Branches are recombined via softmax attention weights
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import math
 
@@ -238,7 +238,7 @@ class _ResNeStBottleneck(nn.Module):
         inplanes: int,
         planes: int,
         stride: int = 1,
-        downsample: nn.Module | None = None,
+        downsample: nn.Sequential | None = None,
         radix: int = 2,
         groups: int = 1,
         avd: bool = True,
@@ -268,7 +268,7 @@ class _ResNeStBottleneck(nn.Module):
         self.act1 = nn.ReLU(inplace=True)
 
         # AVD pool before SplitAttn (avd_first=True)
-        self.avd_first: nn.Module = (
+        self.avd_first: nn.AvgPool2d | nn.Identity = (
             nn.AvgPool2d(3, avd_stride, padding=1)
             if avd_stride > 0 and avd_first
             else nn.Identity()
@@ -287,11 +287,11 @@ class _ResNeStBottleneck(nn.Module):
         )
         # bn2 is Identity — SplitAttn already contains bn0 after its conv.
         # Both references reserve this slot for DropBlock.
-        self.bn2: nn.Module = _DropBlock2d(drop_block_rate, drop_block_size)
-        self.act2: nn.Module = nn.Identity()
+        self.bn2: _DropBlock2d = _DropBlock2d(drop_block_rate, drop_block_size)
+        self.act2: nn.Identity = nn.Identity()
 
         # AVD pool after SplitAttn (avd_first=False, default)
-        self.avd_last: nn.Module = (
+        self.avd_last: nn.AvgPool2d | nn.Identity = (
             nn.AvgPool2d(3, avd_stride, padding=1)
             if avd_stride > 0 and not avd_first
             else nn.Identity()
@@ -310,19 +310,19 @@ class _ResNeStBottleneck(nn.Module):
         out = self.bn1(out)
         out = self.act1(out)
 
-        out = cast(Tensor, self.avd_first(out))
+        out = self.avd_first(out)
 
         out = self.conv2(out)
-        out = cast(Tensor, self.bn2(out))
-        out = cast(Tensor, self.act2(out))
+        out = self.bn2(out)
+        out = self.act2(out)
 
-        out = cast(Tensor, self.avd_last(out))
+        out = self.avd_last(out)
 
         out = self.conv3(out)
         out = self.bn3(out)
 
         if self.downsample is not None:
-            shortcut = cast(Tensor, self.downsample(x))
+            shortcut = self.downsample(x)
 
         out = out + shortcut
         return self.act3(out)
@@ -371,7 +371,7 @@ def _make_layer(
     out_ch = planes * expansion
 
     # Downsample for first block
-    downsample: nn.Module | None = None
+    downsample: nn.Sequential | None = None
     if stride != 1 or inplanes != out_ch:
         if avg_down:
             downsample = _make_avg_downsample(inplanes, out_ch, stride)
@@ -684,7 +684,7 @@ class ResNeSt(PretrainedModel, BackboneMixin):
     def forward_features(self, x: Tensor) -> Tensor:
         x = self.conv1(x)
         x = self.act1(self.bn1(x))
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -784,14 +784,14 @@ class ResNeStForImageClassification(ImageClassificationModel, ClassificationHead
     ) -> ImageClassificationOutput:
         x = self.conv1(x)
         x = self.act1(self.bn1(x))
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
         x = self.avgpool(x)
         x = x.flatten(1)
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

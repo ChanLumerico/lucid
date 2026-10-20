@@ -36,7 +36,7 @@ canonical reference implementation these weights come from:
   augmentation are present.
 """
 
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -339,7 +339,7 @@ class AlexNetForImageClassification(ImageClassificationModel, ClassificationHead
         # parity never caught it.
         x = F.relu(self.fc6(self.drop6(x)))
         x = F.relu(self.fc7(self.drop7(x)))
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

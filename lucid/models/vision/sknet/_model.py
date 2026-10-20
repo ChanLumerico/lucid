@@ -12,7 +12,7 @@ bottleneck width per the ResNeXt formula:
 """
 
 import math
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -122,14 +122,14 @@ class _ConvBnAct(nn.Module):
         self.bn = nn.BatchNorm2d(out_channels)
         self.apply_act = apply_act
         if apply_act:
-            self.act: nn.Module = nn.ReLU(inplace=True)
+            self.act: nn.ReLU = nn.ReLU(inplace=True)
 
     @override
     def forward(self, x: Tensor) -> Tensor:
         out = self.conv(x)
         out = self.bn(out)
         if self.apply_act:
-            out = cast(Tensor, self.act(out))
+            out = self.act(out)
         return out
 
 
@@ -186,7 +186,7 @@ class _SelectiveKernel(nn.Module):
         path_in = in_channels // self.num_paths if split_input else in_channels
         effective_groups = min(out_channels, groups)
 
-        self.paths = nn.ModuleList(
+        self.paths: nn.ModuleList[_ConvBnAct] = nn.ModuleList(
             [
                 _ConvBnAct(
                     path_in,
@@ -219,11 +219,11 @@ class _SelectiveKernel(nn.Module):
         if self.split_input:
             half = self.in_channels // self.num_paths
             x_paths = [
-                cast(Tensor, self.paths[i](x[:, i * half : (i + 1) * half, :, :]))
+                self.paths[i](x[:, i * half : (i + 1) * half, :, :])
                 for i in range(self.num_paths)
             ]
         else:
-            x_paths = [cast(Tensor, op(x)) for op in self.paths]
+            x_paths = [op(x) for op in self.paths]
 
         # Stack — (B, num_paths, C, H, W)
         stacked = lucid.stack(x_paths, dim=1)
@@ -262,7 +262,7 @@ class _SelectiveKernelBasic(nn.Module):
         inplanes: int,
         planes: int,
         stride: int = 1,
-        downsample: nn.Module | None = None,
+        downsample: nn.Sequential | None = None,
         cardinality: int = 1,
         base_width: int = 64,
         split_input: bool = False,
@@ -302,7 +302,7 @@ class _SelectiveKernelBasic(nn.Module):
         out = self.conv2(out)
 
         if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
+            identity = self.downsample(x)
 
         out = out + identity
         return self.act(out)
@@ -324,7 +324,7 @@ class _SelectiveKernelBottleneck(nn.Module):
         inplanes: int,
         planes: int,
         stride: int = 1,
-        downsample: nn.Module | None = None,
+        downsample: nn.Sequential | None = None,
         cardinality: int = 1,
         base_width: int = 64,
         split_input: bool = True,
@@ -363,7 +363,7 @@ class _SelectiveKernelBottleneck(nn.Module):
         out = self.conv3(out)
 
         if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
+            identity = self.downsample(x)
 
         out = out + identity
         return self.act(out)
@@ -396,7 +396,7 @@ def _make_stage(
 
     outplanes = planes * block_cls.expansion
 
-    downsample: nn.Module | None = None
+    downsample: nn.Sequential | None = None
     if stride != 1 or inplanes != outplanes:
         downsample = nn.Sequential(
             nn.Conv2d(inplanes, outplanes, kernel_size=1, stride=stride, bias=False),
@@ -595,7 +595,7 @@ class SKNet(PretrainedModel, BackboneMixin):
     @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = self.stem(x)
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -702,14 +702,14 @@ class SKNetForImageClassification(ImageClassificationModel, ClassificationHeadMi
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
         x = self.stem(x)
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
         x = self.avgpool(x)
         x = x.flatten(1)
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

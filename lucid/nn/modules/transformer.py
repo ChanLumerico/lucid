@@ -345,7 +345,7 @@ def _proto_dtype(layer: Module) -> DTypeLike:
     return None
 
 
-class _LayerContainer(Module):
+class _LayerContainer[M: Module = Module](Module):
     """Holds a stack's layers under the conventional ``layers.N`` prefix.
 
     Iterating, indexing and ``len()`` behave like the plain list this
@@ -354,19 +354,19 @@ class _LayerContainer(Module):
     is what puts ``layers.`` into the state-dict keys.
     """
 
-    def __init__(self, layers: Sequence[Module]) -> None:
+    def __init__(self, layers: Sequence[M]) -> None:
         super().__init__()
-        self._items: list[Module] = list(layers)
+        self._items: list[M] = list(layers)
         for i, layer in enumerate(self._items):
             self.add_module(str(i), layer)
 
-    def __iter__(self) -> Iterator[Module]:
+    def __iter__(self) -> Iterator[M]:
         return iter(self._items)
 
     def __len__(self) -> int:
         return len(self._items)
 
-    def __getitem__(self, index: int) -> Module:
+    def __getitem__(self, index: int) -> M:
         return self._items[index]
 
 
@@ -597,14 +597,11 @@ class TransformerEncoder(Module):
         output = src
         causal = bool(is_causal)
         for layer in self.layers:
-            output = cast(
-                Tensor,
-                layer(
-                    output,
-                    src_mask=mask,
-                    src_key_padding_mask=src_key_padding_mask,
-                    is_causal=causal,
-                ),
+            output = layer(
+                output,
+                src_mask=mask,
+                src_key_padding_mask=src_key_padding_mask,
+                is_causal=causal,
             )
         if self.norm is not None:
             output = cast(Tensor, self.norm(output))
@@ -1203,22 +1200,19 @@ class TransformerDecoder(Module):
         output = tgt
         causal = bool(tgt_is_causal)
         for layer_idx, layer in enumerate(self.layers):
-            output = cast(
-                Tensor,
-                layer(
-                    output,
-                    memory,
-                    tgt_mask=tgt_mask,
-                    memory_mask=memory_mask,
-                    tgt_key_padding_mask=tgt_key_padding_mask,
-                    memory_key_padding_mask=memory_key_padding_mask,
-                    tgt_is_causal=causal,
-                    memory_is_causal=memory_is_causal,
-                    past_key_value=past_key_value,
-                    layer_idx=layer_idx,
-                    use_cache=use_cache,
-                    cache_position=cache_position,
-                ),
+            output = layer(
+                output,
+                memory,
+                tgt_mask=tgt_mask,
+                memory_mask=memory_mask,
+                tgt_key_padding_mask=tgt_key_padding_mask,
+                memory_key_padding_mask=memory_key_padding_mask,
+                tgt_is_causal=causal,
+                memory_is_causal=memory_is_causal,
+                past_key_value=past_key_value,
+                layer_idx=layer_idx,
+                use_cache=use_cache,
+                cache_position=cache_position,
             )
         if self.norm is not None:
             output = cast(Tensor, self.norm(output))

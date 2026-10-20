@@ -12,7 +12,7 @@ amount to a flat rename.
 """
 
 import math
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -334,9 +334,7 @@ class _RoFormerEncoder(nn.Module):
         attention_mask: Tensor | None = None,
     ) -> Tensor:
         for layer in self.layer:
-            hidden = cast(
-                Tensor, layer(hidden, cos, sin, attention_mask=attention_mask)
-            )
+            hidden = layer(hidden, cos, sin, attention_mask=attention_mask)
         return hidden
 
 
@@ -440,7 +438,7 @@ class RoFormerModel(_RoFormerInitMixin, PretrainedModel):
         # Only present when the embedding is factorised, matching the
         # reference's ``if config.embedding_size != config.hidden_size``.
         emb_dim = config.embedding_size or config.hidden_size
-        self.embeddings_project: nn.Module | None = (
+        self.embeddings_project: nn.Linear | None = (
             nn.Linear(emb_dim, config.hidden_size)
             if emb_dim != config.hidden_size
             else None
@@ -487,7 +485,7 @@ class RoFormerModel(_RoFormerInitMixin, PretrainedModel):
 
         hidden = self.embeddings(input_ids, token_type_ids=token_type_ids)
         if self.embeddings_project is not None:
-            hidden = cast(Tensor, self.embeddings_project(hidden))
+            hidden = self.embeddings_project(hidden)
         ext_mask = extended_attention_mask(attention_mask, (B, T))
         sequence_output = self.encoder(hidden, cos, sin, attention_mask=ext_mask)
         pooled_output = self.pooler(sequence_output)

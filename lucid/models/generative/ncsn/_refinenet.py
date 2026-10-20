@@ -15,7 +15,7 @@ otherwise throw away.  §3.3 of the v1 paper introduces it for exactly that
 reason.  The conditional form keeps one gain/bias triple per noise level.
 """
 
-from typing import cast, final, override
+from typing import final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -121,7 +121,7 @@ class _CondResBlock(nn.Module):
         self.conv2 = nn.Conv2d(
             out_ch, out_ch, 3, padding=dilation, dilation=dilation, bias=False
         )
-        self.skip: nn.Module = (
+        self.skip: nn.Conv2d | nn.Identity = (
             nn.Conv2d(in_ch, out_ch, 1, bias=False)
             if in_ch != out_ch
             else nn.Identity()
@@ -131,7 +131,7 @@ class _CondResBlock(nn.Module):
     def forward(self, x: Tensor, labels: Tensor) -> Tensor:
         h = self.conv1(F.elu(self.norm1(x, labels)))
         h = self.conv2(F.elu(self.norm2(h, labels)))
-        return h + cast(Tensor, self.skip(x))
+        return h + self.skip(x)
 
 
 @final
@@ -217,7 +217,7 @@ class RefineNetScoreNet(nn.Module):
         self.stem = nn.Conv2d(in_channels, base_channels, 3, padding=1)
 
         widths = [base_channels * m for m in channel_mult]
-        encoders: list[nn.Module] = []
+        encoders: list[_CondResBlock] = []
         prev = base_channels
         for w, d in zip(widths, dilations, strict=True):
             encoders.append(_CondResBlock(prev, w, num_classes, dilation=d))
@@ -247,14 +247,14 @@ class RefineNetScoreNet(nn.Module):
 
         skips: list[Tensor] = []
         for enc, pool in zip(self.encoders, self.pools, strict=True):
-            h = cast(Tensor, enc(h, labels))
+            h = enc(h, labels)
             skips.append(h)
-            h = cast(Tensor, pool(h))
+            h = pool(h)
 
         # Decode from the coarsest cascade back up, fusing each skip.
         h = skips[-1]
         for refine, skip in zip(self.refines, reversed(skips[:-1]), strict=True):
-            h = cast(Tensor, refine(h, skip, labels))
+            h = refine(h, skip, labels)
 
         h = F.elu(self.out_norm(h, labels))
         out = self.out_conv(h)

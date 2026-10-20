@@ -28,7 +28,7 @@ The ``activation`` and ``pooling`` config fields let callers switch to the
 modern ReLU/MaxPool convention without changing the topology.
 """
 
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -44,13 +44,13 @@ from lucid.models.vision.lenet._config import LeNetConfig
 # ---------------------------------------------------------------------------
 
 
-def _act(name: str) -> nn.Module:
+def _act(name: str) -> nn.ReLU | nn.Tanh:
     if name == "relu":
         return nn.ReLU(inplace=True)
     return nn.Tanh()
 
 
-def _pool(name: str) -> nn.Module:
+def _pool(name: str) -> nn.MaxPool2d | nn.AvgPool2d:
     """Sub-sampling layer for S2 / S4.
 
     Section II.B's sub-sampling unit is not a plain pool: it sums the four
@@ -303,8 +303,8 @@ class LeNetForImageClassification(ImageClassificationModel, ClassificationHeadMi
         x = self.features(x)
         # C5 output is (B, 120, 1, 1) — flatten spatial dims
         x = x.flatten(1)
-        x = cast(Tensor, self.act_f6(self.f6(x)))
-        logits = cast(Tensor, self.classifier(x))
+        x = self.act_f6(self.f6(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

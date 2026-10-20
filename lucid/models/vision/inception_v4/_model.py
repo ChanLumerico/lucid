@@ -22,7 +22,7 @@ published weights transfer key-for-key with no remapping.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -115,7 +115,7 @@ class _Mixed3a(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        x0 = cast(Tensor, self.maxpool(x))
+        x0 = self.maxpool(x)
         x1 = self.conv(x)
         return lucid.cat([x0, x1], dim=1)  # 64 + 96 = 160
 
@@ -164,7 +164,7 @@ class _Mixed5a(nn.Module):
     @override
     def forward(self, x: Tensor) -> Tensor:
         x0 = self.conv(x)
-        x1 = cast(Tensor, self.maxpool(x))
+        x1 = self.maxpool(x)
         return lucid.cat([x0, x1], dim=1)  # 192 + 192 = 384
 
 
@@ -234,7 +234,7 @@ class _ReductionA(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         x0 = self.branch0(x)
         x1 = self.branch1(x)
-        x2 = cast(Tensor, self.branch2(x))
+        x2 = self.branch2(x)
         return lucid.cat([x0, x1, x2], dim=1)  # 384 + 256 + 384 = 1024
 
 
@@ -314,7 +314,7 @@ class _ReductionB(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         x0 = self.branch0(x)
         x1 = self.branch1(x)
-        x2 = cast(Tensor, self.branch2(x))
+        x2 = self.branch2(x)
         return lucid.cat([x0, x1, x2], dim=1)  # 192 + 320 + 1024 = 1536
 
 
@@ -620,7 +620,7 @@ class InceptionV4ForImageClassification(ImageClassificationModel):
         self.features = _build_features(config)
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
         if config.dropout > 0.0:
-            self.head_drop: nn.Module = nn.Dropout(config.dropout)
+            self.head_drop: nn.Dropout | nn.Identity = nn.Dropout(config.dropout)
         else:
             self.head_drop = nn.Identity()
         self.last_linear = nn.Linear(_NUM_FEATURES, config.num_classes)
@@ -663,7 +663,7 @@ class InceptionV4ForImageClassification(ImageClassificationModel):
         """
         feats = self.features(x)
         pooled = self.global_pool(feats).flatten(1)
-        logits = self.last_linear(cast(Tensor, self.head_drop(pooled)))
+        logits = self.last_linear(self.head_drop(pooled))
 
         loss: Tensor | None = None
         if labels is not None:

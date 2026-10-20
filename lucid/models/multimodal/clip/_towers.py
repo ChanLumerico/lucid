@@ -18,7 +18,7 @@ contrastive checkpoints were trained in.
 framework's own defaults, and it will not load these weights.
 """
 
-from typing import cast, final, override
+from typing import final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -185,7 +185,7 @@ class TransformerTower(nn.Module):
         super().__init__()
         self.width = width
         self.layers = layers
-        self.resblocks = nn.ModuleList(
+        self.resblocks: nn.ModuleList[ResidualAttentionBlock] = nn.ModuleList(
             [ResidualAttentionBlock(width, heads, causal) for _ in range(layers)]
         )
 
@@ -204,5 +204,5 @@ class TransformerTower(nn.Module):
             ``(B, T, width)``.
         """
         for block in self.resblocks:
-            x = cast(Tensor, block(x))
+            x = block(x)
         return x

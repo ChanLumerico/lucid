@@ -150,14 +150,21 @@ class Sequential(Module):
             input = cast(Tensor, m(input))
         return input
 
-    def __getitem__(self, idx: int | slice) -> Module:
+    @overload
+    def __getitem__(self, idx: int) -> Module: ...
+    @overload
+    def __getitem__(self, idx: slice) -> Sequential: ...
+
+    def __getitem__(self, idx: int | slice) -> Module | Sequential:
         """Return the child module(s) at the given index or slice."""
         keys = list(self._modules.keys())
         if isinstance(idx, slice):
             return Sequential(
-                OrderedDict((k, cast(Module, self._modules[k])) for k in keys[idx])
+                OrderedDict((k, m) for k in keys[idx] if (m := self._modules[k]) is not None)
             )
-        return cast(Module, self._modules[keys[idx]])
+        m = self._modules[keys[idx]]
+        assert m is not None
+        return m
 
     def __setitem__(self, idx: int, module: Module) -> None:
         """Replace the child module at the given index."""
@@ -213,7 +220,7 @@ class Sequential(Module):
             self.add_module(str(i), module)
 
 
-class ModuleList(Module):
+class ModuleList[M: Module = Module](Module):
     r"""A list-like container that registers all child modules with the parent.
 
     ``ModuleList`` stores an ordered collection of ``Module`` objects and
@@ -304,21 +311,26 @@ class ModuleList(Module):
     >>> mlp = DynamicMLP([784, 512, 256, 10])
     """
 
-    def __init__(self, modules: list[Module] | None = None) -> None:
+    def __init__(self, modules: Iterable[M] | None = None) -> None:
         """Initialise the ModuleList module. See the class docstring for parameter semantics."""
         super().__init__()
         if modules is not None:
             for i, m in enumerate(modules):
                 self.add_module(str(i), m)
 
-    def __getitem__(self, idx: int | slice) -> Module:
+    @overload
+    def __getitem__(self, idx: int) -> M: ...
+    @overload
+    def __getitem__(self, idx: slice) -> ModuleList[M]: ...
+
+    def __getitem__(self, idx: int | slice) -> M | ModuleList[M]:
         """Return the child module(s) at the given index or slice."""
         keys = list(self._modules.keys())
         if isinstance(idx, slice):
-            return ModuleList([cast(Module, self._modules[k]) for k in keys[idx]])
-        return cast(Module, self._modules[keys[idx]])
+            return ModuleList([cast(M, self._modules[k]) for k in keys[idx]])
+        return cast(M, self._modules[keys[idx]])
 
-    def __setitem__(self, idx: int, module: Module) -> None:
+    def __setitem__(self, idx: int, module: M) -> None:
         """Replace the child module at the given index."""
         keys = list(self._modules.keys())
         self._modules[keys[idx]] = module
@@ -337,22 +349,20 @@ class ModuleList(Module):
         """Return the number of registered child modules."""
         return len(self._modules)
 
-    def __iter__(self) -> Iterator[Module]:
+    def __iter__(self) -> Iterator[M]:
         """Iterate over the registered child modules."""
-        for m in self._modules.values():
-            assert m is not None
-            yield m
+        return cast(Iterator[M], iter(self._modules.values()))
 
-    def append(self, module: Module) -> None:
+    def append(self, module: M) -> None:
         """Append a module to the end of the ModuleList."""
         self.add_module(str(len(self._modules)), module)
 
-    def extend(self, modules: Iterable[Module]) -> None:
+    def extend(self, modules: Iterable[M]) -> None:
         """Append each module from an iterable to the ModuleList."""
         for module in modules:
             self.append(module)
 
-    def insert(self, index: int, module: Module) -> None:
+    def insert(self, index: int, module: M) -> None:
         """Insert a module at the given position in the ModuleList."""
         n = len(self._modules)
         if index < 0:
@@ -387,7 +397,7 @@ class ModuleList(Module):
         raise NotImplementedError("ModuleList has no forward; iterate manually.")
 
 
-class ModuleDict(Module):
+class ModuleDict[M: Module = Module](Module):
     r"""A dict-like container that registers all child modules under string keys.
 
     ``ModuleDict`` maps arbitrary string keys to ``Module`` objects and
@@ -489,18 +499,18 @@ class ModuleDict(Module):
     high Linear(in_features=64, out_features=128, bias=True)
     """
 
-    def __init__(self, modules: dict[str, Module] | None = None) -> None:
+    def __init__(self, modules: Mapping[str, M] | None = None) -> None:
         """Initialise the ModuleDict module. See the class docstring for parameter semantics."""
         super().__init__()
         if modules is not None:
             for k, m in modules.items():
                 self.add_module(k, m)
 
-    def __getitem__(self, key: str) -> Module:
+    def __getitem__(self, key: str) -> M:
         """Return the child module(s) at the given index or slice."""
-        return cast(Module, self._modules[key])
+        return cast(M, self._modules[key])
 
-    def __setitem__(self, key: str, module: Module) -> None:
+    def __setitem__(self, key: str, module: M) -> None:
         """Replace the child module at the given index."""
         self.add_module(key, module)
 
@@ -524,28 +534,29 @@ class ModuleDict(Module):
         """Return an iterable over the keys of the ModuleDict."""
         return self._modules.keys()
 
-    def items(self) -> ItemsView[str, Module]:
+    def items(self) -> ItemsView[str, M]:
         """Return an iterable of ``(key, module)`` pairs in the ModuleDict."""
-        return cast(ItemsView[str, Module], self._modules.items())
+        return cast(ItemsView[str, M], self._modules.items())
 
-    def values(self) -> ValuesView[Module]:
+    def values(self) -> ValuesView[M]:
         """Return an iterable over the modules in the ModuleDict."""
-        return cast(ValuesView[Module], self._modules.values())
+        return cast(ValuesView[M], self._modules.values())
 
-    def get(self, key: str, default: Module | None = None) -> Module | None:
+    def get(self, key: str, default: M | None = None) -> M | None:
         """Method on the ModuleDict module."""
-        return self._modules.get(key, default)
+        val = self._modules.get(key)
+        return default if val is None else cast(M, val)
 
-    def pop(self, key: str) -> Module:
+    def pop(self, key: str) -> M:
         """Remove and return the module at the given index from the ModuleDict."""
-        return cast(Module, self._modules.pop(key))
+        return cast(M, self._modules.pop(key))
 
     def clear(self) -> None:
         """Remove all modules from the ModuleDict."""
         self._modules.clear()
 
     def update(
-        self, modules: Mapping[str, Module] | Iterable[tuple[str, Module]]
+        self, modules: Mapping[str, M] | Iterable[tuple[str, M]]
     ) -> None:
         """Update the ModuleDict with another mapping of modules."""
         items = modules.items() if isinstance(modules, Mapping) else modules

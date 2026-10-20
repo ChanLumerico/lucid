@@ -42,7 +42,7 @@ Losses (training)
   Uses cross-entropy loss: F.cross_entropy(logits, targets).
 """
 
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid
 import lucid.nn as nn
@@ -59,21 +59,23 @@ from lucid.models.vision.unet._config import UNetConfig
 
 def _conv(
     dim: int, in_ch: int, out_ch: int, k: int = 3, padding: int = 1, bias: bool = False
-) -> nn.Module:
+) -> nn.Conv2d | nn.Conv3d:
     if dim == 3:
         return nn.Conv3d(in_ch, out_ch, k, padding=padding, bias=bias)
     return nn.Conv2d(in_ch, out_ch, k, padding=padding, bias=bias)
 
 
-def _bn(dim: int, ch: int) -> nn.Module:
+def _bn(dim: int, ch: int) -> nn.BatchNorm2d | nn.BatchNorm3d:
     return nn.BatchNorm3d(ch) if dim == 3 else nn.BatchNorm2d(ch)
 
 
-def _pool(dim: int) -> nn.Module:
+def _pool(dim: int) -> nn.MaxPool2d | nn.MaxPool3d:
     return nn.MaxPool3d(2, stride=2) if dim == 3 else nn.MaxPool2d(2, stride=2)
 
 
-def _deconv(dim: int, in_ch: int, out_ch: int) -> nn.Module:
+def _deconv(
+    dim: int, in_ch: int, out_ch: int
+) -> nn.ConvTranspose2d | nn.ConvTranspose3d:
     if dim == 3:
         return nn.ConvTranspose3d(in_ch, out_ch, 2, stride=2)
     return nn.ConvTranspose2d(in_ch, out_ch, 2, stride=2)
@@ -126,11 +128,11 @@ class _DoubleConv(nn.Module):
         # Final ReLU is applied AFTER the residual add (or directly if no shortcut).
         self.body = nn.Sequential(*layers)
         if dropout > 0.0:
-            self.dropout: nn.Module | None = nn.Dropout(p=dropout)
+            self.dropout: nn.Dropout | None = nn.Dropout(p=dropout)
         else:
             self.dropout = None
 
-        self.shortcut: nn.Module | None
+        self.shortcut: nn.Sequential | None
         if residual and in_ch != out_ch:
             # A projection shortcut in a post-activation residual block is
             # Conv1x1 *plus* BatchNorm, so both addends of ``out + identity``
@@ -148,13 +150,11 @@ class _DoubleConv(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         out: Tensor = self.body(x)
         if self._residual:
-            identity: Tensor = (
-                x if self.shortcut is None else cast(Tensor, self.shortcut(x))
-            )
+            identity: Tensor = x if self.shortcut is None else self.shortcut(x)
             out = out + identity
         out = F.relu(out)
         if self.dropout is not None:
-            out = cast(Tensor, self.dropout(out))
+            out = self.dropout(out)
         return out
 
 
@@ -184,7 +184,7 @@ class _EncoderBlock(nn.Module):
     @override
     def forward(self, x: Tensor) -> tuple[Tensor, Tensor]:
         skip: Tensor = self.conv(x)
-        pooled: Tensor = cast(Tensor, self.pool(skip))
+        pooled: Tensor = self.pool(skip)
         return pooled, skip
 
 
@@ -211,9 +211,13 @@ class _DecoderBlock(nn.Module):
             # Interpolation alone carries all ``in_ch`` channels into the
             # concat, so the bilinear decoder came out *wider* than the
             # transposed-conv one instead of matching its budget.
-            self.up: nn.Module = nn.Sequential(
-                nn.Upsample(scale_factor=2, mode=_interp_mode(dim), align_corners=True),
-                _conv(dim, in_ch, in_ch // 2, k=1, padding=0, bias=False),
+            self.up: nn.Sequential | nn.ConvTranspose2d | nn.ConvTranspose3d = (
+                nn.Sequential(
+                    nn.Upsample(
+                        scale_factor=2, mode=_interp_mode(dim), align_corners=True
+                    ),
+                    _conv(dim, in_ch, in_ch // 2, k=1, padding=0, bias=False),
+                )
             )
             self.conv = _DoubleConv(
                 in_ch // 2 + skip_ch, out_ch, dim, dropout, residual, mid_ch=mid
@@ -226,7 +230,7 @@ class _DecoderBlock(nn.Module):
 
     @override
     def forward(self, x: Tensor, skip: Tensor) -> Tensor:
-        x_up: Tensor = cast(Tensor, self.up(x))
+        x_up: Tensor = self.up(x)
 
         # Pad x_up to match skip spatial dims (handles non-power-of-2 inputs).
         if self._dim == 3:
@@ -428,7 +432,7 @@ class UNetForSemanticSegmentation(SemanticSegmentationModel):
             skip = skips[-(i + 1)]
             feat = dec(feat, skip)
 
-        logits: Tensor = cast(Tensor, self.head(feat))
+        logits: Tensor = self.head(feat)
 
         # Ensure output spatial matches input
         out_spatial = tuple(int(s) for s in logits.shape[2:])

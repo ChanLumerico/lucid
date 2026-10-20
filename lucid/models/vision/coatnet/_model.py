@@ -14,7 +14,7 @@ Architecture (CoAtNet-0, 4 stages after the stem):
 Reference param count: ~25.6 M (timm coatnet_0).
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -101,7 +101,7 @@ class _MBConv(nn.Module):
         self.se = _SE(mid_ch, se_ch)
         self.project = nn.Conv2d(mid_ch, out_ch, 1, bias=True)
 
-        self.shortcut: nn.Module
+        self.shortcut: nn.Sequential
         if stride != 1 or in_ch != out_ch:
             sc_layers: list[nn.Module] = []
             if stride != 1:
@@ -113,7 +113,7 @@ class _MBConv(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        shortcut = cast(Tensor, self.shortcut(x))
+        shortcut = self.shortcut(x)
 
         # Pre-activation form is ``x + Module(Norm(x))`` — Norm only; the
         # reference's pre_norm is built with apply_act=False.
@@ -190,7 +190,7 @@ class _RelAttnBlock(nn.Module):
         self.norm1 = nn.LayerNorm(dim, eps=_LN_EPS)
         self.qkv = nn.Linear(dim, out_dim * 3)
         self.proj = nn.Linear(out_dim, out_dim)
-        self.shortcut: nn.Module = (
+        self.shortcut: nn.Linear | nn.Identity = (
             nn.Linear(dim, out_dim) if dim != out_dim else nn.Identity()
         )
         self.norm2 = nn.LayerNorm(out_dim, eps=_LN_EPS)
@@ -285,7 +285,7 @@ class _RelAttnBlock(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         # Input x — (B, N, C)
         identity = self._pool(x)
-        shortcut = cast(Tensor, self.shortcut(identity))
+        shortcut = self.shortcut(identity)
         h = self._pool(self.norm1(x))
         x = shortcut + self.drop_path1(self._attn(h))
         x = x + self.drop_path2(self.fc2(F.gelu(self.fc1(self.norm2(x)))))
@@ -341,7 +341,7 @@ class _TransformerStage(nn.Module):
 
         self.downsample = downsample
         self.grid_h, self.grid_w = grid_h, grid_w
-        self.pool: nn.Module = (
+        self.pool: nn.MaxPool2d | nn.Identity = (
             # Eqn (4): "the standard max pooling of stride 2 is directly
             # applied to the input states of both branches".
             nn.MaxPool2d(2, stride=2)
@@ -353,7 +353,7 @@ class _TransformerStage(nn.Module):
         # structure, not a stage-level step: pooling once up front and then
         # running plain blocks gives a different function, because the
         # identity branch never sees the projection paired with its own pool.
-        self.blocks = nn.ModuleList(
+        self.blocks: nn.ModuleList[_RelAttnBlock] = nn.ModuleList(
             [
                 _RelAttnBlock(
                     in_ch if i == 0 else out_ch,
@@ -382,7 +382,7 @@ class _TransformerStage(nn.Module):
             self.grid_h, self.grid_w = target_h, target_w
         seq = x.reshape(B, C, H * W).permute(0, 2, 1)  # (B, N, C)
         for blk in self.blocks:
-            seq = cast(Tensor, blk(seq))
+            seq = blk(seq)
         seq = self.norm(seq)
         D = int(seq.shape[2])
         out_h, out_w = self.grid_h, self.grid_w
@@ -400,7 +400,8 @@ def _build_body(
     nn.Sequential,  # stem
     nn.Sequential,  # s1 (MBConv)
     nn.Sequential,  # s2 (MBConv)
-    nn.Module,  # s3 (Transformer for variants 0..5; Sequential for mixed-S3 variants 6/7)
+    _TransformerStage
+    | nn.Sequential,  # s3 (Transformer for variants 0..5; Sequential for mixed-S3 variants 6/7)
     _TransformerStage,  # s4 (Transformer)
     list[FeatureInfo],
 ]:
@@ -475,7 +476,7 @@ def _build_body(
     #   * Mixed (variants 6/7): MBConv sub-stage (does the spatial halving)
     #     → 1×1 channel-expand → transformer sub-stage at the wider width.
     s3_grid = (img_size // 8, img_size // 8)  # input to S3 (H/8 × W/8)
-    s3: nn.Module
+    s3: _TransformerStage | nn.Sequential
     s3_out_ch: int
     if config.mixed_s3 is None:
         s3 = _TransformerStage(
@@ -646,7 +647,7 @@ class CoAtNet(PretrainedModel, BackboneMixin):
         x = self.stem(x)
         x = self.s1(x)
         x = self.s2(x)
-        x = cast(Tensor, self.s3(x))
+        x = self.s3(x)
         x = self.s4(x)
         return x
 
@@ -752,7 +753,7 @@ class CoAtNetForImageClassification(ImageClassificationModel, ClassificationHead
         self.norm = nn.LayerNorm(feat_dim)
         # Optional hidden layer (timm head_hidden_size=768 for coatnet_0)
         if config.head_hidden_size is not None:
-            self.pre_logits: nn.Module = nn.Sequential(
+            self.pre_logits: nn.Sequential = nn.Sequential(
                 nn.Linear(feat_dim, config.head_hidden_size),
                 nn.Tanh(),
             )
@@ -771,13 +772,13 @@ class CoAtNetForImageClassification(ImageClassificationModel, ClassificationHead
         x = self.stem(x)
         x = self.s1(x)
         x = self.s2(x)
-        x = cast(Tensor, self.s3(x))
+        x = self.s3(x)
         x = self.s4(x)
         x = self.avgpool(x)
         x = x.flatten(1)
         x = self.norm(x)
-        x = cast(Tensor, self.pre_logits(x))
-        logits = cast(Tensor, self.classifier(x))
+        x = self.pre_logits(x)
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

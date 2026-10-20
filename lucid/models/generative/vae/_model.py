@@ -88,7 +88,7 @@ class _VAEEncoder(nn.Module):
         self._c_top = c_top
 
         in_ch = config.in_channels
-        blocks: list[nn.Module] = []
+        blocks: list[nn.Conv2d] = []
         for out_ch in config.down_block_channels:
             blocks.append(nn.Conv2d(in_ch, out_ch, kernel_size=4, stride=2, padding=1))
             in_ch = out_ch
@@ -96,8 +96,8 @@ class _VAEEncoder(nn.Module):
 
         if self._hier:
             # Per-stage (μ_l, logvar_l) from global-average-pooled features.
-            mus: list[nn.Module] = []
-            logs: list[nn.Module] = []
+            mus: list[nn.Linear] = []
+            logs: list[nn.Linear] = []
             for stage_ch, lat_dim in zip(
                 config.down_block_channels, config.latent_dims, strict=True
             ):
@@ -126,15 +126,15 @@ class _VAEEncoder(nn.Module):
             for blk, fc_mu, fc_logvar in zip(
                 self.down_blocks, self.fc_mus, self.fc_logvars, strict=True
             ):
-                h = cast(Tensor, blk(h))
+                h = blk(h)
                 h = generative_activation(self._act_name, h)
                 pooled = self._gap(h)  # (B, c_l)
-                mus.append(cast(Tensor, fc_mu(pooled)))
-                logvars.append(cast(Tensor, fc_logvar(pooled)))
+                mus.append(fc_mu(pooled))
+                logvars.append(fc_logvar(pooled))
             return mus, logvars
 
         for blk in self.down_blocks:
-            h = cast(Tensor, blk(h))
+            h = blk(h)
             h = generative_activation(self._act_name, h)
         B = int(h.shape[0])
         h = h.reshape(B, self._c_top * self._h_top * self._w_top)
@@ -182,7 +182,7 @@ class _VAEDecoder(nn.Module):
 
         # Upsampling stack.  Channels go (c_top → ... → c_0) over L blocks;
         # the final ConvTranspose lifts to ``c_0`` so the head can mix.
-        up_blocks: list[nn.Module] = []
+        up_blocks: list[nn.ConvTranspose2d] = []
         in_ch = rev_channels[0]
         # rev_channels has L entries; we want L upsample blocks.  After the
         # last upsample the channel count stays at rev_channels[-1].
@@ -203,7 +203,7 @@ class _VAEDecoder(nn.Module):
         # level ``L-1-l`` (so the deepest z_{L-1} is consumed by the
         # initial Linear above; the next block consumes z_{L-2}; …).
         if self._hier:
-            inject: list[nn.Module] = []
+            inject: list[nn.Linear] = []
             # We use the post-upsample feature's channel count to size the
             # injection.  For block index l in 0..L-1, post-upsample
             # channels are ``rev_channels[l+1]`` for l < L-1 and
@@ -246,11 +246,11 @@ class _VAEDecoder(nn.Module):
             B = int(h.shape[0])
             h = h.reshape(B, self._c_top, self._h_top, self._w_top)
             for lvl, blk in enumerate(self.up_blocks):
-                h = cast(Tensor, blk(h))
+                h = blk(h)
                 h = generative_activation(self._act_name, h)
                 if lvl < self._L - 1:
                     z_inj = zs[self._L - 2 - lvl]  # (B, d_l)
-                    proj = cast(Tensor, self.injectors[lvl](z_inj))  # (B, post_c)
+                    proj = self.injectors[lvl](z_inj)  # (B, post_c)
                     proj = proj.reshape(B, self._post_channels[lvl], 1, 1).expand(
                         B, self._post_channels[lvl], int(h.shape[2]), int(h.shape[3])
                     )
@@ -263,7 +263,7 @@ class _VAEDecoder(nn.Module):
         B = int(h.shape[0])
         h = h.reshape(B, self._c_top, self._h_top, self._w_top)
         for blk in self.up_blocks:
-            h = cast(Tensor, blk(h))
+            h = blk(h)
             h = generative_activation(self._act_name, h)
         return self.head(h)
 

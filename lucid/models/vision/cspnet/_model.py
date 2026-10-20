@@ -19,7 +19,7 @@ single converter handles all three variants with no per-arch
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 from lucid._tensor.tensor import Tensor
 from lucid.models._utils._common import init_cnn_fan_out
@@ -235,7 +235,7 @@ class _CrossStage(nn.Module):
         # stages.0.conv_down has no parameters).  ``groups`` carries
         # through here so CSPResNeXt's 32-way group convolution is
         # applied at the downsample step as well as inside the blocks.
-        self.conv_down: nn.Module
+        self.conv_down: _ConvBnAct | nn.Identity
         if stride > 1:
             self.conv_down = _ConvBnAct(
                 in_chs,
@@ -315,7 +315,7 @@ class _CrossStage(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.conv_down(x))
+        x = self.conv_down(x)
         x = self.conv_exp(x)
         # Channel split — equal halves.
         half = self.expand_chs // 2
@@ -344,7 +344,7 @@ class _Stem(nn.Module):
     ) -> None:
         super().__init__()
         self.conv1 = _ConvBnAct(in_channels, out_chs, kernel_size, stride=stride)
-        self.pool: nn.Module
+        self.pool: nn.MaxPool2d | nn.Identity
         if pool == "max":
             # Divergence, deliberate: csresnet50.cfg / csresnext50.cfg specify
             # ``[maxpool] size=2 stride=2``, but the checkpoints this family
@@ -361,7 +361,7 @@ class _Stem(nn.Module):
     @override
     def forward(self, x: Tensor) -> Tensor:
         x = self.conv1(x)
-        return cast(Tensor, self.pool(x))
+        return self.pool(x)
 
 
 # ---------------------------------------------------------------------------
@@ -371,7 +371,7 @@ class _Stem(nn.Module):
 
 def _build_trunk(cfg: CSPNetConfig) -> tuple[
     _Stem,
-    nn.ModuleList,
+    nn.ModuleList[_CrossStage],
     list[FeatureInfo],
     int,
 ]:
@@ -384,7 +384,7 @@ def _build_trunk(cfg: CSPNetConfig) -> tuple[
         pool=cfg.stem_pool,
     )
 
-    stages: list[nn.Module] = []
+    stages: list[_CrossStage] = []
     fi: list[FeatureInfo] = []
 
     # Reduction factor tracking — stem may have stride>1 and an optional pool.
@@ -469,7 +469,7 @@ class CSPNet(PretrainedModel, BackboneMixin):
     def forward_features(self, x: Tensor) -> Tensor:
         x = self.stem(x)
         for stage in self.stages:
-            x = cast(Tensor, stage(x))
+            x = stage(x)
         return x
 
     @override
@@ -552,9 +552,9 @@ class CSPNetForImageClassification(ImageClassificationModel, ClassificationHeadM
     ) -> ImageClassificationOutput:
         x = self.stem(x)
         for stage in self.stages:
-            x = cast(Tensor, stage(x))
+            x = stage(x)
         x = self.avgpool(x).flatten(1)
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

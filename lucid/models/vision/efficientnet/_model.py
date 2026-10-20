@@ -27,7 +27,7 @@ Each MBConv block:
 """
 
 import math
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -135,7 +135,7 @@ class _MBConvBlock(nn.Module):
         # width at 1, so ``se_ratio=0`` still built an SE that gated every
         # activation through a single scalar-per-image sigmoid — the opposite
         # of disabling it.
-        self.se: nn.Module | None
+        self.se: _SEBlock | None
         if 0.0 < se_ratio <= 1.0:
             se_channels = max(1, int(in_channels * se_ratio))
             self.se = _SEBlock(expanded, se_channels)
@@ -150,7 +150,7 @@ class _MBConvBlock(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         out = self.conv(x)
         if self.se is not None:
-            out = cast(Tensor, self.se(out))
+            out = self.se(out)
         out = self.project_bn(self.project_conv(out))
         if self._has_residual:
             # Stochastic depth (Tan & Le 2019 §3.3) — applied only when the
@@ -463,7 +463,7 @@ class EfficientNetForImageClassification(
         x = self.features(x)
         x = self.avgpool(x)
         x = self.drop(x.flatten(1))
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

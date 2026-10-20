@@ -247,7 +247,7 @@ class MeanFlowModel(PretrainedModel):
         grew another one.
         """
         for block in self.blocks:
-            cast(DiTBlock, block).zero_conditioning()
+            block.zero_conditioning()
         self.final.zero_conditioning()
 
     def _unpatchify(self, x: Tensor) -> Tensor:
@@ -292,11 +292,11 @@ class MeanFlowModel(PretrainedModel):
         tokens = tokens.reshape(tokens.shape[0], tokens.shape[1], -1).permute(0, 2, 1)
         tokens = tokens + self.pos_embed
 
-        cond = cast(Tensor, self.time_mlps[0](self._time_inputs(r, t)[0]))
+        cond = self.time_mlps[0](self._time_inputs(r, t)[0])
         for mlp, scalar in zip(
             list(self.time_mlps)[1:], self._time_inputs(r, t)[1:], strict=True
         ):
-            cond = cond + cast(Tensor, mlp(scalar))
+            cond = cond + mlp(scalar)
 
         if labels is None:
             labels = lucid.full(
@@ -308,7 +308,7 @@ class MeanFlowModel(PretrainedModel):
         cond = cond + self.label_embed(labels)
 
         for block in self.blocks:
-            tokens = cast(Tensor, block(tokens, cond))
+            tokens = block(tokens, cond)
         return DiffusionModelOutput(sample=self._unpatchify(self.final(tokens, cond)))
 
 

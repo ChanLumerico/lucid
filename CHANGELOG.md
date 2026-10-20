@@ -1219,6 +1219,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - unify try_unwrap helper, thread wrap_axis op names, and drop dead headers
 - decompose god functions in tensor, compile, and coreml
 - eliminate vulture, ARG, ERA001, and RUF100 findings
+- type module attributes and generic containers
 
 ---
 

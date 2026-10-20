@@ -41,6 +41,20 @@ _CLIENT = textwrap.dedent("""
     assert_type(Twice()(x), tuple[Tensor, Tensor])
     assert_type(Twice()(x, scale=3.0), tuple[Tensor, Tensor])
 
+    layers: nn.ModuleList[nn.Linear] = nn.ModuleList([nn.Linear(3, 4)])
+    assert_type(layers[0](x), Tensor)
+    assert_type(layers[:1], nn.ModuleList[nn.Linear])
+
+    named: nn.ModuleDict[nn.Linear] = nn.ModuleDict({"head": nn.Linear(3, 4)})
+    assert_type(named["head"](x), Tensor)
+
+    seq = nn.Sequential(nn.Linear(3, 4), nn.ReLU())
+    assert_type(seq[:1](x), Tensor)
+
+    img = lucid.randn(1, 3, 8, 8)
+    assert_type(nn.MaxPool2d(2)(img), Tensor)
+    assert_type(nn.AdaptiveMaxPool2d((4, 4))(img), Tensor)
+
     lin("bad")  # the only error expected
     """)
 

@@ -12,7 +12,7 @@ Channel widths: [64, 128, 256, 512, 512] — fixed across all VGG variants;
 only the per-block conv count changes.
 """
 
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -237,7 +237,7 @@ class VGGForImageClassification(ImageClassificationModel, ClassificationHeadMixi
         feat = self.avgpool(self.features(x)).flatten(1)
         h = self.drop6(F.relu(self.fc6(feat)))
         h = self.drop7(F.relu(self.fc7(h)))
-        logits = cast(Tensor, self.classifier(h))
+        logits = self.classifier(h)
 
         loss: Tensor | None = None
         if labels is not None:

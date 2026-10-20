@@ -32,7 +32,7 @@ Architecture (EfficientFormer-L1, image=224):
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -182,6 +182,8 @@ class _Attention(nn.Module):
     pre-softmax scores.
     """
 
+    attention_bias_idxs: Tensor
+
     def __init__(
         self,
         dim: int,
@@ -226,7 +228,7 @@ class _Attention(nn.Module):
         self.register_buffer("attention_bias_idxs", idx, persistent=False)
 
     def _bias(self) -> Tensor:
-        idx = cast(Tensor, self.attention_bias_idxs)
+        idx = self.attention_bias_idxs
         n = self.resolution * self.resolution
         gathered = self.attention_biases[:, idx.reshape(-1)]  # (heads, n*n)
         return gathered.reshape(self.num_heads, n, n)
@@ -374,13 +376,13 @@ class _Stage(nn.Module):
     ) -> None:
         super().__init__()
         if downsample:
-            self.downsample: nn.Module = _Downsample(in_dim, out_dim)
+            self.downsample: _Downsample | nn.Identity = _Downsample(in_dim, out_dim)
             dim = out_dim
         else:
             self.downsample = nn.Identity()
             dim = in_dim
 
-        blocks: list[nn.Module] = []
+        blocks: list[_Flat | _MetaBlock1d | _MetaBlock2d] = []
         if num_vit and num_vit >= depth:
             blocks.append(_Flat())
 
@@ -412,13 +414,15 @@ class _Stage(nn.Module):
                 if num_vit and num_vit == remain_idx:
                     blocks.append(_Flat())
 
-        self.blocks = nn.ModuleList(blocks)
+        self.blocks: nn.ModuleList[_Flat | _MetaBlock1d | _MetaBlock2d] = nn.ModuleList(
+            blocks
+        )
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.downsample(x))
+        x = self.downsample(x)
         for block in self.blocks:
-            x = cast(Tensor, block(x))
+            x = block(x)
         return x
 
 
@@ -431,7 +435,7 @@ def _build_efficientformer(
     cfg: EfficientFormerConfig,
 ) -> tuple[
     _Stem,
-    nn.ModuleList,
+    nn.ModuleList[_Stage],
     nn.LayerNorm,
     list[FeatureInfo],
     int,
@@ -448,7 +452,7 @@ def _build_efficientformer(
     else:
         flat = [cfg.drop_path_rate] * total
 
-    stages: list[nn.Module] = []
+    stages: list[_Stage] = []
     fi: list[FeatureInfo] = []
     cursor = 0
     prev_dim = cfg.embed_dims[0]
@@ -479,7 +483,7 @@ def _build_efficientformer(
 
 def _forward_trunk(
     stem: _Stem,
-    stages: nn.ModuleList,
+    stages: nn.ModuleList[_Stage],
     head_norm: nn.LayerNorm,
     x: Tensor,
 ) -> Tensor:
@@ -487,7 +491,7 @@ def _forward_trunk(
     x = stem(x)
     last = len(stages) - 1
     for i, stage in enumerate(stages):
-        x = cast(Tensor, stage(x))
+        x = stage(x)
         if i == last and x.ndim == 4:
             # No attention block flattened the tensor (num_vit == 0): flatten now.
             x = x.flatten(2).permute(0, 2, 1)

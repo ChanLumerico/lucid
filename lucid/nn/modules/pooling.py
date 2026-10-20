@@ -2,7 +2,7 @@
 Pooling modules.
 """
 
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from lucid._tensor.tensor import Tensor
 from lucid._types import _Size2d, _Size3d
@@ -143,31 +143,25 @@ class MaxPool1d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
-    @override
-    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
-        r"""Apply the pooling operation to the input tensor.
+    if TYPE_CHECKING:
 
-        Parameters
-        ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
-            spatial dimensions appropriate for this pooling layer.
+        @override
+        def forward(self, input: Tensor) -> Tensor: ...
 
-        Returns
-        -------
-        Tensor or tuple of Tensor
-            Pooled output tensor, or ``(output, indices)`` when the layer
-            was built with ``return_indices=True``.
-        """
-        return max_pool1d(
-            input,
-            self.kernel_size,
-            self.stride,
-            self.padding,
-            self.dilation,
-            self.ceil_mode,
-            self.return_indices,
-        )
+    else:
+
+        @override
+        def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+            """Apply the pooling operation to the input tensor."""
+            return max_pool1d(
+                input,
+                self.kernel_size,
+                self.stride,
+                self.padding,
+                self.dilation,
+                self.ceil_mode,
+                self.return_indices,
+            )
 
     @override
     def extra_repr(self) -> str:
@@ -282,31 +276,25 @@ class MaxPool2d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
-    @override
-    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
-        r"""Apply the pooling operation to the input tensor.
+    if TYPE_CHECKING:
 
-        Parameters
-        ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
-            spatial dimensions appropriate for this pooling layer.
+        @override
+        def forward(self, input: Tensor) -> Tensor: ...
 
-        Returns
-        -------
-        Tensor or tuple of Tensor
-            Pooled output tensor, or ``(output, indices)`` when the layer
-            was built with ``return_indices=True``.
-        """
-        return max_pool2d(
-            input,
-            self.kernel_size,
-            self.stride,
-            self.padding,
-            self.dilation,
-            self.ceil_mode,
-            self.return_indices,
-        )
+    else:
+
+        @override
+        def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+            """Apply the pooling operation to the input tensor."""
+            return max_pool2d(
+                input,
+                self.kernel_size,
+                self.stride,
+                self.padding,
+                self.dilation,
+                self.ceil_mode,
+                self.return_indices,
+            )
 
     @override
     def extra_repr(self) -> str:
@@ -823,23 +811,17 @@ class AdaptiveMaxPool2d(Module):
         self.return_indices = return_indices
         self.output_size = output_size
 
-    @override
-    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
-        r"""Apply the pooling operation to the input tensor.
+    if TYPE_CHECKING:
 
-        Parameters
-        ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
-            spatial dimensions appropriate for this pooling layer.
+        @override
+        def forward(self, input: Tensor) -> Tensor: ...
 
-        Returns
-        -------
-        Tensor or tuple of Tensor
-            Pooled output tensor, or ``(output, indices)`` when the layer
-            was built with ``return_indices=True``.
-        """
-        return adaptive_max_pool2d(input, self.output_size, self.return_indices)
+    else:
+
+        @override
+        def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+            """Apply the pooling operation to the input tensor."""
+            return adaptive_max_pool2d(input, self.output_size, self.return_indices)
 
     @override
     def extra_repr(self) -> str:
@@ -954,31 +936,25 @@ class MaxPool3d(Module):
         self.dilation = dilation
         self.ceil_mode = ceil_mode
 
-    @override
-    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
-        r"""Apply the pooling operation to the input tensor.
+    if TYPE_CHECKING:
 
-        Parameters
-        ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
-            spatial dimensions appropriate for this pooling layer.
+        @override
+        def forward(self, input: Tensor) -> Tensor: ...
 
-        Returns
-        -------
-        Tensor or tuple of Tensor
-            Pooled output tensor, or ``(output, indices)`` when the layer
-            was built with ``return_indices=True``.
-        """
-        return max_pool3d(
-            input,
-            self.kernel_size,
-            self.stride,
-            self.padding,
-            self.dilation,
-            self.ceil_mode,
-            self.return_indices,
-        )
+    else:
+
+        @override
+        def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+            """Apply the pooling operation to the input tensor."""
+            return max_pool3d(
+                input,
+                self.kernel_size,
+                self.stride,
+                self.padding,
+                self.dilation,
+                self.ceil_mode,
+                self.return_indices,
+            )
 
     @override
     def extra_repr(self) -> str:
@@ -1278,23 +1254,17 @@ class AdaptiveMaxPool1d(Module):
         self.return_indices = return_indices
         self.output_size = output_size
 
-    @override
-    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
-        r"""Apply the pooling operation to the input tensor.
+    if TYPE_CHECKING:
 
-        Parameters
-        ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
-            spatial dimensions appropriate for this pooling layer.
+        @override
+        def forward(self, input: Tensor) -> Tensor: ...
 
-        Returns
-        -------
-        Tensor or tuple of Tensor
-            Pooled output tensor, or ``(output, indices)`` when the layer
-            was built with ``return_indices=True``.
-        """
-        return adaptive_max_pool1d(input, self.output_size, self.return_indices)
+    else:
+
+        @override
+        def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+            """Apply the pooling operation to the input tensor."""
+            return adaptive_max_pool1d(input, self.output_size, self.return_indices)
 
     @override
     def extra_repr(self) -> str:
@@ -1370,23 +1340,17 @@ class AdaptiveMaxPool3d(Module):
         self.return_indices = return_indices
         self.output_size = output_size
 
-    @override
-    def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
-        r"""Apply the pooling operation to the input tensor.
+    if TYPE_CHECKING:
 
-        Parameters
-        ----------
-        input : Tensor
-            Input tensor of shape :math:`(N, C, *)` where :math:`*` are the
-            spatial dimensions appropriate for this pooling layer.
+        @override
+        def forward(self, input: Tensor) -> Tensor: ...
 
-        Returns
-        -------
-        Tensor or tuple of Tensor
-            Pooled output tensor, or ``(output, indices)`` when the layer
-            was built with ``return_indices=True``.
-        """
-        return adaptive_max_pool3d(input, self.output_size, self.return_indices)
+    else:
+
+        @override
+        def forward(self, input: Tensor) -> Tensor | tuple[Tensor, Tensor]:
+            """Apply the pooling operation to the input tensor."""
+            return adaptive_max_pool3d(input, self.output_size, self.return_indices)
 
     @override
     def extra_repr(self) -> str:
@@ -1752,7 +1716,7 @@ class LPPool3d(Module):
 # ── P4 fill: MaxUnpool / FractionalMaxPool ────────────────────────────────
 
 
-class _MaxUnpoolNd(Module):
+class _MaxUnpoolNd[S = int](Module):
     r"""Shared base for :class:`MaxUnpool1d`, :class:`MaxUnpool2d`, and
     :class:`MaxUnpool3d`.
 
@@ -1764,15 +1728,15 @@ class _MaxUnpoolNd(Module):
 
     def __init__(
         self,
-        kernel_size: int | tuple[int, ...],
-        stride: int | tuple[int, ...] | None = None,
-        padding: int | tuple[int, ...] = 0,
+        kernel_size: S,
+        stride: S | None = None,
+        padding: S | int = 0,
     ) -> None:
         """Initialise the _MaxUnpoolNd module. See the class docstring for parameter semantics."""
         super().__init__()
-        self.kernel_size = kernel_size
-        self.stride = stride if stride is not None else kernel_size
-        self.padding = padding
+        self.kernel_size: S = kernel_size
+        self.stride: S = stride if stride is not None else kernel_size
+        self.padding: S | int = padding
 
     @override
     def extra_repr(self) -> str:
@@ -1783,7 +1747,7 @@ class _MaxUnpoolNd(Module):
         )
 
 
-class MaxUnpool1d(_MaxUnpoolNd):
+class MaxUnpool1d(_MaxUnpoolNd[int]):
     r"""Computes a partial inverse of :class:`MaxPool1d`.
 
     :class:`MaxPool1d` is not fully invertible because the non-maximum
@@ -1881,14 +1845,14 @@ class MaxUnpool1d(_MaxUnpoolNd):
         return max_unpool1d(
             input,
             indices,
-            kernel_size=self.kernel_size,  # type: ignore[arg-type]
-            stride=self.stride,  # type: ignore[arg-type]
-            padding=self.padding,  # type: ignore[arg-type]
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=self.padding,
             output_size=output_size,
         )
 
 
-class MaxUnpool2d(_MaxUnpoolNd):
+class MaxUnpool2d(_MaxUnpoolNd[_Size2d]):
     r"""Computes a partial inverse of :class:`MaxPool2d`.
 
     Reconstructs a sparse approximation of the original 2-D feature map
@@ -1986,14 +1950,14 @@ class MaxUnpool2d(_MaxUnpoolNd):
         return max_unpool2d(
             input,
             indices,
-            kernel_size=self.kernel_size,  # type: ignore[arg-type]
-            stride=self.stride,  # type: ignore[arg-type]
-            padding=self.padding,  # type: ignore[arg-type]
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=self.padding,
             output_size=output_size,
         )
 
 
-class MaxUnpool3d(_MaxUnpoolNd):
+class MaxUnpool3d(_MaxUnpoolNd[_Size3d]):
     r"""Computes a partial inverse of :class:`MaxPool3d`.
 
     Extends :class:`MaxUnpool2d` to three spatial dimensions.  Each
@@ -2077,9 +2041,9 @@ class MaxUnpool3d(_MaxUnpoolNd):
         return max_unpool3d(
             input,
             indices,
-            kernel_size=self.kernel_size,  # type: ignore[arg-type]
-            stride=self.stride,  # type: ignore[arg-type]
-            padding=self.padding,  # type: ignore[arg-type]
+            kernel_size=self.kernel_size,
+            stride=self.stride,
+            padding=self.padding,
             output_size=output_size,
         )
 

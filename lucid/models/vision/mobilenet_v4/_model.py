@@ -24,9 +24,10 @@ published checkpoints load with an identity key map:
   conv_head, norm_head, classifier    post-pool head (classifier only)
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from math import sqrt
-from typing import ClassVar, Literal, cast, override
+from typing import ClassVar, Literal, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -284,14 +285,14 @@ _ARCHS: dict[str, _Arch] = {
 _HEAD_WIDTH = 1280
 
 
-def _chain(x: Tensor, *layers: nn.Module) -> Tensor:
+def _chain(x: Tensor, *layers: Callable[[Tensor], Tensor]) -> Tensor:
     """Apply ``layers`` in order (each returns a single tensor)."""
     for layer in layers:
-        x = cast(Tensor, layer(x))
+        x = layer(x)
     return x
 
 
-def _make_act(kind: Literal["relu", "gelu"]) -> nn.Module:
+def _make_act(kind: Literal["relu", "gelu"]) -> nn.ReLU | nn.GELU:
     return nn.GELU() if kind == "gelu" else nn.ReLU()
 
 
@@ -311,7 +312,7 @@ class _ConvNorm(nn.Module):
         *,
         stride: int = 1,
         groups: int = 1,
-        act: nn.Module | None = None,
+        act: nn.ReLU | nn.GELU | None = None,
     ) -> None:
         super().__init__()
         self.conv = nn.Conv2d(
@@ -413,13 +414,13 @@ class _UIB(nn.Module):
         self._has_skip = stride == 1 and in_ch == out_ch
         mid_ch = make_divisible(in_ch * exp)
 
-        self.dw_start: nn.Module = (
+        self.dw_start: _ConvNorm | nn.Identity = (
             _ConvNorm(in_ch, in_ch, start, stride=1 if mid else stride, groups=in_ch)
             if start
             else nn.Identity()
         )
         self.pw_exp = _ConvNorm(in_ch, mid_ch, 1, act=_make_act(act))
-        self.dw_mid: nn.Module = (
+        self.dw_mid: _ConvNorm | nn.Identity = (
             _ConvNorm(
                 mid_ch, mid_ch, mid, stride=stride, groups=mid_ch, act=_make_act(act)
             )
@@ -427,7 +428,7 @@ class _UIB(nn.Module):
             else nn.Identity()
         )
         self.pw_proj = _ConvNorm(mid_ch, out_ch, 1)
-        self.layer_scale: nn.Module = (
+        self.layer_scale: LayerScale | nn.Identity = (
             LayerScale(out_ch, layer_scale)
             if layer_scale is not None
             else nn.Identity()
@@ -452,10 +453,10 @@ class _KVProjection(nn.Module):
         if kv_stride > 1:
             # SR(X): a stride-2 3x3 depthwise conv in place of average
             # pooling (Section 5, Eq. 2).
-            self.down_conv: nn.Module = nn.Conv2d(
+            self.down_conv: nn.Conv2d | nn.Identity = nn.Conv2d(
                 dim, dim, 3, stride=kv_stride, padding=1, groups=dim, bias=False
             )
-            self.norm: nn.Module = nn.BatchNorm2d(dim)
+            self.norm: nn.BatchNorm2d | nn.Identity = nn.BatchNorm2d(dim)
         else:
             self.down_conv = nn.Identity()
             self.norm = nn.Identity()
@@ -535,7 +536,7 @@ class _MobileMQA(nn.Module):
         super().__init__()
         self.norm = nn.BatchNorm2d(dim)
         self.attn = _MultiQueryAttention(dim, dim, heads, key_dim, kv_stride)
-        self.layer_scale: nn.Module = (
+        self.layer_scale: LayerScale | nn.Identity = (
             LayerScale(dim, layer_scale) if layer_scale is not None else nn.Identity()
         )
         self.drop_path = DropPath(drop_path)
@@ -553,7 +554,13 @@ class _MobileMQA(nn.Module):
 
 def _build_trunk(
     cfg: MobileNetV4Config,
-) -> tuple[nn.Conv2d, nn.BatchNorm2d, nn.Module, nn.Sequential, list[FeatureInfo]]:
+) -> tuple[
+    nn.Conv2d,
+    nn.BatchNorm2d,
+    nn.ReLU | nn.GELU,
+    nn.Sequential,
+    list[FeatureInfo],
+]:
     """Return ``(conv_stem, bn1, act, blocks, feature_info)`` for ``cfg``."""
     arch = _ARCHS[cfg.variant]
     conv_stem = nn.Conv2d(
@@ -858,7 +865,7 @@ class MobileNetV4ForImageClassification(
             self.act_head,
         )
         x = self.head_drop(x.reshape(x.shape[0], -1))
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

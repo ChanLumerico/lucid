@@ -25,7 +25,7 @@ HuggingFace parity (state-dict keys):
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -430,16 +430,13 @@ class GPT2Model(PretrainedModel):
             attention_mask, (B, T), key_length=past_len + T
         )
         for layer_idx, block in enumerate(self.h):
-            hidden = cast(
-                Tensor,
-                block(
-                    hidden,
-                    attention_mask=ext_mask,
-                    past_key_value=past_key_values,
-                    layer_idx=layer_idx,
-                    cache_position=cache_position,
-                    use_cache=use_cache,
-                ),
+            hidden = block(
+                hidden,
+                attention_mask=ext_mask,
+                past_key_value=past_key_values,
+                layer_idx=layer_idx,
+                cache_position=cache_position,
+                use_cache=use_cache,
             )
 
         hidden = self.ln_f(hidden)

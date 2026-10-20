@@ -25,7 +25,7 @@ ConvNeXt block (all ops on (B, C, H, W)):
   permute back → + residual
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -116,8 +116,8 @@ def _build_convnext(
     cfg: ConvNeXtConfig,
 ) -> tuple[
     _StemWithNorm,  # stem
-    nn.ModuleList,  # stages
-    nn.ModuleList,  # downsamplers (len = num_stages - 1)
+    nn.ModuleList[nn.Sequential],  # stages
+    nn.ModuleList[_Downsample],  # downsamplers (len = num_stages - 1)
     nn.LayerNorm,  # head norm
     list[FeatureInfo],
     int,  # final channels
@@ -129,8 +129,8 @@ def _build_convnext(
     )
     stem_norm = nn.LayerNorm(cfg.dims[0], eps=cfg.layer_norm_eps)
 
-    stages: list[nn.Module] = []
-    downsamplers: list[nn.Module] = []
+    stages: list[nn.Sequential] = []
+    downsamplers: list[_Downsample] = []
     fi: list[FeatureInfo] = []
     reduction = 4
 
@@ -316,10 +316,10 @@ class ConvNeXt(PretrainedModel, BackboneMixin):
         x = self.stem(x)
         stages: list[Tensor] = []
         for i, stage in enumerate(self.stages):
-            x = cast(Tensor, stage(x))
+            x = stage(x)
             stages.append(x)
             if i < len(self.downsamplers):
-                x = cast(Tensor, self.downsamplers[i](x))
+                x = self.downsamplers[i](x)
         self._stage_features = stages
         x = self.avgpool(x).flatten(1)  # (B, C)
         x = x.unsqueeze(-1).unsqueeze(-1)  # keep (B,C,1,1) for consistency
@@ -438,15 +438,15 @@ class ConvNeXtForImageClassification(ImageClassificationModel, ClassificationHea
     ) -> ImageClassificationOutput:
         x = self.stem(x)
         for i, stage in enumerate(self.stages):
-            x = cast(Tensor, stage(x))
+            x = stage(x)
             if i < len(self.downsamplers):
-                x = cast(Tensor, self.downsamplers[i](x))
+                x = self.downsamplers[i](x)
         x = self.avgpool(x).flatten(1)
         # head norm in channel-last
         x = x.unsqueeze(-1).unsqueeze(-1).permute(0, 2, 3, 1)
         x = self.head_norm(x)
         x = x.flatten(1)
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

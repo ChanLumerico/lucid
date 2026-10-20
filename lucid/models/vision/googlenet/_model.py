@@ -32,7 +32,7 @@ and 4d:
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -399,19 +399,19 @@ class GoogLeNet(PretrainedModel, BackboneMixin):
         if getattr(self.config, "transform_input", False):
             x = transform_input_imagenet_to_tf(x)
         x = self.conv1(x)
-        x = cast(Tensor, self.maxpool1(x))
+        x = self.maxpool1(x)
         x = self.conv2(x)
         x = self.conv3(x)
-        x = cast(Tensor, self.maxpool2(x))
+        x = self.maxpool2(x)
         x = self.inception3a(x)
         x = self.inception3b(x)
-        x = cast(Tensor, self.maxpool3(x))
+        x = self.maxpool3(x)
         x = self.inception4a(x)
         x = self.inception4b(x)
         x = self.inception4c(x)
         x = self.inception4d(x)
         x = self.inception4e(x)
-        x = cast(Tensor, self.maxpool4(x))
+        x = self.maxpool4(x)
         x = self.inception5a(x)
         x = self.inception5b(x)
         # ``feature_info`` describes the pre-pool pyramid, and the mixin
@@ -572,13 +572,13 @@ class GoogLeNetForImageClassification(
         if getattr(self.config, "transform_input", False):
             x = transform_input_imagenet_to_tf(x)
         x = self.conv1(x)
-        x = cast(Tensor, self.maxpool1(x))
+        x = self.maxpool1(x)
         x = self.conv2(x)
         x = self.conv3(x)
-        x = cast(Tensor, self.maxpool2(x))
+        x = self.maxpool2(x)
         x = self.inception3a(x)
         x = self.inception3b(x)
-        x = cast(Tensor, self.maxpool3(x))
+        x = self.maxpool3(x)
 
         x = self.inception4a(x)
         aux1: Tensor | None = None
@@ -593,13 +593,13 @@ class GoogLeNetForImageClassification(
             aux2 = self.aux2(x)
 
         x = self.inception4e(x)
-        x = cast(Tensor, self.maxpool4(x))
+        x = self.maxpool4(x)
         x = self.inception5a(x)
         x = self.inception5b(x)
 
         x = self.avgpool(x)
         x = self.drop(x.flatten(1))
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

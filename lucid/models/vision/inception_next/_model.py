@@ -29,7 +29,7 @@ State-dict naming matches timm inception_next_tiny / small / base exactly:
   head.fc2.*    Linear (→ num_classes)
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -190,7 +190,7 @@ class _Stage(nn.Module):
         dpr = dpr if dpr is not None else [0.0] * depth
         if downsample:
             # timm: Sequential(BN2d(in_dim), Conv2d(in_dim→out_dim, 2, stride=2))
-            self.downsample: nn.Module = nn.Sequential(
+            self.downsample: nn.Sequential | nn.Identity = nn.Sequential(
                 nn.BatchNorm2d(in_dim),
                 nn.Conv2d(in_dim, out_dim, 2, stride=2),
             )
@@ -213,7 +213,7 @@ class _Stage(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.downsample(x))
+        x = self.downsample(x)
         return self.blocks(x)
 
 
@@ -263,7 +263,7 @@ def _build_inception_next(
     cfg: InceptionNeXtConfig,
 ) -> tuple[
     nn.Sequential,
-    nn.ModuleList,
+    nn.ModuleList[_Stage],
     list[FeatureInfo],
     int,
 ]:
@@ -273,7 +273,7 @@ def _build_inception_next(
         nn.BatchNorm2d(cfg.dims[0]),
     )
 
-    stages: list[nn.Module] = []
+    stages: list[_Stage] = []
     fi: list[FeatureInfo] = []
     reduction = 4
 
@@ -402,7 +402,7 @@ class InceptionNeXt(PretrainedModel, BackboneMixin):
     def forward_features(self, x: Tensor) -> Tensor:
         x = self.stem(x)
         for stage in self.stages:
-            x = cast(Tensor, stage(x))
+            x = stage(x)
         return x.mean(dim=(2, 3))  # (B, C)
 
     @override
@@ -491,7 +491,7 @@ class InceptionNeXtForImageClassification(ImageClassificationModel):
     ) -> ImageClassificationOutput:
         x = self.stem(x)
         for stage in self.stages:
-            x = cast(Tensor, stage(x))
+            x = stage(x)
         logits = self.head(x)
 
         loss: Tensor | None = None

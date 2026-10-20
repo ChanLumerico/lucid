@@ -34,7 +34,6 @@ from lucid.models._base import PretrainedModel
 from lucid.models._tasks import ImageClassificationModel
 from lucid.models._output import ModelOutput
 from lucid.models.multimodal.clip._towers import (
-    ResidualAttentionBlock,
     TransformerTower,
 )
 from lucid.models.multimodal.clip._config import CLIPConfig
@@ -121,19 +120,17 @@ class _VisionTransformer(nn.Module):
         x = self.conv1(pixel_values)
         x = x.reshape(batch, int(x.shape[1]), -1).swapaxes(1, 2)
 
-        cls = cast(Tensor, self.class_embedding).reshape(1, 1, -1)
+        cls = self.class_embedding.reshape(1, 1, -1)
         cls = cls.repeat(batch, 1, 1)
         x = lucid.cat([cls, x], dim=1)
-        x = x + cast(Tensor, self.positional_embedding).reshape(
-            1, self.num_patches + 1, -1
-        )
+        x = x + self.positional_embedding.reshape(1, self.num_patches + 1, -1)
 
         x = self.ln_pre(x)
         x = self.transformer(x)
         # Only the class token leaves the tower; the patch tokens have
         # done their work by conditioning it.
         pooled = self.ln_post(x[:, 0])
-        return pooled @ cast(Tensor, self.proj)
+        return pooled @ self.proj
 
 
 @final
@@ -194,7 +191,7 @@ class _TextTransformer(nn.Module):
                 f"table has no entries beyond it"
             )
         x = self.token_embedding(input_ids)
-        x = x + cast(Tensor, self.positional_embedding).reshape(1, length, -1)
+        x = x + self.positional_embedding.reshape(1, length, -1)
         x = self.transformer(x)
         x = self.ln_final(x)
 
@@ -204,7 +201,7 @@ class _TextTransformer(nn.Module):
         # left on the CPU only fails once it meets the activations.
         rows = lucid.arange(int(x.shape[0]), dtype=lucid.int64, device=x.device.type)
         pooled = x[rows, eos]
-        return pooled @ cast(Tensor, self.text_projection)
+        return pooled @ self.text_projection
 
 
 @dataclass(slots=True)
@@ -362,18 +359,16 @@ class CLIPModel(PretrainedModel):
         config = self.config
         with lucid.no_grad():
             nn.init.normal_(self.textual.token_embedding.weight, std=0.02)
-            nn.init.normal_(cast(Tensor, self.textual.positional_embedding), std=0.01)
+            nn.init.normal_(self.textual.positional_embedding, std=0.01)
             nn.init.normal_(
-                cast(Tensor, self.textual.text_projection),
+                self.textual.text_projection,
                 std=config.text_width**-0.5,
             )
 
             vision_std = config.vision_width**-0.5
-            nn.init.normal_(cast(Tensor, self.visual.class_embedding), std=vision_std)
-            nn.init.normal_(
-                cast(Tensor, self.visual.positional_embedding), std=vision_std
-            )
-            nn.init.normal_(cast(Tensor, self.visual.proj), std=vision_std)
+            nn.init.normal_(self.visual.class_embedding, std=vision_std)
+            nn.init.normal_(self.visual.positional_embedding, std=vision_std)
+            nn.init.normal_(self.visual.proj, std=vision_std)
 
             for tower, width, layers in (
                 (self.visual.transformer, config.vision_width, config.vision_layers),
@@ -383,7 +378,7 @@ class CLIPModel(PretrainedModel):
                 proj_std = (width**-0.5) * ((2 * layers) ** -0.5)
                 fc_std = (2 * width) ** -0.5
                 for module in tower.resblocks:
-                    block = cast(ResidualAttentionBlock, module)
+                    block = module
                     # Fused only when the three projections share a
                     # width, which self-attention always does; asserting
                     # rather than casting so a future kdim/vdim split
@@ -417,7 +412,7 @@ class CLIPModel(PretrainedModel):
         puts it and therefore where it is easy to omit.
         """
         return lucid.clip(
-            lucid.exp(cast(Tensor, self.logit_scale)), None, self.config.logit_scale_max
+            lucid.exp(self.logit_scale), None, self.config.logit_scale_max
         )
 
     def encode_image(self, pixel_values: Tensor) -> Tensor:

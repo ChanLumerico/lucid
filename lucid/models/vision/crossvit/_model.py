@@ -353,13 +353,10 @@ class _MultiScaleBlock(nn.Module):
     @override
     def forward(self, xs: list[Tensor]) -> list[Tensor]:
         # Per-branch self-attention.
-        xs = [cast(Tensor, self.blocks[d](xs[d])) for d in range(self.num_branches)]
+        xs = [self.blocks[d](xs[d]) for d in range(self.num_branches)]
 
         # Project CLS of each branch into the other branch's dim space.
-        proj_cls = [
-            cast(Tensor, self.projs[d](xs[d][:, 0:1, :]))
-            for d in range(self.num_branches)
-        ]
+        proj_cls = [self.projs[d](xs[d][:, 0:1, :]) for d in range(self.num_branches)]
 
         # Cross-attend + revert.
         out_xs: list[Tensor] = []
@@ -367,10 +364,10 @@ class _MultiScaleBlock(nn.Module):
             d_ = (d + 1) % self.num_branches
             # Concat projected CLS (1 token) + other-branch patch tokens.
             tmp = lucid.cat([proj_cls[d], xs[d_][:, 1:, :]], dim=1)
-            tmp = cast(Tensor, self.fusion[d](tmp))
+            tmp = self.fusion[d](tmp)
             # Project the fused CLS back to original branch dim and stitch
             # together with the unchanged patch tokens.
-            reverted = cast(Tensor, self.revert_projs[d](tmp))
+            reverted = self.revert_projs[d](tmp)
             out_xs.append(lucid.cat([reverted, xs[d][:, 1:, :]], dim=1))
         return out_xs
 
@@ -610,7 +607,7 @@ class CrossViT(PretrainedModel, BackboneMixin):
 
     def _branch_tokens(self, x: Tensor, branch: int) -> Tensor:
         """Patch-embed branch + CLS + positional embedding + dropout."""
-        x = cast(Tensor, self.patch_embed[branch](x))  # (B, N, C)
+        x = self.patch_embed[branch](x)  # (B, N, C)
         cls_token = (self.cls_token_0 if branch == 0 else self.cls_token_1).expand(
             x.shape[0], 1, x.shape[2]
         )
@@ -634,7 +631,7 @@ class CrossViT(PretrainedModel, BackboneMixin):
         for stage in self.stages:
             xs = stage(xs)
         # Final norm per branch.
-        xs = [cast(Tensor, self.norm[d](xs[d])) for d in range(2)]
+        xs = [self.norm[d](xs[d]) for d in range(2)]
         # Return the two CLS tokens.
         return xs[0][:, 0], xs[1][:, 0]
 
@@ -735,7 +732,7 @@ class CrossViTForImageClassification(ImageClassificationModel, ClassificationHea
         init_transformer_trunc_normal(self)
 
     def _branch_tokens(self, x: Tensor, branch: int) -> Tensor:
-        x = cast(Tensor, self.patch_embed[branch](x))
+        x = self.patch_embed[branch](x)
         cls_token = (self.cls_token_0 if branch == 0 else self.cls_token_1).expand(
             x.shape[0], 1, x.shape[2]
         )
@@ -754,10 +751,7 @@ class CrossViTForImageClassification(ImageClassificationModel, ClassificationHea
         looks for a single ``self.classifier`` and raised ``AttributeError``.
         """
         self.head = nn.ModuleList(
-            [
-                nn.Linear(cast(nn.Linear, lin).in_features, num_classes)
-                for lin in self.head
-            ]
+            [nn.Linear(lin.in_features, num_classes) for lin in self.head]
         )
 
     @override
@@ -774,10 +768,10 @@ class CrossViTForImageClassification(ImageClassificationModel, ClassificationHea
         xs = [self._branch_tokens(xs[d], d) for d in range(2)]
         for stage in self.stages:
             xs = stage(xs)
-        xs = [cast(Tensor, self.norm[d](xs[d])) for d in range(2)]
+        xs = [self.norm[d](xs[d]) for d in range(2)]
         cls = [xs[d][:, 0] for d in range(2)]
-        logits_s = cast(Tensor, self.head[0](cls[0]))
-        logits_l = cast(Tensor, self.head[1](cls[1]))
+        logits_s = self.head[0](cls[0])
+        logits_l = self.head[1](cls[1])
         logits = (logits_s + logits_l) / 2.0
 
         loss: Tensor | None = None

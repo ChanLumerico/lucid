@@ -44,7 +44,7 @@ Head:
 """
 
 import math
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -418,11 +418,13 @@ class _Shortcut(nn.Module):
         super().__init__()
         self._stride = stride
         if stride > 1:
-            self.pool: nn.Module = nn.AvgPool2d(stride, stride=stride)
+            self.pool: nn.AvgPool2d | nn.Identity = nn.AvgPool2d(stride, stride=stride)
         else:
             self.pool = nn.Identity()
         if in_dim != out_dim:
-            self.expand: nn.Module = nn.Conv2d(in_dim, out_dim, 1, bias=True)
+            self.expand: nn.Conv2d | nn.Identity = nn.Conv2d(
+                in_dim, out_dim, 1, bias=True
+            )
         else:
             self.expand = nn.Identity()
 
@@ -435,8 +437,8 @@ class _Shortcut(nn.Module):
             # 12x12 + 13x13 for any input that is not a multiple of the window
             # grid — every resolution except the 224 the tests happen to use.
             x = _tf_same_pad2d(x, kernel_size=self._stride, stride=self._stride)
-        x = cast(Tensor, self.pool(x))
-        return cast(Tensor, self.expand(x))
+        x = self.pool(x)
+        return self.expand(x)
 
 
 # ---------------------------------------------------------------------------
@@ -677,11 +679,30 @@ class _PreLogits(nn.Module):
 # ---------------------------------------------------------------------------
 
 
+class _Stem(nn.Module):
+    """Two-conv stem matching timm's stem.conv1 / stem.norm1 / stem.conv2."""
+
+    def __init__(self, in_ch: int, out_ch: int) -> None:
+        super().__init__()
+        # padding=0: TF-same is applied manually in forward before conv1
+        self.conv1 = nn.Conv2d(in_ch, out_ch, 3, stride=2, padding=0, bias=True)
+        self.norm1 = nn.BatchNorm2d(out_ch, eps=1e-3, momentum=_BN_MOMENTUM)
+        # conv2 is stride=1 so symmetric padding=1 matches TF-same exactly
+        self.conv2 = nn.Conv2d(out_ch, out_ch, 3, stride=1, padding=1, bias=True)
+
+    @override
+    def forward(self, x: Tensor) -> Tensor:
+        x = _tf_same_pad2d(x, kernel_size=3, stride=2)
+        x = self.conv1(x)
+        x = F.gelu(self.norm1(x), approximate="tanh")
+        return self.conv2(x)
+
+
 def _build_maxvit(
     cfg: MaxViTConfig,
 ) -> tuple[
-    nn.Module,
-    nn.ModuleList,
+    _Stem,
+    nn.ModuleList[_MaxViTStage],
     list[FeatureInfo],
     int,
 ]:
@@ -694,27 +715,9 @@ def _build_maxvit(
     """
     stem_out = cfg.stem_width if cfg.stem_width is not None else cfg.dims[0]
 
-    class _Stem(nn.Module):
-        """Two-conv stem matching timm's stem.conv1 / stem.norm1 / stem.conv2."""
+    stem = _Stem(cfg.in_channels, stem_out)
 
-        def __init__(self, in_ch: int, out_ch: int) -> None:
-            super().__init__()
-            # padding=0: TF-same is applied manually in forward before conv1
-            self.conv1 = nn.Conv2d(in_ch, out_ch, 3, stride=2, padding=0, bias=True)
-            self.norm1 = nn.BatchNorm2d(out_ch, eps=1e-3, momentum=_BN_MOMENTUM)
-            # conv2 is stride=1 so symmetric padding=1 matches TF-same exactly
-            self.conv2 = nn.Conv2d(out_ch, out_ch, 3, stride=1, padding=1, bias=True)
-
-        @override
-        def forward(self, x: Tensor) -> Tensor:
-            x = _tf_same_pad2d(x, kernel_size=3, stride=2)
-            x = self.conv1(x)
-            x = F.gelu(self.norm1(x), approximate="tanh")
-            return self.conv2(x)
-
-    stem: nn.Module = _Stem(cfg.in_channels, stem_out)
-
-    stages_list: list[nn.Module] = []
+    stages_list: list[_MaxViTStage] = []
     fi: list[FeatureInfo] = []
     reduction = (
         4  # stem stride=2, then each stage block0 stride=2 → 4 total after stage 0
@@ -850,9 +853,9 @@ class MaxViT(PretrainedModel, BackboneMixin):
 
     @override
     def forward_features(self, x: Tensor) -> Tensor:
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         for stage in self.stages:
-            x = cast(Tensor, stage(x))
+            x = stage(x)
         # Global average pool → flatten
         x = F.adaptive_avg_pool2d(x, (1, 1)).flatten(1)
         return x
@@ -977,9 +980,9 @@ class MaxViTForImageClassification(ImageClassificationModel, ClassificationHeadM
         x: Tensor,
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
-        x = cast(Tensor, self.stem(x))
+        x = self.stem(x)
         for stage in self.stages:
-            x = cast(Tensor, stage(x))
+            x = stage(x)
         # Global average pool → flatten → LayerNorm expects (B, C)
         x = F.adaptive_avg_pool2d(x, (1, 1)).flatten(1)
         logits = self.head(x)

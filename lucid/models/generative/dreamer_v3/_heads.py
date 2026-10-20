@@ -19,7 +19,7 @@ Kept private to the family.  It is a general idea and a reasonable
 candidate for promotion, but it has one consumer.
 """
 
-from typing import cast, final, override
+from typing import final, override
 
 import lucid
 import lucid.nn as nn
@@ -75,6 +75,8 @@ class TwoHotHead(nn.Module):
     (2, 3)
     """
 
+    bins: Tensor
+
     def __init__(
         self,
         in_features: int,
@@ -112,7 +114,7 @@ class TwoHotHead(nn.Module):
     @property
     def grid(self) -> Tensor:
         """The bin locations, narrowed from the buffer registry."""
-        return cast(Tensor, self.bins)
+        return self.bins
 
     @override
     def forward(self, feature: Tensor) -> Tensor:

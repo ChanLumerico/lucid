@@ -18,7 +18,7 @@ graph backwards from a prior sample, which is why ``decode`` is not an
 approximate decoder but the true inverse.
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -95,7 +95,7 @@ class _CouplingNet(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         h = x
         for layer in self.hidden:
-            h = generative_activation(self._act_name, cast(Tensor, layer(h)))
+            h = generative_activation(self._act_name, layer(h))
         return self.proj(h)
 
 
@@ -301,7 +301,7 @@ class NICEModel(PretrainedModel):
         if self._reorder == "tile":
             h = _tile(h)
         for layer in self.couplings:
-            h = cast(Tensor, layer(h))
+            h = layer(h)
         h = self.scaling(h)
 
         batch = int(x.shape[0])
@@ -317,7 +317,7 @@ class NICEModel(PretrainedModel):
         self._check_shape(h, "latents")
         x = self.scaling.inverse(h)
         for idx in range(len(self.couplings) - 1, -1, -1):
-            x = cast(_AdditiveCoupling, self.couplings[idx]).inverse(x)
+            x = self.couplings[idx].inverse(x)
         if self._reorder == "tile":
             x = _untile(x)
         return x

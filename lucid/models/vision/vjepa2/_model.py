@@ -8,7 +8,7 @@ blocks without creating a second public component module.
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, TypedDict, cast, override
+from typing import ClassVar, TypedDict, override
 
 import lucid
 import lucid.nn as nn
@@ -501,7 +501,7 @@ class _RoPEVideoEncoder(nn.Module):
             )
             for rate in rates
         ]
-        self.blocks = nn.ModuleList(cast(list[nn.Module], blocks))
+        self.blocks = nn.ModuleList(blocks)
         self.norm = nn.LayerNorm(dim, eps=layer_norm_eps)
         _init_vjepa2_weights(self, init_std)
         for index, block in enumerate(blocks, start=1):
@@ -532,15 +532,9 @@ class _RoPEVideoEncoder(nn.Module):
             tokens = _gather_tokens(tokens, indices)
         for block in self.blocks:
             if indices is None:
-                tokens = cast(
-                    Tensor,
-                    block(tokens, temporal=time, height=rows, width=cols),
-                )
+                tokens = block(tokens, temporal=time, height=rows, width=cols)
             else:
-                tokens = cast(
-                    Tensor,
-                    block(tokens, indices, temporal=time, height=rows, width=cols),
-                )
+                tokens = block(tokens, indices, temporal=time, height=rows, width=cols)
         return self.norm(tokens)
 
 
@@ -611,7 +605,7 @@ class _RoPEVideoPredictor(nn.Module):
             )
             for rate in rates
         ]
-        self.predictor_blocks = nn.ModuleList(cast(list[nn.Module], blocks))
+        self.predictor_blocks = nn.ModuleList(blocks)
         self.predictor_norm = nn.LayerNorm(predictor_dim, eps=layer_norm_eps)
         self.predictor_proj = nn.Linear(predictor_dim, predictor_out_dim)
         _init_vjepa2_weights(self, init_std)
@@ -650,9 +644,7 @@ class _RoPEVideoPredictor(nn.Module):
             tokens = tokens + _gather_tokens(
                 positions.repeat(batch, 1, 1), context_indices
             )
-        queries = cast(Tensor, self.mask_tokens[mask_index]).repeat(
-            batch, target_count, 1
-        )
+        queries = self.mask_tokens[mask_index].repeat(batch, target_count, 1)
         if not self.use_rope:
             queries = queries + _gather_tokens(
                 positions.repeat(batch, 1, 1), target_indices
@@ -671,15 +663,12 @@ class _RoPEVideoPredictor(nn.Module):
         sorted_masks = lucid.gather(masks, 1, order)
         rows = self.grid_size
         for block in self.predictor_blocks:
-            hidden = cast(
-                Tensor,
-                block(
-                    hidden,
-                    sorted_masks,
-                    temporal=temporal,
-                    height=rows,
-                    width=rows,
-                ),
+            hidden = block(
+                hidden,
+                sorted_masks,
+                temporal=temporal,
+                height=rows,
+                width=rows,
             )
         hidden = self.predictor_norm(hidden)
         inverse = order.argsort(dim=1)
@@ -751,7 +740,7 @@ class _ActionConditionedPredictor(nn.Module):
             )
             for _ in range(depth)
         ]
-        self.predictor_blocks = nn.ModuleList(cast(list[nn.Module], blocks))
+        self.predictor_blocks = nn.ModuleList(blocks)
         self.predictor_norm = nn.LayerNorm(predictor_dim, eps=layer_norm_eps)
         self.predictor_proj = nn.Linear(predictor_dim, embed_dim)
         _init_vjepa2_weights(self, init_std)
@@ -813,16 +802,13 @@ class _ActionConditionedPredictor(nn.Module):
         # token index of the same frame is sufficient for the causal attention
         # path; spatial token positions are reconstructed inside each block.
         for block in self.predictor_blocks:
-            hidden = cast(
-                Tensor,
-                block(
-                    hidden,
-                    temporal=steps,
-                    height=self.grid_size,
-                    width=self.grid_size,
-                    attn_mask=masks,
-                    action_tokens=cond,
-                ),
+            hidden = block(
+                hidden,
+                temporal=steps,
+                height=self.grid_size,
+                width=self.grid_size,
+                attn_mask=masks,
+                action_tokens=cond,
             )
         hidden = hidden.reshape(batch, steps, total_per_step, self.predictor_dim)
         hidden = hidden[:, :, cond:, :].reshape(batch, token_count, self.predictor_dim)
@@ -979,18 +965,15 @@ class _AttentivePooler(nn.Module):
         self.num_heads = config.num_heads
         self.head_dim = config.dim // config.num_heads
         self.blocks = nn.ModuleList(
-            cast(
-                list[nn.Module],
-                [
-                    _SelfAttentionBlock(
-                        config.dim,
-                        config.num_heads,
-                        config.mlp_ratio,
-                        config.layer_norm_eps,
-                    )
-                    for _ in range(config.num_pooler_layers)
-                ],
-            )
+            [
+                _SelfAttentionBlock(
+                    config.dim,
+                    config.num_heads,
+                    config.mlp_ratio,
+                    config.layer_norm_eps,
+                )
+                for _ in range(config.num_pooler_layers)
+            ]
         )
         self.query_token = nn.Parameter(lucid.zeros(1, 1, config.dim))
         self.norm_keys = nn.LayerNorm(config.dim, eps=config.layer_norm_eps)
@@ -1009,7 +992,7 @@ class _AttentivePooler(nn.Module):
         _init_vjepa2_weights(self, config.init_std)
         nn.init.trunc_normal_(self.query_token, std=config.init_std)
         for depth, block in enumerate(self.blocks, start=1):
-            tower = cast(_SelfAttentionBlock, block)
+            tower = block
             _scale_projection(tower.proj, tower.mlp, depth, config.init_std)
         # The cross-attention carries no projection to narrow, and upstream
         # narrows its feed-forward by the last block's factor rather than
@@ -1024,7 +1007,7 @@ class _AttentivePooler(nn.Module):
     def forward(self, tokens: Tensor) -> Tensor:
         batch, _, width = (int(s) for s in tokens.shape)
         for block in self.blocks:
-            tokens = cast(Tensor, block(tokens))
+            tokens = block(tokens)
         count = int(tokens.shape[1])
         keys = self.norm_keys(tokens)
 
@@ -1033,7 +1016,7 @@ class _AttentivePooler(nn.Module):
                 0, 2, 1, 3
             )
 
-        query_input = cast(Tensor, self.query_token).repeat(batch, 1, 1)
+        query_input = self.query_token.repeat(batch, 1, 1)
         query = split_heads(self.query(query_input), 1)
         key = split_heads(self.key(keys), count)
         value = split_heads(self.value(keys), count)

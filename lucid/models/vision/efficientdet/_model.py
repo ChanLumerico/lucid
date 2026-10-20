@@ -140,8 +140,12 @@ class _BiFPNLayer(nn.Module):
         )
 
         # One conv per top-down node (L-1) and one per bottom-up node (L-1).
-        self.td_convs = nn.ModuleList([_SepConv(num_channels) for _ in range(L - 1)])
-        self.out_convs = nn.ModuleList([_SepConv(num_channels) for _ in range(L - 1)])
+        self.td_convs: nn.ModuleList[_SepConv] = nn.ModuleList(
+            [_SepConv(num_channels) for _ in range(L - 1)]
+        )
+        self.out_convs: nn.ModuleList[_SepConv] = nn.ModuleList(
+            [_SepConv(num_channels) for _ in range(L - 1)]
+        )
         # Registered down-sampler (avoids allocating a new module each forward call)
         self.down = nn.MaxPool2d(2, stride=2)
 
@@ -166,11 +170,11 @@ class _BiFPNLayer(nn.Module):
             # the weight vector puts +eps in every numerator and N*eps in the
             # sum, which changes the fusion ratios rather than just avoiding a
             # division by zero.
-            w: Tensor = F.relu(cast(Tensor, self.td_weights[L - 2 - i]))
+            w: Tensor = F.relu(self.td_weights[L - 2 - i])
             wsum = w.sum() + _EPS
             up = F.interpolate(td[0], scale_factor=2.0, mode="nearest")
             fused: Tensor = (w[0] / wsum) * features[i] + (w[1] / wsum) * up
-            node = cast(Tensor, self.td_convs[L - 2 - i](fused))
+            node = self.td_convs[L - 2 - i](fused)
             td.insert(0, node)  # prepend so td[0] = finest
 
         # --- Bottom-up output ---
@@ -178,9 +182,9 @@ class _BiFPNLayer(nn.Module):
         out: list[Tensor] = [td[0]]
 
         for i in range(1, L):
-            wl: Tensor = F.relu(cast(Tensor, self.out_weights[i - 1]))
+            wl: Tensor = F.relu(self.out_weights[i - 1])
             wlsum = wl.sum() + _EPS
-            down = cast(Tensor, self.down(out[-1]))
+            down = self.down(out[-1])
             if i < L - 1:
                 fused_l: Tensor = (
                     (wl[0] / wlsum) * features[i]
@@ -190,7 +194,7 @@ class _BiFPNLayer(nn.Module):
             else:
                 # Coarsest level: no top-down intermediate exists here.
                 fused_l = (wl[0] / wlsum) * features[i] + (wl[1] / wlsum) * down
-            out.append(cast(Tensor, self.out_convs[i - 1](fused_l)))
+            out.append(self.out_convs[i - 1](fused_l))
 
         return out
 
@@ -241,7 +245,7 @@ class _MBConv(nn.Module):
         # EfficientNet's MBConv carries squeeze-and-excitation at ratio 0.25;
         # omitting it drops the channel-gating the backbone was designed
         # around and quietly changes the parameter count.
-        self.se: nn.Module | None
+        self.se: nn.Sequential | None
         if 0.0 < se_ratio <= 1.0:
             se_ch = max(1, int(in_ch * se_ratio))
             self.se = nn.Sequential(
@@ -264,7 +268,7 @@ class _MBConv(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         out: Tensor = self.block(x)
         if self.se is not None:
-            out = out * cast(Tensor, self.se(out))
+            out = out * self.se(out)
         out = self.project(out)
         return out + x if self.use_skip else out
 
@@ -363,7 +367,7 @@ class _PredictionHead(nn.Module):
         self.num_repeats = num_repeats
 
         # Shared DWConv weights (one per repeat depth)
-        self.dw_convs = nn.ModuleList(
+        self.dw_convs: nn.ModuleList[nn.Conv2d] = nn.ModuleList(
             [
                 nn.Conv2d(
                     in_channels,
@@ -376,14 +380,14 @@ class _PredictionHead(nn.Module):
                 for _ in range(num_repeats)
             ]
         )
-        self.pw_convs = nn.ModuleList(
+        self.pw_convs: nn.ModuleList[nn.Conv2d] = nn.ModuleList(
             [
                 nn.Conv2d(in_channels, in_channels, 1, bias=False)
                 for _ in range(num_repeats)
             ]
         )
         # Separate BN per level per depth
-        self.bns = nn.ModuleList(
+        self.bns: nn.ModuleList[nn.ModuleList[nn.BatchNorm2d]] = nn.ModuleList(
             [
                 nn.ModuleList([nn.BatchNorm2d(in_channels) for _ in range(num_levels)])
                 for _ in range(num_repeats)
@@ -409,10 +413,10 @@ class _PredictionHead(nn.Module):
         for lvl, feat in enumerate(features):
             x = feat
             for depth in range(self.num_repeats):
-                dw: Tensor = cast(Tensor, self.dw_convs[depth](x))
-                pw: Tensor = cast(Tensor, self.pw_convs[depth](dw))
-                bn_list = cast(nn.ModuleList, self.bns[depth])
-                x = F.silu(cast(Tensor, bn_list[lvl](pw)))
+                dw: Tensor = self.dw_convs[depth](x)
+                pw: Tensor = self.pw_convs[depth](dw)
+                bn_list = self.bns[depth]
+                x = F.silu(bn_list[lvl](pw))
             outs.append(self.predictor(self.predictor_dw(x)))
         return outs
 
@@ -672,8 +676,8 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
         fp3: Tensor = self.p3_proj(p3)
         fp4: Tensor = self.p4_proj(p4)
         fp5: Tensor = self.p5_proj(p5)
-        fp6: Tensor = cast(Tensor, self.p6_pool(self.p6_proj(p5)))
-        fp7: Tensor = cast(Tensor, self.p7_pool(fp6))
+        fp6: Tensor = self.p6_pool(self.p6_proj(p5))
+        fp7: Tensor = self.p7_pool(fp6)
         return [fp3, fp4, fp5, fp6, fp7]
 
     # ------------------------------------------------------------------
@@ -711,7 +715,7 @@ class EfficientDetForObjectDetection(ObjectDetectionModel):
 
         # 3. BiFPN stack
         for bifpn_layer in self.bifpn:
-            fpn_feats = cast(_BiFPNLayer, bifpn_layer)(fpn_feats)
+            fpn_feats = bifpn_layer(fpn_feats)
 
         # 4. Strides for 5 levels (P3=8, P4=16, P5=32, P6=64, P7=128)
         strides: list[tuple[int, int]] = [

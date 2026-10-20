@@ -18,7 +18,7 @@ Architecture (CvT-13, image=224):
   Head   : LN → mean-pool → FC(384, num_classes)
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -356,7 +356,7 @@ class _CvTStage(nn.Module):
             cls = self.cls_token.expand(B, 1, C)
             tokens = lucid.cat([cls, tokens], dim=1)
         for blk in self.blocks:
-            tokens = cast(Tensor, blk(tokens, H, W))
+            tokens = blk(tokens, H, W)
         # Split the CLS token back off (if present); the spatial tokens
         # are reshaped to a feature map for the next stage / pooling.
         cls_out: Tensor | None = None
@@ -485,7 +485,7 @@ class CvT(PretrainedModel, BackboneMixin):
     def __init__(self, config: CvTConfig) -> None:
         super().__init__(config)
         stage_list, fi = _build_stages(config)
-        self.stages = nn.ModuleList(stage_list)  # type: ignore[arg-type]
+        self.stages = nn.ModuleList(stage_list)
         # Trunk LayerNorm -- the reference's ``forward_features`` ends with
         # it, so the backbone's advertised feature is the normalised one.
         self.norm = nn.LayerNorm(config.dims[-1])
@@ -589,7 +589,7 @@ class CvTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
     def __init__(self, config: CvTConfig) -> None:
         super().__init__(config)
         stage_list, _ = _build_stages(config)
-        self.stages = nn.ModuleList(stage_list)  # type: ignore[arg-type]
+        self.stages = nn.ModuleList(stage_list)
         self.head_norm = nn.LayerNorm(config.dims[-1])
         self._build_classifier(
             config.dims[-1], config.num_classes, dropout=config.dropout
@@ -620,7 +620,7 @@ class CvTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
             # and the two branches disagreed with each other.
             tokens = x.flatten(2).permute(0, 2, 1)  # (B, N, C)
             feat = self.head_norm(tokens).mean(dim=1)
-        logits = cast(Tensor, self.classifier(feat))
+        logits = self.classifier(feat)
 
         loss: Tensor | None = None
         if labels is not None:

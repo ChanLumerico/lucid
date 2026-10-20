@@ -23,7 +23,7 @@ Architecture (width_mult=1.0):
   AvgPool(7×7) → FC(1024, num_classes)
 """
 
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -325,7 +325,7 @@ class MobileNetForImageClassification(
         x = self.features(x)
         x = self.avgpool(x)
         x = self.drop(x.flatten(1))
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

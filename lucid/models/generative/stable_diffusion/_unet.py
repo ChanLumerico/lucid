@@ -23,7 +23,7 @@ that while passing every shape check.
 """
 
 import math
-from typing import cast, final, override
+from typing import final, override
 
 import lucid
 import lucid.nn as nn
@@ -108,7 +108,7 @@ class _ResBlock(nn.Module):
         self.norm2 = nn.GroupNorm(groups, out_channels)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
         self.act = nn.SiLU()
-        self.shortcut: nn.Module | None = (
+        self.shortcut: nn.Conv2d | None = (
             nn.Conv2d(in_channels, out_channels, kernel_size=1)
             if in_channels != out_channels
             else None
@@ -134,7 +134,7 @@ class _ResBlock(nn.Module):
         shift = self.time_proj(self.act(emb))
         h = h + shift.reshape(int(shift.shape[0]), int(shift.shape[1]), 1, 1)
         h = self.conv2(self.act(self.norm2(h)))
-        skip = x if self.shortcut is None else cast(Tensor, self.shortcut(x))
+        skip = x if self.shortcut is None else self.shortcut(x)
         return skip + h
 
 
@@ -260,13 +260,13 @@ class _TransformerBlock(nn.Module):
         """
         normed = self.norm1(x)
         attended, _ = self.attn1(normed, normed, normed, need_weights=False)
-        x = x + attended + cast(Tensor, self.attn1_out_bias)
+        x = x + attended + self.attn1_out_bias
 
         # The load-bearing line: query from the image, key/value from the
         # conditioning.  Reversed, this still runs and still trains.
         query = self.norm2(x)
         crossed, _ = self.attn2(query, context, context, need_weights=False)
-        x = x + crossed + cast(Tensor, self.attn2_out_bias)
+        x = x + crossed + self.attn2_out_bias
 
         return x + self.ff(self.norm3(x))
 
@@ -327,7 +327,7 @@ class _SpatialTransformer(nn.Module):
         y = self.proj_in(self.norm(x))
         y = y.reshape(b, c, h * w).swapaxes(1, 2)
         for block in self.blocks:
-            y = cast(Tensor, block(y, context))
+            y = block(y, context)
         y = y.swapaxes(1, 2).reshape(b, c, h, w)
         return residual + self.proj_out(y)
 
@@ -392,9 +392,11 @@ class UNet2DConditionModel(nn.Module):
 
         # Down path.  ``_attn`` mirrors ``down`` and holds either a
         # transformer or None, so the forward can stay a plain zip.
-        self.down_blocks = nn.ModuleList()
-        self.down_attns = nn.ModuleList()
-        self.downsamplers = nn.ModuleList()
+        self.down_blocks: nn.ModuleList[_ResBlock] = nn.ModuleList()
+        self.down_attns: nn.ModuleList[_SpatialTransformer | nn.Identity] = (
+            nn.ModuleList()
+        )
+        self.downsamplers: nn.ModuleList[nn.Conv2d | nn.Identity] = nn.ModuleList()
         self.skip_channels: list[int] = [widths[0]]
         current = widths[0]
         for level, width in enumerate(widths):
@@ -421,9 +423,11 @@ class UNet2DConditionModel(nn.Module):
         self.mid_block_2 = _ResBlock(current, current, time_dim, groups)
 
         # Up path — one extra block per level for the extra skip.
-        self.up_blocks = nn.ModuleList()
-        self.up_attns = nn.ModuleList()
-        self.upsamplers = nn.ModuleList()
+        self.up_blocks: nn.ModuleList[_ResBlock] = nn.ModuleList()
+        self.up_attns: nn.ModuleList[_SpatialTransformer | nn.Identity] = (
+            nn.ModuleList()
+        )
+        self.upsamplers: nn.ModuleList[nn.Conv2d | nn.Identity] = nn.ModuleList()
         skips = list(self.skip_channels)
         for level, width in enumerate(reversed(widths)):
             first = level == 0
@@ -487,15 +491,15 @@ class UNet2DConditionModel(nn.Module):
         index = 0
         for level in range(len(self.config.unet_block_out_channels)):
             for _ in range(per_level):
-                h = cast(Tensor, self.down_blocks[index](h, emb))
+                h = self.down_blocks[index](h, emb)
                 attn = self.down_attns[index]
                 if not isinstance(attn, nn.Identity):
-                    h = cast(Tensor, attn(h, context))
+                    h = attn(h, context)
                 skips.append(h)
                 index += 1
             sampler = self.downsamplers[level]
             if not isinstance(sampler, nn.Identity):
-                h = cast(Tensor, sampler(h))
+                h = sampler(h)
                 skips.append(h)
 
         h = self.mid_block_1(h, emb)
@@ -506,13 +510,13 @@ class UNet2DConditionModel(nn.Module):
         for level in range(len(self.config.unet_block_out_channels)):
             for _ in range(per_level + 1):
                 h = lucid.cat([h, skips.pop()], dim=1)
-                h = cast(Tensor, self.up_blocks[index](h, emb))
+                h = self.up_blocks[index](h, emb)
                 attn = self.up_attns[index]
                 if not isinstance(attn, nn.Identity):
-                    h = cast(Tensor, attn(h, context))
+                    h = attn(h, context)
                 index += 1
             sampler = self.upsamplers[level]
             if not isinstance(sampler, nn.Identity):
-                h = cast(Tensor, sampler(self.upsample(h)))
+                h = sampler(self.upsample(h))
 
         return self.conv_out(self.act(self.norm_out(h)))

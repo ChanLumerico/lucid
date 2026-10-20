@@ -22,7 +22,7 @@ that noise negligible and the model learns nothing.
 """
 
 from dataclasses import dataclass
-from typing import cast, final, override
+from typing import final, override
 
 import lucid
 import lucid.nn as nn
@@ -147,7 +147,7 @@ class _ResnetBlock(nn.Module):
         self.norm2 = nn.GroupNorm(groups, out_channels, eps=_VAE_NORM_EPS)
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
         self.act = nn.SiLU()
-        self.shortcut: nn.Module | None = (
+        self.shortcut: nn.Conv2d | None = (
             nn.Conv2d(in_channels, out_channels, kernel_size=1)
             if in_channels != out_channels
             else None
@@ -169,7 +169,7 @@ class _ResnetBlock(nn.Module):
         """
         h = self.conv1(self.act(self.norm1(x)))
         h = self.conv2(self.act(self.norm2(h)))
-        skip = x if self.shortcut is None else cast(Tensor, self.shortcut(x))
+        skip = x if self.shortcut is None else self.shortcut(x)
         return skip + h
 
 
@@ -352,7 +352,7 @@ class AutoencoderKL(nn.Module):
         self.conv_in = nn.Conv2d(
             config.in_channels, widths[0], kernel_size=3, padding=1
         )
-        down: list[nn.Module] = []
+        down: list[_ResnetBlock | _Downsample2d] = []
         current = widths[0]
         for level, width in enumerate(widths):
             for _ in range(config.vae_layers_per_block):
@@ -376,7 +376,7 @@ class AutoencoderKL(nn.Module):
         self.decoder_mid_attn = _SelfAttention2d(current, groups)
         self.decoder_mid_block_2 = _ResnetBlock(current, current, groups)
 
-        up: list[nn.Module] = []
+        up: list[_ResnetBlock | nn.Upsample | nn.Conv2d] = []
         for level, width in enumerate(reversed(widths)):
             for _ in range(config.vae_layers_per_block + 1):
                 up.append(_ResnetBlock(current, width, groups))
@@ -429,7 +429,7 @@ class AutoencoderKL(nn.Module):
         """
         h = self.conv_in(x)
         for block in self.down:
-            h = cast(Tensor, block(h))
+            h = block(h)
         h = self.mid_block_1(h)
         h = self.mid_attn(h)
         h = self.mid_block_2(h)
@@ -477,7 +477,7 @@ class AutoencoderKL(nn.Module):
         h = self.decoder_mid_attn(h)
         h = self.decoder_mid_block_2(h)
         for block in self.up:
-            h = cast(Tensor, block(h))
+            h = block(h)
         return self.decoder_conv_out(self.act(self.decoder_norm_out(h)))
 
     @override

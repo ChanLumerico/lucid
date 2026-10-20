@@ -15,7 +15,7 @@ Architecture:
 """
 
 import math
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -283,7 +283,7 @@ def _build_trunk(cfg: ViTConfig) -> tuple[
     Tensor,  # cls_token parameter
     Tensor,  # pos_embed parameter
     nn.Dropout,
-    nn.ModuleList,  # blocks
+    nn.ModuleList[_ViTBlock],  # blocks
     nn.LayerNorm,  # norm
     int,  # num_patches
 ]:
@@ -447,7 +447,7 @@ class ViT(PretrainedModel, BackboneMixin):
         x = lucid.cat([cls, x], dim=1)  # (B, N+1, dim)
         x = self.pos_drop(x + self.pos_embed)
         for blk in self.blocks:
-            x = cast(Tensor, blk(x))
+            x = blk(x)
         x = self.norm(x)
         return _pool(x, self._classifier)
 
@@ -575,7 +575,7 @@ class ViTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
         # still load key-for-key.
         head_in = config.dim
         if config.representation_size is not None:
-            self.pre_logits: nn.Module = nn.Sequential(
+            self.pre_logits: nn.Sequential | nn.Identity = nn.Sequential(
                 nn.Linear(config.dim, config.representation_size), nn.Tanh()
             )
             head_in = config.representation_size
@@ -613,9 +613,9 @@ class ViTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
         x = lucid.cat([cls, x], dim=1)
         x = self.pos_drop(x + self.pos_embed)
         for blk in self.blocks:
-            x = cast(Tensor, blk(x))
+            x = blk(x)
         x = self.norm(x)
-        feat = cast(Tensor, self.pre_logits(_pool(x, self._classifier)))
+        feat = self.pre_logits(_pool(x, self._classifier))
         logits = self.head(feat)
 
         loss: Tensor | None = None

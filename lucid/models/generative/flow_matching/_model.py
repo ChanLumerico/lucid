@@ -161,7 +161,7 @@ class _ResBlock(nn.Module):
             nn.init.zeros_(self.conv2.bias)
 
         if in_channels != out_channels:
-            self.skip: nn.Module = nn.Conv2d(in_channels, out_channels, 1)
+            self.skip: nn.Conv2d | nn.Identity = nn.Conv2d(in_channels, out_channels, 1)
         else:
             self.skip = nn.Identity()
 
@@ -174,7 +174,7 @@ class _ResBlock(nn.Module):
         h = generative_activation(act, self.norm2(h))
         h = self.dropout(h)
         h = self.conv2(h)
-        return h + cast(Tensor, self.skip(x))
+        return h + self.skip(x)
 
 
 @final
@@ -329,9 +329,9 @@ class _VelocityField(nn.Module):
         size = config.sample_size
         spatial = size[0] if isinstance(size, tuple) else int(size)
 
-        self.down_res: nn.ModuleList = nn.ModuleList()
-        self.down_attn: nn.ModuleList = nn.ModuleList()
-        self.down_sample: nn.ModuleList = nn.ModuleList()
+        self.down_res: nn.ModuleList[_ResBlock] = nn.ModuleList()
+        self.down_attn: nn.ModuleList[_AttentionBlock | nn.Identity] = nn.ModuleList()
+        self.down_sample: nn.ModuleList[_Downsample | nn.Identity] = nn.ModuleList()
         skip_channels: list[int] = [base]
         ch = base
         for level, mult in enumerate(config.channel_mult):
@@ -385,9 +385,9 @@ class _VelocityField(nn.Module):
             groups=config.resnet_groups,
         )
 
-        self.up_res: nn.ModuleList = nn.ModuleList()
-        self.up_attn: nn.ModuleList = nn.ModuleList()
-        self.up_sample: nn.ModuleList = nn.ModuleList()
+        self.up_res: nn.ModuleList[_ResBlock] = nn.ModuleList()
+        self.up_attn: nn.ModuleList[_AttentionBlock | nn.Identity] = nn.ModuleList()
+        self.up_sample: nn.ModuleList[_Upsample | nn.Identity] = nn.ModuleList()
         for level, mult in list(enumerate(config.channel_mult))[::-1]:
             out_ch = base * mult
             for _ in range(config.num_res_blocks + 1):
@@ -463,12 +463,12 @@ class _VelocityField(nn.Module):
         idx = 0
         for level in range(self._levels):
             for _ in range(self._blocks_per_down):
-                h = cast(Tensor, self.down_res[idx](h, t_emb))
-                h = cast(Tensor, self.down_attn[idx](h))
+                h = self.down_res[idx](h, t_emb)
+                h = self.down_attn[idx](h)
                 skips.append(h)
                 idx += 1
             if level != self._levels - 1:
-                h = cast(Tensor, self.down_sample[level](h))
+                h = self.down_sample[level](h)
                 skips.append(h)
 
         h = self.mid_block1(h, t_emb)
@@ -479,11 +479,11 @@ class _VelocityField(nn.Module):
         for level in range(self._levels - 1, -1, -1):
             for _ in range(self._blocks_per_up):
                 h = lucid.cat([h, skips.pop()], dim=1)
-                h = cast(Tensor, self.up_res[idx](h, t_emb))
-                h = cast(Tensor, self.up_attn[idx](h))
+                h = self.up_res[idx](h, t_emb)
+                h = self.up_attn[idx](h)
                 idx += 1
             if level != 0:
-                h = cast(Tensor, self.up_sample[self._levels - 1 - level](h))
+                h = self.up_sample[self._levels - 1 - level](h)
 
         h = generative_activation(self._act_name, self.norm_out(h))
         return self.conv_out(h)

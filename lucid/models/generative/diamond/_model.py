@@ -24,7 +24,7 @@ REINFORCE.  Nothing would be shared by fusing them but a checkpoint.
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, Literal, cast, overload, override
+from typing import ClassVar, Literal, overload, override
 
 import lucid
 import lucid.nn as nn
@@ -286,7 +286,7 @@ class _ResBlocks(nn.Module):
 
     def each(self) -> list[_ResBlock]:
         """The blocks, typed, for a caller that manages skips itself."""
-        return [cast(_ResBlock, b) for b in self.resblocks]
+        return [b for b in self.resblocks]
 
     @override
     def forward(self, x: Tensor, cond: Tensor) -> Tensor:
@@ -418,8 +418,8 @@ class _UNet(nn.Module):
         """Initialise the network. See the class docstring for parameters."""
         super().__init__()
         attn = (0,) * len(channels) if attn is None else attn
-        self.d_blocks = nn.ModuleList()
-        self.downsamples = nn.ModuleList()
+        self.d_blocks: nn.ModuleList[_ResBlocks] = nn.ModuleList()
+        self.downsamples: nn.ModuleList[_Downsample | nn.Identity] = nn.ModuleList()
         width = channels[0]
         for stage, (out_ch, count) in enumerate(zip(channels, layers, strict=True)):
             self.downsamples.append(nn.Identity() if stage == 0 else _Downsample(width))
@@ -455,8 +455,8 @@ class _UNet(nn.Module):
             pushes.extend([out_ch] * count)
             width = out_ch
 
-        self.u_blocks = nn.ModuleList()
-        self.upsamples = nn.ModuleList()
+        self.u_blocks: nn.ModuleList[_ResBlocks] = nn.ModuleList()
+        self.upsamples: nn.ModuleList[_Upsample | nn.Identity] = nn.ModuleList()
         cursor = len(pushes)
         for stage in reversed(range(len(channels))):
             out_ch = channels[stage]
@@ -511,9 +511,9 @@ class _UNet(nn.Module):
         skips: list[Tensor] = [x]
         for stage, blocks in enumerate(self.d_blocks):
             if stage > 0:
-                x = cast(Tensor, self.downsamples[stage](x))
+                x = self.downsamples[stage](x)
                 skips.append(x)
-            for block in cast(_ResBlocks, blocks).each():
+            for block in blocks.each():
                 x = block(x, cond)
                 skips.append(x)
 
@@ -521,8 +521,8 @@ class _UNet(nn.Module):
 
         for index, blocks in enumerate(self.u_blocks):
             if index > 0:
-                x = cast(Tensor, self.upsamples[index](x))
-            for block in cast(_ResBlocks, blocks).each():
+                x = self.upsamples[index](x)
+            for block in blocks.each():
                 x = lucid.cat([x, skips.pop()], dim=1)
                 x = block(x, cond)
         if pad_h or pad_w:
@@ -754,8 +754,8 @@ class _Encoder(nn.Module):
         """Initialise the stack. See the class docstring for parameters."""
         super().__init__()
         self.conv_in = nn.Conv2d(in_channels, channels[0], 3, padding=1)
-        self.blocks = nn.ModuleList()
-        self.downsamples = nn.ModuleList()
+        self.blocks: nn.ModuleList[_ResBlocks] = nn.ModuleList()
+        self.downsamples: nn.ModuleList[_Downsample | nn.Identity] = nn.ModuleList()
         width = channels[0]
         for stage, (out_ch, count) in enumerate(zip(channels, layers, strict=True)):
             self.downsamples.append(nn.Identity() if stage == 0 else _Downsample(width))
@@ -784,8 +784,8 @@ class _Encoder(nn.Module):
         h = self.conv_in(x)
         for stage, blocks in enumerate(self.blocks):
             if 0 < stage < len(self.downsamples):
-                h = cast(Tensor, self.downsamples[stage](h))
-            h = cast(_ResBlocks, blocks)(h, cond)
+                h = self.downsamples[stage](h)
+            h = blocks(h, cond)
         return h
 
 

@@ -26,7 +26,7 @@ still reaches each network only through its own term.
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid
 import lucid.nn as nn
@@ -240,7 +240,7 @@ class _STTransformer(nn.Module):
             )
         x = x + self.spatial_position + self.temporal_position[:, :frames]
         for block in self.blocks:
-            x = cast(Tensor, block(x))
+            x = block(x)
         return self.norm(x)
 
 
@@ -279,6 +279,9 @@ class _Codebook(nn.Module):
     The paper says nothing about any of this; Jafar resets dead codes on
     a schedule.  ``reset_threshold=0`` switches it off.
     """
+
+    usage: Tensor
+    candidates: Tensor
 
     def __init__(
         self,
@@ -356,7 +359,7 @@ class _Codebook(nn.Module):
             return
         fair = 1.0 / float(self.num_codes)
         with lucid.no_grad():
-            usage = cast(Tensor, self.usage)
+            usage = self.usage
             dead = (usage < self.reset_threshold * fair).to(usage.dtype)
             weight = self.quantizer.weight
             # Writing a parameter in place gives it a new buffer and drops
@@ -366,7 +369,7 @@ class _Codebook(nn.Module):
             # show for it, so the gradient is put back.
             pending = weight.grad
             revived = dead.unsqueeze(-1)
-            candidates = cast(Tensor, self.candidates)
+            candidates = self.candidates
             weight[:] = weight * (1.0 - revived) + candidates * revived
             if pending is not None:
                 weight.grad = pending
@@ -390,9 +393,9 @@ class _Codebook(nn.Module):
             0, int(flat.shape[0]), (self.num_codes,), device=flat.device
         )
         with lucid.no_grad():
-            usage = cast(Tensor, self.usage)
+            usage = self.usage
             usage[:] = _USAGE_DECAY * usage + (1.0 - _USAGE_DECAY) * share
-            cast(Tensor, self.candidates)[:] = flat[picks]
+            self.candidates[:] = flat[picks]
 
 
 # ── the three networks ───────────────────────────────────────────────────────

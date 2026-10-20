@@ -13,10 +13,9 @@ Sampling uses the per-σ step-size rule from §4.3:
 """
 
 import math
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid
-import lucid.nn as nn
 from lucid._tensor.tensor import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._tasks import ImageGenerationModel
@@ -154,7 +153,7 @@ class NCSNModel(PretrainedModel):
         # loads a released v1/v2 checkpoint — the weights are not published
         # in a form this can convert — so the choice is about inductive
         # bias, not about weight compatibility.
-        self.unet: nn.Module
+        self.unet: RefineNetScoreNet | _DDPMUNet
         if config.backbone == "refinenet":
             self.unet = RefineNetScoreNet(
                 config.in_channels,
@@ -193,7 +192,7 @@ class NCSNModel(PretrainedModel):
             :class:`DiffusionModelOutput` whose ``sample`` field is the raw
             score prediction (same shape as ``sample``).
         """
-        raw = cast(Tensor, self.unet(sample, sigma_idx))
+        raw = self.unet(sample, sigma_idx)
         if not self._scale_by_sigma:
             return DiffusionModelOutput(sample=raw)
 

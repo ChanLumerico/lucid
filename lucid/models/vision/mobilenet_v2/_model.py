@@ -8,7 +8,7 @@ depthwise conv, then project back to a smaller channel count with a linear
 and input channels match output channels.
 """
 
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -352,7 +352,7 @@ class MobileNetV2ForImageClassification(
         x = self.features(x)
         x = self.avgpool(x)
         x = self.drop(x.flatten(1))
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

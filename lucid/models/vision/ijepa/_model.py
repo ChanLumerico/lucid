@@ -20,7 +20,7 @@ model by prefix alone.
 import math
 import random
 from dataclasses import dataclass
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid
 import lucid.nn as nn
@@ -103,6 +103,8 @@ class _Encoder(nn.Module):
     the target-encoder for evaluation and average pool its output"*.
     """
 
+    pos_embed: Tensor
+
     def __init__(self, config: IJEPAConfig) -> None:
         super().__init__()
         hidden = int(config.dim * config.mlp_ratio)
@@ -114,7 +116,7 @@ class _Encoder(nn.Module):
             _Block(config.dim, config.num_heads, hidden, config.layer_norm_eps)
             for _ in range(config.depth)
         ]
-        self.blocks = nn.ModuleList([*blocks])
+        self.blocks: nn.ModuleList[_Block] = nn.ModuleList([*blocks])
         self.norm = nn.LayerNorm(config.dim, eps=config.layer_norm_eps)
 
         # The released code — not the paper — initialises the tower at 0.02
@@ -132,11 +134,11 @@ class _Encoder(nn.Module):
         The positions are added *before* the tokens are selected, so a
         kept patch carries where it came from into the blocks.
         """
-        tokens = self.patch_embed(x) + cast(Tensor, self.pos_embed)
+        tokens = self.patch_embed(x) + self.pos_embed
         if indices is not None:
             tokens = _gather_tokens(tokens, indices)
         for block in self.blocks:
-            tokens = cast(Tensor, block(tokens))
+            tokens = block(tokens)
         return self.norm(tokens)
 
 
@@ -147,6 +149,8 @@ class _Predictor(nn.Module):
     distinct only by the fixed positional embedding added to it — so the
     predictor's whole input about a target is *where* it is.
     """
+
+    predictor_pos_embed: Tensor
 
     def __init__(self, config: IJEPAConfig) -> None:
         super().__init__()
@@ -161,7 +165,7 @@ class _Predictor(nn.Module):
             _Block(width, heads, hidden, config.layer_norm_eps)
             for _ in range(config.predictor_depth)
         ]
-        self.predictor_blocks = nn.ModuleList([*blocks])
+        self.predictor_blocks: nn.ModuleList[_Block] = nn.ModuleList([*blocks])
         self.predictor_norm = nn.LayerNorm(width, eps=config.layer_norm_eps)
         self.predictor_proj = nn.Linear(width, config.dim)
 
@@ -177,7 +181,7 @@ class _Predictor(nn.Module):
         self, context: Tensor, context_indices: Tensor, target_indices: Tensor
     ) -> Tensor:
         """Predict the target encoder's output at ``target_indices``."""
-        positions = cast(Tensor, self.predictor_pos_embed)
+        positions = self.predictor_pos_embed
         tokens = self.predictor_embed(context)
         tokens = tokens + _gather_tokens(
             positions
@@ -193,7 +197,7 @@ class _Predictor(nn.Module):
 
         batch, count = int(target_indices.shape[0]), int(target_indices.shape[1])
         width = int(tokens.shape[2])
-        queries = cast(Tensor, self.mask_token) + lucid.zeros(
+        queries = self.mask_token + lucid.zeros(
             batch, count, width, dtype=tokens.dtype, device=tokens.device
         )
         queries = queries + _gather_tokens(
@@ -204,7 +208,7 @@ class _Predictor(nn.Module):
 
         hidden = lucid.cat([tokens, queries], dim=1)
         for block in self.predictor_blocks:
-            hidden = cast(Tensor, block(hidden))
+            hidden = block(hidden)
         hidden = self.predictor_norm(hidden)
         return self.predictor_proj(hidden[:, -count:])
 

@@ -29,7 +29,7 @@ State-dict key structure mirrors timm densenet121:
     classifier.weight/bias
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -104,6 +104,7 @@ class _DenseBlock(nn.Module):
         dropout_rate: float,
     ) -> None:
         super().__init__()
+        self._layers: list[_DenseLayer] = []
         for i in range(num_layers):
             layer = _DenseLayer(
                 num_input_features + i * growth_rate,
@@ -112,11 +113,12 @@ class _DenseBlock(nn.Module):
                 dropout_rate,
             )
             self.add_module(f"denselayer{i + 1}", layer)
+            self._layers.append(layer)
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        for module in self.children():
-            x = cast(Tensor, module(x))
+        for module in self._layers:
+            x = module(x)
         return x
 
 
@@ -177,6 +179,7 @@ class _Features(nn.Module):
         self.pool0 = nn.MaxPool2d(3, stride=2, padding=1)
 
         # --- dense blocks + transitions ---
+        self._stages: list[_DenseBlock | _Transition] = []
         num_features = cfg.num_init_features
         num_blocks = len(cfg.block_config)
         for idx, num_layers in enumerate(cfg.block_config):
@@ -184,12 +187,14 @@ class _Features(nn.Module):
                 num_layers, num_features, cfg.growth_rate, cfg.bn_size, cfg.dropout_rate
             )
             self.add_module(f"denseblock{idx + 1}", block)
+            self._stages.append(block)
             num_features += num_layers * cfg.growth_rate
 
             if idx < num_blocks - 1:
                 out_features = num_features // 2
                 transition = _Transition(num_features, out_features)
                 self.add_module(f"transition{idx + 1}", transition)
+                self._stages.append(transition)
                 num_features = out_features
 
         # --- final BN ---
@@ -202,14 +207,10 @@ class _Features(nn.Module):
 
     @override
     def forward(self, x: Tensor) -> Tensor:
-        x = cast(
-            Tensor,
-            self.pool0(self.relu0(self.norm0(self.conv0(x)))),
-        )
+        x = self.pool0(self.relu0(self.norm0(self.conv0(x))))
         # iterate dense blocks and transitions in registration order
-        for name, module in self.named_children():
-            if name.startswith(("denseblock", "transition")):
-                x = cast(Tensor, module(x))
+        for module in self._stages:
+            x = module(x)
         # final BN + ReLU (caller applies ReLU after pool)
         x = self.norm5(x)
         return x
@@ -450,7 +451,7 @@ class DenseNetForImageClassification(ImageClassificationModel, ClassificationHea
         x = F.relu(self.features(x))
         x = self.avgpool(x)
         x = x.flatten(1)
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

@@ -23,7 +23,7 @@ Each SwinBlock:
   Alternating blocks use cyclic shift + mask to implement shifted windows.
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -134,6 +134,8 @@ def _window_reverse(windows: Tensor, ws: int, nH: int, nW: int) -> Tensor:
 class _WindowAttention(nn.Module):
     """Local window attention with learnable relative position bias."""
 
+    rel_pos_idx: Tensor
+
     def __init__(
         self,
         dim: int,
@@ -195,7 +197,7 @@ class _WindowAttention(nn.Module):
         # table's, so the same learned parameters still apply.
         eff = int(round(float(N) ** 0.5))
         if eff == self.ws:
-            rel_pos_idx = cast(Tensor, self.rel_pos_idx)
+            rel_pos_idx = self.rel_pos_idx
         else:
             c1d = lucid.arange(eff).to(lucid.int64)
             gy_e, gx_e = lucid.meshgrid(c1d, c1d, indexing="ij")
@@ -379,7 +381,7 @@ class _SwinStage(nn.Module):
             raise ValueError(
                 f"drop_path_rates length must equal depth ({len(drop_path_rates)} vs {depth})"
             )
-        self.blocks = nn.ModuleList(
+        self.blocks: nn.ModuleList[_SwinBlock] = nn.ModuleList(
             [
                 _SwinBlock(
                     dim,
@@ -394,14 +396,14 @@ class _SwinStage(nn.Module):
                 for i in range(depth)
             ]
         )
-        self.downsample: nn.Module | None = _PatchMerge(dim) if downsample else None
+        self.downsample: _PatchMerge | None = _PatchMerge(dim) if downsample else None
 
     @override
     def forward(self, x: Tensor) -> Tensor:
         for blk in self.blocks:
-            x = cast(Tensor, blk(x))
+            x = blk(x)
         if self.downsample is not None:
-            x = cast(Tensor, self.downsample(x))
+            x = self.downsample(x)
         return x
 
 
@@ -412,12 +414,14 @@ class _SwinStage(nn.Module):
 
 def _build_swin(
     cfg: SwinConfig,
-) -> tuple[_PatchEmbed, nn.ModuleList, nn.LayerNorm, list[FeatureInfo], int]:
+) -> tuple[
+    _PatchEmbed, nn.ModuleList[_SwinStage], nn.LayerNorm, list[FeatureInfo], int
+]:
     patch_embed = _PatchEmbed(
         cfg.in_channels, cfg.patch_size, cfg.embed_dim, cfg.dropout
     )
 
-    stages: list[nn.Module] = []
+    stages: list[_SwinStage] = []
     dim = cfg.embed_dim
     fi: list[FeatureInfo] = []
     reduction = cfg.patch_size
@@ -576,7 +580,7 @@ class SwinTransformer(PretrainedModel, BackboneMixin):
     def forward_features(self, x: Tensor) -> Tensor:
         x = self.patch_embed(x)  # (B, H/p, W/p, C)
         for stage in self.stages:
-            x = cast(Tensor, stage(x))
+            x = stage(x)
         x = self.norm(x)  # (B, H', W', C)
         # Global average pool: permute to (B, C, H', W') → avgpool → flatten
         B, H, W, C = x.shape
@@ -680,12 +684,12 @@ class SwinTransformerForImageClassification(
     ) -> ImageClassificationOutput:
         x = self.patch_embed(x)
         for stage in self.stages:
-            x = cast(Tensor, stage(x))
+            x = stage(x)
         x = self.norm(x)
         B, H, W, C = x.shape
         x = x.permute(0, 3, 1, 2)
         x = self.avgpool(x).flatten(1)
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:

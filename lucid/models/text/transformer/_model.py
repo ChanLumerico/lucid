@@ -298,14 +298,14 @@ class TransformerModel(PretrainedModel):
         """Target-side embedding — used to tie an LM head against."""
         return self.tgt_tok_emb
 
-    def _embed(self, ids: Tensor, table: nn.Module, pos_offset: int = 0) -> Tensor:
+    def _embed(self, ids: Tensor, table: nn.Embedding, pos_offset: int = 0) -> Tensor:
         """Token-embed + scale-by-√d + sin/cos PE + dropout.
 
         ``pos_offset`` shifts the positional-encoding slice so cached decode
         steps embed the new tokens at their true absolute positions.
         """
         T = int(ids.shape[1])
-        emb = cast(Tensor, table(ids)) * math.sqrt(self._d_model)
+        emb = table(ids) * math.sqrt(self._d_model)
         full_pe = self.positional_encoding()
         if pos_offset + T > self._max_pos:
             raise ValueError(

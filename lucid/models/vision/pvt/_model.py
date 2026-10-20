@@ -29,7 +29,7 @@ timm key layout (pvt_v2_b1):
   head.weight  head.bias
 """
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -153,7 +153,9 @@ class _SRAttention(nn.Module):
             # Linear SRA (§3.3/§3.5): pool to a fixed P x P grid, then a 1x1
             # projection + norm + GELU.  Independent of ``sr_ratio``, which
             # is why B2-Li uses P_i = 7 at every stage instead of R_i.
-            self.pool: nn.Module | None = nn.AdaptiveAvgPool2d((pool_size, pool_size))
+            self.pool: nn.AdaptiveAvgPool2d | None = nn.AdaptiveAvgPool2d(
+                (pool_size, pool_size)
+            )
             self.sr = nn.Conv2d(dim, dim, 1, stride=1)
             self.norm = nn.LayerNorm(dim)
         elif sr_ratio > 1:
@@ -176,7 +178,7 @@ class _SRAttention(nn.Module):
         if self.sr is not None:
             x_2d = x.permute(0, 2, 1).reshape(B, C, H, W)
             if self.pool is not None:
-                x_2d = cast(Tensor, self.pool(x_2d))  # (B, C, P, P)
+                x_2d = self.pool(x_2d)  # (B, C, P, P)
             x_2d = self.sr(x_2d)  # (B, C, H', W')
             x_2d = x_2d.flatten(2).permute(0, 2, 1)  # (B, H'*W', C)
             x_2d = self.norm(x_2d)
@@ -266,7 +268,7 @@ class _PVTStage(nn.Module):
         # Stages 1-3: patch_embed stored as downsample (timm key layout).
         if not is_first:
             self.downsample = _OverlapPatchEmbed(in_ch, embed_dim, patch_size, stride)
-        self.blocks = nn.ModuleList(
+        self.blocks: nn.ModuleList[_PVTBlock] = nn.ModuleList(
             [
                 _PVTBlock(
                     embed_dim,
@@ -285,7 +287,7 @@ class _PVTStage(nn.Module):
     def forward_tokens(self, tokens: Tensor, H: int, W: int) -> tuple[Tensor, int, int]:
         """Run blocks + norm on pre-embedded tokens (B, N, C)."""
         for blk in self.blocks:
-            tokens = cast(Tensor, blk(tokens, H, W))
+            tokens = blk(tokens, H, W)
         tokens = self.norm(tokens)
         B, _, C = tokens.shape
         x_out = tokens.permute(0, 2, 1).reshape(B, C, H, W)
@@ -316,7 +318,7 @@ def _build_pvt(
     cfg: PVTConfig,
 ) -> tuple[
     _OverlapPatchEmbed,  # top-level patch_embed (stage 0)
-    nn.ModuleList,  # stages (0-indexed)
+    nn.ModuleList[_PVTStage],  # stages (0-indexed)
     list[FeatureInfo],
     int,  # final embed dim
 ]:
@@ -327,7 +329,7 @@ def _build_pvt(
       stages.0     — blocks + norm only (no downsample submodule)
       stages.1-3   — downsample + blocks + norm
     """
-    stages: list[nn.Module] = []
+    stages: list[_PVTStage] = []
 
     # Linear stochastic-depth schedule over the global block index.
     total = sum(cfg.depths)
@@ -480,10 +482,10 @@ class PVT(PretrainedModel, BackboneMixin):
     def forward_features(self, x: Tensor) -> Tensor:
         # Stage 0: use top-level patch_embed then stage blocks
         tokens, H, W = self.patch_embed(x)
-        x_spatial, H, W = cast(_PVTStage, self.stages[0]).forward_tokens(tokens, H, W)
+        x_spatial, H, W = self.stages[0].forward_tokens(tokens, H, W)
         # Stages 1-3: each stage calls its own downsample internally
         for stage in list(self.stages)[1:]:
-            x_spatial, H, W = cast(tuple[Tensor, int, int], stage(x_spatial))
+            x_spatial, H, W = stage(x_spatial)
         # x_spatial: (B, C, H, W) — global average pool to (B, C)
         return x_spatial.flatten(2).mean(dim=2)
 
@@ -571,13 +573,13 @@ class PVTForImageClassification(ImageClassificationModel, ClassificationHeadMixi
     ) -> ImageClassificationOutput:
         # Stage 0: use top-level patch_embed then stage blocks
         tokens, H, W = self.patch_embed(x)
-        x_spatial, H, W = cast(_PVTStage, self.stages[0]).forward_tokens(tokens, H, W)
+        x_spatial, H, W = self.stages[0].forward_tokens(tokens, H, W)
         # Stages 1-3
         for stage in list(self.stages)[1:]:
-            x_spatial, H, W = cast(tuple[Tensor, int, int], stage(x_spatial))
+            x_spatial, H, W = stage(x_spatial)
         # x_spatial: (B, C, H, W) — mean pool to (B, C)
         x_vec = x_spatial.flatten(2).mean(dim=2)
-        logits = cast(Tensor, self.classifier(x_vec))
+        logits = self.classifier(x_vec)
 
         loss: Tensor | None = None
         if labels is not None:

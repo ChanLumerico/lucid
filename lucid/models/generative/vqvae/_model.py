@@ -32,7 +32,7 @@ own block rather than sharing one.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid
 import lucid.nn as nn
@@ -166,7 +166,7 @@ class _VQVAEEncoder(nn.Module):
         super().__init__()
         self._act_name = config.act_fn
 
-        blocks: list[nn.Module] = []
+        blocks: list[nn.Conv2d] = []
         in_ch = config.in_channels
         for _ in range(config.num_downsample_layers):
             blocks.append(
@@ -196,7 +196,7 @@ class _VQVAEEncoder(nn.Module):
         h = x
         last = len(self.down_blocks) - 1
         for i, blk in enumerate(self.down_blocks):
-            h = cast(Tensor, blk(h))
+            h = blk(h)
             # Not after the last one.  What follows is either a
             # pre-activation residual block or the trailing activation
             # below, and both open with an activation of their own — so
@@ -210,7 +210,7 @@ class _VQVAEEncoder(nn.Module):
             if i != last:
                 h = generative_activation(self._act_name, h)
         for res in self.residuals:
-            h = cast(Tensor, res(h))
+            h = res(h)
         h = generative_activation(self._act_name, h)
         return self.proj(h)
 
@@ -237,7 +237,7 @@ class _VQVAEDecoder(nn.Module):
             ]
         )
 
-        ups: list[nn.Module] = []
+        ups: list[nn.ConvTranspose2d] = []
         n_up = config.num_downsample_layers
         for i in range(n_up):
             last = i == n_up - 1
@@ -257,10 +257,10 @@ class _VQVAEDecoder(nn.Module):
     def forward(self, z_q: Tensor) -> Tensor:
         h = self.lift(z_q)
         for res in self.residuals:
-            h = cast(Tensor, res(h))
+            h = res(h)
         h = generative_activation(self._act_name, h)
         for i, blk in enumerate(self.up_blocks):
-            h = cast(Tensor, blk(h))
+            h = blk(h)
             # No activation after the final transposed conv: its output is
             # the reconstruction (or the Bernoulli logits) itself.
             if i < self._n_up - 1:

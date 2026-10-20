@@ -1,6 +1,6 @@
 """ResNet backbone and classification head."""
 
-from typing import ClassVar, cast, final, override
+from typing import ClassVar, final, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
@@ -78,7 +78,7 @@ class _BasicBlock(nn.Module):
         in_channels: int,
         out_channels: int,
         stride: int = 1,
-        downsample: nn.Module | None = None,
+        downsample: nn.Sequential | None = None,
     ) -> None:
         super().__init__()
         self.conv1 = nn.Conv2d(
@@ -99,7 +99,7 @@ class _BasicBlock(nn.Module):
         out = self.bn2(self.conv2(out))
 
         if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
+            identity = self.downsample(x)
 
         out = out + identity
         return self.relu(out)
@@ -172,7 +172,7 @@ class _Bottleneck(nn.Module):
         in_channels: int,
         out_channels: int,
         stride: int = 1,
-        downsample: nn.Module | None = None,
+        downsample: nn.Sequential | None = None,
         width_mult: int = 1,
     ) -> None:
         super().__init__()
@@ -199,7 +199,7 @@ class _Bottleneck(nn.Module):
         out = self.bn3(self.conv3(out))
 
         if self.downsample is not None:
-            identity = cast(Tensor, self.downsample(x))
+            identity = self.downsample(x)
 
         out = out + identity
         return self.relu(out)
@@ -222,7 +222,7 @@ def _make_layer(
     expansion = block_cls.expansion
     final_channels = out_channels * expansion
 
-    downsample: nn.Module | None = None
+    downsample: nn.Sequential | None = None
     if stride != 1 or in_channels != final_channels:
         downsample = nn.Sequential(
             nn.Conv2d(in_channels, final_channels, 1, stride=stride, bias=False),
@@ -230,7 +230,7 @@ def _make_layer(
         )
 
     def _make_block(
-        inc: int, outc: int, s: int = 1, ds: nn.Module | None = None
+        inc: int, outc: int, s: int = 1, ds: nn.Sequential | None = None
     ) -> nn.Module:
         if block_cls is _Bottleneck:
             return _Bottleneck(
@@ -430,7 +430,7 @@ class ResNet(PretrainedModel, BackboneMixin):
     @override
     def forward_features(self, x: Tensor) -> Tensor:
         x = self.stem(x)
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
@@ -560,14 +560,14 @@ class ResNetForImageClassification(ImageClassificationModel, ClassificationHeadM
         labels: Tensor | None = None,
     ) -> ImageClassificationOutput:
         x = self.stem(x)
-        x = cast(Tensor, self.maxpool(x))
+        x = self.maxpool(x)
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
         x = self.avgpool(x)
         x = x.flatten(1)
-        logits = cast(Tensor, self.classifier(x))
+        logits = self.classifier(x)
 
         loss: Tensor | None = None
         if labels is not None:
