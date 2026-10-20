@@ -172,6 +172,27 @@ def test_large_metal_remainder_is_exact() -> None:
     np.testing.assert_array_equal((x // 3).numpy(), want // 3)
 
 
+def test_metal_broadcast_and_wide_int64_divmod_are_exact(ref: ModuleType) -> None:
+    """Contiguous, scalar-broadcast, and 2-D strided-broadcast paths (LCD-448)."""
+    if not metal_available():
+        pytest.skip("Metal unavailable")
+    nums = [-(2**63), -(2**62) - 3, -(2**40) - 7, 2**40 + 7, 2**62 + 3, 2**63 - 1]
+    dens = [-7, 3, -(2**33) - 5, 2**33 + 5]
+    a = lucid.tensor([nums], dtype=lucid.int64, device="metal")
+    b = lucid.tensor([[d] for d in dens], dtype=lucid.int64, device="metal")
+    for op in ("floordiv", "mod", "fmod", "div_trunc"):
+        got = OPS[op](a, b).tolist()
+        want = [[_int_oracle(_KIND[op], x, y, 64) for x in nums] for y in dens]
+        assert got == want
+
+    fa = lucid.tensor([[0.0, -0.0, 5.0, -5.0, _INF, -_INF]], dtype=lucid.float32, device="metal")
+    fb = lucid.tensor([[1.0], [-1.0], [_INF], [-_INF]], dtype=lucid.float32, device="metal")
+    rfa = ref.tensor([[0.0, -0.0, 5.0, -5.0, _INF, -_INF]], dtype=ref.float32)
+    rfb = ref.tensor([[1.0], [-1.0], [_INF], [-_INF]], dtype=ref.float32)
+    for op in ("floordiv", "mod", "fmod"):
+        _assert_same_floats(OPS[op](fa, fb), _ref_op(ref, op)(rfa, rfb))
+
+
 # ── floats: the reference is the oracle ──────────────────────────────────────
 
 _INF, _NAN = math.inf, math.nan

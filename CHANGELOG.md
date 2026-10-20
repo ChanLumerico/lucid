@@ -170,6 +170,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - O(k log N) binary search for searchsorted and bucketize (LCD-218)
 
+- fuse exact Metal divmod in custom kernel (LCD-448)
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats
