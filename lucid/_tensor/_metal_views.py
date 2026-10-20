@@ -397,9 +397,11 @@ _FILLS = frozenset({"fill_", "zero_"})
 
 def _check(view: Tensor, *, allow_overlap: bool = False) -> None:
     """Refuse, before anything is written, what the write-back could not honour."""
-    # As the reference refuses: a write into the written tensor's own
-    # elements that share a place, unless it leaves one value in all of them.
-    # A view of such a tensor that shares none may be written.
+    # Refuse any value-dependent write into a view whose own elements share a
+    # storage position (stride-0 expand as well as overlapping unfold/as_strided
+    # windows — deliberate departure from the reference's stride-0-only check,
+    # LCD-537), unless it leaves one value in all of them (fill_ / zero_).  A
+    # view of such a tensor that shares none may be written.
     if not allow_overlap and _self_overlaps(view):
         raise RuntimeError(
             "an in-place write into a tensor whose elements overlap (an expanded "

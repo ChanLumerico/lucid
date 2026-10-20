@@ -1,11 +1,15 @@
 """``fill_`` and ``zero_`` write a view whose elements overlap; other writes do not.
 
 Two elements of an expanded view, of unfold windows that overlap, or of an
-``as_strided`` view that revisits a position are one byte.  A write whose
-value depends on the element has no single value to leave there, so the
-reference refuses it and so does Lucid.  A fill leaves the same value in
-every element, so the elements that share a byte agree; the reference lets it
-through, and Lucid used to refuse it with the rest on both devices (LCD-28).
+``as_strided`` view that revisits a position are one byte.  Because Lucid
+computes in-place results out of place and scatters them back into the target
+view on both CPU and Metal, a value-dependent write has no single value to
+leave at a shared position and is refused for every self-overlapping view
+(deliberately stricter than the reference, which refuses only stride-0 overlap
+and sequentially compounds overlapping ``unfold`` / ``as_strided`` elements in
+storage order — LCD-537).  A fill leaves the same value in every element, so
+the elements that share a byte agree; the reference lets it through, and Lucid
+does too on both devices (LCD-28).
 """
 
 from collections.abc import Callable
@@ -121,3 +125,37 @@ def test_the_fill_matches_the_reference(view: str, fill: str, ref: ModuleType) -
     r = ref.tensor(values)
     write(make(r))
     assert base.tolist() == r.tolist()
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("device", _devices())
+def test_overlapping_unfold_and_as_strided_write_refusal_is_a_documented_departure(
+    device: str, ref: ModuleType
+) -> None:
+    """Pin the LCD-537 contract: Lucid refuses all self-overlapping value writes.
+
+    The reference refuses stride-0 ``expand`` writes, but allows overlapping
+    ``unfold`` and ``as_strided`` writes by compounding elements sequentially in
+    storage order.  Lucid refuses all three on both CPU and Metal and leaves the
+    base tensor unmodified.
+    """
+    r_exp = ref.arange(3.0).reshape(1, 3).expand(2, 3)
+    with pytest.raises(RuntimeError):
+        r_exp.add_(100.0)
+    l_exp_base = lucid.arange(3.0, device=device)
+    with pytest.raises(RuntimeError, match="overlap"):
+        l_exp_base.reshape(1, 3).expand(2, 3).add_(100.0)
+    assert l_exp_base.to("cpu").tolist() == [0.0, 1.0, 2.0]
+
+    r_unf = ref.arange(6.0)
+    r_unf.unfold(0, 2, 1).add_(100.0)
+    assert r_unf.tolist() == [100.0, 201.0, 202.0, 203.0, 204.0, 105.0]
+
+    for make in (
+        lambda b: b.unfold(0, 2, 1),
+        lambda b: b.as_strided((5, 2), (1, 1)),
+    ):
+        base = lucid.arange(6.0, device=device)
+        with pytest.raises(RuntimeError, match="overlap"):
+            make(base).add_(100.0)
+        assert base.to("cpu").tolist() == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]

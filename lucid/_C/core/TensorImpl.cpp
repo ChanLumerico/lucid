@@ -333,10 +333,15 @@ void note_inplace_write(TensorImpl& dst, const TensorImpl& src) {
         trc->on_inplace_write(d, from);
 }
 
-// Two of the target's elements are one byte: a write has no single value to
-// leave there, so the reference refuses it.  ``fill_`` is the exception, as
-// it is the reference's (``zero_`` is ``fill_(0)`` on this side): it leaves
-// one value in every element, so the elements that share a byte agree.
+// Two of the target's elements are one byte: a value-dependent write has no
+// single value to leave there.  The reference refuses only stride-0 internal
+// overlap (expanded views) and lets overlapping unfold/as_strided views
+// sequentially compound in storage order; Lucid computes in-place results out
+// of place and scatters them back, so it deliberately refuses any view whose
+// own elements overlap via strided::overlaps_itself (LCD-537).  ``fill_`` is
+// the exception, as in the reference (``zero_`` is ``fill_(0)`` on this side):
+// it leaves one value in every element, so the elements that share a byte
+// agree.
 void refuse_ambiguous_write(const TensorImpl& t, const char* name) {
     if (std::strcmp(name, "fill_") == 0 || t.is_contiguous() ||
         !strided::overlaps_itself(t.shape(), t.stride()))
