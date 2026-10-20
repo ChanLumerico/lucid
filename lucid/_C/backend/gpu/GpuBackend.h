@@ -6157,6 +6157,14 @@ private:
         return ((n - cycles) % 2 == 0) ? 1.0f : -1.0f;
     }
 
+    static ::mlx::core::array widen_gpu(const Storage& s) {
+        return widen_half(*std::get<GpuStorage>(s).arr);
+    }
+
+    static Storage wrap_narrow(const ::mlx::core::array& a, Dtype dt) {
+        return Storage{gpu::wrap_mlx_array(narrow_to(a, gpu::to_mlx_dtype(dt)), dt)};
+    }
+
     std::vector<Storage> batch_norm_eval_forward(const Storage& x,
                                                  const Storage& mean,
                                                  const Storage& var,
@@ -6167,26 +6175,20 @@ private:
                                                  int,
                                                  double eps,
                                                  Dtype dt) override {
-        const auto& gx = std::get<GpuStorage>(x);
-        const auto& gm = std::get<GpuStorage>(mean);
-        const auto& gv = std::get<GpuStorage>(var);
-        const auto& gg = std::get<GpuStorage>(gamma);
-        const auto& gb = std::get<GpuStorage>(beta);
-        const auto mlx_dt = gpu::to_mlx_dtype(dt);
-        auto eps_arr = ::mlx::core::astype(::mlx::core::array(static_cast<float>(eps)), mlx_dt);
-        auto rstd = ::mlx::core::rsqrt(::mlx::core::add(*gv.arr, eps_arr));
+        // Widen 16-bit floats to float32 at the door and round once on the way
+        // out, matching the CPU eval kernel (LCD-487 / LCD-516).
+        const auto xw = widen_gpu(x), vw = widen_gpu(var);
+        auto rstd = ::mlx::core::rsqrt(::mlx::core::add(vw, gpu::mlx_scalar(eps, xw.dtype())));
         ::mlx::core::Shape b_shape(x_shape.size(), 1);
         b_shape[1] = C;
-        auto m_b = ::mlx::core::reshape(*gm.arr, b_shape);
+        auto m_b = ::mlx::core::reshape(widen_gpu(mean), b_shape);
         auto r_b = ::mlx::core::reshape(rstd, b_shape);
-        auto g_b = ::mlx::core::reshape(*gg.arr, b_shape);
-        auto bb_b = ::mlx::core::reshape(*gb.arr, b_shape);
+        auto g_b = ::mlx::core::reshape(widen_gpu(gamma), b_shape);
+        auto bb_b = ::mlx::core::reshape(widen_gpu(beta), b_shape);
         auto y = ::mlx::core::add(
-            ::mlx::core::multiply(g_b,
-                                  ::mlx::core::multiply(::mlx::core::subtract(*gx.arr, m_b), r_b)),
+            ::mlx::core::multiply(g_b, ::mlx::core::multiply(::mlx::core::subtract(xw, m_b), r_b)),
             bb_b);
-        return {Storage{gpu::wrap_mlx_array(std::move(y), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(rstd), dt)}};
+        return {wrap_narrow(y, dt), wrap_narrow(rstd, dt)};
     }
 
     std::vector<Storage> batch_norm_eval_backward(const Storage& x,
@@ -6198,42 +6200,30 @@ private:
                                                   int C,
                                                   int,
                                                   Dtype dt) override {
-        const auto& gx = std::get<GpuStorage>(x);
-        const auto& gm = std::get<GpuStorage>(mean);
-        const auto& gg = std::get<GpuStorage>(gamma);
-        const auto& rs = std::get<GpuStorage>(rstd);
-        const auto& go = std::get<GpuStorage>(grad_out);
-        const auto mlx_dt = gpu::to_mlx_dtype(dt);
+        const auto xw = widen_gpu(x), mw = widen_gpu(mean), gw = widen_gpu(gamma);
+        const auto rw = widen_gpu(rstd), gow = widen_gpu(grad_out);
         ::mlx::core::Shape b_shape(x_shape.size(), 1);
         b_shape[1] = C;
-        auto m_b = ::mlx::core::reshape(*gm.arr, b_shape);
-        auto r_b = ::mlx::core::reshape(*rs.arr, b_shape);
-        auto g_b = ::mlx::core::reshape(*gg.arr, b_shape);
-        auto x_minus_m = ::mlx::core::subtract(*gx.arr, m_b);
-        auto dx = ::mlx::core::multiply(::mlx::core::multiply(g_b, r_b), *go.arr);
+        auto m_b = ::mlx::core::reshape(mw, b_shape);
+        auto r_b = ::mlx::core::reshape(rw, b_shape);
+        auto g_b = ::mlx::core::reshape(gw, b_shape);
+        auto x_minus_m = ::mlx::core::subtract(xw, m_b);
+        auto dx = ::mlx::core::multiply(::mlx::core::multiply(g_b, r_b), gow);
         std::vector<int> reduce_axes;
         for (std::size_t i = 0; i < x_shape.size(); ++i)
             if (i != 1)
                 reduce_axes.push_back(static_cast<int>(i));
-        // Both sums accumulate in float32 for a half gradient (see
-        // ``widen_half``) and come back in its dtype.
-        auto sum_g = sum_widened(*go.arr, reduce_axes, false);
-        auto sum_xm_g =
-            narrow_half(::mlx::core::sum(product_widened(x_minus_m, *go.arr), reduce_axes, false),
-                        go.arr->dtype());
-        auto db = sum_g;
-        auto dg = ::mlx::core::multiply(sum_xm_g, *rs.arr);
-        auto dm = ::mlx::core::negative(
-            ::mlx::core::multiply(*gg.arr, ::mlx::core::multiply(*rs.arr, sum_g)));
-        auto half = ::mlx::core::astype(::mlx::core::array(-0.5f), mlx_dt);
-        auto r3 = ::mlx::core::multiply(*rs.arr, ::mlx::core::multiply(*rs.arr, *rs.arr));
+        auto sum_g = ::mlx::core::sum(gow, reduce_axes, false);
+        auto sum_xm_g = ::mlx::core::sum(::mlx::core::multiply(x_minus_m, gow), reduce_axes, false);
+        auto dg = ::mlx::core::multiply(sum_xm_g, rw);
+        auto dm =
+            ::mlx::core::negative(::mlx::core::multiply(gw, ::mlx::core::multiply(rw, sum_g)));
+        auto half = gpu::mlx_scalar(-0.5, xw.dtype());
+        auto r3 = ::mlx::core::multiply(rw, ::mlx::core::multiply(rw, rw));
         auto dv = ::mlx::core::multiply(
-            half, ::mlx::core::multiply(*gg.arr, ::mlx::core::multiply(r3, sum_xm_g)));
-        return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(dm), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(dv), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(dg), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(db), dt)}};
+            half, ::mlx::core::multiply(gw, ::mlx::core::multiply(r3, sum_xm_g)));
+        return {wrap_narrow(dx, dt), wrap_narrow(dm, dt), wrap_narrow(dv, dt), wrap_narrow(dg, dt),
+                wrap_narrow(sum_g, dt)};
     }
 
     std::vector<Storage> lp_normalize_forward(const Storage& x,
@@ -6296,28 +6286,18 @@ private:
                                                       const Shape& x_shape,
                                                       double eps,
                                                       Dtype dt) override {
-        const auto& gx = std::get<GpuStorage>(x);
-        const auto& gg = std::get<GpuStorage>(gamma);
-        const auto& gb = std::get<GpuStorage>(beta);
-        const auto mlx_dt = gpu::to_mlx_dtype(dt);
-        const int C = static_cast<int>(x_shape[1]);
-        const int B = static_cast<int>(x_shape[0]);
-        // The spatial 2-norms and their channel mean are taken in float32
-        // for a half input (see ``widen_half``) — a float16 x^2 overflows
-        // past 256 — and the response Nx is rounded back to the input dtype.
-        auto G = ::mlx::core::sqrt(::mlx::core::sum(
-            squared_deviation(*gx.arr, ::mlx::core::zeros({}, ::mlx::core::float32)),
-            std::vector<int>{2, 3}, true));
+        const int C = static_cast<int>(x_shape[1]), B = static_cast<int>(x_shape[0]);
+        const auto xw = widen_gpu(x);
+        auto G = ::mlx::core::sqrt(
+            ::mlx::core::sum(::mlx::core::square(xw), std::vector<int>{2, 3}, true));
         auto m = ::mlx::core::mean(G, std::vector<int>{1}, true);
         auto denom = ::mlx::core::add(m, gpu::mlx_scalar(eps, G.dtype()));
-        auto Nx = narrow_to(::mlx::core::divide(G, denom), mlx_dt);
-        auto g_b = ::mlx::core::reshape(*gg.arr, {1, C, 1, 1});
-        auto bb_b = ::mlx::core::reshape(*gb.arr, {1, C, 1, 1});
-        auto y = ::mlx::core::add(::mlx::core::multiply(g_b, ::mlx::core::multiply(*gx.arr, Nx)),
-                                  ::mlx::core::multiply(bb_b, *gx.arr));
-        auto Nx_flat = ::mlx::core::reshape(Nx, {B, C});
-        return {Storage{gpu::wrap_mlx_array(std::move(y), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(Nx_flat), dt)}};
+        auto Nx = ::mlx::core::divide(G, denom);
+        auto g_b = ::mlx::core::reshape(widen_gpu(gamma), {1, C, 1, 1});
+        auto bb_b = ::mlx::core::reshape(widen_gpu(beta), {1, C, 1, 1});
+        auto y = ::mlx::core::add(::mlx::core::multiply(g_b, ::mlx::core::multiply(xw, Nx)),
+                                  ::mlx::core::multiply(bb_b, xw));
+        return {wrap_narrow(y, dt), wrap_narrow(::mlx::core::reshape(Nx, {B, C}), dt)};
     }
 
     std::vector<Storage> global_response_norm_backward(const Storage& x,
@@ -6328,26 +6308,15 @@ private:
                                                        const Shape& x_shape,
                                                        double eps,
                                                        Dtype dt) override {
-        const auto& gx = std::get<GpuStorage>(x);
-        const auto& gg = std::get<GpuStorage>(gamma);
-        const auto& gnx = std::get<GpuStorage>(saved_Nx);
-        const auto& go = std::get<GpuStorage>(grad_out);
-        const auto mlx_dt = gpu::to_mlx_dtype(dt);
-        const int B = static_cast<int>(x_shape[0]);
-        const int C = static_cast<int>(x_shape[1]);
-        // The whole backward runs in float32 for a half input (see
-        // ``widen_half``): it is made of sums over the spatial and channel
-        // axes, of squares and of products, and each output is rounded
-        // back to ``dt`` once.
-        const auto xw = widen_half(*gx.arr);
-        const auto gw = widen_half(*go.arr);
+        const int B = static_cast<int>(x_shape[0]), C = static_cast<int>(x_shape[1]);
+        const auto xw = widen_gpu(x), gw = widen_gpu(grad_out);
         const auto acc_dt = xw.dtype();
         auto G = ::mlx::core::sqrt(
             ::mlx::core::sum(::mlx::core::square(xw), std::vector<int>{2, 3}, true));
         auto m_b = ::mlx::core::mean(G, std::vector<int>{1}, true);
         auto denom = ::mlx::core::add(m_b, gpu::mlx_scalar(eps, acc_dt));
-        auto Nx = widen_half(::mlx::core::reshape(*gnx.arr, {B, C, 1, 1}));
-        auto g_b = widen_half(::mlx::core::reshape(*gg.arr, {1, C, 1, 1}));
+        auto Nx = ::mlx::core::reshape(widen_gpu(saved_Nx), {B, C, 1, 1});
+        auto g_b = ::mlx::core::reshape(widen_gpu(gamma), {1, C, 1, 1});
         auto gx_prod = ::mlx::core::multiply(gw, xw);
         auto db = ::mlx::core::sum(gx_prod, std::vector<int>{0, 2, 3}, false);
         auto gxN = ::mlx::core::multiply(gx_prod, Nx);
@@ -6363,16 +6332,12 @@ private:
         auto eps_g = gpu::mlx_scalar(1e-12, acc_dt);
         auto G_safe = ::mlx::core::maximum(G, eps_g);
         auto dG_term = ::mlx::core::divide(::mlx::core::multiply(dG, xw), G_safe);
-
-        const auto& gb = std::get<GpuStorage>(beta);
-        auto bb_b = widen_half(::mlx::core::reshape(*gb.arr, {1, C, 1, 1}));
+        auto bb_b = ::mlx::core::reshape(widen_gpu(beta), {1, C, 1, 1});
         auto dx = ::mlx::core::add(
             ::mlx::core::add(::mlx::core::multiply(::mlx::core::multiply(g_b, Nx), gw),
                              ::mlx::core::multiply(bb_b, gw)),
             dG_term);
-        return {Storage{gpu::wrap_mlx_array(narrow_to(dx, mlx_dt), dt)},
-                Storage{gpu::wrap_mlx_array(narrow_to(dg, mlx_dt), dt)},
-                Storage{gpu::wrap_mlx_array(narrow_to(db, mlx_dt), dt)}};
+        return {wrap_narrow(dx, dt), wrap_narrow(dg, dt), wrap_narrow(db, dt)};
     }
 
     // ── interpolate — the graphs live in ``gpu/Interpolate.h`` ─────────────

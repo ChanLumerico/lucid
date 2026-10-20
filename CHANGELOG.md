@@ -1094,6 +1094,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - guard CPU scalar dispatch on phantom and sub-shape scatter
 
+- compute Metal half batch_norm_eval and GRN in float32
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

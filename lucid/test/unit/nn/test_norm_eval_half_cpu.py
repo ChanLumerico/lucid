@@ -76,21 +76,26 @@ def _grn_inputs(dtype: str) -> list[np.ndarray]:
     return [_on_grid(a, dtype) for a in arrays]
 
 
-def _run_bn(arrays: list[np.ndarray], dtype: object) -> list[np.ndarray]:
-    x, rm, rv, w, b = (lucid.tensor(a, dtype=dtype) for a in arrays[:5])
+def _run_bn(arrays: list[np.ndarray], dtype: object, device: str) -> list[np.ndarray]:
+    x, rm, rv, w, b = (
+        lucid.tensor(a, dtype=dtype, device=device) for a in arrays[:5]
+    )
     for t in (x, rm, w, b):
         t.requires_grad_()
     out = F.batch_norm(x, rm, rv, w, b, training=False, eps=1e-5)
-    out.backward(lucid.tensor(arrays[5], dtype=dtype))
+    out.backward(lucid.tensor(arrays[5], dtype=dtype, device=device))
     return _collect(dtype, out, x, rm, w, b)
 
 
-def _run_grn(arrays: list[np.ndarray], dtype: object) -> list[np.ndarray]:
-    x, g, b = (lucid.tensor(a, dtype=dtype, requires_grad=True) for a in arrays[:3])
+def _run_grn(arrays: list[np.ndarray], dtype: object, device: str) -> list[np.ndarray]:
+    x, g, b = (
+        lucid.tensor(a, dtype=dtype, device=device, requires_grad=True)
+        for a in arrays[:3]
+    )
     out = _wrap(
         _C_engine.nn.global_response_norm(_unwrap(x), _unwrap(g), _unwrap(b), 1e-6)
     )
-    out.backward(lucid.tensor(arrays[3], dtype=dtype))
+    out.backward(lucid.tensor(arrays[3], dtype=dtype, device=device))
     return _collect(dtype, out, x, g, b)
 
 
@@ -103,11 +108,11 @@ def _collect(
         assert leaf.grad is not None
         found.append(leaf.grad)
     assert all(t.dtype == dtype for t in found)
-    return [t.detach().to(lucid.float32).numpy() for t in found]
+    return [t.detach().to("cpu").to(lucid.float32).numpy() for t in found]
 
 
 _Inputs = Callable[[str], list[np.ndarray]]
-_Runner = Callable[[list[np.ndarray], object], list[np.ndarray]]
+_Runner = Callable[[list[np.ndarray], object, str], list[np.ndarray]]
 _KERNELS: dict[str, tuple[_Inputs, _Runner]] = {
     **{
         f"batch_norm{rank}d_eval": (functools.partial(_bn_inputs, rank), _run_bn)
@@ -117,15 +122,16 @@ _KERNELS: dict[str, tuple[_Inputs, _Runner]] = {
 }
 
 
+@pytest.mark.parametrize("device", _DEVICES)
 @pytest.mark.parametrize("dtype", list(_HALVES))
 @pytest.mark.parametrize("kernel", list(_KERNELS))
 def test_the_half_kernel_is_the_float32_kernel_rounded_once(
-    kernel: str, dtype: str
+    kernel: str, dtype: str, device: str
 ) -> None:
     make, run = _KERNELS[kernel]
     arrays = make(dtype)
-    got = run(arrays, _HALVES[dtype])
-    want = run(arrays, lucid.float32)
+    got = run(arrays, _HALVES[dtype], device)
+    want = run(arrays, lucid.float32, device)
     np.testing.assert_array_equal(got[0], _on_grid(want[0], dtype), err_msg="output")
     # The backward reads the saved statistic at the half's precision, so it
     # may carry that rounding as well as its own.
@@ -175,14 +181,6 @@ def test_half_batch_norm_eval_matches_the_reference(
         assert g is not None and g.dtype == _HALVES[dtype], what
         g_np = g.detach().to("cpu").to(lucid.float32).numpy()
         r_np = r.detach().float().numpy()
-        if device == "cpu":
-            # One step of the half's grid: the reference rounds once, the
-            # CPU at most twice (the saved rstd).
-            np.testing.assert_allclose(g_np, r_np, rtol=2 * u, atol=1e-6, err_msg=what)
-        else:
-            # Metal evaluates the forward natively in the half, so an output
-            # near zero carries the rounding of its larger terms.
-            scale = max(1.0, float(np.abs(r_np).max()))
-            np.testing.assert_allclose(
-                g_np, r_np, rtol=0, atol=4 * u * scale, err_msg=what
-            )
+        # One step of the half's grid: the reference rounds once, both CPU and
+        # Metal at most twice (the saved rstd).
+        np.testing.assert_allclose(g_np, r_np, rtol=2 * u, atol=1e-6, err_msg=what)
