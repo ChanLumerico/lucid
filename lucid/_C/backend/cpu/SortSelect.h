@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <numeric>
 #include <type_traits>
 #include <utility>
@@ -25,6 +26,157 @@
 #include "../../core/Storage.h"
 
 namespace lucid::backend::cpu {
+
+template <typename T>
+struct SortKeyTrait;
+
+template <>
+struct SortKeyTrait<float> {
+    using Key = std::uint32_t;
+    static Key encode(float v, bool descending) noexcept {
+        if (std::isnan(v))
+            return descending ? 0u : 0xFFFFFFFFu;
+        if (v == 0.0f)
+            v = 0.0f;
+        std::uint32_t bits = 0;
+        std::memcpy(&bits, &v, sizeof(bits));
+        const std::uint32_t k = (bits & 0x80000000u) ? ~bits : (bits ^ 0x80000000u);
+        return descending ? ~k : k;
+    }
+};
+
+template <>
+struct SortKeyTrait<double> {
+    using Key = std::uint64_t;
+    static Key encode(double v, bool descending) noexcept {
+        if (std::isnan(v))
+            return descending ? 0ull : ~0ull;
+        if (v == 0.0)
+            v = 0.0;
+        std::uint64_t bits = 0;
+        std::memcpy(&bits, &v, sizeof(bits));
+        const std::uint64_t k = (bits & (1ull << 63)) ? ~bits : (bits ^ (1ull << 63));
+        return descending ? ~k : k;
+    }
+};
+
+template <>
+struct SortKeyTrait<std::int32_t> {
+    using Key = std::uint32_t;
+    static Key encode(std::int32_t v, bool descending) noexcept {
+        const std::uint32_t k = static_cast<std::uint32_t>(v) ^ 0x80000000u;
+        return descending ? ~k : k;
+    }
+};
+
+template <>
+struct SortKeyTrait<std::int64_t> {
+    using Key = std::uint64_t;
+    static Key encode(std::int64_t v, bool descending) noexcept {
+        const std::uint64_t k = static_cast<std::uint64_t>(v) ^ (1ull << 63);
+        return descending ? ~k : k;
+    }
+};
+
+template <typename Key, typename Pos = std::uint32_t>
+struct KeyPos {
+    Key key;
+    Pos pos;
+};
+
+template <typename T, typename Pos = std::uint32_t>
+const KeyPos<typename SortKeyTrait<T>::Key, Pos>*
+radix_sort_line(const T* src_line,
+                std::size_t L,
+                std::size_t stride,
+                bool descending,
+                std::vector<KeyPos<typename SortKeyTrait<T>::Key, Pos>>& buf0,
+                std::vector<KeyPos<typename SortKeyTrait<T>::Key, Pos>>& buf1) {
+    using Key = typename SortKeyTrait<T>::Key;
+    constexpr std::size_t kPasses = sizeof(Key);
+    std::size_t hist[kPasses][256] = {};
+    for (std::size_t i = 0; i < L; ++i) {
+        const Key k = SortKeyTrait<T>::encode(src_line[i * stride], descending);
+        buf0[i] = {k, static_cast<Pos>(i)};
+        for (std::size_t p = 0; p < kPasses; ++p)
+            ++hist[p][(k >> (p * 8)) & 0xFFu];
+    }
+    auto* cur = buf0.data();
+    auto* nxt = buf1.data();
+    const Key first_key = cur[0].key;
+    for (std::size_t p = 0; p < kPasses; ++p) {
+        const std::size_t shift = p * 8;
+        if (hist[p][(first_key >> shift) & 0xFFu] == L)
+            continue;
+        std::size_t sum = 0;
+        for (std::size_t b = 0; b < 256; ++b) {
+            const std::size_t c = hist[p][b];
+            hist[p][b] = sum;
+            sum += c;
+        }
+        for (std::size_t i = 0; i < L; ++i)
+            nxt[hist[p][(cur[i].key >> shift) & 0xFFu]++] = cur[i];
+        std::swap(cur, nxt);
+    }
+    return cur;
+}
+
+template <typename T, typename Pos = std::uint32_t>
+const KeyPos<typename SortKeyTrait<T>::Key, Pos>*
+sort_line_keys(const T* src_line,
+               std::size_t L,
+               std::size_t stride,
+               std::size_t K,
+               bool descending,
+               std::vector<KeyPos<typename SortKeyTrait<T>::Key, Pos>>& buf0,
+               std::vector<KeyPos<typename SortKeyTrait<T>::Key, Pos>>& buf1) {
+    if (K == L && L >= 64)
+        return radix_sort_line<T, Pos>(src_line, L, stride, descending, buf0, buf1);
+    for (std::size_t i = 0; i < L; ++i)
+        buf0[i] = {SortKeyTrait<T>::encode(src_line[i * stride], descending), static_cast<Pos>(i)};
+    auto cmp = [](const auto& lhs, const auto& rhs) {
+        return lhs.key != rhs.key ? (lhs.key < rhs.key) : (lhs.pos < rhs.pos);
+    };
+    if (K == L)
+        std::sort(buf0.begin(), buf0.end(), cmp);
+    else if (K > 0)
+        std::partial_sort(buf0.begin(), buf0.begin() + static_cast<std::ptrdiff_t>(K), buf0.end(),
+                          cmp);
+    return buf0.data();
+}
+
+template <typename T, typename Entry>
+void write_sorted_line(const T* src_line,
+                       const Entry* sorted,
+                       T* dst,
+                       std::int64_t* idx_dst,
+                       std::size_t o,
+                       std::size_t j,
+                       std::size_t K,
+                       std::size_t inner) {
+    if (inner == 1) {
+        std::int64_t* row_idx = idx_dst + o * K;
+        if (dst) {
+            T* row_dst = dst + o * K;
+            for (std::size_t k = 0; k < K; ++k) {
+                const auto pos = sorted[k].pos;
+                row_dst[k] = src_line[pos];
+                row_idx[k] = static_cast<std::int64_t>(pos);
+            }
+        } else {
+            for (std::size_t k = 0; k < K; ++k)
+                row_idx[k] = static_cast<std::int64_t>(sorted[k].pos);
+        }
+        return;
+    }
+    for (std::size_t k = 0; k < K; ++k) {
+        const std::size_t out_flat = (o * K + k) * inner + j;
+        const auto pos = sorted[k].pos;
+        if (dst)
+            dst[out_flat] = src_line[static_cast<std::size_t>(pos) * inner];
+        idx_dst[out_flat] = static_cast<std::int64_t>(pos);
+    }
+}
 
 // ``outer`` / ``inner`` extents around ``axis`` of ``shape``.
 inline std::pair<std::size_t, std::size_t> around_axis(const Shape& shape, int axis) {
@@ -47,63 +199,34 @@ std::pair<CpuStorage, CpuStorage> sort_select_cpu(const CpuStorage& input,
                                                   const Shape& output_shape,
                                                   int axis,
                                                   Dtype dt,
-                                                  bool descending) {
+                                                  bool descending,
+                                                  bool need_values = true) {
     const std::size_t n_out = shape_numel(output_shape);
-    CpuStorage values{allocate_aligned_bytes(n_out * dtype_size(dt), Device::CPU),
-                      n_out * dtype_size(dt), dt};
+    CpuStorage values;
+    if (need_values) {
+        values = CpuStorage{allocate_aligned_bytes(n_out * dtype_size(dt), Device::CPU),
+                            n_out * dtype_size(dt), dt};
+    }
     CpuStorage indices{allocate_aligned_bytes(n_out * sizeof(std::int64_t), Device::CPU),
                        n_out * sizeof(std::int64_t), Dtype::I64};
 
     const auto* src = reinterpret_cast<const T*>(input.ptr.get());
-    auto* dst = reinterpret_cast<T*>(values.ptr.get());
+    auto* dst = need_values ? reinterpret_cast<T*>(values.ptr.get()) : nullptr;
     auto* idx_dst = reinterpret_cast<std::int64_t*>(indices.ptr.get());
     const auto [outer, inner] = around_axis(input_shape, axis);
     const std::size_t L = static_cast<std::size_t>(input_shape[static_cast<std::size_t>(axis)]);
     const std::size_t K = static_cast<std::size_t>(output_shape[static_cast<std::size_t>(axis)]);
+    if (K == 0 || outer == 0 || inner == 0)
+        return {std::move(values), std::move(indices)};
 
-    std::vector<std::int64_t> order(L);
+    using Key = typename SortKeyTrait<T>::Key;
+    std::vector<KeyPos<Key>> buf0(L);
+    std::vector<KeyPos<Key>> buf1(K == L && L >= 64 ? L : 0);
     for (std::size_t o = 0; o < outer; ++o) {
         for (std::size_t j = 0; j < inner; ++j) {
-            std::iota(order.begin(), order.end(), std::int64_t{0});
-            // NaN sorts as the largest value, so ascending puts it last and
-            // descending puts it first — the reference framework's convention.
-            //
-            // This is not only about where the NaN lands.  ``lv < rv`` is
-            // false in *both* directions when either side is NaN, so the
-            // comparator is not a strict weak ordering and ``std::sort`` has
-            // undefined behaviour: ``[1, nan, 3, -1]`` came back
-            // ``[1, nan, -1, 3]``, and a longer array can walk the pivot off
-            // the end of the buffer.  Ordering NaN makes the comparator valid.
-            //
-            // Equal values are ordered by position, lowest first.  A full
-            // sort is stable anyway, but ``partial_sort`` (a top-k) is not:
-            // ``topk([0, 5, 4, 4], 3)`` named 1, 3, 2.
-            auto cmp = [&](std::int64_t lhs, std::int64_t rhs) {
-                const T lv = src[(o * L + static_cast<std::size_t>(lhs)) * inner + j];
-                const T rv = src[(o * L + static_cast<std::size_t>(rhs)) * inner + j];
-                if constexpr (std::is_floating_point_v<T>) {
-                    const bool ln = std::isnan(lv);
-                    const bool rn = std::isnan(rv);
-                    if (ln || rn) {
-                        if (ln && rn)
-                            return lhs < rhs;
-                        return descending ? ln : rn;
-                    }
-                }
-                if (lv == rv)
-                    return lhs < rhs;
-                return descending ? (lv > rv) : (lv < rv);
-            };
-            if (K == L)
-                std::stable_sort(order.begin(), order.end(), cmp);
-            else
-                std::partial_sort(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(K),
-                                  order.end(), cmp);
-            for (std::size_t k = 0; k < K; ++k) {
-                const std::size_t out_flat = (o * K + k) * inner + j;
-                dst[out_flat] = src[(o * L + static_cast<std::size_t>(order[k])) * inner + j];
-                idx_dst[out_flat] = order[k];
-            }
+            const T* src_line = src + o * L * inner + j;
+            const auto* sorted = sort_line_keys<T>(src_line, L, inner, K, descending, buf0, buf1);
+            write_sorted_line(src_line, sorted, dst, idx_dst, o, j, K, inner);
         }
     }
     return {std::move(values), std::move(indices)};

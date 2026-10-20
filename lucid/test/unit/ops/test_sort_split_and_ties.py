@@ -16,6 +16,8 @@ Each of these was documented one way and behaved another:
   ``amax`` does.
 """
 
+import time
+
 import numpy as np
 import pytest
 
@@ -129,3 +131,44 @@ def test_a_nan_slice_gets_no_gradient_rather_than_nan() -> None:
     x = lucid.tensor([[1.0, float("nan")], [2.0, 3.0]], requires_grad=True)
     lucid.max(x, dim=1).sum().backward()
     assert x.grad.tolist() == [[0.0, 0.0], [0.0, 1.0]]
+
+
+def test_radix_sort_stability_signed_zero_nan_and_100k_budget() -> None:
+    """LCD-360: LSD radix sort preserves -0.0/+0.0 and NaN stability and sorts 100k floats < 5 ms."""
+    a = np.zeros(128, dtype=np.float32)
+    a[0] = -0.0
+    a[1] = 0.0
+    a[2] = float("nan")
+    a[3] = float("inf")
+    a[4] = float("-inf")
+    a[5] = -0.0
+    t = lucid.tensor(a)
+    idx_asc = lucid.argsort(t).tolist()
+    assert idx_asc[0] == 4  # -inf first
+    assert idx_asc[-2:] == [3, 2]  # +inf then nan
+    # All zeros keep their input relative order: 0, 1, 5, 6, 7, ...
+    zero_positions = [i for i in idx_asc if i not in (2, 3, 4)]
+    assert zero_positions == sorted(zero_positions)
+    sorted_vals = lucid.sort(t).numpy()
+    assert np.copysign(1.0, sorted_vals[1]) == -1.0
+    assert np.copysign(1.0, sorted_vals[2]) == 1.0
+    assert np.copysign(1.0, sorted_vals[3]) == -1.0
+
+    idx_desc = lucid.argsort(t, descending=True).tolist()
+    assert idx_desc[:2] == [2, 3]  # nan then +inf
+    assert idx_desc[-1] == 4  # -inf last
+
+    x = lucid.randn(100_000)
+    lucid.argsort(x)
+    lucid.unique(x, return_inverse=True, return_counts=True)
+    times_argsort = []
+    times_unique = []
+    for _ in range(5):
+        t0 = time.perf_counter()
+        lucid.argsort(x)
+        times_argsort.append((time.perf_counter() - t0) * 1e3)
+        t0 = time.perf_counter()
+        lucid.unique(x, return_inverse=True, return_counts=True)
+        times_unique.append((time.perf_counter() - t0) * 1e3)
+    assert min(times_argsort) < 5.0
+    assert min(times_unique) < 8.0

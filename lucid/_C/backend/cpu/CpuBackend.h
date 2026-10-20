@@ -4316,58 +4316,56 @@ public:
         return Storage{CpuStorage{ptr, out_nbytes, dt}};
     }
 
+    std::pair<Storage, Storage> sort_select_impl(const Storage& a,
+                                                 const Shape& input_shape,
+                                                 const Shape& output_shape,
+                                                 int axis,
+                                                 Dtype dt,
+                                                 bool descending,
+                                                 bool need_values) {
+        // int8, int16, and bool widen to int64; float16 and bfloat16 widen to
+        // float32 at the door and round once on the way out when values are requested.
+        if (detail::is_narrow_int(dt)) {
+            auto wide = sort_select_impl(detail::as_i64(a), input_shape, output_shape, axis,
+                                         Dtype::I64, descending, need_values);
+            if (!need_values)
+                return wide;
+            return {detail::narrow_int(wide.first, shape_numel(output_shape), dt), wide.second};
+        }
+        if (detail::is_half_like(dt)) {
+            auto wide = sort_select_impl(detail::as_f32(a), input_shape, output_shape, axis,
+                                         Dtype::F32, descending, need_values);
+            return need_values ? detail::back_to_f16(std::move(wide), dt) : wide;
+        }
+        const auto& ca = std::get<CpuStorage>(a);
+        auto run = [&](auto tag) {
+            using T = decltype(tag);
+            auto [v, idx] = cpu::sort_select_cpu<T>(ca, input_shape, output_shape, axis, dt,
+                                                    descending, need_values);
+            return std::pair<Storage, Storage>{Storage{std::move(v)}, Storage{std::move(idx)}};
+        };
+        if (dt == Dtype::F32)
+            return run(float{});
+        if (dt == Dtype::F64)
+            return run(double{});
+        if (dt == Dtype::I32)
+            return run(std::int32_t{});
+        if (dt == Dtype::I64)
+            return run(std::int64_t{});
+        ErrorBuilder("cpu_backend::sort_select").not_implemented("dtype not supported");
+    }
+
     std::pair<Storage, Storage> sort_select(const Storage& a,
                                             const Shape& input_shape,
                                             const Shape& output_shape,
                                             int axis,
                                             Dtype dt,
                                             bool descending) override {
-        // int8 and int16 have no kernel here.  Ordering is exact through
-        // int64 — every narrow value fits, and comparing the widened values
-        // gives the same order — and Metal answered these already.
-        //
-        // Only the values come back narrowed; the second half of the pair is
-        // the int64 index whatever the operand's dtype.  Bool takes the same road — false < true is
-        // 0 < 1 — and was excluded for no reason the code recorded: sorting a
-        // bool tensor raised on the CPU and answered on Metal.
-        if (detail::is_narrow_int(dt)) {
-            auto wide = sort_select(detail::as_i64(a), input_shape, output_shape, axis, Dtype::I64,
-                                    descending);
-            const std::size_t out_n = shape_numel(output_shape);
-            return {detail::narrow_int(wide.first, out_n, dt), wide.second};
-        }
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(sort_select(detail::as_f32(a), input_shape, output_shape,
-                                                   axis, Dtype::F32, descending),
-                                       dt);
-        const auto& ca = std::get<CpuStorage>(a);
-        CpuStorage values;
-        CpuStorage indices;
-        if (dt == Dtype::F32) {
-            std::tie(values, indices) =
-                cpu::sort_select_cpu<float>(ca, input_shape, output_shape, axis, dt, descending);
-        } else if (dt == Dtype::F64) {
-            std::tie(values, indices) =
-                cpu::sort_select_cpu<double>(ca, input_shape, output_shape, axis, dt, descending);
-        } else if (dt == Dtype::I32) {
-            std::tie(values, indices) = cpu::sort_select_cpu<std::int32_t>(
-                ca, input_shape, output_shape, axis, dt, descending);
-        } else if (dt == Dtype::I64) {
-            std::tie(values, indices) = cpu::sort_select_cpu<std::int64_t>(
-                ca, input_shape, output_shape, axis, dt, descending);
-        } else {
-            ErrorBuilder("cpu_backend::sort_select").not_implemented("dtype not supported");
-        }
-        return {Storage{std::move(values)}, Storage{std::move(indices)}};
+        return sort_select_impl(a, input_shape, output_shape, axis, dt, descending, true);
     }
 
     Storage argsort(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
-        auto result = sort_select(a, shape, shape, axis, dt, false);
-        return std::move(result.second);
+        return sort_select_impl(a, shape, shape, axis, dt, false, false).second;
     }
 
     Storage arg_reduce_index(const Storage& a,

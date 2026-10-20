@@ -303,15 +303,31 @@ CpuStorage run_unique_int(Dtype dt, const T* src, std::size_t n) {
 
 template <typename T>
 CpuStorage run_unique_float(Dtype dt, const T* src, std::size_t n) {
-    std::vector<T> vals(src, src + n);
-    std::stable_sort(vals.begin(), vals.end(), [](T x, T y) {
-        if (std::isnan(x))
-            return false;
-        if (std::isnan(y))
-            return true;
-        return x < y;
-    });
+    std::vector<T> vals;
+    vals.reserve(n);
+    std::vector<T> nans;
+    bool seen_zero = false;
+    T first_zero = T{0};
+    for (std::size_t i = 0; i < n; ++i) {
+        const T v = src[i];
+        if (std::isnan(v)) {
+            nans.push_back(v);
+        } else {
+            if (v == T{0} && !seen_zero) {
+                seen_zero = true;
+                first_zero = v;
+            }
+            vals.push_back(v);
+        }
+    }
+    std::sort(vals.begin(), vals.end());
     vals.erase(std::unique(vals.begin(), vals.end()), vals.end());
+    if (seen_zero) {
+        auto it = std::lower_bound(vals.begin(), vals.end(), T{0});
+        if (it != vals.end() && *it == T{0})
+            *it = first_zero;
+    }
+    vals.insert(vals.end(), nans.begin(), nans.end());
     return pack_unique_vec(dt, vals);
 }
 
