@@ -847,6 +847,20 @@ def _linalg_extra(name: str, domain: str) -> Iterator[Call]:
             0,
             "householder_product(H(4,3), tau(3,))",
         )
+    elif name in ("tensorinv",):
+        yield Call(
+            [_probe.as_f64(square.reshape(2, 2, 2, 2))], {}, 0, "tensorinv((2,2,2,2))"
+        )
+    elif name in ("tensorsolve",):
+        yield Call(
+            [
+                _probe.as_f64(square.reshape(2, 2, 2, 2)),
+                _probe.as_f64(rhs[:2, :2]),
+            ],
+            {},
+            0,
+            "tensorsolve(A(2,2,2,2), B(2,2))",
+        )
     elif name in ("vander",):
         yield Call([_probe.as_f64(gen.uniform(0.5, 1.5, (4,)))], {}, 0, "vander(1-D)")
 
@@ -1090,7 +1104,7 @@ _FAMILIES: list[tuple[str, Callable[[str, str], Iterator[Call]]]] = [
     (
         r"^(cholesky(_ex)?|eig|eigh|eigvals|eigvalsh|inv|det|slogdet|matrix_exp|"
         r"matrix_power|lu|lu_factor|lu_solve|ldl_factor|ldl_solve|solve|"
-        r"solve_triangular|lstsq|householder_product|vander)$",
+        r"solve_triangular|lstsq|householder_product|tensorinv|tensorsolve|vander)$",
         _linalg_extra,
     ),
     (

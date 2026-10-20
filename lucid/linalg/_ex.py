@@ -10,16 +10,19 @@ the factorisations they wrap.
 """
 
 from collections.abc import Callable
-from typing import final, override
+from typing import NamedTuple, final, override
 
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dtype import finfo as _finfo
+from lucid._tensor._indexing import broadcast_shapes as _broadcast_batch
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function, FunctionCtx
 from lucid.linalg import (
     LinAlgError,
+    _build_permutation_matrix,
+    _check_pivots,
     _la,
     _lu_factor_packed,
     _Pinv,
@@ -30,6 +33,83 @@ from lucid.linalg import (
     solve_triangular,
     svd,
 )
+
+
+class _SlogdetResult(NamedTuple):
+    sign: Tensor
+    logabsdet: Tensor
+
+
+class _EighResult(NamedTuple):
+    eigenvalues: Tensor
+    eigenvectors: Tensor
+
+
+class _EigResult(NamedTuple):
+    eigenvalues: Tensor
+    eigenvectors: Tensor
+
+
+class _SvdResult(NamedTuple):
+    U: Tensor
+    S: Tensor
+    Vh: Tensor
+
+
+class _QrResult(NamedTuple):
+    Q: Tensor
+    R: Tensor
+
+
+class _LuFactorResult(NamedTuple):
+    LU: Tensor
+    pivots: Tensor
+
+
+class _LuFactorExResult(NamedTuple):
+    LU: Tensor
+    pivots: Tensor
+    info: Tensor
+
+
+class _LuResult(NamedTuple):
+    P: Tensor
+    L: Tensor
+    U: Tensor
+
+
+class _InvExResult(NamedTuple):
+    inverse: Tensor
+    info: Tensor
+
+
+class _CholeskyExResult(NamedTuple):
+    L: Tensor
+    info: Tensor
+
+
+class _SolveExResult(NamedTuple):
+    result: Tensor
+    info: Tensor
+
+
+class _LstsqResult(NamedTuple):
+    solution: Tensor
+    residuals: Tensor
+    rank: Tensor
+    singular_values: Tensor
+
+
+class _LdlFactorResult(NamedTuple):
+    LD: Tensor
+    pivots: Tensor
+
+
+class _LdlFactorExResult(NamedTuple):
+    LD: Tensor
+    pivots: Tensor
+    info: Tensor
+
 
 # ── *_ex variants — return (result, info) instead of raising ───────────────
 #
@@ -286,14 +366,14 @@ def cholesky_ex(
     """
     A = input
     try:
-        return cholesky(A, upper=upper), _info_zero(A)
+        return _CholeskyExResult(cholesky(A, upper=upper), _info_zero(A))
     except LinAlgError:
         pass  # located per matrix below
     info = _potrf_info(A, upper)
     if check_errors:
         _raise_ex_failure("cholesky_ex", info, _not_positive_definite)
     out = _on_the_rest(lambda M: cholesky(M, upper=upper), A, info)
-    return _with_partial_factors(out, A, info, upper), info
+    return _CholeskyExResult(_with_partial_factors(out, A, info, upper), info)
 
 
 def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
@@ -346,13 +426,13 @@ def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
     2
     """
     try:
-        return inv(A), _info_zero(A)
+        return _InvExResult(inv(A), _info_zero(A))
     except LinAlgError:
         pass  # located per matrix below
     info = _getrf_info(A)
     if check_errors:
         _raise_ex_failure("inv_ex", info, _singular_reason("inversion"))
-    return _on_the_rest(lambda M: inv(M), A, info), info
+    return _InvExResult(_on_the_rest(lambda M: inv(M), A, info), info)
 
 
 def solve_ex(
@@ -417,13 +497,13 @@ def solve_ex(
     0
     """
     try:
-        return solve(A, B, left=left), _info_zero(A)
+        return _SolveExResult(solve(A, B, left=left), _info_zero(A))
     except LinAlgError:
         pass  # located per matrix below
     info = _getrf_info(A if left else A.mT)
     if check_errors:
         _raise_ex_failure("solve_ex", info, _singular_reason("solve"))
-    return _on_the_rest(lambda M: solve(M, B, left=left), A, info), info
+    return _SolveExResult(_on_the_rest(lambda M: solve(M, B, left=left), A, info), info)
 
 
 def lu_factor_ex(
@@ -478,13 +558,13 @@ def lu_factor_ex(
 
 def _lu_factor_ex(
     A: Tensor, *, check_errors: bool, op: str
-) -> tuple[Tensor, Tensor, Tensor]:
+) -> _LuFactorExResult:
     """``(LU, pivots, info)``, ``info`` being ``getrf``'s own code from the
     kernel; ``check_errors`` raises for the first matrix it marks."""
     LU, pivots, info = _lu_factor_packed(A)
     if check_errors:
         _raise_ex_failure(op, info, _zero_pivot_reason)
-    return LU, pivots, info
+    return _LuFactorExResult(LU, pivots, info)
 
 
 def ldl_factor(
@@ -565,7 +645,7 @@ def ldl_factor(
     """
     del hermitian  # only real input is factored, where it changes nothing
     LD, pivots, _ = _ldl_factor_ex(input, check_errors=True, op="ldl_factor")
-    return LD, pivots
+    return _LdlFactorResult(LD, pivots)
 
 
 def ldl_factor_ex(
@@ -625,7 +705,7 @@ def ldl_factor_ex(
 
 def _ldl_factor_ex(
     A: Tensor, *, check_errors: bool, op: str
-) -> tuple[Tensor, Tensor, Tensor]:
+) -> _LdlFactorExResult:
     """``(LD, pivots, info)``, ``info`` being ``sytrf``'s own code from the
     kernel; ``check_errors`` raises for the first matrix it marks.  The
     kernel takes real input only, for which symmetric and Hermitian are one
@@ -638,7 +718,7 @@ def _ldl_factor_ex(
         tracked = _LDLFactorGrad.apply(A, LD, pivots, info)
         assert isinstance(tracked, Tensor)
         LD = tracked
-    return LD, pivots, info
+    return _LdlFactorExResult(LD, pivots, info)
 
 
 # ── The derivative of the packed LDLᵀ factor ───────────────────────────────
@@ -764,7 +844,7 @@ def _complete_svd_basis(
 
 def _complete_svd_factors(
     A: Tensor, U: object, S: object, Vh: object, full_matrices: bool
-) -> tuple[Tensor, Tensor, Tensor]:
+) -> _SvdResult:
     """Return ``(U, S, Vh)`` with full orthogonal bases when ``full_matrices=True``."""
     assert isinstance(U, Tensor) and isinstance(S, Tensor) and isinstance(Vh, Tensor)
     if full_matrices:
@@ -774,7 +854,7 @@ def _complete_svd_factors(
             U = _complete_svd_basis(U, m, k, columns=True)
         elif m < n:
             Vh = _complete_svd_basis(Vh, n, k, columns=False)
-    return U, S, Vh
+    return _SvdResult(U, S, Vh)
 
 
 def _tol_tensor(
@@ -903,6 +983,110 @@ def tensorinv(input: Tensor, ind: int = 2) -> Tensor:
     return inv(A.reshape(m, n)).reshape(*(back + front))
 
 
+def tensorsolve(
+    input: Tensor,
+    other: Tensor,
+    dims: tuple[int, ...] | list[int] | None = None,
+) -> Tensor:
+    r"""Solve the tensor equation ``tensordot(A, X, dims=X.ndim) = B`` for ``X``.
+
+    Parameters
+    ----------
+    input : Tensor
+        Coefficient tensor ``A``.  After moving ``dims`` (when given) to the
+        trailing axes, must satisfy ``A.shape[:B.ndim] == B.shape`` and
+        ``prod(A.shape[B.ndim:]) == prod(B.shape)``.
+    other : Tensor
+        Right-hand side tensor ``B``.
+    dims : tuple of int or list of int, optional
+        Dimensions of ``input`` to be moved to the trailing positions before
+        solving.  If ``None`` (default), no dimensions are moved.
+
+    Returns
+    -------
+    Tensor
+        Solution ``X`` of shape ``A.shape[B.ndim:]`` (after moving ``dims``).
+    """
+    A, B = input, other
+    if dims is not None:
+        if not isinstance(dims, (tuple, list)):
+            raise TypeError(
+                f"linalg_tensorsolve(): argument 'dims' must be tuple of ints, "
+                f"not {type(dims).__name__}"
+            )
+        dims_list = [int(d) for d in dims]
+        if dims_list:
+            dest = list(range(-len(dims_list), 0))
+            A = lucid.movedim(A, dims_list, dest)
+    k = B.ndim
+    a_shape = tuple(int(s) for s in A.shape)
+    b_shape = tuple(int(s) for s in B.shape)
+    if k > len(a_shape):
+        raise _C_engine.ShapeMismatch(
+            f"linalg.tensorsolve: expected input.ndim ({len(a_shape)}) >= "
+            f"other.ndim ({k})"
+        )
+    front, back = a_shape[:k], a_shape[k:]
+    m = 1
+    for s in front:
+        m *= s
+    n = 1
+    for s in back:
+        n *= s
+    if n != m:
+        raise _C_engine.ShapeMismatch(
+            f"Expected self to satisfy the requirement "
+            f"prod(self.shape[other.ndim:]) == prod(self.shape[:other.ndim]), "
+            f"but got {n} != {m}"
+        )
+    if front != b_shape:
+        raise _C_engine.ShapeMismatch(
+            f"linalg.tensorsolve: expected input.shape[:other.ndim] {front} "
+            f"to match other.shape {b_shape}"
+        )
+    x = solve(A.reshape(m, n), B.reshape(m, 1))
+    return x.reshape(*back)
+
+
+def _lu_solve_general(
+    LU: Tensor, pivots: Tensor, B: Tensor, *, left: bool, adjoint: bool
+) -> Tensor:
+    """``lu_solve(LU, pivots, B, left=..., adjoint=...)`` across all flags."""
+    piv = _check_pivots(pivots, LU, "lu_solve")
+    if left and not adjoint:
+        return _wrap(_la.lu_solve(_unwrap(LU), _unwrap(piv), _unwrap(B)))
+    if not left:
+        if B.ndim < 2:
+            raise _C_engine.ShapeMismatch(
+                "linalg.lu_solve: The input tensor B must have at least 2 dimensions."
+            )
+        return _lu_solve_general(
+            LU, piv, B.mT, left=True, adjoint=not adjoint
+        ).mT
+    lu_sh = tuple(int(s) for s in LU.shape)
+    b_sh = tuple(int(s) for s in B.shape)
+    if len(lu_sh) < 2 or lu_sh[-1] != lu_sh[-2]:
+        raise _C_engine.ShapeMismatch(
+            f"lu_solve: LU must be a square matrix or batch of them, got {lu_sh}"
+        )
+    n = lu_sh[-1]
+    if len(b_sh) < 2 or b_sh[-2] != n:
+        raise _C_engine.ShapeMismatch(
+            f"lu_solve: B must have shape (*, {n}, k), got {b_sh}"
+        )
+    batch = _broadcast_batch(lu_sh[:-2], b_sh[:-2])
+    k = b_sh[-1]
+    if n == 0 or k == 0 or 0 in batch:
+        return lucid.zeros(*batch, n, k, dtype=LU.dtype, device=LU.device)
+    P = _build_permutation_matrix(piv, n, LU.dtype, LU.device)
+    eye = lucid.eye(n, dtype=LU.dtype, device=LU.device)
+    L = lucid.tril(LU, -1) + eye
+    U = lucid.triu(LU)
+    y = solve_triangular(U.mT, B, upper=False)
+    z = solve_triangular(L.mT, y, upper=True, unitriangular=True)
+    return lucid.matmul(P, z)
+
+
 def _check_lstsq_shapes(
     a_shape: tuple[int, ...], b_shape: tuple[int, ...]
 ) -> tuple[bool, tuple[int, ...]]:
@@ -992,5 +1176,6 @@ def _householder_product(H: Tensor, tau: Tensor) -> Tensor:
     if use_ops:
         return _householder_product_ops(H, tau)
     return _wrap(_la.householder_product(_unwrap(H), _unwrap(tau)))
+
 
 

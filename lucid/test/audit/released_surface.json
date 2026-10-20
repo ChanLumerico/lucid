@@ -6598,6 +6598,13 @@
         "a:ind="
       ]
     },
+    "lucid.linalg.tensorsolve": {
+      "params": [
+        "a:input",
+        "a:other",
+        "a:dims="
+      ]
+    },
     "lucid.linalg.vander": {
       "params": [
         "a:x",

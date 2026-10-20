@@ -999,10 +999,11 @@ def qr(A: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
     )
     q_impl, r_impl = _la.qr(_unwrap(A))
     if not _C_engine.grad_enabled() or not A.requires_grad:
-        return _wrap(q_impl), _wrap(r_impl)
+        return _QrResult(_wrap(q_impl), _wrap(r_impl))
     Q = _QRQGrad.apply(A, q_impl, r_impl)
     R = _QRRGradWithA.apply(A, q_impl, r_impl)
-    return Q, R  # type: ignore[return-value]
+    assert isinstance(Q, Tensor) and isinstance(R, Tensor)
+    return _QrResult(Q, R)
 
 
 @final
@@ -1294,9 +1295,10 @@ def eig(input: Tensor) -> tuple[Tensor, Tensor]:
     tensor([(2.+0.j), (3.+0.j)], dtype=lucid.complex64)
     """
     if input.requires_grad and lucid.is_grad_enabled():
-        return cast(tuple[Tensor, Tensor], _Eig.apply(input))
+        w, V = cast(tuple[Tensor, Tensor], _Eig.apply(input))
+        return _EigResult(w, V)
     raw_vals, raw_vecs = _la.eig(_unwrap(input))
-    return _wrap(raw_vals), _wrap(raw_vecs)
+    return _EigResult(_wrap(raw_vals), _wrap(raw_vecs))
 
 
 def eigvals(input: Tensor) -> Tensor:
@@ -1590,10 +1592,11 @@ def eigh(input: Tensor, UPLO: str = "L") -> tuple[Tensor, Tensor]:
     """
     w_impl, V_impl = _la.eigh(_from_triangle(input, UPLO, "eigh"))
     if not _C_engine.grad_enabled() or not input.requires_grad:
-        return _wrap(w_impl), _wrap(V_impl)
+        return _EighResult(_wrap(w_impl), _wrap(V_impl))
     w = _EighWGrad.apply(input, w_impl, V_impl)
     V = _EighVGrad.apply(input, w_impl, V_impl)
-    return w, V  # type: ignore[return-value]
+    assert isinstance(w, Tensor) and isinstance(V, Tensor)
+    return _EighResult(w, V)
 
 
 def eigvalsh(input: Tensor, UPLO: str = "L") -> Tensor:
@@ -1705,7 +1708,7 @@ def lu_factor(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor]:
     if not pivot:
         raise NotImplementedError("lu_factor: pivot=False is not supported")
     LU, pivots, _ = _lu_factor_ex(A, check_errors=True, op="lu_factor")
-    return LU, pivots
+    return _LuFactorResult(LU, pivots)
 
 
 def _lu_factor_packed(A: Tensor) -> tuple[Tensor, Tensor, Tensor]:
@@ -1812,7 +1815,7 @@ def slogdet(A: Tensor) -> tuple[Tensor, Tensor]:
     d = det(A)
     di, z = _unwrap(d), _C_engine.zeros_like(_unwrap(d))
     sign = _wrap(_C_engine.where(_C_engine.equal(di, z), _C_engine.mul(di, z), _C_engine.sign(di)))
-    return sign, cast(Tensor, _LogAbsDet.apply(d))
+    return _SlogdetResult(sign, cast(Tensor, _LogAbsDet.apply(d)))
 
 
 @final
@@ -2160,17 +2163,17 @@ def solve_triangular(
 def vander(
     x: Tensor, *, N: int | None = None, increasing: bool = False
 ) -> Tensor:
-    r"""Construct a Vandermonde matrix from a 1-D vector.
+    r"""Construct a Vandermonde matrix from a 1-D or batched vector.
 
-    Given a 1-D input :math:`x = (x_1, \ldots, x_n)`, returns the
-    :math:`n \times N` matrix whose :math:`j`-th column is a power of
+    Given an input :math:`x` of shape ``(*, n)``, returns the
+    ``(*, n, N)`` tensor whose :math:`j`-th column is a power of
     :math:`x`:
 
     .. math::
 
-        V_{ij} \,=\, x_i^{\,j} \quad (\text{increasing})
+        V_{\ldots ij} \,=\, x_{\ldots i}^{\,j} \quad (\text{increasing})
         \qquad\text{or}\qquad
-        V_{ij} \,=\, x_i^{\,N-1-j} \quad (\text{decreasing, default}).
+        V_{\ldots ij} \,=\, x_{\ldots i}^{\,N-1-j} \quad (\text{decreasing, default}).
 
     Vandermonde matrices arise naturally in polynomial fitting and
     interpolation: the columns are the basis :math:`\{1, x, x^2,
@@ -2179,9 +2182,9 @@ def vander(
     Parameters
     ----------
     x : Tensor
-        1-D input of length :math:`n`.
+        Input tensor of shape ``(*, n)`` with ``ndim >= 1``.
     N : int or None, keyword-only, optional
-        Number of columns.  Defaults to :math:`n` (square output).
+        Number of columns.  Defaults to :math:`n` (square output per vector).
     increasing : bool, keyword-only, optional
         If ``True`` powers increase left-to-right (column 0 is
         :math:`x^0`).  Default ``False`` matches the classical
@@ -2190,7 +2193,7 @@ def vander(
     Returns
     -------
     Tensor
-        :math:`n \times N` Vandermonde matrix.
+        ``(*, n, N)`` Vandermonde tensor.
 
     Notes
     -----
@@ -2206,10 +2209,14 @@ def vander(
     >>> vander(lucid.tensor([1.0, 2.0, 3.0]), N=3, increasing=True)
     tensor([[1., 1., 1.], [1., 2., 4.], [1., 3., 9.]])
     """
-    n = int(x.shape[0])
-    if N is None:
-        N = n
     x_impl = _unwrap(x)
+    shape = [int(s) for s in x_impl.shape]
+    if not shape:
+        raise _C_engine.InvalidArgument("linalg.vander: expected input with at least 1 dimension, got 0D tensor")
+    n = shape[-1]
+    cols = n if N is None else int(N)
+    if cols < 0:
+        raise _C_engine.InvalidArgument(f"linalg.vander: N must be non-negative, got {cols}")
     # The exponent row is combined with ``x`` by ``pow``, so it must live on the
     # input's device — a hardcoded CPU exponent raised DeviceMismatch for any
     # Metal input.
@@ -2230,12 +2237,14 @@ def vander(
     if exp_dtype not in (_C_engine.F32, _C_engine.F64):
         exp_dtype = _C_engine.F32
         x_impl = _C_engine.astype(x_impl, _C_engine.F32)
+    if cols == 0:
+        return _wrap(_C_engine.zeros([*shape, 0], exp_dtype, dev))
     if increasing:
-        exp_impl = _C_engine.arange(0.0, float(N), 1.0, exp_dtype, dev)
+        exp_impl = _C_engine.arange(0.0, float(cols), 1.0, exp_dtype, dev)
     else:
-        exp_impl = _C_engine.arange(float(N - 1), -1.0, -1.0, exp_dtype, dev)
-    x_col = _C_engine.reshape(x_impl, [n, 1])
-    exp_row = _C_engine.reshape(exp_impl, [1, N])
+        exp_impl = _C_engine.arange(float(cols - 1), -1.0, -1.0, exp_dtype, dev)
+    x_col = _C_engine.reshape(x_impl, [*shape, 1])
+    exp_row = _C_engine.reshape(exp_impl, [*([1] * len(shape)), cols])
     return _wrap(_C_engine.pow(x_col, exp_row))
 
 
@@ -2868,7 +2877,7 @@ def lstsq(
     dev = _unwrap(input).device
     dt = _unwrap(input).dtype
     empty = _wrap(_C_engine.zeros([0], dt, dev))
-    return sol, empty, empty, empty
+    return _LstsqResult(sol, empty, empty, empty)
 
 
 def lu_solve(
@@ -2928,13 +2937,7 @@ def lu_solve(
     >>> lu_solve(LU, piv, b)
     tensor([[2.], [3.]])
     """
-    unsupported_if(not left, "lu_solve", "left", left)
-    unsupported_if(adjoint, "lu_solve", "adjoint", adjoint)
-    return _wrap(
-        _la.lu_solve(
-            _unwrap(LU), _unwrap(_check_pivots(pivots, LU, "lu_solve")), _unwrap(B)
-        )
-    )
+    return _lu_solve_general(LU, pivots, B, left=left, adjoint=adjoint)
 
 
 def householder_product(input: Tensor, tau: Tensor) -> Tensor:
@@ -3061,7 +3064,7 @@ def lu(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor, Tensor]:
     # the swap sequence in reverse to recover ``P`` such that ``P · A``
     # equals the *unpermuted* LU product.
     P = _build_permutation_matrix(pivots, n, A.dtype, A.device)
-    return P, L, U
+    return _LuResult(P, L, U)
 
 
 def _check_pivots(pivots: Tensor, factor: Tensor, op: str) -> Tensor:
@@ -3610,19 +3613,11 @@ def diagonal(
 # The ``*_ex`` family reads LAPACK's ``info``; ``lu_factor`` and
 # ``ldl_factor`` above are its checked forms.
 from lucid.linalg._ex import (
-    _complete_svd_factors,
-    _householder_product,
-    _lstsq_solution,
-    _lu_factor_ex,
-    _pinv_with_tol,
-    _sv_cutoff,
-    cholesky_ex,
-    inv_ex,
-    ldl_factor,
-    ldl_factor_ex,
-    lu_factor_ex,
-    solve_ex,
-    tensorinv,
+    _complete_svd_factors, _EighResult, _EigResult, _householder_product,
+    _LstsqResult, _lstsq_solution, _lu_factor_ex, _lu_solve_general,
+    _LuFactorResult, _LuResult, _pinv_with_tol, _QrResult, _SlogdetResult,
+    _sv_cutoff, cholesky_ex, inv_ex, ldl_factor, ldl_factor_ex, lu_factor_ex,
+    solve_ex, tensorinv, tensorsolve,
 )
 
 __all__ = [
@@ -3667,6 +3662,7 @@ __all__ = [
     "inv_ex",
     "solve_ex",
     "tensorinv",
+    "tensorsolve",
     "matrix_exp",
     "diagonal",
 ]

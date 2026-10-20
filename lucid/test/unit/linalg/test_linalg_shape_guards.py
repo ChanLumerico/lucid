@@ -179,3 +179,103 @@ def test_tensorinv_inverts_tensordot_and_differentiates() -> None:
             LA.tensorinv(a, ind=bad_ind)
     with pytest.raises(RuntimeError):
         LA.tensorinv(lucid.ones(2, 3, 5, dtype=lucid.float64), ind=1)
+
+
+def test_tensorsolve_solves_tensordot_with_and_without_dims() -> None:
+    rng = np.random.default_rng(7)
+    m = 2 * 3
+    a_np = (rng.standard_normal((m, m)) * 0.2 + np.eye(m)).reshape(2, 3, 3, 2)
+    b_np = rng.standard_normal((2, 3))
+    a = lucid.tensor(a_np, requires_grad=True)
+    b = lucid.tensor(b_np, requires_grad=True)
+    x = LA.tensorsolve(a, b)
+    assert tuple(x.shape) == (3, 2)
+    np.testing.assert_allclose(
+        x.detach().numpy(), np.linalg.tensorsolve(a_np, b_np), rtol=1e-10, atol=1e-10
+    )
+    recon = lucid.tensordot(a, x, dims=2)
+    np.testing.assert_allclose(recon.detach().numpy(), b_np, rtol=1e-10, atol=1e-10)
+    x.sum().backward()
+    assert a.grad is not None and np.isfinite(a.grad.numpy()).all()
+    assert b.grad is not None and np.isfinite(b.grad.numpy()).all()
+
+    a_perm = lucid.movedim(a.detach(), (-2, -1), (0, 2))
+    x_dims = LA.tensorsolve(a_perm, b.detach(), dims=(0, 2))
+    np.testing.assert_allclose(x_dims.numpy(), x.detach().numpy(), rtol=1e-10, atol=1e-10)
+    with pytest.raises(RuntimeError, match="prod"):
+        LA.tensorsolve(lucid.ones(2, 3, 2, 2, dtype=lucid.float64), b.detach())
+    with pytest.raises(RuntimeError, match="other.shape"):
+        LA.tensorsolve(a.detach(), lucid.ones(3, 2, dtype=lucid.float64))
+
+
+def test_vander_supports_batched_inputs() -> None:
+    x_np = np.array([[1.0, 2.0, 3.0], [2.0, 3.0, 4.0]])
+    x = lucid.tensor(x_np)
+    v_def = LA.vander(x)
+    v_inc = LA.vander(x, N=4, increasing=True)
+    assert tuple(v_def.shape) == (2, 3, 3)
+    assert tuple(v_inc.shape) == (2, 3, 4)
+    for i in range(2):
+        np.testing.assert_allclose(v_def[i].numpy(), np.vander(x_np[i]), rtol=1e-12, atol=1e-12)
+        np.testing.assert_allclose(
+            v_inc[i].numpy(), np.vander(x_np[i], N=4, increasing=True), rtol=1e-12, atol=1e-12
+        )
+    assert tuple(LA.vander(x, N=0).shape) == (2, 3, 0)
+    with pytest.raises(RuntimeError):
+        LA.vander(lucid.tensor(1.0))
+    with pytest.raises(RuntimeError):
+        LA.vander(x, N=-1)
+
+
+@pytest.mark.parametrize("left", [True, False])
+@pytest.mark.parametrize("adjoint", [False, True])
+def test_lu_solve_supports_left_and_adjoint_with_gradients(
+    left: bool, adjoint: bool
+) -> None:
+    rng = np.random.default_rng(11)
+    a_np = rng.standard_normal((2, 3, 3)) * 0.25 + np.eye(3) * 2.0
+    b_np = rng.standard_normal((2, 3, 2)) if left else rng.standard_normal((2, 2, 3))
+    a = lucid.tensor(a_np, requires_grad=True)
+    b = lucid.tensor(b_np, requires_grad=True)
+    lu_res = LA.lu_factor(a)
+    x = LA.lu_solve(lu_res.LU, lu_res.pivots, b, left=left, adjoint=adjoint)
+    mat = a.mT if adjoint else a
+    want = LA.solve(mat, b, left=left)
+    np.testing.assert_allclose(x.detach().numpy(), want.detach().numpy(), rtol=1e-10, atol=1e-10)
+    (x * 1.5).sum().backward()
+    assert a.grad is not None and np.isfinite(a.grad.numpy()).all()
+    assert b.grad is not None and np.isfinite(b.grad.numpy()).all()
+
+
+def test_linalg_decompositions_return_named_tuples() -> None:
+    a = lucid.tensor([[4.0, 1.0], [1.0, 3.0]])
+    b = lucid.tensor([[1.0], [2.0]])
+    sd = LA.slogdet(a)
+    assert (sd.sign, sd.logabsdet) == (sd[0], sd[1])
+    eh = LA.eigh(a)
+    assert (eh.eigenvalues, eh.eigenvectors) == (eh[0], eh[1])
+    eg = LA.eig(a)
+    assert (eg.eigenvalues, eg.eigenvectors) == (eg[0], eg[1])
+    sv = LA.svd(a)
+    assert (sv.U, sv.S, sv.Vh) == (sv[0], sv[1], sv[2])
+    qr = LA.qr(a)
+    assert (qr.Q, qr.R) == (qr[0], qr[1])
+    luf = LA.lu_factor(a)
+    assert (luf.LU, luf.pivots) == (luf[0], luf[1])
+    lufe = LA.lu_factor_ex(a)
+    assert (lufe.LU, lufe.pivots, lufe.info) == (lufe[0], lufe[1], lufe[2])
+    lu = LA.lu(a)
+    assert (lu.P, lu.L, lu.U) == (lu[0], lu[1], lu[2])
+    inve = LA.inv_ex(a)
+    assert (inve.inverse, inve.info) == (inve[0], inve[1])
+    che = LA.cholesky_ex(a)
+    assert (che.L, che.info) == (che[0], che[1])
+    sole = LA.solve_ex(a, b)
+    assert (sole.result, sole.info) == (sole[0], sole[1])
+    lsq = LA.lstsq(a, b)
+    assert (lsq.solution, lsq.residuals, lsq.rank, lsq.singular_values) == tuple(lsq)
+    ldlf = LA.ldl_factor(a)
+    assert (ldlf.LD, ldlf.pivots) == (ldlf[0], ldlf[1])
+    ldlfe = LA.ldl_factor_ex(a)
+    assert (ldlfe.LD, ldlfe.pivots, ldlfe.info) == (ldlfe[0], ldlfe[1], ldlfe[2])
+
