@@ -39,9 +39,15 @@ namespace lucid::gpu {
 // against, so the build-time version is the one that decides.
 #if MLX_VERSION_NUMERIC >= 32001
 inline constexpr const char* k_mlx_eigh_lower = "L";
+inline constexpr const char* k_mlx_eigh_upper = "U";
 #else
 inline constexpr const char* k_mlx_eigh_lower = "U";
+inline constexpr const char* k_mlx_eigh_upper = "L";
 #endif
+
+inline const char* mlx_eigh_uplo(bool upper) noexcept {
+    return upper ? k_mlx_eigh_upper : k_mlx_eigh_lower;
+}
 
 // Map a Lucid :enum:`Dtype` to the matching ``mlx::core::Dtype``.
 //

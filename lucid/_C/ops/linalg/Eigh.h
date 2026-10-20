@@ -63,6 +63,7 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include "../../api.h"
@@ -126,6 +127,6 @@ namespace lucid {
 // --------
 // [[eig_op]] : General non-symmetric eigendecomposition (use only
 //              when the symmetric structure cannot be exploited).
-LUCID_API std::vector<TensorImplPtr> eigh_op(const TensorImplPtr& a);
+LUCID_API std::vector<TensorImplPtr> eigh_op(const TensorImplPtr& a, const std::string& uplo = "L");
 
 }  // namespace lucid

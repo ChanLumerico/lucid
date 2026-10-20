@@ -337,7 +337,8 @@ LUCID_INTERNAL void lapack_svd_f64(
 // References
 // ----------
 // LAPACK ``ssyevd_``.
-LUCID_INTERNAL void lapack_eigh_f32(const float* A, int n, float* w, float* V_out, int* info);
+LUCID_INTERNAL void
+lapack_eigh_f32(const float* A, int n, float* w, float* V_out, int* info, char uplo = 'L');
 
 // Double-precision symmetric eigendecomposition.  Uses ``dsyevd_``.
 //
@@ -357,7 +358,8 @@ LUCID_INTERNAL void lapack_eigh_f32(const float* A, int n, float* w, float* V_ou
 // References
 // ----------
 // LAPACK ``dsyevd_``.
-LUCID_INTERNAL void lapack_eigh_f64(const double* A, int n, double* w, double* V_out, int* info);
+LUCID_INTERNAL void
+lapack_eigh_f64(const double* A, int n, double* w, double* V_out, int* info, char uplo = 'L');
 
 // General (non-symmetric) eigendecomposition (float32).
 //

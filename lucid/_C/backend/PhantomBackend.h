@@ -461,7 +461,7 @@ public:
         return {phantom(dt), phantom(dt)};
     }
     StoragePair
-    linalg_eigh(const Storage&, const Shape&, const Shape&, const Shape&, Dtype dt) override {
+    linalg_eigh(const Storage&, const Shape&, const Shape&, const Shape&, Dtype dt, bool) override {
         return {phantom(dt), phantom(dt)};
     }
     std::vector<Storage> linalg_svd(const Storage&,

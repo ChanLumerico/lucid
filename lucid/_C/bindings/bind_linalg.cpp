@@ -82,11 +82,11 @@ void register_linalg(py::module_& m) {
     // eigenvalues sorted in ascending order and is faster than eig.
     m.def(
         "eigh",
-        [](const TensorImplPtr& a) {
-            auto r = eigh_op(a);
+        [](const TensorImplPtr& a, const std::string& UPLO) {
+            auto r = eigh_op(a, UPLO);
             return py::make_tuple(r[0], r[1]);
         },
-        py::arg("a"),
+        py::arg("a"), py::arg("UPLO") = "L",
         "Symmetric/Hermitian eigendecomposition.\n"
         "Returns (eigenvalues, eigenvectors) with eigenvalues sorted ascending.\n"
         "Input must be a real symmetric square matrix.\n"

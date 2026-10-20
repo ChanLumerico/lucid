@@ -486,11 +486,11 @@ void lapack_svd_f64(const double* A,
     *info_out = 0;
 }
 
-void lapack_eigh_f32(const float* A, int n, float* w, float* V_out, int* info_out) {
+void lapack_eigh_f32(const float* A, int n, float* w, float* V_out, int* info_out, char uplo) {
     std::vector<float> Ac(static_cast<std::size_t>(n) * n);
     rowmajor_to_colmajor_f32(A, Ac.data(), n, n);
 
-    char jobz = 'V', uplo = 'L';
+    char jobz = 'V';
     i32 N = n, lda = ld(n), info = 0;
 
     i32 lwork = -1, liwork = -1;
@@ -515,11 +515,11 @@ void lapack_eigh_f32(const float* A, int n, float* w, float* V_out, int* info_ou
     *info_out = 0;
 }
 
-void lapack_eigh_f64(const double* A, int n, double* w, double* V_out, int* info_out) {
+void lapack_eigh_f64(const double* A, int n, double* w, double* V_out, int* info_out, char uplo) {
     std::vector<double> Ac(static_cast<std::size_t>(n) * n);
     rowmajor_to_colmajor_f64(A, Ac.data(), n, n);
 
-    char jobz = 'V', uplo = 'L';
+    char jobz = 'V';
     i32 N = n, lda = ld(n), info = 0;
 
     i32 lwork = -1, liwork = -1;

@@ -5983,33 +5983,26 @@ public:
         const auto& cs = std::get<CpuStorage>(a);
 
         int info = 0;
-        if (dt == Dtype::F32) {
-            const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
-            auto* w_p = reinterpret_cast<float*>(values_ptr.get());
-            auto* v_p = reinterpret_cast<float*>(vectors_ptr.get());
-            std::vector<float> wr(n), wi(n), vr(per_mat);
+        auto run_eig = [&](auto tag, auto fn) {
+            using T = decltype(tag);
+            const auto* in_p = reinterpret_cast<const T*>(cs.ptr.get());
+            auto* w_p = reinterpret_cast<T*>(values_ptr.get());
+            auto* v_p = reinterpret_cast<T*>(vectors_ptr.get());
+            std::vector<T> wr(n), wi(n), vr(per_mat);
             for (std::int64_t b = 0; b < batch; ++b) {
                 require_finite_eig(in_p + b * per_mat, per_mat);
-                cpu::lapack_eig_f32(in_p + b * per_mat, n, wr.data(), wi.data(), vr.data(), &info);
+                fn(in_p + b * per_mat, n, wr.data(), wi.data(), vr.data(), &info);
                 check_lapack_info(info, "eig");
-                unpack_eig<float>(wr.data(), wi.data(), vr.data(), n, w_p + 2 * b * per_w,
-                                  v_p + 2 * b * per_mat);
+                unpack_eig<T>(wr.data(), wi.data(), vr.data(), n, w_p + 2 * b * per_w,
+                              v_p + 2 * b * per_mat);
             }
-        } else if (dt == Dtype::F64) {
-            const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
-            auto* w_p = reinterpret_cast<double*>(values_ptr.get());
-            auto* v_p = reinterpret_cast<double*>(vectors_ptr.get());
-            std::vector<double> wr(n), wi(n), vr(per_mat);
-            for (std::int64_t b = 0; b < batch; ++b) {
-                require_finite_eig(in_p + b * per_mat, per_mat);
-                cpu::lapack_eig_f64(in_p + b * per_mat, n, wr.data(), wi.data(), vr.data(), &info);
-                check_lapack_info(info, "eig");
-                unpack_eig<double>(wr.data(), wi.data(), vr.data(), n, w_p + 2 * b * per_w,
-                                   v_p + 2 * b * per_mat);
-            }
-        } else {
+        };
+        if (dt == Dtype::F32)
+            run_eig(float{}, cpu::lapack_eig_f32);
+        else if (dt == Dtype::F64)
+            run_eig(double{}, cpu::lapack_eig_f64);
+        else
             ErrorBuilder("cpu_backend::linalg_eig").not_implemented("dtype not supported");
-        }
 
         return {Storage{CpuStorage{values_ptr, values_nbytes, out_dt}},
                 Storage{CpuStorage{vectors_ptr, vectors_nbytes, out_dt}}};
@@ -6019,35 +6012,33 @@ public:
                             const Shape& shape,
                             const Shape& values_shape,
                             const Shape& vectors_shape,
-                            Dtype dt) override {
+                            Dtype dt,
+                            bool upper = false) override {
         const int n = static_cast<int>(shape[shape.size() - 1]);
         const std::int64_t batch = leading_matrix_batch_count(shape, 2);
-        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
-        const std::size_t per_w = static_cast<std::size_t>(n);
-        const std::size_t w_nb = shape_numel(values_shape) * dtype_size(dt);
-        const std::size_t v_nb = shape_numel(vectors_shape) * dtype_size(dt);
-        auto w_ptr = allocate_aligned_bytes(w_nb, Device::CPU);
-        auto v_ptr = allocate_aligned_bytes(v_nb, Device::CPU);
+        const std::size_t per_mat = static_cast<std::size_t>(n) * n,
+                          per_w = static_cast<std::size_t>(n);
+        auto w_cpu = alloc_cpu(shape_numel(values_shape), dt);
+        auto v_cpu = alloc_cpu(shape_numel(vectors_shape), dt);
         const auto& cs = std::get<CpuStorage>(a);
+        const char uplo = upper ? 'U' : 'L';
         int info = 0;
-        if (dt == Dtype::F32) {
-            const auto* in = reinterpret_cast<const float*>(cs.ptr.get());
-            auto* wp = reinterpret_cast<float*>(w_ptr.get());
-            auto* vp = reinterpret_cast<float*>(v_ptr.get());
+        auto run_eigh = [&](auto tag, auto fn) {
+            using T = decltype(tag);
+            const auto* in = reinterpret_cast<const T*>(cs.ptr.get());
+            auto* wp = reinterpret_cast<T*>(w_cpu.ptr.get());
+            auto* vp = reinterpret_cast<T*>(v_cpu.ptr.get());
             for (std::int64_t b = 0; b < batch; ++b)
-                cpu::lapack_eigh_f32(in + b * per_mat, n, wp + b * per_w, vp + b * per_mat, &info);
-            check_lapack_info(info, "eigh");
-        } else if (dt == Dtype::F64) {
-            const auto* in = reinterpret_cast<const double*>(cs.ptr.get());
-            auto* wp = reinterpret_cast<double*>(w_ptr.get());
-            auto* vp = reinterpret_cast<double*>(v_ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b)
-                cpu::lapack_eigh_f64(in + b * per_mat, n, wp + b * per_w, vp + b * per_mat, &info);
-            check_lapack_info(info, "eigh");
-        } else {
+                fn(in + b * per_mat, n, wp + b * per_w, vp + b * per_mat, &info, uplo);
+        };
+        if (dt == Dtype::F32)
+            run_eigh(float{}, cpu::lapack_eigh_f32);
+        else if (dt == Dtype::F64)
+            run_eigh(double{}, cpu::lapack_eigh_f64);
+        else
             ErrorBuilder("cpu_backend::linalg_eigh").not_implemented("dtype not supported");
-        }
-        return {Storage{CpuStorage{w_ptr, w_nb, dt}}, Storage{CpuStorage{v_ptr, v_nb, dt}}};
+        check_lapack_info(info, "eigh");
+        return {Storage{std::move(w_cpu)}, Storage{std::move(v_cpu)}};
     }
 
     std::vector<Storage> linalg_svd(const Storage& a,

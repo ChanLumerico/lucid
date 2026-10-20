@@ -53,6 +53,7 @@
 #include <mlx/ops.h>
 
 #include "ComplexParts.h"
+#include "MlxBridge.h"
 
 namespace lucid {
 namespace backend {
@@ -70,6 +71,14 @@ inline ::mlx::core::array widen_half(const ::mlx::core::array& x) {
 // ``x`` in ``dt`` — a no-op when it already is.
 inline ::mlx::core::array narrow_to(const ::mlx::core::array& x, ::mlx::core::Dtype dt) {
     return x.dtype() == dt ? x : ::mlx::core::astype(x, dt);
+}
+
+inline ::mlx::core::array widen_gpu(const Storage& s) {
+    return widen_half(*std::get<GpuStorage>(s).arr);
+}
+
+inline Storage wrap_narrow(const ::mlx::core::array& a, Dtype dt) {
+    return Storage{::lucid::gpu::wrap_mlx_array(narrow_to(a, ::lucid::gpu::to_mlx_dtype(dt)), dt)};
 }
 
 // The dtype a reduction over ``dt`` accumulates in.

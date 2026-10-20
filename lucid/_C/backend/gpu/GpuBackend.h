@@ -2767,10 +2767,15 @@ public:
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(v), out_dt)}};
     }
 
-    StoragePair
-    linalg_eigh(const Storage& a, const Shape&, const Shape&, const Shape&, Dtype dt) override {
+    StoragePair linalg_eigh(const Storage& a,
+                            const Shape&,
+                            const Shape&,
+                            const Shape&,
+                            Dtype dt,
+                            bool upper = false) override {
         const auto& ga = std::get<GpuStorage>(a);
-        auto [w, v] = ::mlx::core::linalg::eigh(*ga.arr, gpu::k_mlx_eigh_lower, k_linalg_stream);
+        auto [w, v] =
+            ::mlx::core::linalg::eigh(*ga.arr, gpu::mlx_eigh_uplo(upper), k_linalg_stream);
         return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(w), dt)},
                 Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(v), dt)}};
     }
@@ -6155,14 +6160,6 @@ private:
             }
         }
         return ((n - cycles) % 2 == 0) ? 1.0f : -1.0f;
-    }
-
-    static ::mlx::core::array widen_gpu(const Storage& s) {
-        return widen_half(*std::get<GpuStorage>(s).arr);
-    }
-
-    static Storage wrap_narrow(const ::mlx::core::array& a, Dtype dt) {
-        return Storage{gpu::wrap_mlx_array(narrow_to(a, gpu::to_mlx_dtype(dt)), dt)};
     }
 
     std::vector<Storage> batch_norm_eval_forward(const Storage& x,

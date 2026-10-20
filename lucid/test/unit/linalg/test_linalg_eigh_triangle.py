@@ -106,15 +106,14 @@ def test_uplo_names_the_triangle_read(
     ("device", "dtype"), device_dtype_params([lucid.float32, lucid.float64])
 )
 @pytest.mark.parametrize("name", list(_INPUTS))
+@pytest.mark.parametrize("uplo", ["L", "U"])
 def test_the_kernel_reads_the_triangle_linalg_assumes(
-    name: str, device: str, dtype: lucid.dtype
+    uplo: str, name: str, device: str, dtype: lucid.dtype
 ) -> None:
-    """``lucid.linalg`` passes ``UPLO="L"`` straight through and transposes
-    for ``"U"``, so it relies on the kernel reading the lower triangle on
-    every device.  A backend — or an MLX upgrade — that changes sides fails
-    here, by name, instead of as a silently flipped ``UPLO``."""
+    """``_C_engine.linalg.eigh`` passes ``UPLO`` straight to the backend
+    kernel on every device without a Python transpose."""
     a = _INPUTS[name]
-    w, _ = LA._la.eigh(_unwrap(lucid.tensor(a, dtype=dtype, device=device)))
+    w, _ = LA._la.eigh(_unwrap(lucid.tensor(a, dtype=dtype, device=device)), uplo)
     got = _wrap(w).to("cpu").numpy()
-    want = np.linalg.eigvalsh(a, UPLO=LA._EIGH_KERNEL_READS)
+    want = np.linalg.eigvalsh(a, UPLO=uplo)
     np.testing.assert_allclose(got, want, **_tol(dtype))

@@ -43,9 +43,11 @@ namespace lucid {
 // wsh drops the last dimension (n scalars per n×n matrix).
 // vsh is the same as the input shape (the full n×n orthogonal eigenvector matrix).
 // The backend guarantees eigenvalues in wsh are sorted ascending.
-std::vector<TensorImplPtr> eigh_op(const TensorImplPtr& a) {
+std::vector<TensorImplPtr> eigh_op(const TensorImplPtr& a, const std::string& uplo) {
     using namespace linalg_detail;
     Validator::input(a, "eigh.a").non_null();
+    if (uplo != "L" && uplo != "U")
+        ErrorBuilder("eigh").invalid_argument("UPLO must be 'L' or 'U', got " + uplo);
     require_float(a->dtype(), "eigh");
     require_square_matrix(a->shape(), "eigh.a");
     OpScopeFull scope{"eigh", a->device(), a->dtype(), a->shape()};
@@ -62,7 +64,7 @@ std::vector<TensorImplPtr> eigh_op(const TensorImplPtr& a) {
         return {zeros_op(wsh, a->dtype(), a->device()), zeros_op(vsh, a->dtype(), a->device())};
 
     auto out = backend::Dispatcher::for_device(a->device())
-                   .linalg_eigh(a->storage(), sh, wsh, vsh, a->dtype());
+                   .linalg_eigh(a->storage(), sh, wsh, vsh, a->dtype(), uplo == "U");
     return {fresh(std::move(out.first), wsh, a->dtype(), a->device()),
             fresh(std::move(out.second), vsh, a->dtype(), a->device())};
 }
