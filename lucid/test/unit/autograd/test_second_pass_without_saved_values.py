@@ -51,6 +51,7 @@ _SAVE_NOTHING: dict[str, Build] = {
     "permute": lambda m, x: x.reshape(3, 2).permute(1, 0).sum(),
     "expand": lambda m, x: x.reshape(1, 6).expand(2, 6).sum(),
     "slice": lambda m, x: x[1:4].sum(),
+    "as-strided": lambda m, x: x.as_strided((2,), (2,)).sum(),
     "cat": lambda m, x: m.cat([x, x - 1.0], 0).mean(),
     "stack": lambda m, x: m.stack([x, x + 1.0], 0).sum(),
     "flip": lambda m, x: m.flip(x, [0]).sum(),
@@ -74,6 +75,8 @@ _SAVE_VALUES: dict[str, Build] = {
     "gather": lambda m, x: m.gather(x, 0, _index(m, x.device)).sum(),
     "index-select": lambda m, x: m.index_select(x, 0, _index(m, x.device)).sum(),
     "advanced-indexing": lambda m, x: x[_index(m, x.device)].sum(),
+    "sort": lambda m, x: m.sort(x)[0].sum(),
+    "topk": lambda m, x: m.topk(x, 2)[0].sum(),
     "max-pool1d": lambda m, x: m.nn.functional.max_pool1d(x.reshape(1, 1, 6), 2).sum(),
     "embedding": lambda m, x: m.nn.functional.embedding(
         m.tensor([0, 2], device=x.device), x.reshape(3, 2)
@@ -224,22 +227,52 @@ def test_a_save_free_pass_keeps_the_root_attached(device: str) -> None:
     assert y.grad_fn is not None and y.grad_fn.name() == fn.name()
 
 
-def test_a_pass_that_freed_values_cuts_the_root_from_its_graph(device: str) -> None:
+def test_a_pass_that_freed_values_cuts_at_the_freed_frontier(device: str) -> None:
     x = _leaf(lucid, device)
-    y = (x * x).sum()
-    y.backward()
-    assert y.grad_fn is not None and y.grad_fn.name() == "SpentGraph"
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-493: the spent root of (a*a).sum() hides that nothing "
-    "between it and the interior tensor h was freed, so grad(y, h) is refused "
-    "where the reference answers [1, 1]",
-)
-def test_grad_to_an_interior_tensor_behind_save_free_nodes(device: str) -> None:
-    a = lucid.ones(2, requires_grad=True, device=device)
-    h = a * a
+    h = x * x
     y = h.sum()
     y.backward()
-    assert [_values(g) for g in lucid.autograd.grad(y, h)] == [[1.0, 1.0]]
+    assert y.grad_fn is not None and y.grad_fn.name() == "sum"
+    assert h.grad_fn is not None and h.grad_fn.name() == "mul"
+    with pytest.raises(RuntimeError, match="second time"):
+        y.backward()
+    with pytest.raises(RuntimeError, match="second time"):
+        lucid.autograd.grad(y, x)
+
+
+def test_grad_to_an_interior_tensor_behind_save_free_nodes(
+    ref: ModuleType, device: str
+) -> None:
+    def scenario(m: ModuleType, dev: str) -> object:
+        a = m.ones(2, requires_grad=True, device=dev)
+        h = a * a
+        y = h.sum()
+        y.backward()
+        return [_values(g) for g in m.autograd.grad(y, h)]
+
+    want = _outcome(ref, "cpu", scenario)
+    assert want == {"value": [[1.0, 1.0]]}
+    assert _outcome(lucid, device, scenario) == want
+
+
+def test_grad_to_an_unvisited_branch_after_a_partial_grad_pass(
+    ref: ModuleType, device: str
+) -> None:
+    def scenario(m: ModuleType, dev: str) -> object:
+        x = m.tensor([2.0, 3.0], requires_grad=True, device=dev)
+        w = m.tensor([4.0, 5.0], requires_grad=True, device=dev)
+        y = (x * x).sum() + (w * w).sum()
+        gx = [_values(g) for g in m.autograd.grad(y, [x])]
+        gw = [_values(g) for g in m.autograd.grad(y, [w])]
+        return gx, gw
+
+    want = _outcome(ref, "cpu", scenario)
+    assert want == {"value": ([[4.0, 6.0]], [[8.0, 10.0]])}
+    assert _outcome(lucid, device, scenario) == want
+
+    x = lucid.tensor([2.0, 3.0], requires_grad=True, device=device)
+    w = lucid.tensor([4.0, 5.0], requires_grad=True, device=device)
+    y = (x * x).sum() + (w * w).sum()
+    lucid.autograd.grad(y, [x])
+    with pytest.raises(RuntimeError, match="second time"):
+        lucid.autograd.grad(y, [x])

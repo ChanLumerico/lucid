@@ -63,7 +63,7 @@
     },
     "frees": 87,
     "host_syncs": 0,
-    "peak_bytes": 171156
+    "peak_bytes": 162948
   },
   "cnn_sgd/metal": {
     "allocations": 94,
@@ -98,7 +98,7 @@
     "frees": 94,
     "host_allocations": 0,
     "host_syncs": 1,
-    "peak_bytes": 203908
+    "peak_bytes": 195716
   },
   "compiled_mlp_adam/metal": {
     "allocations": 17,
@@ -217,7 +217,7 @@
     },
     "frees": 64,
     "host_syncs": 0,
-    "peak_bytes": 14404
+    "peak_bytes": 14340
   },
   "mlp_adam/metal": {
     "allocations": 70,
@@ -266,7 +266,7 @@
     },
     "frees": 102,
     "host_syncs": 0,
-    "peak_bytes": 32004
+    "peak_bytes": 31876
   },
   "transformer_adamw/metal": {
     "allocations": 142,
@@ -285,6 +285,7 @@
     "frees": 142,
     "host_allocations": 0,
     "host_syncs": 1,
-    "peak_bytes": 33160
+    "peak_bytes": 32900
   }
 }
+

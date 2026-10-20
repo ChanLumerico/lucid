@@ -86,6 +86,8 @@ public:
     // Pre-computed per-channel reciprocal std, shape ``(C,)``.
     Storage rstd_;
 
+    void release_own_saved() { clear_saved(rstd_); }
+
     // Run the inference-mode forward pass.
     //
     // Normalises ``x`` channel-wise using the *supplied* ``mean`` and
@@ -237,6 +239,8 @@ public:
     // Per-slice norm values needed for backward.
     Storage saved_norm_;
 
+    void release_own_saved() { clear_saved(saved_norm_); }
+
     // Run the forward pass.
     //
     // Computes the per-slice Lp norm along ``axis``, divides ``x`` by
@@ -364,6 +368,8 @@ public:
 
     // Normalised global response, shape ``(N, C, 1, 1)``.
     Storage saved_Nx_;
+
+    void release_own_saved() { clear_saved(saved_Nx_); }
 
     // Run the forward pass.
     //

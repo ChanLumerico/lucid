@@ -145,6 +145,8 @@ public:
     // Forward eps; reused on the GPU backward to derive variance from rstd.
     double eps_ = 1e-5;
 
+    void release_own_saved() { clear_saved(saved_mean_, saved_rstd_, saved_xnorm_); }
+
     // Run the training-mode forward pass.
     //
     // Computes per-channel batch statistics, normalises ``x``, applies

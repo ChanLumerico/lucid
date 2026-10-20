@@ -557,6 +557,12 @@ class BazBackward : public FuncOp<BazBackward, 1> {
 void wire(std::shared_ptr<BazBackward> bwd, const TensorImplPtr& out) {
     bwd->saved_output_ = out->storage();
 }
+class QuxBackward : public FuncOp<QuxBackward, 1> {
+public:
+    static constexpr bool kKeepsOwnValues = true;
+    Storage mask_;
+    std::vector<Storage> apply(Storage g) override;
+};
 """
 
 
@@ -564,7 +570,12 @@ def test_the_check_refuses_each_way_a_node_can_escape_the_guard(tmp_path: Path) 
     (tmp_path / "ops").mkdir()
     (tmp_path / "ops" / "Foo.cpp").write_text(_UNGUARDED)
     problems = check_saved_versions.check(
-        tmp_path, {"BarNode::held_": check_saved_versions.GUARDED, "Gone::x_": "why"}
+        tmp_path,
+        {
+            "BarNode::held_": check_saved_versions.GUARDED,
+            "QuxBackward::mask_": "computed",
+            "Gone::x_": "why",
+        },
     )
     text = "\n".join(problems)
     assert "FooBackward::saved_x_ holds tensor data and is not classified" in text
@@ -572,8 +583,12 @@ def test_the_check_refuses_each_way_a_node_can_escape_the_guard(tmp_path: Path) 
         "FooBackward keeps a tensor of its own but does not declare kKeepsOwnValues"
         in text
     )
+    assert (
+        "QuxBackward declares kKeepsOwnValues = true but does not define release_own_saved()"
+        in text
+    )
     assert "BarNode::held_ is listed as guarded but BarNode declares no" in text
     assert "an empty validate_versions override" in text
     assert "HELD lists Gone::x_" in text
     assert "ops/Foo.cpp:15: writes a saved slot directly" in text
-    assert len(problems) == 6
+    assert len(problems) == 7

@@ -278,6 +278,22 @@ def undeclared_own_values(engine: Path = ENGINE) -> Iterator[tuple[str, Path]]:
                 yield name, path
 
 
+def unreleased_own_values(engine: Path = ENGINE) -> Iterator[tuple[str, Path]]:
+    """Yield ``(class, file)`` for each slot-based node declaring
+    ``kKeepsOwnValues = true`` without defining ``release_own_saved``."""
+    for path, text in _sources(engine):
+        for m in _CLASS.finditer(text):
+            name = m.group("name")
+            if name in _SLOT_OWNERS or not _SLOT_BASE.search(m.group("bases")):
+                continue
+            flat = _top_level(_body(text, m.end() - 1))
+            if (
+                re.search(r"\bkKeepsOwnValues\s*=\s*true\b", flat)
+                and "release_own_saved" not in flat
+            ):
+                yield name, path
+
+
 def direct_slot_writes(engine: Path = ENGINE) -> Iterator[tuple[Path, int]]:
     """Yield ``(file, line)`` for each write into a canonical slot outside
     :data:`_SLOT_HEADERS`."""
@@ -304,6 +320,12 @@ def check(engine: Path = ENGINE, held: dict[str, str] | None = None) -> list[str
             f"{path.relative_to(engine)}: {cls} keeps a tensor of its own but does not "
             f"declare {_KEEPS_OWN} — AutogradNode::saved_kind sees only the canonical "
             f"slots, so a second pass would run it after its values were meant to be gone"
+        )
+    for cls, path in unreleased_own_values(engine):
+        problems.append(
+            f"{path.relative_to(engine)}: {cls} declares {_KEEPS_OWN} = true but does not "
+            f"define release_own_saved() — release_saved() would leave its own members "
+            f"allocated after backward"
         )
     seen: set[str] = set()
     for cls, member, validates, path in scan(engine):

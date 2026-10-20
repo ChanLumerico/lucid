@@ -105,6 +105,8 @@ public:
     // term without anything looking wrong.
     double eps_ = 1e-5;
 
+    void release_own_saved() { clear_saved(saved_mean_, saved_rstd_); }
+
     // Run the forward pass.
     //
     // Reduces ``x`` over its last $D$ dimensions (where $D$ is the rank

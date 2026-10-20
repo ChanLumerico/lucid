@@ -93,6 +93,7 @@ public:
     // ``B`` stays guarded although the eager formula reads the saved
     // solution instead: graph-mode backward recomputes ``X`` from it.
     void validate_versions() override;
+    void release_own_saved() { clear_saved(pivots_); }
 };
 
 // Solve $Ax = b$ given the packed LU factors and pivot vector.

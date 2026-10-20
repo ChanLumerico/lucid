@@ -98,6 +98,8 @@ public:
     Shape grad_shape_;
     int axis_ = 0;
 
+    void release_own_saved() { clear_saved(indices_); }
+
     std::vector<Storage> apply(Storage grad_out) override {
         return {scatter_axis_add_storage(grad_out, indices_, input_shapes_[0], grad_shape_, axis_,
                                          dtype_, device_)};

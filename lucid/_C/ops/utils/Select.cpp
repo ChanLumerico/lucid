@@ -194,6 +194,7 @@ public:
     // The condition is the one tensor read by value; ``x`` and ``y`` only
     // route the gradient, so a write into either is not refused.
     void validate_versions() override { check_saved_version(cond_tensor_, 0, schema_v1.name, 0); }
+    void release_own_saved() { clear_saved(cond_); }
 };
 
 const OpSchema WhereBackward::schema_v1{"where", 1, AmpPolicy::KeepInput, true};
@@ -234,6 +235,7 @@ public:
 
     // Only the mask is read by value.
     void validate_versions() override { check_saved_version(mask_tensor_, 0, schema_v1.name, 1); }
+    void release_own_saved() { clear_saved(mask_); }
 };
 
 const OpSchema MaskedFillBackward::schema_v1{"masked_fill", 1, AmpPolicy::KeepInput, true};
@@ -320,6 +322,7 @@ public:
     void validate_versions() override {
         check_saved_version(indices_tensor_, 0, schema_v1.name, 1);
     }
+    void release_own_saved() { clear_saved(indices_); }
 };
 
 const OpSchema GatherBackward::schema_v1{"gather", 1, AmpPolicy::KeepInput, true};

@@ -151,6 +151,11 @@ using GradReads = std::array<std::array<bool, N>, N>;
 // --------
 // :class:`Node` — the abstract base whose virtuals this class overrides.
 // :class:`FuncOp` — alias used by most concrete backward classes.
+template <typename... S>
+inline void clear_saved(S&... s) {
+    ((s = S{}), ...);
+}
+
 template <class Derived, std::size_t N_IN>
 class AutogradNode : public Node {
 public:
@@ -270,6 +275,9 @@ public:
         for (auto& p : saved_impl_inputs_)
             p.reset();
         saved_impl_output_.reset();
+        if constexpr (requires(Derived& d) { d.release_own_saved(); }) {
+            static_cast<Derived*>(this)->release_own_saved();
+        }
     }
 
     // Keep ``s`` as input ``i``'s values, or the output's, for :meth:`apply`.
@@ -305,6 +313,10 @@ public:
             "a node that frees members of its own in release_saved must say in saved_kind "
             "whether its eager backward reads them");
         if constexpr (requires { Derived::kKeepsOwnValues; }) {
+            static_assert(
+                !Derived::kKeepsOwnValues || requires(Derived& d) { d.release_own_saved(); },
+                "a node with kKeepsOwnValues = true must free its own members in "
+                "release_own_saved()");
             if (Derived::kKeepsOwnValues)
                 return SavedKind::kEagerValues;
         }

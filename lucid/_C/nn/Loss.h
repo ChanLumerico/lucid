@@ -348,6 +348,10 @@ public:
     Storage saved_weight_;       // Optional per-class weights.
     Storage saved_valid_count_;  // Count of non-ignored samples (for Mean).
 
+    void release_own_saved() {
+        clear_saved(saved_softmax_, saved_target_, saved_weight_, saved_valid_count_);
+    }
+
     // Compute cross-entropy loss with autograd wiring.
     //
     // Parameters
@@ -441,6 +445,8 @@ public:
     Storage saved_target_;
     Storage saved_weight_;
     Storage saved_valid_count_;
+
+    void release_own_saved() { clear_saved(saved_target_, saved_weight_, saved_valid_count_); }
 
     // Compute NLL loss with autograd wiring.
     //
@@ -759,6 +765,10 @@ public:
     Storage saved_targets_;
     Storage saved_input_lengths_;
     Storage saved_target_lengths_;
+
+    void release_own_saved() {
+        clear_saved(saved_targets_, saved_input_lengths_, saved_target_lengths_);
+    }
 
     std::vector<Storage> apply(Storage grad_out) override;
 };

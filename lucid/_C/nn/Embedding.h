@@ -150,6 +150,7 @@ public:
     // The same scatter-add, recorded, so a gradient of the weight gradient
     // reaches the upstream gradient.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+    void release_own_saved() { clear_saved(saved_indices_); }
 };
 
 // Autograd node for Rotary Position Embedding (RoPE, Su et al. 2021).
@@ -239,6 +240,7 @@ public:
     // The same rotation by $-\theta$ from tracked ops, for
     // ``create_graph=True``; the saved tables are constants.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+    void release_own_saved() { clear_saved(saved_cos_, saved_sin_); }
 };
 
 // Integer-index embedding lookup — free-function entry point.
@@ -406,6 +408,7 @@ public:
     // as the eager backward reads them, and the gradient is a scatter-add of
     // the bag gradients onto them — differentiable again in the gradient.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+    void release_own_saved() { clear_saved(saved_indices_, saved_offsets_); }
 };
 
 LUCID_API TensorImplPtr embedding_bag_op(const TensorImplPtr& weight,

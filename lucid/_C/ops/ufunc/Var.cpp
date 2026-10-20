@@ -107,6 +107,8 @@ public:
         auto scale = full_like_op(x, 2.0 / static_cast<double>(count_));
         return {mul_op(centered, mul_op(g, scale))};
     }
+
+    void release_own_saved() { clear_saved(saved_mean_); }
 };
 
 // KeepInput: variance is computed in the input's own dtype under an

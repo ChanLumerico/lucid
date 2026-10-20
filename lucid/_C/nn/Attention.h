@@ -128,6 +128,8 @@ public:
     Dtype mask_dtype_ = Dtype::F32;
     Storage saved_mask_;  // valid iff has_mask_; Bool ⇒ keep-mask, else additive.
 
+    void release_own_saved() { clear_saved(saved_weights_, saved_mask_); }
+
     // Run the SDPA forward and return the output tensor.
     //
     // Dispatches to ``IBackend::sdpa_forward`` after validating that the

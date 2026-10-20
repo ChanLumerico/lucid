@@ -109,6 +109,8 @@ public:
     // plain Storage and would drop d(rstd)/dx from the second derivative.
     double eps_ = 1e-5;
 
+    void release_own_saved() { clear_saved(saved_mean_, saved_rstd_); }
+
     // Run the forward pass.
     //
     // Computes per-``(batch, group)`` statistics, normalises ``x``,

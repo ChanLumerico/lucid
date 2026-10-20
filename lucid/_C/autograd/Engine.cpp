@@ -57,14 +57,22 @@ void refuse_released(const Node& node, bool graph) {
         ErrorBuilder("backward").fail(std::string(kSecondPass) + " (" + node.node_name() + ")");
 }
 
-// What a root keeps once its graph has been spent.  Clearing its grad_fn
-// instead made it look like a leaf, and a second backward() on the same
-// loss quietly wrote the seed into the loss's own .grad.
+// What a node holds once a pass has freed the values its eager backward
+// reads.  Clearing its edges to nothing made ``grad()`` read it as a dead end
+// — reporting every input behind it unreachable, and under ``allow_unused``
+// or ``backward(inputs=)`` answering ``None`` without a word — while
+// replacing the root's own ``grad_fn`` hid that nothing between the root and
+// an interior tensor or another branch had been freed (LCD-493).
 //
-// Severing the root is what frees the graph, so this node is all that is
-// left of it: it is marked released, which refuses it wherever that is
-// checked, and carries the sequence numbers of the nodes the graph held,
-// which say where a gradient through it would have gone (``spent_reaches``).
+// Severing at the *frontier* — the nodes in ``freed`` whose eager-read values
+// were actually released — keeps the save-free nodes above them wired and
+// frees the subgraph below them.  Each freed node's outgoing edges are
+// replaced by a single edge to a :class:`SpentGraphNode` carrying the
+// sequence numbers of the subgraph that node could reach, so a later pass
+// that tries to differentiate *past* ``freed`` towards a target in that
+// subgraph still routes into ``freed`` and hits ``refuse_released``, while a
+// pass that stops at an interior tensor above ``freed`` (or follows an
+// untouched branch) never reaches ``freed`` at all.
 class SpentGraphNode final : public Node {
 public:
     explicit SpentGraphNode(std::vector<std::uint64_t> held) : held_(std::move(held)) {
@@ -85,9 +93,9 @@ public:
 
     std::string node_name() const override { return "SpentGraph"; }
 
-    // Whether ``node`` was part of the spent graph.  Matched by sequence
+    // Whether ``node`` was part of the spent subgraph.  Matched by sequence
     // number, unique for the life of the process, so a node made after the
-    // graph was freed is never taken for one of its own.
+    // subgraph was freed is never taken for one of its own.
     bool held(const Node& node) const {
         return std::binary_search(held_.begin(), held_.end(), node.sequence_nr());
     }
@@ -100,29 +108,13 @@ private:
     std::vector<std::uint64_t> held_;
 };
 
-// ``node`` as a spent root, or null.  Only a spent root is both released and
-// edgeless, which a walk over every node of a graph tests before the cast.
+// ``node`` as a spent frontier marker, or null.  Only a SpentGraphNode is
+// both released and edgeless, which a walk over every node of a graph tests
+// before the cast.
 const SpentGraphNode* as_spent(const Node& node) {
     if (!node.next_edges().empty() || !node.saved_released())
         return nullptr;
     return dynamic_cast<const SpentGraphNode*>(&node);
-}
-
-// Sever a non-leaf root from the graph it just ran so the nodes can be
-// freed.  ``order`` is that whole graph; a spent root inside it hands on what
-// its own graph held.
-void release_root(const std::shared_ptr<TensorImpl>& root,
-                  const std::vector<std::shared_ptr<Node>>& order) {
-    std::vector<std::uint64_t> held;
-    held.reserve(order.size());
-    for (const auto& node : order) {
-        held.push_back(node->sequence_nr());
-        if (const auto* spent = as_spent(*node))
-            held.insert(held.end(), spent->held_sequence().begin(), spent->held_sequence().end());
-    }
-    std::sort(held.begin(), held.end());
-    held.erase(std::unique(held.begin(), held.end()), held.end());
-    root->set_grad_fn(std::make_shared<SpentGraphNode>(std::move(held)));
 }
 
 // A gradient with a zero derivative of its own (see zero_derivative_through).
@@ -435,31 +427,35 @@ std::vector<std::shared_ptr<Node>> topo_order(const std::vector<std::shared_ptr<
     return order;
 }
 
-// After a pass that did not retain its graph, cut each root from its graph
-// when the pass freed, somewhere in that graph, values an eager backward
-// reads (``freed``).  Decided per root: a root whose own graph saved none of
-// them stays attached and runs again, whatever another root's graph freed.
-// Each root's spent node holds the nodes of its own graph only, so it does
-// not refuse a gradient towards an input only another root reached.  A leaf
-// root keeps its AccumulateGrad: every graph that uses the leaf reaches it
-// through that node (AccumulateGrad.h), and a later grad() asked for the
-// leaf finds it there.
-void sever_roots(const std::vector<BackwardRoot>& roots,
-                 const std::vector<std::shared_ptr<Node>>& order,
-                 const std::unordered_set<const Node*>& freed) {
-    if (freed.empty())
-        return;
-    std::unordered_set<const TensorImpl*> seen;
-    for (const auto& r : roots) {
-        if (r.tensor->is_leaf() || !r.tensor->grad_fn() || !seen.insert(r.tensor.get()).second)
+// After a pass that did not retain its graph, sever the outgoing edges of each
+// node whose eager-read values were freed in this pass (``freed``), replacing
+// them with a single edge to a :class:`SpentGraphNode` that records the
+// sequence numbers of the subgraph below that node.  Iterating leaf-first lets
+// each freed node fold in the sequence numbers of any already-severed
+// descendants without walking their subgraphs again, while leaving every
+// save-free node above ``freed`` (and every untouched branch) wired.
+void sever_frontier(const std::vector<std::shared_ptr<Node>>& freed) {
+    for (auto it = freed.rbegin(); it != freed.rend(); ++it) {
+        Node& node = **it;
+        const auto sub = topo_order({*it});
+        std::vector<std::uint64_t> held;
+        for (const auto& desc : sub) {
+            if (desc.get() == &node)
+                continue;
+            if (const auto* spent = as_spent(*desc)) {
+                const auto& prev = spent->held_sequence();
+                held.insert(held.end(), prev.begin(), prev.end());
+            } else {
+                held.push_back(desc->sequence_nr());
+            }
+        }
+        if (held.empty()) {
+            node.set_next_edges({});
             continue;
-        std::vector<std::shared_ptr<Node>> own;
-        if (roots.size() > 1)
-            own = topo_order({r.tensor->grad_fn()});
-        const auto& graph = roots.size() > 1 ? own : order;
-        if (std::any_of(graph.begin(), graph.end(),
-                        [&](const auto& node) { return freed.count(node.get()) != 0; }))
-            release_root(r.tensor, graph);
+        }
+        std::sort(held.begin(), held.end());
+        held.erase(std::unique(held.begin(), held.end()), held.end());
+        node.set_next_edges({Edge(std::make_shared<SpentGraphNode>(std::move(held)), 0)});
     }
 }
 
@@ -768,7 +764,7 @@ static void eager_backward(const std::vector<BackwardRoot>& roots,
     };
     seed_roots(roots, seeds, send);
 
-    std::unordered_set<const Node*> freed;  // released here, freeing eager-read values
+    std::vector<std::shared_ptr<Node>> freed;  // released here, freeing eager-read values
     for (const auto& node : order) {
         Storage grad_in;
         if (!take_pending(pending, *node, grad_in))
@@ -789,7 +785,7 @@ static void eager_backward(const std::vector<BackwardRoot>& roots,
         // graph intact for a second backward call.
         if (!retain_graph)
             if (release(*node))
-                freed.insert(node.get());
+                freed.push_back(node);
 
         check_anomaly_grads(*node, input_grads);
         check_result_count(*node, input_grads.size());
@@ -797,7 +793,7 @@ static void eager_backward(const std::vector<BackwardRoot>& roots,
     }
 
     if (!retain_graph)
-        sever_roots(roots, order, freed);
+        sever_frontier(freed);
 }
 
 void Engine::backward(const std::shared_ptr<TensorImpl>& root,
@@ -1149,7 +1145,7 @@ void grad_eager(const std::vector<BackwardRoot>& roots,
     };
     seed_roots(roots, seeds, send);
 
-    std::unordered_set<const Node*> freed;  // released here, freeing eager-read values
+    std::vector<std::shared_ptr<Node>> freed;  // released here, freeing eager-read values
     for (const auto& node : order) {
         Storage grad_in;
         if (!take_pending(pending, *node, grad_in))
@@ -1174,13 +1170,13 @@ void grad_eager(const std::vector<BackwardRoot>& roots,
         std::vector<Storage> input_grads = run_node(*node, std::move(grad_in), std::move(slots));
         if (!retain_graph)
             if (release(*node))
-                freed.insert(node.get());
+                freed.push_back(node);
         check_anomaly_grads(*node, input_grads);
         route_results(*node, input_grads, send);
     }
 
     if (!retain_graph)
-        sever_roots(roots, order, freed);
+        sever_frontier(freed);
 }
 
 }  // namespace

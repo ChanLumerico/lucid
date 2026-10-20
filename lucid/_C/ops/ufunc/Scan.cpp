@@ -198,6 +198,8 @@ public:
             ErrorBuilder("cumprod").fail("graph-mode backward is missing its saved input");
         return {cumprod_grad(grad_out, x, cumprod_op(x, axis_), axis_, true)};
     }
+
+    void release_own_saved() { clear_saved(saved_y_); }
 };
 
 // KeepInput: scans are valid for integer types; no promotion needed.
@@ -494,6 +496,8 @@ public:
         return {scan_ext_graph_backward<true>(grad_out, saved_y_, input_shape_, axis_, dtype_,
                                               device_, "cummax_backward")};
     }
+
+    void release_own_saved() { clear_saved(saved_y_); }
 };
 
 // Backward node for cummin.
@@ -549,6 +553,8 @@ public:
         return {scan_ext_graph_backward<false>(grad_out, saved_y_, input_shape_, axis_, dtype_,
                                                device_, "cummin_backward")};
     }
+
+    void release_own_saved() { clear_saved(saved_y_); }
 };
 
 const OpSchema CummaxBackward::schema_v1{"cummax", 1, AmpPolicy::KeepInput, true};

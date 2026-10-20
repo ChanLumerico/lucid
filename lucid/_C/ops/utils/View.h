@@ -232,7 +232,7 @@ LUCID_API TensorImplPtr unsqueeze_op(const TensorImplPtr& a, int dim);
 // (I32, one per view element), never the input's values.
 class LUCID_API AsStridedBackward : public FuncOp<AsStridedBackward, 1> {
 public:
-    static constexpr bool kKeepsOwnValues = true;
+    static constexpr bool kKeepsOwnValues = false;
     static const OpSchema schema_v1;
     Storage indices_;
     std::int64_t numel_ = 0;

@@ -77,6 +77,8 @@ public:
     // dxb offset by (b*C + c) * H * W and no crop.
     Storage saved_argmax_;
 
+    void release_own_saved() { clear_saved(saved_argmax_); }
+
     // Graph-mode backward — the same scatter, written in ops.
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 

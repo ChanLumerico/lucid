@@ -93,6 +93,8 @@ public:
     // The forward's epsilon: the graph-mode backward recomputes rstd from x.
     double eps_ = 0.0;
 
+    void release_own_saved() { clear_saved(saved_rstd_); }
+
     // Run the forward pass.
     //
     // Reduces ``x`` over its last $D$ dimensions (where $D$ is the rank
