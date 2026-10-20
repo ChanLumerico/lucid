@@ -143,7 +143,7 @@ inline std::optional<Storage> try_cpu_scalar_dispatch(backend::IBackend& be,
                                                       const TensorImplPtr& b_ptr,
                                                       const Shape& out_shape,
                                                       Dtype eff_dt) {
-    if (shape_numel(out_shape) <= 1)
+    if (shape_numel(out_shape) <= 1 || a_ptr->is_phantom() || b_ptr->is_phantom())
         return std::nullopt;
     const auto& ca = std::get<CpuStorage>(a_ptr->storage());
     const auto& cb = std::get<CpuStorage>(b_ptr->storage());

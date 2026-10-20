@@ -35,7 +35,9 @@ std::pair<Storage, Storage> MulBackward::grad_formula(const Storage& grad_out) {
     const bool need_b = needs_input_grad(1);
 
     auto factor = [&](std::size_t k) -> Storage {
-        if (device_ == Device::CPU && shape_numel(input_shapes_[k]) == 1 && n > 1) {
+        if (device_ == Device::CPU && shape_numel(input_shapes_[k]) == 1 && n > 1 &&
+            std::holds_alternative<CpuStorage>(saved_inputs_[k]) &&
+            std::holds_alternative<CpuStorage>(grad_out)) {
             const auto& cs = std::get<CpuStorage>(saved_inputs_[k]);
             if (auto s = detail::read_cpu_scalar(cs, dtype_))
                 return mul_scalar_storage(grad_out, *s, n, dtype_, device_);

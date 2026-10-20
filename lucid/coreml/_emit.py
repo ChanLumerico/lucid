@@ -30,6 +30,7 @@ from lucid.coreml._convert import (
     emit_opmath_binary,
     moved,
     scalar_like,
+    scatter_along_axis,
     widened,
 )
 from lucid.coreml._linear import fused_linear_gelu, fused_linear_relu, linear
@@ -1192,18 +1193,7 @@ def _scatter_along_axis(
     (:func:`moved`) and comes back as "nonzero": an ``add`` of two trues
     is true, as eager's is.
     """
-    bindings: Bindings = [
-        ("data", ins[0]),
-        ("indices", ins[1]),
-        ("updates", ins[2]),
-        ("axis", b.const_int(_as_int(_attr(op, "dim")))),
-        ("mode", b.const_str(mode)),
-        # Same iOS17 requirement the gathers carry: the whole
-        # scatter / gather family gained this parameter, and leaving it
-        # out makes the package fail to parse rather than to run.
-        ("validate_indices", b.const_bool(False)),
-    ]
-    return moved(b, op, "scatter_along_axis", bindings, ("data", "updates"))
+    return scatter_along_axis(b, op, ins, _as_int(_attr(op, "dim")), mode)
 
 
 @_emitter("where")

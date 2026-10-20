@@ -22,6 +22,7 @@ __all__ = [
     "emit_opmath_binary",
     "moved",
     "scalar_like",
+    "scatter_along_axis",
     "widened",
 ]
 
@@ -166,6 +167,69 @@ def moved(
     ]
     result = b.emit(mil_type, operands, b.result_dims(op), dtype=_MIL_INT32)
     return emit_cast(b, result, "bool")
+
+
+def _split_prefix(
+    b: Builder, value: str, shape: list[int], axis: int, head_size: int
+) -> tuple[str, str, list[int]]:
+    first, second = list(shape), list(shape)
+    first[axis], second[axis] = head_size, shape[axis] - head_size
+    head, tail = b.emit_multi(
+        "split",
+        [
+            ("x", value),
+            ("split_sizes", b.const_ints([first[axis], second[axis]])),
+            ("axis", b.const_int(axis)),
+        ],
+        [first, second],
+    )
+    return head, tail, first
+
+
+def scatter_along_axis(
+    b: Builder, op: TracedOp, ins: list[str], axis: int, mode: str
+) -> EmitResult:
+    """Emit MIL ``scatter_along_axis``, narrowing non-scatter axes when ``indices`` is a sub-slice."""
+    is_bool = b.result_mil_dtype(op) == _MIL_BOOL
+    work_dtype = _MIL_INT32 if is_bool else b.result_mil_dtype(op)
+    data = widened(b, ins[0]) if is_bool else ins[0]
+    indices = ins[1]
+    updates = widened(b, ins[2]) if is_bool else ins[2]
+    cur_shape = b.shape_of(data).declared()
+    idx_shape = b.shape_of(indices).declared()
+    upd_shape = b.shape_of(updates).declared()
+    rank = len(cur_shape)
+    norm_axis = axis % rank if rank else 0
+    for a in range(rank):
+        if 0 < idx_shape[a] < upd_shape[a]:
+            updates, _, upd_shape = _split_prefix(b, updates, upd_shape, a, idx_shape[a])
+    tails: list[tuple[int, str, list[int]]] = []
+    for a in range(rank):
+        if a != norm_axis and 0 < idx_shape[a] < cur_shape[a]:
+            full_shape = list(cur_shape)
+            data, tail, cur_shape = _split_prefix(b, data, cur_shape, a, idx_shape[a])
+            tails.append((a, tail, full_shape))
+    bindings: Bindings = [
+        ("data", data),
+        ("indices", indices),
+        ("updates", updates),
+        ("axis", b.const_int(axis)),
+        ("mode", b.const_str(mode)),
+        ("validate_indices", b.const_bool(False)),
+    ]
+    if not tails and not is_bool:
+        return "scatter_along_axis", bindings
+    cur = b.emit("scatter_along_axis", bindings, cur_shape, dtype=work_dtype)
+    for step, (a, tail, full_shape) in enumerate(reversed(tails)):
+        c_bindings: Bindings = [
+            ("values", [cur, tail]),
+            ("axis", b.const_int(a)),
+            ("interleave", b.const_bool(False)),
+        ]
+        if step == len(tails) - 1 and not is_bool:
+            return "concat", c_bindings
+        cur = b.emit("concat", c_bindings, full_shape, dtype=work_dtype)
+    return emit_cast(b, cur, "bool")
 
 
 def _broadcast_f32(b: Builder, val: str, peer: str, dims: _flex.Dims) -> str:
