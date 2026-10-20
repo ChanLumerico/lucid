@@ -63,7 +63,7 @@ Limitations
 """
 
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from typing import TYPE_CHECKING, Callable, Iterator, final
 
 from contextlib import contextmanager
@@ -99,6 +99,7 @@ from lucid._dispatch import _unwrap as _unwrap_hot
 import lucid as _lucid_hot
 
 if TYPE_CHECKING:
+    from lucid._C.engine.compile import CompiledExecutable, TraceGraph, Tracer
     from lucid._tensor.tensor import Tensor
     from lucid.amp.grad_scaler import GradScaler
     from lucid.compile._optim.compiler import _Flags, _ScalarLayout
@@ -109,6 +110,33 @@ __all__ = ["fused_step"]
 
 # Executables a single fused step keeps (oldest dropped first).
 _MAX_PLANS: int = 8
+
+
+@final
+@dataclass(slots=True)
+class _FusedTrace:
+    """Raw outputs captured while tracing forward + loss + optimizer update."""
+
+    tracer: Tracer
+    graph: TraceGraph
+    ext: dict[int, _C_engine.TensorImpl]
+    loss: Tensor
+    loss_for_bwd: Tensor
+    members: tuple[int, ...]
+    ghost_grads: dict[int, Tensor]
+    layout: _ScalarLayout
+    vectors: dict[_C_engine.Dtype, Tensor]
+    opt_outputs: list[Tensor]
+    slots: list[tuple[str, int, str]]
+    found_inf_f32: Tensor | None
+    scaler_enabled: bool
+    loss_id: int = 0
+    unscaled_loss_tid: int | None = None
+    param_ids: list[int] = dataclass_field(default_factory=list)
+    ghost_grad_ids: list[int] = dataclass_field(default_factory=list)
+    output_target_ids: list[int] = dataclass_field(default_factory=list)
+    dropout_pairs: list[tuple[int, int]] = dataclass_field(default_factory=list)
+    bn_pairs: list[tuple[int, int]] = dataclass_field(default_factory=list)
 
 
 def fused_step(
@@ -137,14 +165,6 @@ def fused_step(
     compiled optimizer owns it from ``fused_step(...)`` on — see
     :func:`compile_optimizer`).
 
-    Delegates the optimizer math to the matching
-    :func:`compile_optimizer` subclass — so every Lucid eager optimizer
-    (all 13: SGD, Adam, AdamW, RMSprop, Adagrad, Adadelta, Adamax,
-    NAdam, SparseAdam, Rprop, ASGD, RAdam, LBFGS) compiles cleanly
-    into a fused step.  LBFGS is the closure-less single-step variant
-    (per-element Barzilai-Borwein direction); full closure-driven
-    line search remains eager-only.
-
     Parameters
     ----------
     model : Module
@@ -160,36 +180,17 @@ def fused_step(
         number of parameter groups.
     grad_scaler : GradScaler, optional
         When provided and enabled, the fused step replicates the
-        eager :class:`lucid.amp.GradScaler` contract entirely inside
-        the compiled executable:
-
-        1. The loss is multiplied by the current ``scaler._scale``
-           before the backward derivation, so MPSGraph autograd
-           produces scaled gradients that won't underflow in F16.
-        2. Each scaled gradient is unscaled in F32 by
-           ``1/scaler._scale`` before the optimizer reads it.
-        3. ``found_inf = OR(any(!isfinite(g_unscaled)))`` is computed
-           across all params; each new_param / new_state is wrapped
-           with ``where(found_inf, old, new)`` so an overflow step
-           leaves params + state buffers unchanged — and, as with
-           ``scaler.step(optimizer)``, the step counts do not advance.
-        4. After the executable runs, ``found_inf`` is read back to
-           Python and ``scaler.update()`` is invoked — the scale
-           halves on overflow, doubles after ``growth_interval``
-           clean steps.
-
-        The user-visible loss returned by ``step(*args)`` is always
-        the **unscaled** loss (the trace divides by scale on the
-        return path), matching the eager API exactly.
+        eager :class:`lucid.amp.GradScaler` contract inside the
+        compiled executable (scales loss before backward, unscales
+        gradients in F32, guards updates with ``where(found_inf, old, new)``,
+        and reads ``found_inf`` back to drive ``scaler.update()``).
 
     Returns
     -------
     Callable[..., Tensor]
         A callable ``step(*args)`` where ``args`` is
         ``(model_input, *loss_targets)``.  Returns the scalar loss
-        :class:`Tensor` from the just-completed step (the parameter
-        and optimizer-state buffers have already been updated
-        in-place inside the executable).
+        :class:`Tensor` from the just-completed step.
 
     Raises
     ------
@@ -207,12 +208,10 @@ def fused_step(
     >>> step = fused_step(model, F.cross_entropy, opt)
     >>> for batch in batches:                        # doctest: +SKIP
     ...     loss = step(batch.x, batch.target)       # one executable submission
-    ...     # opt.step() is implicit — parameters already updated in-place
 
     See Also
     --------
-    lucid.compile.make_step : forward+backward only, no optimizer fusion
-        (lets the caller drive the optimizer in Python).
+    lucid.compile.make_step : forward+backward only, no optimizer fusion.
     lucid.compile.compile_optimizer : the underlying optimizer-side
         translator that produces the update graph.
     """
@@ -279,7 +278,7 @@ _GRADIENT_DTYPES = frozenset(
 )
 
 
-def _loss_ancestors(graph: object, loss_id: int) -> set[int]:
+def _loss_ancestors(graph: TraceGraph, loss_id: int) -> set[int]:
     """Every trace id a gradient of ``loss_id`` flows back to (itself included).
 
     One reverse walk over the ops recorded so far — the forward and the
@@ -293,7 +292,7 @@ def _loss_ancestors(graph: object, loss_id: int) -> set[int]:
     sink = _C_engine.compile.VjpRegistration.GradSink
     status = _C_engine.compile.vjp_registration_status
     needed = {loss_id}
-    for node in reversed(graph.ops):  # type: ignore[attr-defined]
+    for node in reversed(graph.ops):
         if not any(int(meta.id) in needed for meta in node.outputs):
             continue
         if status(node.name) == sink or not any(
@@ -309,7 +308,7 @@ def _loss_ancestors(graph: object, loss_id: int) -> set[int]:
 class _FusedPlan:
     """One compiled fused step: its executable and how to feed / drain it."""
 
-    exe: object
+    exe: CompiledExecutable
     members: tuple[int, ...]
     layout: _ScalarLayout
     resolvers: list[Callable[[], _C_engine.TensorImpl]]
@@ -319,6 +318,53 @@ class _FusedPlan:
     loss_dtype: _dtype_cls
     loss_device: _device_cls
     scaled_loss_sink: _C_engine.TensorImpl | None = None
+
+
+def _verify_target_shapes(
+    graph: TraceGraph,
+    checked_ids: list[int],
+    output_targets: list[Tensor],
+) -> None:
+    """Guard against misordering between ``checked_ids`` and ``output_targets``."""
+    id_to_shape: dict[int, tuple[int, ...]] = {}
+    for node in graph.ops:
+        for meta in node.outputs:
+            id_to_shape[int(meta.id)] = tuple(meta.shape)
+    for slot, (oid, tgt) in enumerate(zip(checked_ids, output_targets, strict=True)):
+        exp = id_to_shape.get(int(oid))
+        if exp is not None and tuple(tgt.shape) != exp:
+            raise RuntimeError(
+                f"fused_step: output target slot {slot} (id {oid}) shape "
+                f"{tuple(tgt.shape)} != trace meta {exp} — "
+                "output_target_ids / output_targets ordering drift"
+            )
+
+
+def _require_tid(tracer: Tracer, t: Tensor, msg: str) -> int:
+    """Return the trace ID for ``t``, raising ``RuntimeError(msg)`` if absent."""
+    tid = tracer.lookup_id(_unwrap_hot(t))
+    if tid is None:
+        raise RuntimeError(msg)
+    return int(tid)
+
+
+def _pinned_resolver(
+    impl: _C_engine.TensorImpl,
+) -> Callable[[], _C_engine.TensorImpl]:
+    """Return a zero-argument callable returning ``impl``."""
+    return lambda: impl
+
+
+def _param_resolver(
+    params: list[Tensor], i: int
+) -> Callable[[], _C_engine.TensorImpl]:
+    return lambda: _unwrap_hot(params[i])
+
+
+def _state_resolver(
+    state: list[dict[str, Tensor]], i: int, name: str
+) -> Callable[[], _C_engine.TensorImpl]:
+    return lambda: _unwrap_hot(state[i][name])
 
 
 @final
@@ -639,350 +685,304 @@ class _FusedStep:
         params = self._copt._params
         return tuple(i for i in sorted(self._reachable) if params[i].requires_grad)
 
-    def _build_plan(
-        self, args: tuple[Tensor, ...], flags: tuple[_Flags, ...]
-    ) -> _FusedPlan:
-        """Trace + compile the fused step for the current participants.
-
-        Records forward + loss, decides which parameters take part (the
-        loss's ancestors that require grad), prepares their optimizer
-        state, records their update with ghost-grad placeholders, then
-        calls ``compile_generic_fused_step``, which threads the ghost-
-        grad ids through the gradient derivation and returns one
-        executable producing loss + parameter updates in one shot.
-
-        Raises :class:`RuntimeError` or :class:`NotImplementedError` on a
-        lowering rejection so :meth:`_compile_and_run_first` can mark the
-        signature eager-only and execute the step via :meth:`_run_eager`.
-        """
-        from lucid._dispatch import _unwrap
-        from lucid._tensor.tensor import Tensor
-        from lucid.autograd._grad_mode import no_grad
-        from lucid.compile import _tracing
-        from lucid.compile._core.bn_runstats import (
-            bn_writeback_targets,
-            model_has_cumulative_bn,
-        )
-        from lucid.compile._core.buffer_writes import refuse
-
-        copt = self._copt
-        params = copt._params
-        groups = copt._opt.param_groups
-
-        # AMP scoping (X4.4): the user may wrap the entire
-        # ``step(x, t)`` call in ``with autocast()``.  Autocast applies
-        # only to forward + loss — the optimizer math runs on F32 master
-        # weights, so a neutral ``AutocastGuard(F32)`` is installed
-        # around the update emission below.  Without this split the
-        # optimizer's reads of F32 master weights would get autocast to
-        # F16 → F16 ``new_param`` → dtype mismatch with the F32 buffer.
-        _autocast_was_active = _C_engine.amp_is_active()
-        _autocast_prev_dtype = _C_engine.amp_active_dtype()
-
-        # GradScaler holders (allocated once, outside any trace).  These
-        # tensors are external feeds in the trace; their *values* are
-        # refreshed each step via ``copy_``.
+    def _ensure_scaler_holders(self) -> bool:
+        """Allocate and refresh GradScaler 0-D scalar holders when enabled."""
         scaler_enabled = self._grad_scaler is not None and self._grad_scaler._enabled
-        if scaler_enabled and self._scale_holder is None:
+        if not scaler_enabled:
+            return False
+        if self._scale_holder is None:
             import lucid as _lucid
 
-            p0 = params[0]
-            self._scale_holder = _lucid.zeros(
-                (), dtype=_lucid.float32, device=p0.device
-            )
+            p0 = self._copt._params[0]
+            self._scale_holder = _lucid.zeros((), dtype=_lucid.float32, device=p0.device)
             self._inv_scale_holder = _lucid.zeros(
                 (), dtype=_lucid.float32, device=p0.device
             )
             self._found_inf_target = _lucid.zeros(
                 (), dtype=_lucid.float32, device=p0.device
             )
-        if scaler_enabled:
-            self._refresh_scaler_scalars()
+        self._refresh_scaler_scalars()
+        return True
 
-        members: tuple[int, ...] = ()
-        ghost_grads: dict[int, Tensor] = {}
-        found_inf_f32: Tensor | None = None
+    def _resolve_members(
+        self, tracer: Tracer, loss_for_bwd: Tensor
+    ) -> tuple[int, ...]:
+        """Find participating parameters that require grad and reach the loss."""
+        from lucid._dispatch import _unwrap
+
+        params = self._copt._params
+        if self._reachable is None:
+            loss_tid = tracer.lookup_id(_unwrap(loss_for_bwd))
+            if loss_tid is None:
+                raise RuntimeError("fused_step: loss missing from trace")
+            ancestors = _loss_ancestors(tracer.graph, int(loss_tid))
+            reachable = {
+                i
+                for i, p in enumerate(params)
+                if (tid := tracer.lookup_id(_unwrap(p))) is not None
+                and int(tid) in ancestors
+            }
+            self._reachable = frozenset(reachable)
+        members = self._members()
+        if not members:
+            raise RuntimeError(
+                "fused_step: no optimizer parameter both requires "
+                "grad and reaches the loss — there is nothing to step"
+            )
+        return members
+
+    def _emit_scaled_update(
+        self,
+        ghost_grads: dict[int, Tensor],
+        layout: _ScalarLayout,
+        vectors: dict[_C_engine.Dtype, Tensor],
+        flags: tuple[_Flags, ...],
+        loss_for_bwd: Tensor,
+    ) -> tuple[list[Tensor], list[tuple[str, int, str]], Tensor]:
+        """Emit unscaled gradients, ``found_inf``, and ``where``-guarded optimizer updates."""
+        import lucid as _lucid
+
+        copt = self._copt
+        params = copt._params
+        members = tuple(ghost_grads.keys())
+        assert self._inv_scale_holder is not None
+        unscaled: dict[int, Tensor] = {
+            i: (g if g.dtype == _lucid.float32 else g.to(_lucid.float32))
+            * self._inv_scale_holder
+            for i, g in ghost_grads.items()
+        }
+        finite_counts: list[Tensor] = [
+            _lucid.isfinite(g).to(_lucid.float32).sum() for g in unscaled.values()
+        ]
+        expected_total = sum(
+            float(int(_prod_shape(g.shape))) for g in unscaled.values()
+        )
+        if loss_for_bwd.dtype == _lucid.float16:
+            assert self._scale_holder is not None
+            finite_counts.append(_lucid.isfinite(loss_for_bwd).to(_lucid.float32).sum())
+            expected_total += float(int(_prod_shape(loss_for_bwd.shape)))
+            finite_counts.append(
+                (self._scale_holder <= 65504.0).to(_lucid.float32).sum()
+            )
+            expected_total += 1.0
+        total_finite = finite_counts[0]
+        for nf in finite_counts[1:]:
+            total_finite = total_finite + nf
+        expected_t = _lucid.tensor(
+            expected_total, dtype=_lucid.float32, device=params[0].device
+        )
+        found_inf_bool = total_finite < expected_t
+        found_inf_f32 = found_inf_bool.to(_lucid.float32)
+
+        opt_outputs, slots = copt._emit(
+            members, unscaled, layout, vectors, flags, False
+        )
+        final_outputs: list[Tensor] = []
+        for slot, new in zip(slots, opt_outputs, strict=True):
+            old = copt._slot_tensor(slot)
+            if old.dtype != new.dtype:
+                old = old.to(new.dtype)
+            final_outputs.append(_lucid.where(found_inf_bool, old, new))
+        return final_outputs, slots, found_inf_f32
+
+    def _trace_fused_graph(
+        self,
+        args: tuple[Tensor, ...],
+        flags: tuple[_Flags, ...],
+        *,
+        scaler_enabled: bool,
+    ) -> _FusedTrace:
+        """Trace forward + loss + optimizer update under ``no_grad()``."""
+        from lucid.autograd._grad_mode import no_grad
+        from lucid.compile import _tracing
+        from lucid.compile._core.buffer_writes import refuse
+
+        copt = self._copt
+        params = copt._params
+        groups = copt._opt.param_groups
+        autocast_was_active = _C_engine.amp_is_active()
+        autocast_prev_dtype = _C_engine.amp_active_dtype()
+
         _tls.active = True
         try:
-            with no_grad():
-                with _tracing(watch=args, module=self._model) as tracer:
+            with no_grad(), _tracing(watch=args, module=self._model) as tracer:
+                try:
+                    out = self._model(*args[:1])
+                    loss = self._loss_fn(out, *args[1:])
+                    if scaler_enabled:
+                        assert self._scale_holder is not None
+                        loss_for_bwd = loss * self._scale_holder.to(loss.dtype)
+                    else:
+                        loss_for_bwd = loss
+
+                    members = self._resolve_members(tracer, loss_for_bwd)
+                    with _untraced(tracer):
+                        for i in members:
+                            copt._activate(i, flags, groups)
+                        ghost_grads = {i: _zeros_like(params[i]) for i in members}
+                        layout = copt._new_layout(members, False, flags)
+                        vectors = copt._trace_vectors(layout)
+
+                    opt_guard = (
+                        _C_engine.AutocastGuard(_C_engine.F32)
+                        if autocast_was_active
+                        else None
+                    )
+                    if opt_guard is not None:
+                        opt_guard.__enter__()
                     try:
-                        out = self._model(*args[:1])
-                        loss = self._loss_fn(out, *args[1:])
-
-                        # GradScaler step 1 — scale loss before backward.
-                        # ``loss_id`` (the backward source) points at the
-                        # scaled loss; the unscaled loss is captured as its own
-                        # output target so F16 overflow of the scaled loss
-                        # cannot corrupt the user-visible loss tensor.
+                        found_inf_f32: Tensor | None = None
                         if scaler_enabled:
-                            assert self._scale_holder is not None
-                            loss_for_bwd = loss * self._scale_holder.to(loss.dtype)
-                        else:
-                            loss_for_bwd = loss
-
-                        # Who takes part: the loss's ancestors that require
-                        # grad.  Asking MPSGraph for the gradient of anything
-                        # else aborts the process ("Not a predecessor of
-                        # primaryTensor"), and eager would leave it alone.
-                        if self._reachable is None:
-                            loss_tid = tracer.lookup_id(_unwrap(loss_for_bwd))
-                            if loss_tid is None:
-                                raise RuntimeError(
-                                    "fused_step: loss missing from trace"
+                            opt_outputs, slots, found_inf_f32 = (
+                                self._emit_scaled_update(
+                                    ghost_grads,
+                                    layout,
+                                    vectors,
+                                    flags,
+                                    loss_for_bwd,
                                 )
-                            ancestors = _loss_ancestors(tracer.graph, int(loss_tid))
-                            reachable: set[int] = set()
-                            for i, p in enumerate(params):
-                                tid = tracer.lookup_id(_unwrap(p))
-                                if tid is not None and int(tid) in ancestors:
-                                    reachable.add(i)
-                            self._reachable = frozenset(reachable)
-                        members = self._members()
-                        if not members:
-                            raise RuntimeError(
-                                "fused_step: no optimizer parameter both requires "
-                                "grad and reaches the loss — there is nothing to step"
                             )
-                        with _untraced(tracer):
-                            for i in members:
-                                copt._activate(i, flags, groups)
-                            ghost_grads = {i: _zeros_like(params[i]) for i in members}
-                            layout = copt._new_layout(members, False, flags)
-                            vectors = copt._trace_vectors(layout)
-
-                        if _autocast_was_active:
-                            _opt_guard = _C_engine.AutocastGuard(_C_engine.F32)
-                            _opt_guard.__enter__()
                         else:
-                            _opt_guard = None
-                        try:
-                            if scaler_enabled:
-                                import lucid as _lucid
-
-                                # GradScaler step 2 — unscale grads (in F32)
-                                # before the optimizer sees them.  F32 is the
-                                # eager-GradScaler convention: F16 inv_scale
-                                # at ``2**-16`` is subnormal and Metal
-                                # flushes it to zero.
-                                unscaled: dict[int, Tensor] = {}
-                                for i, g in ghost_grads.items():
-                                    g_f32 = (
-                                        g
-                                        if g.dtype == _lucid.float32
-                                        else g.to(_lucid.float32)
-                                    )
-                                    unscaled[i] = g_f32 * self._inv_scale_holder
-
-                                # GradScaler step 3a — found_inf over the
-                                # unscaled gradients: Σ isfinite < Σ numel.
-                                # Under F16 backward, MPSGraph's optimizer can
-                                # fuse the F32 scale holder's cast to F16 with
-                                # downstream F16->F32 casts and hide an F16
-                                # overflow at ``scale > 65504`` or in the scaled
-                                # loss that eager's F16 backward hits.
-                                finite_counts: list[Tensor] = []
-                                expected_total = 0.0
-                                for g in unscaled.values():
-                                    finite_counts.append(
-                                        _lucid.isfinite(g).to(_lucid.float32).sum()
-                                    )
-                                    expected_total += float(int(_prod_shape(g.shape)))
-                                if loss_for_bwd.dtype == _lucid.float16:
-                                    assert self._scale_holder is not None
-                                    finite_counts.append(
-                                        _lucid.isfinite(loss_for_bwd)
-                                        .to(_lucid.float32)
-                                        .sum()
-                                    )
-                                    expected_total += float(
-                                        int(_prod_shape(loss_for_bwd.shape))
-                                    )
-                                    finite_counts.append(
-                                        (self._scale_holder <= 65504.0)
-                                        .to(_lucid.float32)
-                                        .sum()
-                                    )
-                                    expected_total += 1.0
-                                total_finite = finite_counts[0]
-                                for nf in finite_counts[1:]:
-                                    total_finite = total_finite + nf
-                                expected_t = _lucid.tensor(
-                                    expected_total,
-                                    dtype=_lucid.float32,
-                                    device=params[0].device,
-                                )
-                                found_inf_bool = total_finite < expected_t
-                                found_inf_f32 = found_inf_bool.to(_lucid.float32)
-
-                                opt_outputs, slots = copt._emit(
-                                    members, unscaled, layout, vectors, flags, False
-                                )
-
-                                # GradScaler step 3b — conditional update:
-                                # ``where(found_inf, old, new)`` keeps params +
-                                # state on an overflow step (eager skips
-                                # ``optimizer.step()``).
-                                final_outputs: list[Tensor] = []
-                                for slot, new in zip(slots, opt_outputs, strict=True):
-                                    old = copt._slot_tensor(slot)
-                                    if old.dtype != new.dtype:
-                                        old = old.to(new.dtype)
-                                    final_outputs.append(
-                                        _lucid.where(found_inf_bool, old, new)
-                                    )
-                                opt_outputs = final_outputs
-                            else:
-                                opt_outputs, slots = copt._emit(
-                                    members, ghost_grads, layout, vectors, flags, False
-                                )
-                        finally:
-                            if _opt_guard is not None:
-                                # Restore the user's autocast dtype after the
-                                # optimizer scope.
-                                if (
-                                    _autocast_prev_dtype is not None
-                                    and _autocast_was_active
-                                ):
-                                    _restore = _C_engine.AutocastGuard(
-                                        _autocast_prev_dtype
-                                    )
-                                    _restore.__enter__()
+                            opt_outputs, slots = copt._emit(
+                                members, ghost_grads, layout, vectors, flags, False
+                            )
                     finally:
-                        refuse(tracer)
+                        if (
+                            opt_guard is not None
+                            and autocast_prev_dtype is not None
+                            and autocast_was_active
+                        ):
+                            _C_engine.AutocastGuard(autocast_prev_dtype).__enter__()
+                finally:
+                    refuse(tracer)
         finally:
             _tls.active = False
 
-        graph = tracer.graph
-        ext = dict(tracer.external_feeds)
-        bn_counters = bn_counter_targets(self._model, graph, ext)
-        if not graph.ops:
-            raise RuntimeError("fused_step: empty trace")
+        return _FusedTrace(
+            tracer=tracer,
+            graph=tracer.graph,
+            ext=dict(tracer.external_feeds),
+            loss=loss,
+            loss_for_bwd=loss_for_bwd,
+            members=members,
+            ghost_grads=ghost_grads,
+            layout=layout,
+            vectors=vectors,
+            opt_outputs=opt_outputs,
+            slots=slots,
+            found_inf_f32=found_inf_f32,
+            scaler_enabled=scaler_enabled,
+        )
 
-        # Resolve the fused-attention workaround capability flag before the
-        # emitters run, if this step's graph contains attention (probes once).
-        from lucid.compile._core.attention_probe import maybe_probe_for_graph
-
-        maybe_probe_for_graph(graph)
-
-        # ``loss_id`` is BOTH the backward source for autograd AND the
-        # tid bound to output[0].  Under GradScaler, both purposes
-        # need the SCALED loss (so grads come out scaled).
-        loss_id = int(tracer.lookup_id(_unwrap(loss_for_bwd)))
-        unscaled_loss_tid: int | None = None
-        if scaler_enabled:
-            _ul_tid = tracer.lookup_id(_unwrap(loss))
-            if _ul_tid is None:
-                raise RuntimeError("fused_step: unscaled loss missing from trace")
-            unscaled_loss_tid = int(_ul_tid)
-
-        param_ids: list[int] = []
-        for i in members:
-            tid = tracer.lookup_id(_unwrap(params[i]))
-            if tid is None:
-                raise RuntimeError("fused_step: a parameter vanished from the trace")
-            param_ids.append(int(tid))
-
-        # Ghost grad ids — same order as param_ids.
-        ghost_grad_ids: list[int] = []
-        for i in members:
-            tid = tracer.lookup_id(_unwrap(ghost_grads[i]))
-            if tid is None:
-                raise RuntimeError(
-                    "fused_step: ghost grad placeholder missing from trace"
+    def _lookup_trace_ids(self, traced: _FusedTrace) -> None:
+        """Resolve trace IDs for loss, parameters, ghost grads, and optimizer outputs."""
+        tracer = traced.tracer
+        params = self._copt._params
+        traced.loss_id = _require_tid(
+            tracer, traced.loss_for_bwd, "fused_step: loss missing from trace"
+        )
+        if traced.scaler_enabled:
+            traced.unscaled_loss_tid = _require_tid(
+                tracer, traced.loss, "fused_step: unscaled loss missing from trace"
+            )
+        for i in traced.members:
+            traced.param_ids.append(
+                _require_tid(
+                    tracer,
+                    params[i],
+                    "fused_step: a parameter vanished from the trace",
                 )
-            ghost_grad_ids.append(int(tid))
-
-        # Opt-output ids (new params first, then new state buffers).
-        output_target_ids: list[int] = []
-        for o in opt_outputs:
-            tid = tracer.lookup_id(_unwrap(o))
-            if tid is None:
-                raise RuntimeError(
-                    "fused_step: optimizer output tensor missing from trace"
+            )
+            traced.ghost_grad_ids.append(
+                _require_tid(
+                    tracer,
+                    traced.ghost_grads[i],
+                    "fused_step: ghost grad placeholder missing from trace",
                 )
-            output_target_ids.append(int(tid))
+            )
+        for o in traced.opt_outputs:
+            traced.output_target_ids.append(
+                _require_tid(
+                    tracer,
+                    o,
+                    "fused_step: optimizer output tensor missing from trace",
+                )
+            )
+        if traced.scaler_enabled and traced.found_inf_f32 is not None:
+            traced.output_target_ids.append(
+                _require_tid(
+                    tracer,
+                    traced.found_inf_f32,
+                    "fused_step: found_inf scalar missing from trace",
+                )
+            )
 
-        # GradScaler step 4 — found_inf as an extra output so Python can
-        # read it back after each step and drive ``scaler.update()``.
-        if scaler_enabled and found_inf_f32 is not None:
-            found_inf_tid = tracer.lookup_id(_unwrap(found_inf_f32))
-            if found_inf_tid is None:
-                raise RuntimeError("fused_step: found_inf scalar missing from trace")
-            output_target_ids.append(int(found_inf_tid))
+    def _collect_stateful_targets(self, traced: _FusedTrace) -> None:
+        """Collect dropout state pairs and BatchNorm running-stat target pairs."""
+        from lucid.compile._core.bn_runstats import (
+            bn_writeback_targets,
+            model_has_cumulative_bn,
+        )
 
-        # Every training-mode dropout's ``state_out`` id, paired with its
-        # ``state_in`` feed — ``compile_generic_fused_step_with_vars``
-        # requires each ``write_id`` in ``variable_pairs`` to also appear
-        # in ``output_target_ids``.
-        dropout_state_target_pairs: list[tuple[int, int]] = []
-        for _node in graph.ops:
-            if _node.name == "dropout_stateful":
-                if len(_node.inputs) >= 2 and len(_node.outputs) >= 2:
-                    _sin = int(_node.inputs[1])
-                    _sout = int(_node.outputs[1].id)
-                    output_target_ids.append(_sout)
-                    dropout_state_target_pairs.append((_sin, _sout))
+        for node in traced.graph.ops:
+            if (
+                node.name == "dropout_stateful"
+                and len(node.inputs) >= 2
+                and len(node.outputs) >= 2
+            ):
+                sin = int(node.inputs[1])
+                sout = int(node.outputs[1].id)
+                traced.output_target_ids.append(sout)
+                traced.dropout_pairs.append((sin, sout))
 
-        # 3.5 BatchNorm running-stats (Path A swap-buffer write-back). A
-        # cumulative-MA BN (track_running_stats=True + momentum=None) can't be
-        # lowered into the graph (its update reads num_batches_tracked as a host
-        # scalar) → raise NotImplementedError so _compile_and_run_first falls
-        # back to eager. A track_running_stats=False BN keeps no buffers →
-        # compiles unchanged. A fused-momentum BN traces 5-input; pair each
-        # running-stat FEED with its EMA OUTPUT and route as PLAIN output-feed
-        # targets.
         if model_has_cumulative_bn(self._model):
             raise NotImplementedError(
                 "BatchNorm with momentum=None (cumulative moving average) "
                 "cannot lower its running-stats update into the compiled graph"
             )
-        bn_stat_target_pairs: list[tuple[int, int]] = [
-            (feed_id, out_id) for feed_id, out_id, _ in bn_writeback_targets(graph, ext)
+        traced.bn_pairs = [
+            (feed_id, out_id)
+            for feed_id, out_id, _ in bn_writeback_targets(traced.graph, traced.ext)
         ]
-        for _bn_feed_id, _bn_new_id in bn_stat_target_pairs:
-            output_target_ids.append(_bn_new_id)  # LAST before unscaled_loss_tid
-        if unscaled_loss_tid is not None:
-            output_target_ids.append(unscaled_loss_tid)
+        for _bn_feed_id, bn_new_id in traced.bn_pairs:
+            traced.output_target_ids.append(bn_new_id)
+        if traced.unscaled_loss_tid is not None:
+            traced.output_target_ids.append(traced.unscaled_loss_tid)
 
-        # ``compile_generic_fused_step_with_vars`` (MPSGraph stateful
-        # variables) is gated behind ``LUCID_COMPILE_VARS=1`` for the
-        # parameter tier, and forced whenever a training-mode dropout is
-        # present (its RNG state must advance across dispatches).
+    def _compile_fused_executable(
+        self, traced: _FusedTrace
+    ) -> CompiledExecutable:
+        """Lower the combined forward+backward+optimizer trace into an executable."""
         import os as _os
 
-        _params_as_vars = _os.environ.get("LUCID_COMPILE_VARS", "0") in (
+        params_as_vars = _os.environ.get("LUCID_COMPILE_VARS", "0") in (
             "1",
             "true",
             "True",
         )
-        if _params_as_vars or dropout_state_target_pairs:
-            # Parameters become variables only on opt-in: promoting large
-            # state regressed 10-20 % per step (perf-state-vars-regression).
-            # The first len(members) opt outputs are the new parameters,
-            # in param_ids order.
+        if params_as_vars or traced.dropout_pairs:
             variable_pairs: list[tuple[int, int]] = []
-            if _params_as_vars:
-                for i, pid in enumerate(param_ids):
-                    variable_pairs.append((pid, output_target_ids[i]))
-            variable_pairs.extend(dropout_state_target_pairs)
+            if params_as_vars:
+                for i, pid in enumerate(traced.param_ids):
+                    variable_pairs.append((pid, traced.output_target_ids[i]))
+            variable_pairs.extend(traced.dropout_pairs)
             exe = _C_engine.compile.compile_generic_fused_step_with_vars(
-                graph,
-                ext,
-                loss_id,
-                param_ids,
-                ghost_grad_ids,
-                output_target_ids,
+                traced.graph,
+                traced.ext,
+                traced.loss_id,
+                traced.param_ids,
+                traced.ghost_grad_ids,
+                traced.output_target_ids,
                 variable_pairs,
             )
         else:
             exe = _C_engine.compile.compile_generic_fused_step(
-                graph,
-                ext,
-                loss_id,
-                param_ids,
-                ghost_grad_ids,
-                output_target_ids,
+                traced.graph,
+                traced.ext,
+                traced.loss_id,
+                traced.param_ids,
+                traced.ghost_grad_ids,
+                traced.output_target_ids,
             )
         if exe is None:
             raise RuntimeError(
@@ -990,133 +990,137 @@ class _FusedStep:
                 "an op in the combined trace has no emitter, or the "
                 "trace is otherwise incompatible with the fused path."
             )
+        return exe
 
-        # Per-input resolvers (impl identity → live impl getter).
-        impl_to_resolver: dict[int, Callable[[], _C_engine.TensorImpl]] = {}
+    def _vector_resolver(self, k: int) -> Callable[[], _C_engine.TensorImpl]:
+        return lambda: self._step_vectors[k]
 
-        def _param_resolver(i: int) -> Callable[[], _C_engine.TensorImpl]:
-            return lambda: _unwrap_hot(params[i])
+    def _arg_resolver(self, slot: int) -> Callable[[], _C_engine.TensorImpl]:
+        return lambda: _unwrap_hot(self._current_args[slot])
 
-        def _state_resolver(i: int, name: str) -> Callable[[], _C_engine.TensorImpl]:
-            return lambda: _unwrap_hot(copt._state[i][name])
+    def _build_resolvers(
+        self,
+        exe: CompiledExecutable,
+        traced: _FusedTrace,
+        args: tuple[Tensor, ...],
+    ) -> list[Callable[[], _C_engine.TensorImpl]]:
+        """Build per-input resolvers mapping ``exe.input_ids`` to live ``TensorImpl``s."""
+        from lucid._tensor.tensor import Tensor
 
-        def _vector_resolver(k: int) -> Callable[[], _C_engine.TensorImpl]:
-            return lambda: self._step_vectors[k]
-
-        def _arg_resolver(slot: int) -> Callable[[], _C_engine.TensorImpl]:
-            return lambda: _unwrap_hot(self._current_args[slot])
-
-        def _pinned(impl: _C_engine.TensorImpl) -> Callable[[], _C_engine.TensorImpl]:
-            return lambda: impl
-
-        for i, p in enumerate(params):
-            impl_to_resolver[id(_unwrap(p))] = _param_resolver(i)
-        for i in members:
+        copt = self._copt
+        params = copt._params
+        ext = traced.ext
+        impl_to_resolver: dict[int, Callable[[], _C_engine.TensorImpl]] = {
+            id(_unwrap_hot(p)): _param_resolver(params, i)
+            for i, p in enumerate(params)
+        }
+        for i in traced.members:
             for name, buf in copt._state[i].items():
-                impl_to_resolver[id(_unwrap(buf))] = _state_resolver(i, name)
-        for k, dt in enumerate(layout.dtypes):
-            impl_to_resolver[id(_unwrap(vectors[dt]))] = _vector_resolver(k)
-        if self._scale_holder is not None and self._inv_scale_holder is not None:
-            impl_to_resolver[id(_unwrap(self._scale_holder))] = _pinned(
-                _unwrap(self._scale_holder)
+                impl_to_resolver[id(_unwrap_hot(buf))] = _state_resolver(
+                    copt._state, i, name
+                )
+        for k, dt in enumerate(traced.layout.dtypes):
+            impl_to_resolver[id(_unwrap_hot(traced.vectors[dt]))] = (
+                self._vector_resolver(k)
             )
-            impl_to_resolver[id(_unwrap(self._inv_scale_holder))] = _pinned(
-                _unwrap(self._inv_scale_holder)
-            )
+        for holder in (self._scale_holder, self._inv_scale_holder):
+            if holder is not None:
+                h_impl = _unwrap_hot(holder)
+                impl_to_resolver[id(h_impl)] = _pinned_resolver(h_impl)
         for pos, a in enumerate(args):
             if isinstance(a, Tensor):
-                impl_to_resolver[id(_unwrap(a))] = _arg_resolver(pos)
+                impl_to_resolver[id(_unwrap_hot(a))] = self._arg_resolver(pos)
+        for bn_feed_id, _bn_new_id in traced.bn_pairs:
+            bn_impl = ext.get(bn_feed_id)
+            if bn_impl is not None and id(bn_impl) not in impl_to_resolver:
+                impl_to_resolver[id(bn_impl)] = _pinned_resolver(bn_impl)
 
-        # 3.5 BatchNorm: the running-stat FEEDS (rm/rv) resolve to the LIVE
-        # module buffer — the read half of the per-step read-modify-write.
-        for _bn_feed_id, _bn_new_id in bn_stat_target_pairs:
-            _bn_impl = ext.get(_bn_feed_id)
-            if _bn_impl is not None and id(_bn_impl) not in impl_to_resolver:
-                impl_to_resolver[id(_bn_impl)] = _pinned(_bn_impl)
-
-        # Anything else (ad-hoc constants the forward materialises, e.g.
-        # ``Conv2d(bias=False)``'s zero bias) is pinned to its trace impl.
         resolvers: list[Callable[[], _C_engine.TensorImpl]] = []
         for tid in exe.input_ids:
             impl = ext.get(tid)
             if impl is None:
                 raise RuntimeError(f"fused_step: input id {tid} not in external_feeds")
             r = impl_to_resolver.get(id(impl))
-            resolvers.append(r if r is not None else _pinned(impl))
+            resolvers.append(r if r is not None else _pinned_resolver(impl))
+        return resolvers
 
-        # Output targets in the SAME order as ``output_target_ids``:
-        # [opt outputs, found_inf, dropout state, BN running-stats].
-        output_targets: list[Tensor] = [copt._slot_tensor(s) for s in slots]
-        if scaler_enabled and self._found_inf_target is not None:
+    def _build_output_targets(
+        self, traced: _FusedTrace
+    ) -> tuple[_C_engine.TensorImpl, ...]:
+        """Build and validate in-place output target ``TensorImpl``s."""
+        from lucid._dispatch import _unwrap, _wrap
+
+        copt = self._copt
+        ext = traced.ext
+        output_targets: list[Tensor] = [copt._slot_tensor(s) for s in traced.slots]
+        if traced.scaler_enabled and self._found_inf_target is not None:
             output_targets.append(self._found_inf_target)
-        for _state_in_tid, _state_out_tid in dropout_state_target_pairs:
-            _impl = ext.get(_state_in_tid)
-            if _impl is None:
+        for state_in_tid, _state_out_tid in traced.dropout_pairs:
+            impl = ext.get(state_in_tid)
+            if impl is None:
                 raise RuntimeError(
-                    "fused_step: dropout state feed id "
-                    f"{_state_in_tid} not in external_feeds"
+                    f"fused_step: dropout state feed id {state_in_tid} not in external_feeds"
                 )
-            output_targets.append(Tensor(_impl, requires_grad=False))
-        for _bn_feed_id, _bn_new_id in bn_stat_target_pairs:
-            _bn_impl = ext.get(_bn_feed_id)
-            if _bn_impl is None:
+            output_targets.append(_wrap(impl))
+        for bn_feed_id, _bn_new_id in traced.bn_pairs:
+            bn_impl = ext.get(bn_feed_id)
+            if bn_impl is None:
                 raise RuntimeError(
-                    f"fused_step: BN running-stat feed id {_bn_feed_id} "
-                    "not in external_feeds"
+                    f"fused_step: BN running-stat feed id {bn_feed_id} not in external_feeds"
                 )
-            output_targets.append(Tensor(_bn_impl, requires_grad=False))
+            output_targets.append(_wrap(bn_impl))
 
-        checked_target_ids = (
-            output_target_ids[:-1]
-            if unscaled_loss_tid is not None
-            else output_target_ids
+        checked_ids = (
+            traced.output_target_ids[:-1]
+            if traced.unscaled_loss_tid is not None
+            else traced.output_target_ids
         )
-        if len(output_targets) != len(checked_target_ids):
+        if len(output_targets) != len(checked_ids):
             raise RuntimeError(
-                "fused_step: output_targets count "
-                f"({len(output_targets)}) doesn't match "
-                f"output_target_ids count ({len(checked_target_ids)})"
+                f"fused_step: output_targets count ({len(output_targets)}) doesn't match "
+                f"output_target_ids count ({len(checked_ids)})"
             )
+        _verify_target_shapes(traced.graph, checked_ids, output_targets)
+        return tuple(_unwrap(t) for t in output_targets)
 
-        # Per-slot shape guard: any misordering (e.g. a found_inf/dropout/BN
-        # swap) would silently write the wrong buffer.
-        _id_to_shape: dict[int, tuple[int, ...]] = {}
-        for _n in graph.ops:
-            for _m in _n.outputs:
-                _id_to_shape[int(_m.id)] = tuple(_m.shape)
-        for _slot, (_oid, _tgt) in enumerate(
-            zip(checked_target_ids, output_targets, strict=True)
-        ):
-            _exp = _id_to_shape.get(int(_oid))
-            if _exp is not None and tuple(_tgt.shape) != _exp:
-                raise RuntimeError(
-                    f"fused_step: output target slot {_slot} (id {_oid}) shape "
-                    f"{tuple(_tgt.shape)} != trace meta {_exp} — "
-                    "output_target_ids / output_targets ordering drift"
-                )
+    def _build_plan(
+        self, args: tuple[Tensor, ...], flags: tuple[_Flags, ...]
+    ) -> _FusedPlan:
+        """Trace + compile the fused step for the current participants."""
+        from lucid.compile._core.attention_probe import maybe_probe_for_graph
 
+        scaler_enabled = self._ensure_scaler_holders()
+        traced = self._trace_fused_graph(args, flags, scaler_enabled=scaler_enabled)
+        bn_counters = bn_counter_targets(self._model, traced.graph, traced.ext)
+        if not traced.graph.ops:
+            raise RuntimeError("fused_step: empty trace")
+        maybe_probe_for_graph(traced.graph)
+
+        self._lookup_trace_ids(traced)
+        self._collect_stateful_targets(traced)
+        exe = self._compile_fused_executable(traced)
+        resolvers = self._build_resolvers(exe, traced, args)
+        target_impls = self._build_output_targets(traced)
         scaled_loss_sink: _C_engine.TensorImpl | None = None
-        if unscaled_loss_tid is not None:
+        if traced.unscaled_loss_tid is not None:
+            loss_bwd = traced.loss_for_bwd
             scaled_loss_sink = _unwrap_hot(
                 _lucid_hot.zeros(
-                    *loss_for_bwd.shape if loss_for_bwd.shape else (),
-                    dtype=loss_for_bwd.dtype,
-                    device=loss_for_bwd.device,
+                    *loss_bwd.shape if loss_bwd.shape else (),
+                    dtype=loss_bwd.dtype,
+                    device=loss_bwd.device,
                 )
             )
-
-        # Phase 1.10: the targets are stable across calls (a state
-        # buffer keeps its identity for life), so unwrap them once.
         return _FusedPlan(
             exe=exe,
-            members=members,
-            layout=layout,
+            members=traced.members,
+            layout=traced.layout,
             resolvers=resolvers,
-            target_impls=tuple(_unwrap(t) for t in output_targets),
+            target_impls=target_impls,
             bn_counters=bn_counters,
-            loss_shape=tuple(loss.shape),
-            loss_dtype=loss.dtype,
-            loss_device=loss.device,
+            loss_shape=tuple(traced.loss.shape),
+            loss_dtype=traced.loss.dtype,
+            loss_device=traced.loss.device,
             scaled_loss_sink=scaled_loss_sink,
         )
 

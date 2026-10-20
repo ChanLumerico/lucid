@@ -321,10 +321,13 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
     ),
     "lucid.compile._entry.function": (("Module", "lucid.nn.module", "Module"),),
     "lucid.compile._entry.fused_step": (
+        ("CompiledExecutable", "lucid._C.engine.compile", "CompiledExecutable"),
         ("GradScaler", "lucid.amp.grad_scaler", "GradScaler"),
         ("Module", "lucid.nn.module", "Module"),
         ("Optimizer", "lucid.optim.optimizer", "Optimizer"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
+        ("TraceGraph", "lucid._C.engine.compile", "TraceGraph"),
+        ("Tracer", "lucid._C.engine.compile", "Tracer"),
         ("_Flags", "lucid.compile._optim.compiler", "_Flags"),
         ("_ScalarLayout", "lucid.compile._optim.compiler", "_ScalarLayout"),
     ),
@@ -342,6 +345,7 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("Module", "lucid.nn.module", "Module"),
         ("Parameter", "lucid.nn.parameter", "Parameter"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
+        ("TraceGraph", "lucid._C.engine.compile", "TraceGraph"),
         ("Tracer", "lucid._C.engine.compile", "Tracer"),
     ),
     "lucid.compile._optim.compiler": (
@@ -355,7 +359,11 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("BlobWriter", "lucid._C.engine", "BlobWriter"),
         ("MilProgram", "lucid._C.engine", "MilProgram"),
         ("Module", "lucid.nn.module", "Module"),
+        ("PackagePaths", "lucid._C.engine", "PackagePaths"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
+        ("TraceGraph", "lucid._C.engine.compile", "TraceGraph"),
+        ("TraceNode", "lucid._C.engine.compile", "TraceNode"),
+        ("Tracer", "lucid._C.engine.compile", "Tracer"),
     ),
     "lucid.coreml._convert": (
         ("Bindings", "lucid.coreml._emit", "Bindings"),

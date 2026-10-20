@@ -16,7 +16,7 @@ Two things the trace hands over that the driver has to sort out:
   bare ``isinstance`` check would reject every model in the zoo.
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING, Any, NoReturn, cast, override
 
 import dataclasses
@@ -55,7 +55,8 @@ from lucid.coreml._spec import (
 )
 
 if TYPE_CHECKING:
-    from lucid._C.engine import BlobWriter, MilProgram
+    from lucid._C.engine import BlobWriter, MilProgram, PackagePaths
+    from lucid._C.engine.compile import TraceGraph, TraceNode, Tracer
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
 
@@ -297,7 +298,7 @@ class _DequantizedLinear(_nn.Module):
 
 
 @contextlib.contextmanager
-def _packed_linears_unpacked(model: Module) -> Any:
+def _packed_linears_unpacked(model: Module) -> Iterator[None]:
     """Stand in for every packed MLX linear while the model is traced.
 
     Swapped on the parent by attribute name and put back afterwards,
@@ -338,7 +339,7 @@ def _packed_linears_unpacked(model: Module) -> Any:
 
 
 @contextlib.contextmanager
-def _activation_quantization_paused(model: Module) -> Any:
+def _activation_quantization_paused(model: Module) -> Iterator[None]:
     """Take a model's activation fake-quantization out of the trace.
 
     Only the activation one. A quantization-aware module holds its
@@ -380,7 +381,7 @@ def _activation_quantization_paused(model: Module) -> Any:
 
 
 @contextlib.contextmanager
-def _observers_paused(model: Module) -> Any:
+def _observers_paused(model: Module) -> Iterator[None]:
     """Stop calibration machinery from writing while the model is traced.
 
     A quantization-aware model carries observers that record the range of
@@ -426,6 +427,64 @@ def _observers_paused(model: Module) -> Any:
                 module.enable_observer()
 
 
+def _bind_traced_inputs(
+    examples: list[tuple[str, Tensor]],
+    held: list[_C_engine.TensorImpl],
+    written: set[int],
+    feeds: dict[int, _C_engine.TensorImpl],
+    tracer: Tracer,
+) -> list[tuple[str, int, Tensor]]:
+    """Bind each example input to its trace value id."""
+    feed_of = {id(impl): int(tid) for tid, impl in feeds.items()}
+    inputs: list[tuple[str, int, Tensor]] = []
+    for (name, tensor), impl in zip(examples, held, strict=True):
+        value_id = (
+            feed_of.get(id(impl)) if id(impl) in written else tracer.lookup_id(impl)
+        )
+        if value_id is None:
+            raise ValueError(
+                f"lucid.coreml: example input {name!r} never reached an op — the "
+                "model ignored it, or copied it before use"
+            )
+        inputs.append((name, value_id, tensor))
+    return inputs
+
+
+def _bind_traced_outputs(
+    selected: list[tuple[str, Tensor]],
+    answered: dict[str, Tensor],
+    tracer: Tracer,
+) -> list[tuple[str, int, Tensor]]:
+    """Bind each selected output to its trace value id."""
+    outputs: list[tuple[str, int, Tensor]] = []
+    for name, tensor in selected:
+        value_id = tracer.lookup_id(_unwrap(tensor))
+        if value_id is None:
+            raise ValueError(
+                f"lucid.coreml: output {name!r} did not come out of the traced "
+                "graph. A constant the trace holds as a buffer (``arange``, a "
+                "tensor from a list) does not depend on the input: return it from "
+                f"outside the model. Otherwise it was computed on the host. {_HOST_READS}"
+            )
+        outputs.append((name, value_id, answered.get(name, tensor)))
+    return outputs
+
+
+def _restore_traced_examples(
+    tracer: Tracer | None,
+    examples: list[tuple[str, Tensor]],
+    held: list[_C_engine.TensorImpl],
+) -> list[tuple[str, bool]]:
+    if tracer is not None:
+        tracer.restore_outside_writes()
+    replaced: list[tuple[str, bool]] = []
+    for (name, tensor), impl in zip(examples, held, strict=True):
+        if _unwrap(tensor) is not impl:
+            replaced.append((name, bool(impl.requires_grad)))
+            tensor._impl = impl
+    return replaced
+
+
 def trace(model: Module, example: object, *, output_field: str | None = None) -> Any:
     """Run one traced forward pass.
 
@@ -449,75 +508,33 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
         and ``outputs`` a list of ``(feature name, value id, tensor)``. An
         input the forward wrote in place is bound to the value it arrived
         with, so the program computes the write from what it is given.
-
-    Raises
-    ------
-    ValueError
-        An input never reached an op, the model replaced an input's
-        tensor instead of writing into it, read a traced value on the
-        host, or an output is not in the trace.
-    TypeError
-        The return value carries no tensor, or lacks the named field.
-    StatefulModel
-        The trace changed one of the model's buffers.
-
-    Notes
-    -----
-    Whatever the forward writes in place — its own buffers, or one of the
-    example tensors — is put back to its value from before the trace,
-    whether the trace succeeded or not. An export runs the model once to
-    learn its shape; leaving that run's writes behind changed the caller's
-    tensors as a side effect of writing a file.
     """
     examples, by_keyword = _named_examples(example)
-    # Captured before the call, because the call may change what the
-    # example tensors hold. An in-place write keeps the tensor's impl and
-    # moves the value id it resolves to; a write that replaces the impl
-    # leaves the original untouched and the tensor pointing elsewhere.
     held = [_unwrap(tensor) for _name, tensor in examples]
-    tracer: Any = None
+    tracer: Tracer | None = None
     try:
         with _observers_paused(model):
             before = _buffer_marks(model)
             with _compile._tracing(watch=[t for _n, t in examples]) as tracer:
-                # Draws stay ops in the recording: export lifts each one into
-                # a model input, where the compile path would turn it into a
-                # feed.
                 tracer.redraw_rng = False
-                # The recorded operations are the same with autograd off —
-                # the tracer hooks fire before the grad-mode check, as the
-                # compile path relies on — and with it on, every activation
-                # is saved for a backward that never comes, for the whole
-                # build. At video resolutions that was gigabytes.
                 with lucid.no_grad():
-                    if by_keyword:
-                        result = model(**dict(examples))
-                    else:
-                        result = model(*(tensor for _, tensor in examples))
+                    result = (
+                        model(**dict(examples))
+                        if by_keyword
+                        else model(*(tensor for _, tensor in examples))
+                    )
                 selected = _select_outputs(result, output_field)
-
             after = _buffer_marks(model)
 
-        # Held as a list so every impl stays alive while its ``id`` is the
-        # key it is matched by.
         writes = list(tracer.outside_writes())
         written = {id(impl) for _tid, impl in writes}
-        # An output is read after the trace — a lifted draw's reference
-        # answer — so one that is itself a written tensor keeps the value
-        # the trace gave it, not the one it is about to be put back to.
         answered = {
             name: tensor.clone()
             for name, tensor in selected
             if id(_unwrap(tensor)) in written
         }
     finally:
-        if tracer is not None:
-            tracer.restore_outside_writes()
-        replaced: list[tuple[str, bool]] = []
-        for (name, tensor), impl in zip(examples, held, strict=True):
-            if _unwrap(tensor) is not impl:
-                replaced.append((name, bool(impl.requires_grad)))
-                tensor._impl = impl
+        replaced = _restore_traced_examples(tracer, examples, held)
 
     moved = sorted(
         name for name, mark in after.items() if before.get(name, mark) != mark
@@ -527,41 +544,11 @@ def trace(model: Module, example: object, *, output_field: str | None = None) ->
     if replaced:
         _refuse_replaced(*replaced[0])
     if tracer.graph.unsupported:
-        # Even with every output in the graph: ``x * 0 + c``, ``c`` read off ``x``.
         raise ValueError(f"lucid.coreml: {tracer.graph.unsupported}. {_HOST_READS}")
 
     feeds = tracer.external_feeds
-    feed_of = {id(impl): int(tid) for tid, impl in feeds.items()}
-    inputs: list[tuple[str, int, Tensor]] = []
-    for (name, tensor), impl in zip(examples, held, strict=True):
-        if id(impl) in written:
-            # Written in place: the tensor now resolves to the value the
-            # write produced, and the value it arrived with is the feed it
-            # was read as before that. Binding the input there makes the
-            # program compute the write from whatever the caller passes,
-            # as eager does; binding it to the written value left the feed
-            # to be baked in as a constant and the input read by nothing.
-            value_id = feed_of.get(id(impl))
-        else:
-            value_id = tracer.lookup_id(impl)
-        if value_id is None:
-            raise ValueError(
-                f"lucid.coreml: example input {name!r} never reached an op — the "
-                "model ignored it, or copied it before use"
-            )
-        inputs.append((name, value_id, tensor))
-
-    outputs: list[tuple[str, int, Tensor]] = []
-    for name, tensor in selected:
-        value_id = tracer.lookup_id(_unwrap(tensor))
-        if value_id is None:
-            raise ValueError(
-                f"lucid.coreml: output {name!r} did not come out of the traced "
-                "graph. A constant the trace holds as a buffer (``arange``, a "
-                "tensor from a list) does not depend on the input: return it from "
-                f"outside the model. Otherwise it was computed on the host. {_HOST_READS}"
-            )
-        outputs.append((name, value_id, answered.get(name, tensor)))
+    inputs = _bind_traced_inputs(examples, held, written, feeds, tracer)
+    outputs = _bind_traced_outputs(selected, answered, tracer)
     return tracer.graph, feeds, inputs, outputs, tracer.retained_values
 
 
@@ -1400,6 +1387,22 @@ class Builder:
         dims = sizes.declared() if isinstance(sizes, _flex.Dims) else list(sizes)
         return self._sizes(dims, value_id, operand, None, infer=False)
 
+    def _carried_where(
+        self,
+        dims: list[int],
+        value_id: int,
+        operand: str | None,
+        known: dict[int, tuple[str, int]] | None,
+    ) -> dict[int, tuple[str, int]]:
+        where = dict(known or {})
+        traced = None if operand is None else self.traced_id(operand)
+        if operand is not None and traced is not None:
+            mine = (value_id, dims)
+            theirs = (traced, self._shapes[operand])
+            for axis, other in self.flex.carried(mine, theirs).items():
+                where.setdefault(axis, (operand, other))
+        return where
+
     def _sizes(
         self,
         dims: list[int],
@@ -1408,13 +1411,7 @@ class Builder:
         known: dict[int, tuple[str, int]] | None,
         infer: bool,
     ) -> str:
-        where = dict(known or {})
-        traced = None if operand is None else self.traced_id(operand)
-        if operand is not None and traced is not None:
-            mine = (value_id, dims)
-            theirs = (traced, self._shapes[operand])
-            for axis, other in self.flex.carried(mine, theirs).items():
-                where.setdefault(axis, (operand, other))
+        where = self._carried_where(dims, value_id, operand, known)
         pieces: list[str] = []
         run: list[int] = []
         for axis, size in enumerate(dims):
@@ -1423,7 +1420,6 @@ class Builder:
                 if source is not None and self.flex_input is not None:
                     where[axis] = (self.flex_input, source)
                 elif infer:
-                    # ``reshape`` infers one axis from the element count.
                     infer = False
                 else:
                     raise ShapeNotFlexible(
@@ -2075,29 +2071,7 @@ def _lift_draws(
     return lifted
 
 
-def _unit_axis_rewrites(
-    graph: Any, handled: set[int], folded: set[int] | None = None
-) -> set[int]:
-    """Rank-6 values that can be emitted without their leading axis.
-
-    The two staging rewrites erase a rank-6 value that is only reshaped
-    and permuted. Deformable attention does something they cannot touch:
-    it *computes* at rank 6, over (batch, queries, heads, levels, points,
-    xy), with ordinary arithmetic between the reshapes. Mask2Former is
-    built out of it.
-
-    Every one of those values carries a batch axis of one, and dropping
-    an axis of one from every operand of an elementwise operation leaves
-    the result unchanged — broadcasting sees the same shapes with the
-    same trailing alignment. So the whole connected set is emitted a
-    rank lower, and the operations that leave it reshape to their
-    recorded output anyway, which restores the axis without being asked.
-
-    Refuses unless the whole set qualifies: a single value that does not
-    have the leading one, or a single operation outside the safe list,
-    and none of it is rewritten. A partial rewrite would put a rank-5
-    value where the rest of the graph expects rank 6.
-    """
+def _tall_unit_ids(graph: TraceGraph, handled: set[int]) -> set[int]:
     tall: set[int] = set()
     for op in graph.ops:
         for out in op.outputs:
@@ -2105,14 +2079,20 @@ def _unit_axis_rewrites(
                 if int(out.shape[0]) != 1:
                     return set()
                 tall.add(out.id)
+    return tall
+
+
+def _unit_axis_rewrites(
+    graph: Any, handled: set[int], folded: set[int] | None = None
+) -> set[int]:
+    """Rank-6 values that can be emitted without their leading axis."""
+    tall = _tall_unit_ids(graph, handled)
     if not tall:
         return set()
 
     gone = folded or set()
     for op in graph.ops:
         if op.outputs and int(op.outputs[0].id) in gone:
-            # Not emitted at all; its result arrives as a constant, which
-            # the driver writes at whatever rank this pass settles on.
             continue
         touches = any(o.id in tall for o in op.outputs) or any(
             i in tall for i in op.inputs
@@ -2388,17 +2368,754 @@ def _declare_image(
 
 @dataclasses.dataclass
 class _Shared:
-    """A package and blob several functions are being written into.
+    """A package and blob several functions are being written into."""
 
-    ``offsets`` maps a parameter's identity to where its bytes already
-    are. Two entry points over the same module hold the same tensors, so
-    keying on identity is what makes one copy serve both — which is the
-    only reason to put them in one package rather than two.
-    """
-
-    paths: Any
-    blob: Any
+    paths: PackagePaths
+    blob: BlobWriter
     offsets: dict[int, int] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass
+class _BuildCtx:
+    """Shared state across the stages of :func:`build_package`."""
+
+    model: Module
+    example: object
+    path: str
+    precision: Precision
+    io_precision: Precision
+    weights: WeightPrecision | _spec.Palettize | _spec.Sparsify
+    shapes: list[tuple[int, ...]] | None
+    shape_range: dict[int, tuple[int, int]] | None
+    state: list[State] | None
+    image_input: ImageInput | None
+    classifier: Classifier | None
+    metadata: Metadata | None
+    output_field: str | None
+    draws: _spec.Draws
+    activations: _spec.Activations
+    into: _Shared | None
+    target: _spec.DeploymentTarget
+    half: bool
+    half_io: bool
+    body_mil: int
+    body_blob: int
+    paths: PackagePaths = dataclasses.field(init=False)
+    blob: BlobWriter = dataclasses.field(init=False)
+    program: MilProgram = dataclasses.field(init=False)
+    builder: Builder = dataclasses.field(init=False)
+    graph: TraceGraph = dataclasses.field(init=False)
+    feeds: dict[int, _C_engine.TensorImpl] = dataclasses.field(default_factory=dict)
+    inputs: list[tuple[str, int, Tensor]] = dataclasses.field(default_factory=list)
+    outputs: list[tuple[str, int, Tensor]] = dataclasses.field(default_factory=list)
+    traced_values: dict[int, _C_engine.TensorImpl] = dataclasses.field(
+        default_factory=dict
+    )
+    flexibility: _flex.Flexibility = dataclasses.field(
+        default_factory=_flex.Flexibility
+    )
+    ordered_shapes: list[tuple[int, ...]] = dataclasses.field(default_factory=list)
+    bounds: list[tuple[int, int]] = dataclasses.field(default_factory=list)
+    varying: dict[int, set[int]] = dataclasses.field(default_factory=dict)
+    lifted: list[tuple[str, int, Tensor, str]] = dataclasses.field(default_factory=list)
+    lifted_heads: set[int] = dataclasses.field(default_factory=set)
+    lifted_names: set[str] = dataclasses.field(default_factory=set)
+    asked_for: int = 0
+    carried: dict[str, State] = dataclasses.field(default_factory=dict)
+    plain_inputs: list[tuple[str, int, Tensor]] = dataclasses.field(default_factory=list)
+    names: dict[int, str] = dataclasses.field(default_factory=dict)
+    input_ids: set[int] = dataclasses.field(default_factory=set)
+    builder_shapes_state: dict[str, list[int]] = dataclasses.field(default_factory=dict)
+    weight_shapes: dict[str, list[int]] = dataclasses.field(default_factory=dict)
+    weight_dtypes: dict[str, int] = dataclasses.field(default_factory=dict)
+    quantized_count: int = 0
+    f32_opmath_scalars: set[int] = dataclasses.field(default_factory=set)
+    rewrites: dict[int, _staging.WindowRewrite] = dataclasses.field(default_factory=dict)
+    stuffing: dict[int, _staging.StuffRewrite] = dataclasses.field(default_factory=dict)
+    absorbed: set[int] = dataclasses.field(default_factory=set)
+    precomputed: set[int] = dataclasses.field(default_factory=set)
+    folded: set[int] = dataclasses.field(default_factory=set)
+    thinned: set[int] = dataclasses.field(default_factory=set)
+    wanted_name: dict[int, str] = dataclasses.field(default_factory=dict)
+    cast_out: bool = False
+
+
+def _trace_and_probe(ctx: _BuildCtx) -> None:
+    """Run the initial trace and any flexibility shape probes."""
+    with (
+        _activation_quantization_paused(ctx.model)
+        if ctx.activations is _spec.Activations.DROPPED
+        else contextlib.nullcontext()
+    ):
+        graph, feeds, inputs, outputs, traced_values = trace(
+            ctx.model, ctx.example, output_field=ctx.output_field
+        )
+        probes, ordered, bounds = _flex.plan_probes(
+            tuple(int(d) for d in inputs[0][2].shape) if inputs else (),
+            len(inputs),
+            ctx.shapes,
+            ctx.shape_range,
+        )
+        flexibility = _flex.Flexibility()
+        if probes:
+            flexibility = _probe(ctx.model, inputs[0][2], probes, ctx.output_field)
+            if not _flex.same_graph(flexibility, graph, inputs[0][1]):
+                graph, feeds, inputs, outputs, traced_values = trace(
+                    ctx.model, ctx.example, output_field=ctx.output_field
+                )
+            if not _flex.same_graph(flexibility, graph, inputs[0][1]):
+                raise ShapeNotFlexible(
+                    "<graph>",
+                    "the model traces a different graph at the example's shape "
+                    "on different calls, so which values follow the input "
+                    "cannot be told from comparing them",
+                )
+    ctx.graph = graph
+    ctx.feeds = feeds
+    ctx.inputs = inputs
+    ctx.outputs = outputs
+    ctx.traced_values = traced_values
+    ctx.flexibility = flexibility
+    ctx.ordered_shapes = ordered
+    ctx.bounds = bounds
+    ctx.varying = flexibility.varying
+
+
+def _validate_state_and_draws(ctx: _BuildCtx) -> None:
+    """Validate carried state specs and lifted random draws."""
+    ctx.lifted = (
+        _lift_draws(ctx.graph, ctx.traced_values)
+        if ctx.draws is _spec.Draws.AS_INPUT
+        else []
+    )
+    ctx.asked_for = len(ctx.inputs)
+    ctx.carried = {spec.input: spec for spec in (ctx.state or [])}
+    if ctx.carried and not ctx.half:
+        raise ValueError(
+            "lucid.coreml: a carried state is stored as float16 — Core ML accepts "
+            "no other type for one — so the body has to be float16 too, or the "
+            "value written back would not be the value read. Pass "
+            "precision=Precision.FLOAT16"
+        )
+    if ctx.carried:
+        _check_carried_state(ctx.state or [], ctx.inputs, ctx.outputs)
+    for name, tid, sample, kind in ctx.lifted:
+        if tid in ctx.varying:
+            raise ShapeNotFlexible(
+                kind,
+                f"its result is shaped {tuple(int(d) for d in sample.shape)} at one "
+                f"input size and differently at another, so the input {name!r} it "
+                "becomes would have to be flexible too — and which of the package's "
+                "inputs a caller may vary is one choice, not two. Export it at a "
+                "single shape",
+            )
+        ctx.lifted_heads.add(tid)
+        ctx.lifted_names.add(name)
+        ctx.inputs.append((name, tid, sample))
+    ctx.plain_inputs = [
+        entry for entry in ctx.inputs if entry[0] not in ctx.carried
+    ]
+    if not ctx.plain_inputs:
+        raise ValueError(
+            "lucid.coreml: every input was declared state, leaving nothing for the "
+            "caller to pass"
+        )
+
+
+def _check_carried_state(
+    state: list[State],
+    inputs: list[tuple[str, int, Tensor]],
+    outputs: list[tuple[str, int, Tensor]],
+) -> None:
+    by_input = {name for name, _tid, _t in inputs}
+    by_output = {field for field, _tid, _t in outputs}
+    for spec in state:
+        if spec.input not in by_input:
+            raise ValueError(
+                f"lucid.coreml: {spec.input!r} is not an input of this model "
+                f"{sorted(by_input)}"
+            )
+        if spec.output not in by_output:
+            raise ValueError(
+                f"lucid.coreml: {spec.output!r} is not an output of this model "
+                f"{sorted(by_output)}"
+            )
+        held = next(t for n, _i, t in inputs if n == spec.input)
+        written = next(t for f, _i, t in outputs if f == spec.output)
+        if tuple(held.shape) != tuple(written.shape):
+            raise ValueError(
+                f"lucid.coreml: state {spec.input!r} is shaped "
+                f"{tuple(int(d) for d in held.shape)} and {spec.output!r} is "
+                f"{tuple(int(d) for d in written.shape)}; what is written back "
+                "has to be what was read"
+            )
+
+
+def _half_interface(ctx: _BuildCtx, name: str, tensor: Tensor) -> bool:
+    """Whether ``name`` is declared float16 and read without a cast."""
+    is_image = ctx.image_input is not None and name not in ctx.lifted_names
+    is_float = tensor.dtype in (lucid.float32, lucid.float16)
+    return ctx.half_io and is_float and not is_image
+
+
+def _declare_carried_state(ctx: _BuildCtx) -> None:
+    for name, tid, tensor in ctx.inputs:
+        ctx.names[tid] = name
+        ctx.input_ids.add(tid)
+        if name not in ctx.carried:
+            continue
+        shape = [int(d) for d in tensor.shape]
+        carried_type = (ctx.body_mil, shape)
+        ctx.program.add_state(name, carried_type)
+        held = f"_state_{name}"
+        ctx.program.read_state(name, held, carried_type)
+        ctx.names[tid] = held
+        ctx.builder_shapes_state[held] = shape
+
+
+def _init_program_and_state(ctx: _BuildCtx) -> None:
+    """Create the ``MilProgram``, configure shapes, and declare state."""
+    cm = _C_engine.coreml
+    ctx.paths = ctx.into.paths if ctx.into is not None else cm.prepare_package(ctx.path)
+    ctx.program = cm.MilProgram(
+        [
+            (
+                name,
+                (
+                    (
+                        _spec.FLOAT16
+                        if _half_interface(ctx, name, tensor)
+                        else _spec.mil_dtype(tensor.dtype)
+                    ),
+                    _flex.flex([int(d) for d in tensor.shape], ctx.varying.get(tid)),
+                ),
+            )
+            for name, tid, tensor in ctx.plain_inputs
+        ]
+    )
+    if ctx.shapes is not None:
+        ctx.program.set_enumerated_shapes(
+            ctx.inputs[0][0], [list(s) for s in ctx.ordered_shapes]
+        )
+        ctx.program.set_default_shape(ctx.inputs[0][0], list(ctx.ordered_shapes[0]))
+    if ctx.shape_range is not None:
+        ctx.program.set_shape_range(ctx.inputs[0][0], ctx.bounds)
+        ctx.program.set_default_shape(
+            ctx.inputs[0][0], [int(d) for d in ctx.inputs[0][2].shape]
+        )
+    _declare_carried_state(ctx)
+    ctx.blob = (
+        ctx.into.blob
+        if ctx.into is not None
+        else cm.BlobWriter(ctx.paths.weight_bin)
+    )
+
+
+def _write_palettized_const(
+    ctx: _BuildCtx,
+    name: str,
+    shape: list[int],
+    palettized: tuple[bytes, Tensor, list[int], int],
+) -> None:
+    keys, palettes, lut_shape, key_bits = palettized
+    offset = ctx.blob.append_bytes(
+        keys, _C_engine.coreml.BLOB_SUBBYTE[str(key_bits)]
+    )
+    lut_offset = ctx.blob.append_tensor(
+        _unwrap(palettes.half() if ctx.half else palettes), ctx.body_blob
+    )
+    ctx.program.add_grouped_lut_const(
+        name,
+        (ctx.body_mil, shape),
+        offset,
+        _C_engine.coreml.MIL_SUBBYTE[str(key_bits)],
+        lut_offset,
+        ctx.body_mil,
+        lut_shape,
+    )
+    ctx.quantized_count += 1
+
+
+def _write_sparse_const(
+    ctx: _BuildCtx,
+    name: str,
+    shape: list[int],
+    sparse: tuple[Tensor, bytes, int],
+) -> None:
+    values, mask, kept = sparse
+    if ctx.half:
+        values = values.half()
+    value_offset = ctx.blob.append_tensor(_unwrap(values), ctx.body_blob)
+    if ctx.target is _spec.DeploymentTarget.IOS18:
+        mask_offset = ctx.blob.append_bytes(mask, _C_engine.coreml.BLOB_SUBBYTE["1"])
+        ctx.program.add_sparse_const_extended(
+            name, (ctx.body_mil, shape), value_offset, kept, ctx.body_mil, mask_offset
+        )
+    else:
+        mask_offset = ctx.blob.append_bytes(mask, _spec.BLOB_UINT8)
+        ctx.program.add_sparse_const(
+            name, (ctx.body_mil, shape), value_offset, kept, mask_offset, len(mask)
+        )
+    ctx.quantized_count += 1
+
+
+def _write_float_const(
+    ctx: _BuildCtx, name: str, tensor: Tensor, dedup: int | None
+) -> None:
+    """Write one float constant, compressed the way ``ctx.weights`` asks."""
+    shape = [int(d) for d in tensor.shape]
+    if isinstance(ctx.weights, _spec.Palettize):
+        palettized = _palettize_weight(tensor, ctx.weights.bits)
+        if palettized is not None:
+            _write_palettized_const(ctx, name, shape, palettized)
+            return
+    elif isinstance(ctx.weights, _spec.Sparsify):
+        sparse = _sparsify_weight(tensor, ctx.weights.ratio)
+        if sparse is not None:
+            _write_sparse_const(ctx, name, shape, sparse)
+            return
+    elif ctx.weights is WeightPrecision.INT8:
+        quantized = _quantize_weight(tensor, ctx.body_mil)
+        if quantized is not None:
+            codes, scale_bytes, zero_bytes, channels = quantized
+            offset = ctx.blob.append_tensor(_unwrap(codes), _spec.BLOB_INT8)
+            ctx.program.add_quantized_const(
+                name,
+                (ctx.body_mil, shape),
+                offset,
+                scale_bytes,
+                ctx.body_mil,
+                zero_bytes,
+                channels,
+                0,
+            )
+            ctx.quantized_count += 1
+            return
+
+    is_f16 = tensor.dtype == lucid.float16
+    mil_dt = _spec.FLOAT16 if is_f16 else _spec.FLOAT32
+    blob_dt = _spec.BLOB_FLOAT16 if is_f16 else _spec.BLOB_FLOAT32
+    blob_offset = (
+        ctx.into.offsets.get(dedup) if ctx.into is not None and dedup else None
+    )
+    if blob_offset is None:
+        blob_offset = ctx.blob.append_tensor(_unwrap(tensor), blob_dt)
+        if ctx.into is not None and dedup:
+            ctx.into.offsets[dedup] = blob_offset
+    ctx.program.add_blob_const(name, (mil_dt, shape), blob_offset)
+
+
+def _write_feed_constants(ctx: _BuildCtx) -> None:
+    """Write non-input external feeds as constants in the program and blob."""
+    ctx.f32_opmath_scalars = _fold.f32_opmath_scalars(ctx.graph, ctx.feeds)
+    for tid, impl in ctx.feeds.items():
+        if tid in ctx.input_ids:
+            continue
+        tensor = _wrap(impl)
+        _refuse_if_empty(tensor)
+        is_float = tensor.dtype in (lucid.float32, lucid.float16)
+        keep_f32 = tid in ctx.f32_opmath_scalars
+        if ctx.half and is_float and not keep_f32:
+            tensor = tensor.half()
+        shape = [int(d) for d in tensor.shape]
+        name = f"_w{tid}"
+        if is_float:
+            _write_float_const(ctx, name, tensor, None if keep_f32 else id(impl))
+            ctx.weight_dtypes[name] = (
+                _spec.FLOAT16 if tensor.dtype == lucid.float16 else _spec.FLOAT32
+            )
+        elif tensor.dtype == lucid.bool_:
+            ctx.program.add_bool_const_shaped(name, _flatten(tensor, bool), shape)
+            ctx.weight_dtypes[name] = _C_engine.coreml.DTYPE_BOOL
+        else:
+            values = _spec.as_int32(_flatten(tensor, _as_int), name)
+            ctx.program.add_int_const_shaped(name, values, shape)
+            ctx.weight_dtypes[name] = _C_engine.coreml.DTYPE_INT32
+        ctx.names[tid] = name
+        ctx.weight_shapes[name] = shape
+
+
+def _verify_unthinned_ranks(ctx: _BuildCtx, staged_or_absorbed: set[int]) -> None:
+    if ctx.thinned & set(ctx.varying):
+        raise ShapeNotFlexible(
+            "<rank-6 value>",
+            "a value computed at rank 6 is emitted without its leading axis of "
+            "one, and its shape changes with the input",
+        )
+    for op in ctx.graph.ops:
+        head = int(op.outputs[0].id) if op.outputs else -1
+        if head in staged_or_absorbed:
+            continue
+        for out in op.outputs:
+            if len(out.shape) > _staging.MAX_RANK and out.id not in ctx.thinned:
+                raise UnsupportedRank(op.name, tuple(int(d) for d in out.shape))
+
+
+def _plan_rewrites_and_folding(ctx: _BuildCtx) -> None:
+    """Plan window/stuffing rewrites, constant folding, and rank-6 thinning."""
+    ctx.rewrites = _staging.window_rewrites(ctx.graph)
+    ctx.stuffing = _staging.stuff_rewrites(ctx.graph)
+    absorbed = {oid for r in ctx.rewrites.values() for oid in r.absorbs}
+    absorbed |= {oid for r in ctx.stuffing.values() for oid in r.absorbs}
+    ctx.absorbed = absorbed
+    output_ids = {tid for _n, tid, _t in ctx.outputs}
+    ctx.precomputed, ctx.folded = _fold.foldable(
+        ctx.graph,
+        ctx.feeds,
+        set(ctx.input_ids),
+        ctx.traced_values,
+        set(ctx.varying),
+        output_ids,
+    )
+    staged_or_absorbed = set(ctx.rewrites) | set(ctx.stuffing) | absorbed
+    ctx.thinned = _unit_axis_rewrites(ctx.graph, staged_or_absorbed, ctx.folded)
+    _verify_unthinned_ranks(ctx, staged_or_absorbed)
+
+
+def _prepare_builder_and_inputs(ctx: _BuildCtx) -> None:
+    """Initialise the :class:`Builder`, register weights, and declare inputs."""
+    builder = Builder(ctx.program, ctx.blob, ctx.body_mil, ctx.body_blob, ctx.half)
+    builder.flex = ctx.flexibility
+    builder.traced_names = ctx.names
+    builder.thinned = set(ctx.thinned)
+    for held_name, held_shape in {
+        **ctx.weight_shapes,
+        **ctx.builder_shapes_state,
+    }.items():
+        builder.declare(held_name, held_shape)
+    for weight_name in ctx.weight_shapes:
+        builder.mark_const(weight_name)
+        builder.dtypes[weight_name] = ctx.weight_dtypes[weight_name]
+    if ctx.image_input is not None and ctx.asked_for != 1:
+        raise ValueError(
+            f"lucid.coreml: image_input needs a single-input model, and this one "
+            f"takes {ctx.asked_for} — which of them is the image would be a guess"
+        )
+    for name, tid, tensor in ctx.plain_inputs:
+        shape = _flex.flex(tensor.shape, ctx.varying.get(tid))
+        builder.declare(name, shape)
+        if tid == ctx.flexibility.input_id:
+            builder.flex_input = name
+        half_in = _half_interface(ctx, name, tensor)
+        builder.dtypes[name] = (
+            _spec.FLOAT16 if half_in else _spec.mil_dtype(tensor.dtype)
+        )
+        source = name
+        if ctx.image_input is not None and name not in ctx.lifted_names:
+            source = _declare_image(
+                ctx.program,
+                builder,
+                name,
+                [int(d) for d in tensor.shape],
+                ctx.image_input,
+            )
+            builder.declare(source, shape)
+            ctx.names[tid] = source
+        if (
+            ctx.half
+            and not half_in
+            and tensor.dtype == lucid.float32
+            and tid not in ctx.f32_opmath_scalars
+        ):
+            cast_name = f"_cast_in_{name}"
+            mil_type, raw = emit_cast(builder, source, "fp16")
+            ctx.program.add_op(
+                mil_type, _operands(raw), cast_name, (ctx.body_mil, shape)
+            )
+            builder.declare(cast_name, shape)
+            builder.dtypes[cast_name] = ctx.body_mil
+            ctx.names[tid] = cast_name
+    ctx.builder = builder
+
+
+def _emit_one_folded_constant(ctx: _BuildCtx, tid: int) -> bool:
+    builder = ctx.builder
+    folded_value = _wrap(ctx.traced_values[tid])
+    if tid in ctx.thinned:
+        folded_value = folded_value.reshape(
+            *[int(d) for d in folded_value.shape][1:]
+        )
+    if tid in ctx.f32_opmath_scalars:
+        ctx.names[tid] = builder.const_float32(float(folded_value.item()))
+        return True
+    if folded_value.dtype in (lucid.float32, lucid.float16):
+        written = folded_value.half() if ctx.half else folded_value
+        if _worth_storing_compressed(written, ctx.weights):
+            name = f"_f{tid}"
+            _write_float_const(ctx, name, written, None)
+            builder.mark_const(name)
+            is_f16 = written.dtype == lucid.float16
+            builder.dtypes[name] = _spec.FLOAT16 if is_f16 else ctx.body_mil
+            builder.declare(name, [int(d) for d in written.shape])
+            ctx.names[tid] = name
+        else:
+            ctx.names[tid] = builder.const_from_tensor(written)
+        return True
+    if folded_value.dtype in (lucid.int8, lucid.int16, lucid.int32, lucid.int64):
+        ctx.names[tid] = builder.const_ints_shaped(
+            [int(v) for v in _flatten(folded_value, _as_int)],
+            [int(d) for d in folded_value.shape],
+        )
+        return True
+    return False
+
+
+def _emit_folded_constants(ctx: _BuildCtx) -> None:
+    """Write precomputed constant-folded values into the program."""
+    carried_out = {spec.output for spec in (ctx.state or [])}
+    ctx.cast_out = ctx.half and not (ctx.half_io and ctx.classifier is None)
+    ctx.wanted_name = {
+        tid: field
+        for field, tid, t in ctx.outputs
+        if field not in carried_out and not (ctx.cast_out and t.dtype == lucid.float32)
+    }
+    for tid in ctx.precomputed:
+        if not _emit_one_folded_constant(ctx, tid):
+            ctx.folded, ctx.precomputed = set(), set()
+            break
+
+
+def _try_emit_staged_rewrite(ctx: _BuildCtx, op: TraceNode, head: int) -> bool:
+    """Emit a window or zero-stuffing rewrite if ``head`` starts one."""
+    plan = ctx.rewrites.get(head)
+    if plan is not None:
+        plan = plan._replace(
+            mid_shape=_flex.flex(plan.mid_shape, ctx.varying.get(head)),
+            out_shape=_flex.flex(plan.out_shape, ctx.varying.get(plan.out_id)),
+        )
+        ctx.names[plan.out_id] = _staging.stage_permutation(
+            ctx.builder, ctx.names[op.inputs[0]], plan
+        )
+        return True
+    stuff = ctx.stuffing.get(head)
+    if stuff is not None:
+        wide = _flex.flex(stuff.out_shape, ctx.varying.get(stuff.out_id))
+        stuff = dataclasses.replace(
+            stuff,
+            source_shape=[
+                -1 if w < 0 else d
+                for d, w in zip(stuff.source_shape, wide, strict=True)
+            ],
+            out_shape=wide,
+        )
+        ctx.names[stuff.out_id] = _staging.stage_zero_stuff(
+            ctx.builder, ctx.names[op.inputs[0]], stuff
+        )
+        return True
+    return False
+
+
+def _emit_single_op(ctx: _BuildCtx, op: TraceNode) -> None:
+    """Emit one reachable traced operation into ``ctx.program``."""
+    builder = ctx.builder
+    emitter = EMITTERS.get(op.name)
+    if emitter is None:
+        raise UnsupportedOp(op.name)
+    operands = [_named(ctx.names, i, f"operation {op.name!r}") for i in op.inputs]
+    result = emitter(
+        builder,
+        _flex.GuardedOp(op, ctx.varying) if ctx.varying else op,
+        operands,
+    )
+    if isinstance(result, Constant):
+        ctx.names[op.outputs[0].id] = result.name
+        return
+    if isinstance(result, Bound):
+        for out, bound in zip(op.outputs, result.names, strict=True):
+            ctx.names[out.id] = bound
+        return
+    outs = op.outputs if isinstance(result, MultiOutput) else op.outputs[:1]
+    mil_type, raw_bindings = (
+        (result.mil_type, result.bindings)
+        if isinstance(result, MultiOutput)
+        else result
+    )
+    bindings = _operands(raw_bindings)
+    produced = [
+        (
+            ctx.wanted_name.get(o.id, f"_v{o.id}_{op.name}"),
+            (
+                _spec.trace_dtype(str(o.dtype).split(".")[-1], ctx.body_mil),
+                _flex.flex(
+                    [int(d) for d in o.shape][1 if o.id in ctx.thinned else 0 :],
+                    ctx.varying.get(o.id),
+                ),
+            ),
+        )
+        for o in outs
+    ]
+    if isinstance(result, MultiOutput):
+        ctx.program.add_op_multi(mil_type, bindings, produced)
+    else:
+        ctx.program.add_op(mil_type, bindings, produced[0][0], produced[0][1])
+    for (out_name, (out_dtype, shape)), o in zip(produced, outs, strict=True):
+        ctx.names[o.id] = out_name
+        builder.declare(out_name, shape)
+        builder.dtypes[out_name] = out_dtype
+        if o.id in ctx.thinned:
+            builder.unit_axis_dropped.add(out_name)
+
+
+def _emit_reachable_ops(ctx: _BuildCtx) -> None:
+    """Emit every reachable non-folded op in topological trace order."""
+    for op in _reachable_ops(ctx.graph, [tid for _n, tid, _t in ctx.outputs]):
+        if op.outputs and int(op.outputs[0].id) in ctx.folded:
+            continue
+        head = int(op.outputs[0].id) if op.outputs else -1
+        if head in ctx.lifted_heads or head in ctx.absorbed:
+            continue
+        ctx.builder.current = op.name
+        if _try_emit_staged_rewrite(ctx, op, head):
+            continue
+        _emit_single_op(ctx, op)
+    if ctx.into is None:
+        ctx.blob.finalize()
+
+
+def _check_classifier(
+    classifier: Classifier, outputs: list[tuple[str, int, Tensor]]
+) -> None:
+    if len(outputs) != 1:
+        raise ValueError(
+            f"lucid.coreml: a classifier needs one output and this model "
+            f"returns {len(outputs)} ({[name for name, _t, _x in outputs]})"
+        )
+    scores = outputs[0][2]
+    score_shape = tuple(int(d) for d in scores.shape)
+    if len(score_shape) != 2 or score_shape[0] != 1:
+        raise ValueError(
+            f"lucid.coreml: a classifier's output must be (1, classes) and this "
+            f"one is {score_shape}"
+        )
+    if score_shape[1] != len(classifier.labels):
+        raise ValueError(
+            f"lucid.coreml: {len(classifier.labels)} labels for "
+            f"{score_shape[1]} scores"
+        )
+
+
+def _set_package_metadata(ctx: _BuildCtx) -> None:
+    if ctx.metadata is not None:
+        ctx.program.set_metadata(
+            ctx.metadata.description,
+            ctx.metadata.author,
+            ctx.metadata.license,
+            ctx.metadata.version,
+        )
+    ctx.program.set_user_metadata(_PRECISION_KEY, ctx.precision.value)
+    ctx.program.set_user_metadata(_IO_PRECISION_KEY, ctx.io_precision.value)
+    if ctx.lifted:
+        ctx.program.set_user_metadata(
+            _DRAWN_KEY,
+            ",".join(
+                f"{name}:{kind}:{'x'.join(str(int(d)) for d in sample.shape)}"
+                for name, _tid, sample, kind in ctx.lifted
+            ),
+        )
+    if ctx.into is None:
+        _C_engine.coreml.finish_package(ctx.paths, ctx.program.serialize())
+
+
+def _declare_outputs_and_metadata(
+    ctx: _BuildCtx,
+) -> list[tuple[str, tuple[int, ...]]]:
+    """Declare program outputs, state write-backs, classifier head, and metadata."""
+    if ctx.classifier is not None:
+        _check_classifier(ctx.classifier, ctx.outputs)
+    written = {spec.output: spec.input for spec in (ctx.state or [])}
+    declared: list[tuple[str, tuple[int, ...]]] = []
+    for field, tid, tensor in ctx.outputs:
+        if field in written:
+            ctx.program.write_state(
+                written[field],
+                _named(ctx.names, tid, f"the state written from {field!r}"),
+            )
+            continue
+        value = _named(ctx.names, tid, f"output {field!r}")
+        is_float = tensor.dtype in (lucid.float32, lucid.float16)
+        flexible_type = (
+            (
+                _spec.FLOAT16
+                if is_float and not ctx.cast_out and ctx.half_io
+                else _spec.mil_dtype(tensor.dtype)
+            ),
+            _flex.flex([int(d) for d in tensor.shape], ctx.varying.get(tid)),
+        )
+        if ctx.cast_out and tensor.dtype == lucid.float32:
+            mil_type, raw = emit_cast(ctx.builder, value, "fp32")
+            ctx.program.add_op(mil_type, _operands(raw), field, flexible_type)
+            value = field
+        if value != field:
+            ctx.program.add_op("identity", [("x", [value])], field, flexible_type)
+        if ctx.classifier is not None:
+            ctx.program.set_classifier(
+                value,
+                list(ctx.classifier.labels),
+                ctx.classifier.label_name,
+                ctx.classifier.probabilities_name,
+            )
+            declared.append((ctx.classifier.label_name, ()))
+            declared.append((ctx.classifier.probabilities_name, ()))
+            continue
+        ctx.program.add_output(field, flexible_type)
+        declared.append((field, tuple(flexible_type[1])))
+    _set_package_metadata(ctx)
+    return declared
+
+
+def _weights_summary_name(
+    weights: WeightPrecision | _spec.Palettize | _spec.Sparsify,
+) -> str:
+    if isinstance(weights, WeightPrecision):
+        return weights.value
+    if isinstance(weights, _spec.Palettize):
+        return f"PALETTIZED_{weights.bits}BIT"
+    return f"SPARSE_{weights.ratio:g}"
+
+
+def _build_package_summary(
+    ctx: _BuildCtx, declared: list[tuple[str, tuple[int, ...]]]
+) -> dict[str, object]:
+    return {
+        "inputs": [
+            (name, tuple(int(d) for d in tensor.shape))
+            for name, _tid, tensor in ctx.plain_inputs
+        ],
+        "outputs": declared,
+        "ops": int(ctx.program.op_count),
+        "precision": ctx.precision.value,
+        "io_precision": ctx.io_precision.value,
+        "weights": _weights_summary_name(ctx.weights),
+        "classifier": ctx.classifier is not None,
+        "noise": [
+            (name, tuple(int(d) for d in sample.shape), kind, sample)
+            for name, _tid, sample, kind in ctx.lifted
+        ],
+        "traced_outputs": (
+            {field: tensor for field, _tid, tensor in ctx.outputs}
+            if ctx.lifted
+            else {}
+        ),
+        "quantized_weights": ctx.quantized_count,
+        "flexible": ctx.shapes is not None or ctx.shape_range is not None,
+        "state": [(spec.input, spec.output) for spec in (ctx.state or [])],
+        "deployment_target": _floor_of(str(ctx.paths.root)) or ctx.target,
+        "program": ctx.program,
+        "path": ctx.paths.root,
+    }
+
+
+def _run_build_pipeline(ctx: _BuildCtx) -> dict[str, object]:
+    _trace_and_probe(ctx)
+    _validate_state_and_draws(ctx)
+    _init_program_and_state(ctx)
+    _write_feed_constants(ctx)
+    _plan_rewrites_and_folding(ctx)
+    _prepare_builder_and_inputs(ctx)
+    _emit_folded_constants(ctx)
+    _emit_reachable_ops(ctx)
+    declared = _declare_outputs_and_metadata(ctx)
+    return _build_package_summary(ctx, declared)
 
 
 def build_package(
@@ -2428,82 +3145,42 @@ def build_package(
     model : nn.Module
         Model to export, in ``eval()`` mode.
     example : Tensor or tuple of Tensor or dict of str to Tensor
-        Supplies each input's shape and dtype; values are irrelevant.
-        A tuple is passed positionally, a mapping by keyword.
+        Supplies each input's shape and dtype (tuple positionally, dict by key).
     path : str
-        Destination package. Replaced if it already exists.
+        Destination package path, replaced if it already exists.
     precision : Precision, optional, keyword-only, default=FLOAT32
-        Body precision. ``FLOAT16`` is what the Neural Engine runs;
-        inputs and outputs stay float32 unless ``io_precision`` says
-        otherwise, bracketed by casts.
+        Body precision (``FLOAT32`` or ``FLOAT16``).
     io_precision : Precision, optional, keyword-only, default=FLOAT32
-        Element type of the float inputs and outputs. ``FLOAT16`` needs
-        a float16 body and removes the casts around it, so the caller
-        hands over and receives half precision. An image input stays a
-        pixel buffer, and a classifier's scores stay float32 under its
-        labels.
+        Element type of float inputs and outputs; ``FLOAT16`` requires a float16 body.
     weights : WeightPrecision, optional, keyword-only, default=FLOAT
-        How weights are stored. ``INT8`` keeps eight bits per weight plus
-        a per-channel scale, halving the package against float16; the
-        body still computes at ``precision``.
+        How weights are stored (``FLOAT``, ``INT8``, ``Palettize``, or ``Sparsify``).
     image_input : ImageInput or None, optional, keyword-only, default=None
-        Present the sole input as an image, with the normalisation it
-        expects. Refused when the model takes more than one input, since
-        which of them is the image would be a guess.
+        Present the sole input as an image with its expected normalisation.
     shapes : list of tuple of int or None, optional, keyword-only, default=None
-        Every input shape the package should accept, the example's own
-        among them. Found by tracing at each and comparing, so an
-        operation whose configuration came from the input size is
-        refused by name rather than silently fixed to one of them.
+        Enumerated input shapes the package should accept.
     shape_range : dict of int to tuple of int or None, optional, keyword-only, default=None
-        Axis to ``(lowest, highest)``, for an input whose size is not a
-        short list — a variable sequence length, a camera's resolution.
-        Axes left out keep the example's size. Mutually exclusive with
-        ``shapes``, which admits only what it lists.
+        Axis to ``(lowest, highest)`` bounds, mutually exclusive with ``shapes``.
     state : list of State or None, optional, keyword-only, default=None
-        Input/output pairs the package should carry between predictions
-        instead of exchanging with the caller.
+        Input/output state pairs carried across predictions.
     classifier : Classifier or None, optional, keyword-only, default=None
-        Declare the model a classifier over these labels. Needs a single
-        output shaped ``(1, len(labels))``.
+        Declare the model a classifier over these labels.
     metadata : Metadata or None, optional, keyword-only, default=None
-        What the package says about itself.
+        Package metadata (author, license, description, version).
     activations : _spec.Activations, optional, keyword-only, default=SIMULATED
-        What to do with a quantization-aware model's activation
-        fake-quantization. The default carries it as arithmetic, so the
-        package reproduces the model exactly; ``DROPPED`` removes it,
-        leaving quantized weights and float activations — which is what
-        the Neural Engine computes anyway. Inert for a model that carries
-        none.
+        How QAT activation fake-quantization is lowered (``SIMULATED`` or ``DROPPED``).
     draws : _spec.Draws, optional, keyword-only, default=REFUSED
-        What to do about a model that draws random numbers in
-        ``forward``. Core ML folds a draw at build time, so the default
-        refuses rather than writing a package that returns one fixed
-        sample forever. ``AS_INPUT`` declares each draw as an input the
-        caller fills; the handle draws for a caller who passes nothing,
-        so the package still samples the way the model does.
+        How random draws in ``forward`` are handled (``REFUSED`` or ``AS_INPUT``).
     minimum_deployment_target : DeploymentTarget or None, optional, keyword-only, default=None
-        Oldest system the package must run on. State, palettization and
-        several entry points each raise that floor to ``IOS18``; naming a
-        lower one refuses the export rather than producing a package that
-        loads nowhere the caller intended. ``None`` accepts whatever the
-        features require, and the result is reported on the model.
+        Oldest deployment target the package must run on.
     output_field : str or None, optional, keyword-only, default=None
-        Single attribute to export from an output dataclass. ``None``
-        takes every tensor field it declares.
+        Single attribute to export from an output dataclass.
     into : _Shared or None, optional, keyword-only, default=None
-        A package and weight blob already open, for building one function
-        of several. The blob is neither finalised nor written out here;
-        the caller does that once every function is in it, which is what
-        lets them share the weights.
+        Open package and weight blob when building one function of several.
 
     Returns
     -------
     dict
-        ``inputs`` and ``outputs`` — each a list of ``(feature name,
-        shape)`` in declared order — plus ``ops``, ``precision`` and
-        ``path``: what a caller needs to drive predictions without
-        re-reading the package.
+        Summary of ``inputs``, ``outputs``, ``ops``, ``precision``, and ``path``.
 
     Raises
     ------
@@ -2514,724 +3191,30 @@ def build_package(
     """
     half_io = io_precision is Precision.FLOAT16
     if half_io and precision is not Precision.FLOAT16:
-        # The casts a float16 interface removes are the ones that bracket
-        # a float16 body; around a float32 one there are none to remove,
-        # and adding the opposite pair would pay two conversions to hand
-        # the caller less precision than the program computed.
         raise ValueError(
             "lucid.coreml: io_precision=Precision.FLOAT16 declares float16 "
             "inputs and outputs, and the body is float32 — the interface would "
             "only round what the program computed. Pass "
             "precision=Precision.FLOAT16 as well"
         )
-    # Settled before anything is written: a floor the package cannot
-    # meet is the caller's mistake to hear about now, not a device's to
-    # report later. A float16 interface does not move it: Core ML reads a
-    # float16 multi-array from iOS 16 on, below the oldest floor written.
     target = _settle_target(
         minimum_deployment_target,
         state=state,
         weights=weights,
         functions=into is not None,
     )
-    with (
-        _activation_quantization_paused(model)
-        if activations is _spec.Activations.DROPPED
-        else contextlib.nullcontext()
-    ):
-        graph, feeds, inputs, outputs, traced_values = trace(
-            model, example, output_field=output_field
-        )
-        probes, ordered, bounds = _flex.plan_probes(
-            tuple(int(d) for d in inputs[0][2].shape) if inputs else (),
-            len(inputs),
-            shapes,
-            shape_range,
-        )
-        flexibility = _flex.Flexibility()
-        if probes:
-            flexibility = _probe(model, inputs[0][2], probes, output_field)
-            if not _flex.same_graph(flexibility, graph, inputs[0][1]):
-                # The open axes are keyed by the probes' value ids, so the
-                # graph emitted has to be theirs. A model that fills a
-                # cache on its first call — Swin's attention mask — traces
-                # a longer graph then than on every call after, and the
-                # probes were all later calls.
-                graph, feeds, inputs, outputs, traced_values = trace(
-                    model, example, output_field=output_field
-                )
-            if not _flex.same_graph(flexibility, graph, inputs[0][1]):
-                raise ShapeNotFlexible(
-                    "<graph>",
-                    "the model traces a different graph at the example's shape "
-                    "on different calls, so which values follow the input "
-                    "cannot be told from comparing them",
-                )
-    varying = flexibility.varying
-
-    lifted = _lift_draws(graph, traced_values) if draws is _spec.Draws.AS_INPUT else []
-    lifted_heads = {tid for _n, tid, _t, _k in lifted}
-    lifted_names = {name for name, _tid, _t, _k in lifted}
-    # Appended only once the interface has been settled. A lifted draw is
-    # an input of the *package* and not of the model, and everything
-    # between here and there counts the model's: a flexible shape, a
-    # range and an image input each need a single-input model, and
-    # counting the draw made a one-input sampler look like two.
-    asked_for = len(inputs)
-
-    carried = {spec.input: spec for spec in (state or [])}
-    if carried and precision is not Precision.FLOAT16:
-        raise ValueError(
-            "lucid.coreml: a carried state is stored as float16 — Core ML accepts "
-            "no other type for one — so the body has to be float16 too, or the "
-            "value written back would not be the value read. Pass "
-            "precision=Precision.FLOAT16"
-        )
-    if carried:
-        by_input = {name for name, _tid, _t in inputs}
-        by_output = {field for field, _tid, _t in outputs}
-        for spec in state or []:
-            if spec.input not in by_input:
-                raise ValueError(
-                    f"lucid.coreml: {spec.input!r} is not an input of this model "
-                    f"{sorted(by_input)}"
-                )
-            if spec.output not in by_output:
-                raise ValueError(
-                    f"lucid.coreml: {spec.output!r} is not an output of this model "
-                    f"{sorted(by_output)}"
-                )
-            held = next(t for n, _i, t in inputs if n == spec.input)
-            written = next(t for f, _i, t in outputs if f == spec.output)
-            if tuple(held.shape) != tuple(written.shape):
-                raise ValueError(
-                    f"lucid.coreml: state {spec.input!r} is shaped "
-                    f"{tuple(int(d) for d in held.shape)} and {spec.output!r} is "
-                    f"{tuple(int(d) for d in written.shape)}; what is written back "
-                    "has to be what was read"
-                )
-
-    for name, tid, sample, kind in lifted:
-        if tid in varying:
-            raise ShapeNotFlexible(
-                kind,
-                f"its result is shaped {tuple(int(d) for d in sample.shape)} at one "
-                f"input size and differently at another, so the input {name!r} it "
-                "becomes would have to be flexible too — and which of the package's "
-                "inputs a caller may vary is one choice, not two. Export it at a "
-                "single shape",
-            )
-
-    # A lifted draw is an input in every respect from here on: declared,
-    # bracketed by the same casts, and not a constant — which is the
-    # whole point, since folding one is what freezes the sample.
-    inputs = [*inputs, *[(name, tid, sample) for name, tid, sample, _k in lifted]]
-    plain_inputs = [entry for entry in inputs if entry[0] not in carried]
-    if not plain_inputs:
-        raise ValueError(
-            "lucid.coreml: every input was declared state, leaving nothing for the "
-            "caller to pass"
-        )
-
-    cm = _C_engine.coreml
-    paths = into.paths if into is not None else cm.prepare_package(path)
-
-    def _half_interface(name: str, tensor: Tensor) -> bool:
-        """Whether this input is declared float16 and read without a cast.
-
-        Only a float multi-array. An image arrives as a pixel buffer, whose
-        normalisation is written at float32 ahead of the body's cast, and
-        an integer input is an index that no float type may carry.
-        """
-        is_image = image_input is not None and name not in lifted_names
-        is_float = tensor.dtype in (lucid.float32, lucid.float16)
-        return half_io and is_float and not is_image
-
-    program = cm.MilProgram(
-        [
-            (
-                name,
-                (
-                    (
-                        _spec.FLOAT16
-                        if _half_interface(name, tensor)
-                        else _spec.mil_dtype(tensor.dtype)
-                    ),
-                    _flex.flex([int(d) for d in tensor.shape], varying.get(tid)),
-                ),
-            )
-            for name, tid, tensor in plain_inputs
-        ]
-    )
-    if shapes is not None:
-        program.set_enumerated_shapes(inputs[0][0], [list(s) for s in ordered])
-        program.set_default_shape(inputs[0][0], list(ordered[0]))
-    if shape_range is not None:
-        program.set_shape_range(inputs[0][0], bounds)
-        program.set_default_shape(inputs[0][0], [int(d) for d in inputs[0][2].shape])
-    names: dict[int, str] = {tid: name for name, tid, _t in inputs}
-    builder_shapes_state: dict[str, list[int]] = {}
-    input_ids = {tid for _n, tid, _t in inputs}
-
-    # The body's precision, which is not necessarily the interface's.  The
-    # Neural Engine only runs float16, so an fp32 program silently lands
-    # on CPU or GPU no matter what compute units are requested; fp16 is
-    # what actually reaches it.  Inputs and outputs stay float32 either
-    # way by default, with casts bracketing the body, so callers are not
-    # asked to hand over half precision; ``io_precision=FLOAT16`` is how a
-    # caller who already holds half precision skips both conversions.
     body_mil, body_blob = _spec.body_dtypes(precision)
-    half = precision is Precision.FLOAT16
-    for name, tid, tensor in inputs:
-        if name not in carried:
-            continue
-        # Declared, then read at the head so the graph that follows sees an
-        # ordinary value; the write-back is appended once the value it
-        # stores exists.
-        # The state lives at the body's precision, which Core ML requires
-        # to be float16; reading it therefore needs no cast, unlike an
-        # ordinary float input.
-        carried_type = (body_mil, [int(d) for d in tensor.shape])
-        program.add_state(name, carried_type)
-        held = f"_state_{name}"
-        program.read_state(name, held, carried_type)
-        names[tid] = held
-        builder_shapes_state[held] = [int(d) for d in tensor.shape]
-
-    # Parameters and buffers become blob-backed constants.  The blob has
-    # to be finalized before the protobuf that carries offsets into it is
-    # written, which is why it is opened and closed here rather than by
-    # the caller.
-    blob = into.blob if into is not None else cm.BlobWriter(paths.weight_bin)
-    weight_shapes: dict[str, list[int]] = {}
-    # MIL element type each weight is declared as.  Not all of them are the
-    # body's float: integer and boolean buffers go out as what they are.
-    weight_dtypes: dict[str, int] = {}
-    quantized_count = 0
-
-    def _write_float_const(name: str, tensor: Tensor, dedup: int | None) -> None:
-        """Write one float constant, compressed the way ``weights`` asks.
-
-        Shared by the model's own weights and by the values constant
-        folding computes for it. They used to be written by different
-        code, and only the first path compressed: a weight that reached
-        the program through any foldable operation — a quantization-aware
-        model's fake-quantize, a scale, a transpose — landed as float32
-        however the export was asked to store it. On a QAT classifier
-        that was 63 KB against the 19 KB the same weights take when
-        nothing folds.
-
-        Parameters
-        ----------
-        name : str
-            Value name to declare in the program.
-        tensor : Tensor
-            The constant, already at the body's precision.
-        dedup : int or None
-            Identity to share the blob payload under, when several
-            functions carry the same parameter. ``None`` writes a fresh
-            payload — a folded value belongs to one function.
-        """
-        nonlocal quantized_count
-        shape = [int(d) for d in tensor.shape]
-        palettized = (
-            _palettize_weight(tensor, weights.bits)
-            if isinstance(weights, _spec.Palettize)
-            else None
+    return _run_build_pipeline(
+        _BuildCtx(
+            model=model, example=example, path=path, precision=precision,
+            io_precision=io_precision, weights=weights, shapes=shapes,
+            shape_range=shape_range, state=state, image_input=image_input,
+            classifier=classifier, metadata=metadata, output_field=output_field,
+            draws=draws, activations=activations, into=into, target=target,
+            half=precision is Precision.FLOAT16, half_io=half_io,
+            body_mil=body_mil, body_blob=body_blob,
         )
-        sparse = (
-            _sparsify_weight(tensor, weights.ratio)
-            if isinstance(weights, _spec.Sparsify)
-            else None
-        )
-        quantized = (
-            _quantize_weight(tensor, body_mil)
-            if weights is WeightPrecision.INT8
-            else None
-        )
-        if palettized is not None:
-            keys, palettes, lut_shape, key_bits = palettized
-            offset = blob.append_bytes(
-                keys, _C_engine.coreml.BLOB_SUBBYTE[str(key_bits)]
-            )
-            lut_offset = blob.append_tensor(
-                _unwrap(palettes.half() if half else palettes), body_blob
-            )
-            program.add_grouped_lut_const(
-                name,
-                (body_mil, shape),
-                offset,
-                _C_engine.coreml.MIL_SUBBYTE[str(key_bits)],
-                lut_offset,
-                body_mil,
-                lut_shape,
-            )
-            quantized_count += 1
-        elif sparse is not None:
-            values, mask, kept = sparse
-            if half:
-                values = values.half()
-            value_offset = blob.append_tensor(_unwrap(values), body_blob)
-            # Which spelling depends on the opset the program will
-            # declare, and both are needed. Core ML's loader does not
-            # reject the older one in a CoreML8 program — it segfaults on
-            # it — so a sparse weight beside carried state or several
-            # entry points has to be written the newer way.
-            if target is _spec.DeploymentTarget.IOS18:
-                mask_offset = blob.append_bytes(
-                    mask, _C_engine.coreml.BLOB_SUBBYTE["1"]
-                )
-                program.add_sparse_const_extended(
-                    name, (body_mil, shape), value_offset, kept, body_mil, mask_offset
-                )
-            else:
-                mask_offset = blob.append_bytes(mask, _spec.BLOB_UINT8)
-                program.add_sparse_const(
-                    name, (body_mil, shape), value_offset, kept, mask_offset, len(mask)
-                )
-            quantized_count += 1
-        elif quantized is not None:
-            codes, scale_bytes, zero_bytes, channels = quantized
-            offset = blob.append_tensor(_unwrap(codes), _spec.BLOB_INT8)
-            program.add_quantized_const(
-                name,
-                (body_mil, shape),
-                offset,
-                scale_bytes,
-                body_mil,
-                zero_bytes,
-                channels,
-                0,
-            )
-            quantized_count += 1
-        else:
-            # Keyed by the parameter's identity, so a weight two
-            # functions share is written once and pointed at twice.
-            is_f16 = tensor.dtype == lucid.float16
-            mil_dt = _spec.FLOAT16 if is_f16 else _spec.FLOAT32
-            blob_dt = _spec.BLOB_FLOAT16 if is_f16 else _spec.BLOB_FLOAT32
-            offset = into.offsets.get(dedup) if into is not None and dedup else None
-            if offset is None:
-                offset = blob.append_tensor(_unwrap(tensor), blob_dt)
-                if into is not None and dedup:
-                    into.offsets[dedup] = offset
-            program.add_blob_const(name, (mil_dt, shape), offset)
-
-    f32_opmath_scalars = _fold.f32_opmath_scalars(graph, feeds)
-    for tid, impl in feeds.items():
-        if tid in input_ids:
-            continue
-        tensor = _wrap(impl)
-        _refuse_if_empty(tensor)
-        is_float = tensor.dtype in (lucid.float32, lucid.float16)
-        keep_f32 = tid in f32_opmath_scalars
-        if half and is_float and not keep_f32:
-            tensor = tensor.half()
-        # Float payloads go straight from the tensor's host storage — no
-        # numpy anywhere in this package (H4).
-        shape = [int(d) for d in tensor.shape]
-        name = f"_w{tid}"
-        if is_float:
-            _write_float_const(name, tensor, None if keep_f32 else id(impl))
-            weight_dtypes[name] = (
-                _spec.FLOAT16 if tensor.dtype == lucid.float16 else _spec.FLOAT32
-            )
-        elif tensor.dtype == lucid.bool_:
-            # A boolean buffer is a mask, not a count that happens to be 0
-            # or 1, and MIL types the two apart — an int32 constant would
-            # be rejected wherever a condition is wanted.
-            program.add_bool_const_shaped(name, _flatten(tensor, bool), shape)
-            weight_dtypes[name] = _C_engine.coreml.DTYPE_BOOL
-        else:
-            # Integer buffers (position ids, token-type ids) go inline: the
-            # blob carries float payloads only, and MIL has an integer
-            # tensor value already, so nothing has to be guessed.
-            values = _spec.as_int32(_flatten(tensor, _as_int), name)
-            program.add_int_const_shaped(name, values, shape)
-            weight_dtypes[name] = _C_engine.coreml.DTYPE_INT32
-        names[tid] = name
-        weight_shapes[name] = shape
-
-    # Core ML's program dialect caps tensors at rank 5.  One shape reaches
-    # past it for a living: the window partition every windowed-attention
-    # transformer performs, which splits two spatial axes and permutes the
-    # halves — ``(B, H, W, C)`` becomes ``(B, H/w, w, W/w, w, C)``, rank 6,
-    # for exactly two operations before collapsing back.  Swin and MaxViT
-    # are built out of it.
-    #
-    # That triple is rewritten rather than refused, so the rank-6 tensor is
-    # never asked for; see ``_staging.window_rewrites``.  Anything else that
-    # exceeds the cap is still refused by name, because letting it through
-    # produces an opaque parse failure from the compiler several steps away
-    # from the operation that built the tensor.
-    rewrites = _staging.window_rewrites(graph)
-    stuffing = _staging.stuff_rewrites(graph)
-    absorbed = {oid for r in rewrites.values() for oid in r.absorbs}
-    absorbed |= {oid for r in stuffing.values() for oid in r.absorbs}
-    # A third shape past the cap: values that are computed on at rank 6
-    # rather than passed through it. Emitted a rank lower — see
-    # ``_unit_axis_rewrites`` — so they never exist at rank 6 either.
-    # Folding is decided first: it removes operations, and whether the
-    # rank-6 component can be emitted a rank lower depends on which
-    # operations are left to check.
-    output_ids = {tid for _n, tid, _t in outputs}
-    precomputed, folded = _fold.foldable(
-        graph, feeds, set(input_ids), traced_values, set(varying), output_ids
     )
-    thinned = _unit_axis_rewrites(
-        graph, set(rewrites) | set(stuffing) | absorbed, folded
-    )
-    if thinned & set(varying):
-        raise ShapeNotFlexible(
-            "<rank-6 value>",
-            "a value computed at rank 6 is emitted without its leading axis of "
-            "one, and its shape changes with the input",
-        )
-    _pending_thinned = thinned
-    for op in graph.ops:
-        head = int(op.outputs[0].id) if op.outputs else -1
-        if head in rewrites or head in stuffing or head in absorbed:
-            continue
-        for out in op.outputs:
-            if len(out.shape) > _staging.MAX_RANK and out.id not in thinned:
-                raise UnsupportedRank(op.name, tuple(int(d) for d in out.shape))
-
-    builder = Builder(program, blob, body_mil, body_blob, half)
-    builder.flex = flexibility
-    builder.traced_names = names
-    builder.thinned = set(_pending_thinned)
-    for held_name, held_shape in {**weight_shapes, **builder_shapes_state}.items():
-        builder.declare(held_name, held_shape)
-    # Weights are constants whichever way they were stored — plain, int8,
-    # palettized or sparse. Emitters that must bind a constant ask here.
-    # Each is recorded as the type it was declared: an integer buffer
-    # recorded as float had ``agree_on_dtype`` cast the *other* operand to
-    # float, and Core ML refused the pair.  ``lucid.arange(n)`` is int64 and
-    # reaches the trace as such a buffer, so ``arange(n) == labels`` hit it.
-    for weight_name in weight_shapes:
-        builder.mark_const(weight_name)
-        builder.dtypes[weight_name] = weight_dtypes[weight_name]
-    if image_input is not None and asked_for != 1:
-        raise ValueError(
-            f"lucid.coreml: image_input needs a single-input model, and this one "
-            f"takes {asked_for} — which of them is the image would be a guess"
-        )
-    for name, tid, tensor in plain_inputs:
-        shape = _flex.flex(tensor.shape, varying.get(tid))
-        builder.declare(name, shape)
-        if tid == flexibility.input_id:
-            builder.flex_input = name
-        half_in = _half_interface(name, tensor)
-        builder.dtypes[name] = (
-            _spec.FLOAT16 if half_in else _spec.mil_dtype(tensor.dtype)
-        )
-        source = name
-        if image_input is not None and name not in lifted_names:
-            # The caller's own input is the picture. A lifted draw is an
-            # input too and is not one — declaring it as an image refused
-            # the export, naming the noise's shape as though the caller
-            # had passed it.
-            source = _declare_image(
-                program, builder, name, [int(d) for d in tensor.shape], image_input
-            )
-            builder.declare(source, shape)
-            names[tid] = source
-        # Only a float32 interface needs bracketing.  An integer input —
-        # token ids — must reach its lookup as an integer; casting it to
-        # half would turn indices into approximations of themselves.  A
-        # float16 interface is already what the body reads.
-        if (
-            half
-            and not half_in
-            and tensor.dtype == lucid.float32
-            and tid not in f32_opmath_scalars
-        ):
-            cast_name = f"_cast_in_{name}"
-            mil_type, raw = emit_cast(builder, source, "fp16")
-            program.add_op(mil_type, _operands(raw), cast_name, (body_mil, shape))
-            builder.declare(cast_name, shape)
-            builder.dtypes[cast_name] = body_mil
-            names[tid] = cast_name
-    # An output's value is named after the model's own field, so a caller
-    # reading the package knows which head it is looking at.  Done when the
-    # producing op is emitted rather than by appending an identity to
-    # rename it — an extra operation would land on the CPU and show up in
-    # every compute plan.  Under fp16 the cast that follows takes the name
-    # instead, since it is what the interface actually returns — unless
-    # the interface is fp16 too, and there is no cast.  A classifier's
-    # scores keep theirs: they are read into a label map, not handed over.
-    # An output that becomes state is never declared, so it keeps the
-    # value name it would have had.
-    carried_out = {spec.output for spec in (state or [])}
-    cast_out = half and not (half_io and classifier is None)
-    wanted_name: dict[int, str] = {
-        tid: field
-        for field, tid, t in outputs
-        if field not in carried_out and not (cast_out and t.dtype == lucid.float32)
-    }
-    # A value the graph recomputes on every prediction although nothing
-    # about it depends on the input is written down instead. See
-    # ``_fold.foldable``: this is a third of a windowed transformer, and all
-    # of it lands on the CPU.
-    for tid in precomputed:
-        folded_value = _wrap(traced_values[tid])
-        if tid in thinned:
-            # Written a rank lower, like everything else in that
-            # component; the leading axis is one by construction.
-            folded_value = folded_value.reshape(
-                *[int(d) for d in folded_value.shape][1:]
-            )
-        if tid in f32_opmath_scalars:
-            names[tid] = builder.const_float32(float(folded_value.item()))
-        elif folded_value.dtype in (lucid.float32, lucid.float16):
-            written = folded_value.half() if half else folded_value
-            if _worth_storing_compressed(written, weights):
-                # Large enough to pay for a table, so it goes through the
-                # same writer the model's own weights do. Before this it
-                # went out float32 whatever the export was asked for.
-                name = f"_f{tid}"
-                _write_float_const(name, written, None)
-                builder.mark_const(name)
-                is_f16 = written.dtype == lucid.float16
-                builder.dtypes[name] = _spec.FLOAT16 if is_f16 else body_mil
-                builder.declare(name, [int(d) for d in written.shape])
-                names[tid] = name
-            else:
-                names[tid] = builder.const_from_tensor(written)
-        elif folded_value.dtype in (lucid.int8, lucid.int16, lucid.int32, lucid.int64):
-            names[tid] = builder.const_ints_shaped(
-                [int(v) for v in _flatten(folded_value, _as_int)],
-                [int(d) for d in folded_value.shape],
-            )
-        else:
-            # Nothing to write it as; leave the operations in place.
-            folded, precomputed = set(), set()
-            break
-
-    for op in _reachable_ops(graph, [tid for _n, tid, _t in outputs]):
-        if op.outputs and int(op.outputs[0].id) in folded:
-            # Its result is a constant now, and so is everything it fed.
-            continue
-        head = int(op.outputs[0].id) if op.outputs else -1
-        if head in lifted_heads or head in absorbed:
-            # Lifted: caller supplies it. Absorbed: emitted in window rewrite.
-            continue
-        builder.current = op.name
-        plan = rewrites.get(head)
-        if plan is not None:
-            plan = plan._replace(
-                mid_shape=_flex.flex(plan.mid_shape, varying.get(head)),
-                out_shape=_flex.flex(plan.out_shape, varying.get(plan.out_id)),
-            )
-            names[plan.out_id] = _staging.stage_permutation(
-                builder, names[op.inputs[0]], plan
-            )
-            continue
-        stuff = stuffing.get(head)
-        if stuff is not None:
-            wide = _flex.flex(stuff.out_shape, varying.get(stuff.out_id))
-            stuff = dataclasses.replace(
-                stuff,
-                source_shape=[
-                    -1 if w < 0 else d
-                    for d, w in zip(stuff.source_shape, wide, strict=True)
-                ],
-                out_shape=wide,
-            )
-            names[stuff.out_id] = _staging.stage_zero_stuff(
-                builder, names[op.inputs[0]], stuff
-            )
-            continue
-        emitter = EMITTERS.get(op.name)
-        if emitter is None:
-            raise UnsupportedOp(op.name)
-        operands = [_named(names, i, f"operation {op.name!r}") for i in op.inputs]
-        # Under a flexible export the emitter sees its results' shapes as
-        # ``Dims``: an open axis cannot be read off them as a number.
-        result = emitter(
-            builder, _flex.GuardedOp(op, varying) if varying else op, operands
-        )
-        if isinstance(result, Constant):
-            names[op.outputs[0].id] = result.name
-            continue
-        if isinstance(result, Bound):
-            for out, bound in zip(op.outputs, result.names, strict=True):
-                names[out.id] = bound
-            continue
-        outs = op.outputs if isinstance(result, MultiOutput) else op.outputs[:1]
-        mil_type, raw_bindings = (
-            (result.mil_type, result.bindings)
-            if isinstance(result, MultiOutput)
-            else result
-        )
-        # Emitters may bind a parameter to one name or several (``concat``);
-        # the engine wants a list either way.
-        bindings = _operands(raw_bindings)
-        produced = [
-            (
-                wanted_name.get(o.id, f"_v{o.id}_{op.name}"),
-                (
-                    _spec.trace_dtype(str(o.dtype).split(".")[-1], body_mil),
-                    _flex.flex(
-                        [int(d) for d in o.shape][1 if o.id in thinned else 0 :],
-                        varying.get(o.id),
-                    ),
-                ),
-            )
-            for o in outs
-        ]
-        if isinstance(result, MultiOutput):
-            program.add_op_multi(mil_type, bindings, produced)
-        else:
-            program.add_op(mil_type, bindings, produced[0][0], produced[0][1])
-        for (out_name, (out_dtype, shape)), o in zip(produced, outs, strict=True):
-            names[o.id] = out_name
-            builder.declare(out_name, shape)
-            builder.dtypes[out_name] = out_dtype
-            if o.id in thinned:
-                builder.unit_axis_dropped.add(out_name)
-
-    if into is None:
-        blob.finalize()
-
-    if classifier is not None:
-        if len(outputs) != 1:
-            raise ValueError(
-                f"lucid.coreml: a classifier needs one output and this model "
-                f"returns {len(outputs)} ({[name for name, _t, _x in outputs]})"
-            )
-        scores = outputs[0][2]
-        score_shape = tuple(int(d) for d in scores.shape)
-        if len(score_shape) != 2 or score_shape[0] != 1:
-            raise ValueError(
-                f"lucid.coreml: a classifier's output must be (1, classes) and this "
-                f"one is {score_shape}"
-            )
-        if score_shape[1] != len(classifier.labels):
-            raise ValueError(
-                f"lucid.coreml: {len(classifier.labels)} labels for "
-                f"{score_shape[1]} scores"
-            )
-
-    written = {spec.output: spec.input for spec in (state or [])}
-    declared: list[tuple[str, tuple[int, ...]]] = []
-    for field, tid, tensor in outputs:
-        if field in written:
-            # The caller does not receive it; Core ML keeps it.
-            program.write_state(
-                written[field], _named(names, tid, f"the state written from {field!r}")
-            )
-            continue
-        value = _named(names, tid, f"output {field!r}")
-        is_float = tensor.dtype in (lucid.float32, lucid.float16)
-        flexible_type = (
-            (
-                _spec.FLOAT16
-                if is_float and not cast_out and half_io
-                else _spec.mil_dtype(tensor.dtype)
-            ),
-            _flex.flex([int(d) for d in tensor.shape], varying.get(tid)),
-        )
-        # Only a float32 output needs bracketing back to fp32, and the
-        # guard has to be here as well as on the input side: casting an
-        # integer output — VQ-VAE returns its codebook indices — or a
-        # float16 output asks Core ML for a cast whose named type is not
-        # the output's, and the package will not parse.
-        # (Half op-math outputs already end in an fp16 cast.)
-        if cast_out and tensor.dtype == lucid.float32:
-            mil_type, raw = emit_cast(builder, value, "fp32")
-            program.add_op(mil_type, _operands(raw), field, flexible_type)
-            value = field
-        if value != field:
-            # Reachable only if the producing op was shared between two
-            # declared outputs, which the naming pass cannot satisfy twice.
-            program.add_op("identity", [("x", [value])], field, flexible_type)
-        if classifier is not None:
-            # The scores stop being the model's output; the label and the
-            # probability map take their place.
-            program.set_classifier(
-                value,
-                list(classifier.labels),
-                classifier.label_name,
-                classifier.probabilities_name,
-            )
-            declared.append((classifier.label_name, ()))
-            declared.append((classifier.probabilities_name, ()))
-            continue
-        program.add_output(field, flexible_type)
-        # ``-1`` on an axis that follows the input: what a handle restores
-        # an output to, since Core ML hands a 0-d result back as ``(1,)``.
-        declared.append((field, tuple(flexible_type[1])))
-    if metadata is not None:
-        program.set_metadata(
-            metadata.description, metadata.author, metadata.license, metadata.version
-        )
-    # Written on every package, so a handle that reopens one knows what it
-    # holds rather than assuming the default it was exported with — see
-    # ``_PRECISION_KEY``.
-    program.set_user_metadata(_PRECISION_KEY, precision.value)
-    program.set_user_metadata(_IO_PRECISION_KEY, io_precision.value)
-    if lifted:
-        # Which inputs stand in for a draw, and what each was drawn from.
-        # Nothing else in the file says so — they are ordinary inputs to
-        # Core ML — and a handle that reopened the package has to know,
-        # or it asks the caller for a sample the caller did not know it
-        # wanted and fills a uniform draw with a normal one.
-        program.set_user_metadata(
-            _DRAWN_KEY,
-            ",".join(
-                f"{name}:{kind}:{'x'.join(str(int(d)) for d in sample.shape)}"
-                for name, _tid, sample, kind in lifted
-            ),
-        )
-    if into is None:
-        cm.finish_package(paths, program.serialize())
-
-    return {
-        "inputs": [
-            (name, tuple(int(d) for d in tensor.shape))
-            for name, _tid, tensor in plain_inputs
-        ],
-        "outputs": declared,
-        "ops": int(program.op_count),
-        "precision": precision.value,
-        "io_precision": io_precision.value,
-        # A name for the summary: the enum has one, and the two
-        # parameterised forms are described by the parameter that makes
-        # them different.
-        "weights": (
-            weights.value
-            if isinstance(weights, WeightPrecision)
-            else (
-                f"PALETTIZED_{weights.bits}BIT"
-                if isinstance(weights, _spec.Palettize)
-                else f"SPARSE_{weights.ratio:g}"
-            )
-        ),
-        "classifier": classifier is not None,
-        "noise": [
-            (name, tuple(int(d) for d in sample.shape), kind, sample)
-            for name, _tid, sample, kind in lifted
-        ],
-        # What the traced run answered, kept only when a draw was lifted.
-        # It is the reference a comparison has to use there: running the
-        # eager model again draws different numbers, so the two sides
-        # would not be computing the same thing.
-        "traced_outputs": (
-            {field: tensor for field, _tid, tensor in outputs} if lifted else {}
-        ),
-        "quantized_weights": quantized_count,
-        "flexible": shapes is not None or shape_range is not None,
-        "state": [(spec.input, spec.output) for spec in (state or [])],
-        # Read back off the file rather than taken from the request.
-        # Asking for palettization does not mean anything was palettized
-        # — a model whose weights are all below the threshold comes out
-        # a CoreML7 program — and the package is the thing that has to
-        # run somewhere, so it is the thing that answers.
-        "deployment_target": _floor_of(str(paths.root)) or target,
-        "program": program,
-        "path": paths.root,
-    }
 
 
 # Bound at runtime, not only for type checking: PEP 649 evaluates a

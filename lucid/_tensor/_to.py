@@ -203,352 +203,315 @@ def _type_target(
     )
 
 
+_TENSOR_CLS: type = object
+
+
+def _fast_device_enum(dev_in: object) -> _C_engine.Device | None:
+    if isinstance(dev_in, str):
+        return _STR_TO_DEVICE_ENUM.get(dev_in)
+    if isinstance(dev_in, _C_engine.Device):
+        return dev_in
+    if isinstance(dev_in, _device_cls):
+        return dev_in._engine
+    return None
+
+
+def _resolve_to_targets(
+    self: Tensor,
+    args: tuple[object, ...],
+    kwargs: dict[str, object],
+) -> tuple[_C_engine.Device, _C_engine.Dtype, bool]:
+    target_device = self._impl.device
+    target_dtype = self._impl.dtype
+    other, device, dtype, copy = _to_operands(args, kwargs, _TENSOR_CLS)
+    if other is not None:
+        t = cast("Tensor", other)
+        target_device = t._impl.device
+        target_dtype = t._impl.dtype
+    if device is not None:
+        target_device = _parse_device(
+            cast(_device_cls | _C_engine.Device | str, device)
+        )
+    if dtype is not None:
+        target_dtype = to_engine_dtype(
+            cast(_dtype_cls | type[_dtype_cls] | _C_engine.Dtype | str, dtype)
+        )
+    return target_device, target_dtype, copy
+
+
+def _transfer_impl(
+    src_impl: _C_engine.TensorImpl,
+    target_device: _C_engine.Device,
+    target_dtype: _C_engine.Dtype,
+) -> Tensor:
+    # A shared tensor is already one whole contiguous buffer, and
+    # ``contiguous`` copied it into an ordinary one, so the relabel below
+    # was never reached and ``.to()`` of a shared tensor always copied.
+    # Keep the buffer unless a cast has to copy anyway.
+    #
+    # A cast writes a fresh dense tensor from any layout, so the dense
+    # copy is needed only when no cast follows; taking it first copied
+    # every element twice (a third of ``.long()``).
+    relabel = src_impl.is_metal_shared and target_dtype == src_impl.dtype
+    casts = target_dtype != src_impl.dtype
+    impl = src_impl if relabel or casts else _C_engine.contiguous(src_impl)
+    if target_dtype != impl.dtype:
+        impl = _C_engine.astype(impl, target_dtype)
+
+    # The result keeps the source's flag — except under ``no_grad``, where
+    # it is a new tensor outside any graph (LCD-486), and on bool or an
+    # integer, where ``astype`` ends the graph (rounding's derivative is
+    # zero): restoring the flag there made ``x.long()`` require grad with
+    # a backward that fell over inside the backend.
+    rg = src_impl.requires_grad and _C_engine.grad_enabled()
+    rg = rg and not _promotion.is_integral(target_dtype)
+    if target_device != impl.device:
+        if rg and impl.requires_grad:
+            # Inside a graph the move is differentiable: the gradient
+            # goes back to the source device.
+            return _wrap(_C_engine.to_device(impl, target_device))
+        if impl.is_metal_shared:
+            impl = _C_engine.transfer_storage(impl, target_device)
+        else:
+            impl = impl.transfer_to_device(target_device, rg)
+        if impl.requires_grad != rg:
+            impl = _impl_with_grad(impl, rg)
+    elif impl.requires_grad != rg:
+        impl = _impl_with_grad(impl, rg)
+    return _wrap(impl)
+
+
+def _to(
+    self: Tensor,
+    *args: _dtype_cls | _device_cls | _C_engine.Device | str | _builtin_bool,
+    **kwargs: object,
+) -> Tensor:
+    """
+    Move and/or cast tensor.
+
+    Overloads:
+      .to(device)                  → device conversion
+      .to(dtype)                   → dtype conversion
+      .to(device, dtype)           → both
+      .to(other_tensor)            → match other's device & dtype
+      .to(device, dtype, non_blocking, copy)
+      .to(device=, dtype=, non_blocking=, copy=)
+
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.zeros(3)
+    >>> x.to(lucid.float64).dtype
+    lucid.float64
+    >>> x.to("metal").device
+    device('metal')
+
+    Notes
+    -----
+    No-op when the source already matches the target device and dtype,
+    unless ``copy=True``; in that case the same Tensor instance is
+    returned without allocation.  Apple Silicon's unified memory means
+    device transfers between CPU and Metal copy the dispatch label but
+    share physical DRAM when the underlying buffer is a SharedStorage.
+    """
+    if not args and len(kwargs) == 1 and "device" in kwargs:
+        target_enum = _fast_device_enum(kwargs["device"])
+        if target_enum is not None and target_enum == self._impl.device:
+            return self
+
+    target_device, target_dtype, copy = _resolve_to_targets(self, args, kwargs)
+    if target_device == self._impl.device and target_dtype == self._impl.dtype and not copy:
+        return self
+    return _transfer_impl(self._impl, target_device, target_dtype)
+
+
+def _metal(self: Tensor) -> Tensor:
+    """Move this tensor to Apple Metal GPU.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.zeros(3)
+    >>> x.metal().device
+    device('metal')
+
+    Notes
+    -----
+    No-op when the tensor is already on Metal.  Under Apple Silicon's
+    unified memory architecture the physical DRAM is shared with the
+    CPU; this call only updates the dispatch target so subsequent ops
+    run through the MLX/Metal backend.
+    """
+    if self._impl.device == _C_engine.Device.GPU:
+        return self
+    return _to(self, _C_engine.Device.GPU)
+
+
+def _cpu(self: Tensor) -> Tensor:
+    """Move this tensor to CPU.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> x = lucid.zeros(3).metal()
+    >>> x.cpu().device
+    device('cpu')
+
+    Notes
+    -----
+    No-op when the tensor is already on CPU.  On Apple Silicon both
+    CPU and Metal share the same physical DRAM (unified memory); this
+    call relabels the dispatch target so subsequent ops route through
+    Apple Accelerate (vDSP / vForce / BLAS / LAPACK).
+    """
+    if self._impl.device == _C_engine.Device.CPU:
+        return self
+    return _to(self, _C_engine.Device.CPU)
+
+
+def _float(self: Tensor) -> Tensor:
+    """Cast to float32.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.zeros(3, dtype=lucid.int64).float().dtype
+    lucid.float32
+
+    Notes
+    -----
+    Returns ``self`` unchanged when the source dtype is already
+    ``float32``.  Otherwise performs a copy-cast via the engine's
+    ``astype`` op; the device is preserved.
+    """
+    if self._impl.dtype == _C_engine.Dtype.F32:
+        return self
+    return _to(self, float32)
+
+
+def _double(self: Tensor) -> Tensor:
+    """Cast to float64.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.zeros(3).double().dtype
+    lucid.float64
+
+    Notes
+    -----
+    Returns ``self`` unchanged when the source dtype is already
+    ``float64``.  Otherwise allocates a new tensor with widened
+    precision; device is preserved.
+    """
+    if self._impl.dtype == _C_engine.Dtype.F64:
+        return self
+    return _to(self, float64)
+
+
+def _half(self: Tensor) -> Tensor:
+    """Cast to float16.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.zeros(3).half().dtype
+    lucid.float16
+
+    Notes
+    -----
+    Returns ``self`` unchanged when the source dtype is already
+    ``float16``.  Lossy narrowing from float32/float64 may overflow to
+    ``inf`` for magnitudes above ~65504 and underflow to 0 for
+    magnitudes below ~6e-5.
+    """
+    if self._impl.dtype == _C_engine.Dtype.F16:
+        return self
+    return _to(self, float16)
+
+
+def _int(self: Tensor) -> Tensor:
+    """Cast to int32.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.tensor([1.7, 2.3]).int().dtype
+    lucid.int32
+
+    Notes
+    -----
+    Returns ``self`` unchanged when the source dtype is already
+    ``int32``.  Casts from floating point truncate toward zero;
+    values outside ``[-2**31, 2**31 - 1]`` produce undefined results.
+    """
+    if self._impl.dtype == _C_engine.Dtype.I32:
+        return self
+    return _to(self, int32)
+
+
+def _long(self: Tensor) -> Tensor:
+    """Cast to int64.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.tensor([1.7, 2.3]).long().dtype
+    lucid.int64
+
+    Notes
+    -----
+    Returns ``self`` unchanged when the source dtype is already
+    ``int64``.  Casts from floating point truncate toward zero.
+    Typically used for index tensors (e.g. ``gather`` / ``scatter``).
+    """
+    if self._impl.dtype == _C_engine.Dtype.I64:
+        return self
+    return _to(self, int64)
+
+
+def _bool(self: Tensor) -> Tensor:
+    """Cast to bool.
+
+    Examples
+    --------
+    >>> import lucid
+    >>> lucid.tensor([0.0, 1.5, -2.0]).bool()
+    tensor([False, True, True], dtype=lucid.bool)
+
+    Notes
+    -----
+    Returns ``self`` unchanged when the source dtype is already
+    ``bool``.  Otherwise each element is reduced to ``True`` if
+    nonzero and ``False`` if zero.
+    """
+    if self._impl.dtype == _C_engine.Dtype.Bool:
+        return self
+    return _to(self, bool_)
+
+
+_TO_METHODS = (
+    ("to", _to),
+    ("metal", _metal),
+    ("cpu", _cpu),
+    ("float", _float),
+    ("double", _double),
+    ("half", _half),
+    ("int", _int),
+    ("long", _long),
+    ("bool", _bool),
+)
+
+
 def _inject_to(cls: type) -> None:
     """Attach .to(), .metal(), .cpu(), and dtype-cast methods to Tensor."""
-    # ``to``, ``cpu``, ``metal`` and the dtype casts are annotated with
-    # ``Tensor`` while it is imported under TYPE_CHECKING only, so PEP 649
-    # would fail with NameError when reading their signatures without this.
+    global _TENSOR_CLS
+    _TENSOR_CLS = cls
     globals().setdefault("Tensor", cls)
-
-    def to(
-        self: Tensor,
-        *args: _dtype_cls | _device_cls | _C_engine.Device | str | _builtin_bool,
-        **kwargs: object,
-    ) -> Tensor:
-        """
-        Move and/or cast tensor.
-
-        Overloads:
-          .to(device)                  → device conversion
-          .to(dtype)                   → dtype conversion
-          .to(device, dtype)           → both
-          .to(other_tensor)            → match other's device & dtype
-          .to(device, dtype, non_blocking, copy)
-          .to(device=, dtype=, non_blocking=, copy=)
-
-        Examples
-        --------
-        >>> import lucid
-        >>> x = lucid.zeros(3)
-        >>> x.to(lucid.float64).dtype
-        lucid.float64
-        >>> x.to("metal").device
-        device('metal')
-
-        Notes
-        -----
-        No-op when the source already matches the target device and dtype,
-        unless ``copy=True``; in that case the same Tensor instance is
-        returned without allocation.  Apple Silicon's unified memory means
-        device transfers between CPU and Metal copy the dispatch label but
-        share physical DRAM when the underlying buffer is a SharedStorage.
-        """
-        # 3.2.0 ultra-fast path for the dominant training-loop pattern
-        # ``x.to(device="metal")`` (or ``"cpu"``) where the tensor is already
-        # on that device.  cProfile measured ~65 k .to() calls / epoch on
-        # LeNet-5/MNIST; each call paid ~3 µs walking the full arg-parsing
-        # + dtype/device normalisation path.  This branch short-circuits
-        # the no-op case to a dict lookup + identity-equality compare.
-        if (
-            not args
-            and not kwargs.get("copy", False)
-            and "dtype" not in kwargs
-            and len(kwargs) == 1
-            and "device" in kwargs
-        ):
-            dev_in = kwargs["device"]
-            cur = self._impl.device
-            target_enum: _C_engine.Device | None = None
-            if isinstance(dev_in, str):
-                target_enum = _STR_TO_DEVICE_ENUM.get(dev_in)
-            elif isinstance(dev_in, _C_engine.Device):
-                target_enum = dev_in
-            elif isinstance(dev_in, _device_cls):
-                target_enum = dev_in._engine
-            if target_enum is not None and target_enum == cur:
-                return self
-
-        target_device = self._impl.device
-        target_dtype = self._impl.dtype
-        other, device, dtype, copy = _to_operands(args, kwargs, cls)
-        if other is not None:
-            # See the note in composite/elementwise.float_power: ``Tensor``
-            # is TYPE_CHECKING-only here, so the bare name made
-            # ``x.to(other_tensor)`` raise NameError.
-            t = cast("Tensor", other)
-            target_device = t._impl.device
-            target_dtype = t._impl.dtype
-        if device is not None:
-            target_device = _parse_device(
-                cast(_device_cls | _C_engine.Device | str, device)
-            )
-        if dtype is not None:
-            target_dtype = to_engine_dtype(
-                cast(_dtype_cls | type[_dtype_cls] | _C_engine.Dtype | str, dtype)
-            )
-
-        same = target_device == self._impl.device and target_dtype == self._impl.dtype
-        if same and not copy:
-            return self
-
-        # A shared tensor is already one whole contiguous buffer, and
-        # ``contiguous`` copied it into an ordinary one, so the relabel below
-        # was never reached and ``.to()`` of a shared tensor always copied.
-        # Keep the buffer unless a cast has to copy anyway.
-        #
-        # A cast writes a fresh dense tensor from any layout, so the dense
-        # copy is needed only when no cast follows; taking it first copied
-        # every element twice (a third of ``.long()``).
-        relabel = self._impl.is_metal_shared and target_dtype == self._impl.dtype
-        casts = target_dtype != self._impl.dtype
-        impl = self._impl if relabel or casts else _C_engine.contiguous(self._impl)
-        # Dtype cast via C++ astype op (CPU: static_cast loop, GPU: mlx::core::astype).
-        if target_dtype != impl.dtype:
-            impl = _C_engine.astype(impl, target_dtype)
-        # Device transfer.
-        #
-        # Strategy:
-        #   · Already SharedStorage → zero-copy relabel via transfer_storage()
-        #     (CPU↔GPU, both directions, no data movement)
-        #   · All other tensors     → native upload/download path
-        #
-        # Why NOT route large tensors through SharedStorage for CPU→GPU:
-        #   SharedStorage wraps the buffer as an MLX *external* array backed by
-        #   MTLResourceStorageModeShared.  GPU compute kernels that read from shared
-        #   Metal memory have measurably lower bandwidth than kernels reading from
-        #   MTLResourceStorageModePrivate (GPU-private) buffers — ~130 µs extra
-        #   latency per op on 10M-element float32 on M-series chips.
-        #
-        #   upload_cpu_to_gpu() instead calls mlx::core::copy(external_cpu), which
-        #   schedules a Metal blit into a GPU-private buffer.  After the first eval,
-        #   the array is fully native and subsequent ops pay no external-array penalty.
-        #   This path results in the same single memcpy as SharedStorage, but with
-        #   GPU-private destination → faster for all subsequent ops.
-        #
-        #   SharedStorage remains useful when explicitly requested via
-        #   lucid.metal.to_shared() / lucid.metal.shared_tensor() for custom Metal
-        #   kernel dispatch where the CPU needs to read/write the same buffer.
-        #
-        # The result keeps the source's flag — except under ``no_grad``, where
-        # it is a new tensor outside any graph (LCD-486), and on bool or an
-        # integer, where ``astype`` ends the graph (rounding's derivative is
-        # zero): restoring the flag there made ``x.long()`` require grad with
-        # a backward that fell over inside the backend.
-        rg = self._impl.requires_grad and _C_engine.grad_enabled()
-        rg = rg and not _promotion.is_integral(target_dtype)
-        if target_device != impl.device:
-            if rg and impl.requires_grad:
-                # Inside a graph the move is differentiable: the gradient
-                # goes back to the source device.  Returning a fresh leaf
-                # here stopped backward at the move, and a leaf that
-                # requires grad is a legitimate thing to be, so nothing
-                # said the source had been cut off.  The engine op records
-                # the move, so a second derivative crosses it too.
-                return _wrap(_C_engine.to_device(impl, target_device))
-            if impl.is_metal_shared:
-                # Zero-copy: SharedStorage tensor re-labeled as the target device.
-                impl = _C_engine.transfer_storage(impl, target_device)
-            else:
-                # Native engine path: CPU→GPU uses ``mlx::core::copy()`` into a
-                # GPU-private buffer; GPU→CPU downloads via the MLX bridge.
-                # ``transfer_to_device`` runs the whole copy inside the C++
-                # engine — no numpy intermediate.  Prior to 3.0.2 this path
-                # called ``data_as_python()`` + ``TensorImpl(np.ndarray, ...)``,
-                # which forced ``import numpy`` on every ``.to(device=...)``
-                # call even though the data never participated in any numpy
-                # computation.  Keeping ``.to()`` numpy-free lets ``import
-                # lucid`` users skip the ``[numpy]`` extra entirely for
-                # CPU↔GPU workloads.
-                impl = impl.transfer_to_device(target_device, rg)
-            if impl.requires_grad != rg:
-                impl = _impl_with_grad(impl, rg)
-        elif impl.requires_grad != rg:
-            # 3.3 AMP fix: re-flag only when the flag disagrees.  The astype
-            # path above wires AstypeBackward (and propagates requires_grad)
-            # when grad mode is on, so an unconditional alias here would
-            # strip the freshly-installed grad_fn and break the backward
-            # chain — exactly the failure that left ``logits.float()``
-            # mid-graph dropping gradients under AMP.
-            impl = _impl_with_grad(impl, rg)
-        return _wrap(impl)
-
-    def metal(self: Tensor) -> Tensor:
-        """Move this tensor to Apple Metal GPU.
-
-        Examples
-        --------
-        >>> import lucid
-        >>> x = lucid.zeros(3)
-        >>> x.metal().device
-        device('metal')
-
-        Notes
-        -----
-        No-op when the tensor is already on Metal.  Under Apple Silicon's
-        unified memory architecture the physical DRAM is shared with the
-        CPU; this call only updates the dispatch target so subsequent ops
-        run through the MLX/Metal backend.
-        """
-        # 3.2.0 no-op fast path — skip the to() machinery entirely when
-        # the tensor is already on the target device.  ~3 µs saved per
-        # call; multiplied by training-loop call frequency it's
-        # meaningful even though each individual call looks trivial.
-        if self._impl.device == _C_engine.Device.GPU:
-            return self
-        return to(self, _C_engine.Device.GPU)
-
-    def cpu(self: Tensor) -> Tensor:
-        """Move this tensor to CPU.
-
-        Examples
-        --------
-        >>> import lucid
-        >>> x = lucid.zeros(3).metal()
-        >>> x.cpu().device
-        device('cpu')
-
-        Notes
-        -----
-        No-op when the tensor is already on CPU.  On Apple Silicon both
-        CPU and Metal share the same physical DRAM (unified memory); this
-        call relabels the dispatch target so subsequent ops route through
-        Apple Accelerate (vDSP / vForce / BLAS / LAPACK).
-        """
-        if self._impl.device == _C_engine.Device.CPU:
-            return self
-        return to(self, _C_engine.Device.CPU)
-
-    def float(self: Tensor) -> Tensor:
-        """Cast to float32.
-
-        Examples
-        --------
-        >>> import lucid
-        >>> lucid.zeros(3, dtype=lucid.int64).float().dtype
-        lucid.float32
-
-        Notes
-        -----
-        Returns ``self`` unchanged when the source dtype is already
-        ``float32``.  Otherwise performs a copy-cast via the engine's
-        ``astype`` op; the device is preserved.
-        """
-        if self._impl.dtype == _C_engine.Dtype.F32:
-            return self
-        return to(self, float32)
-
-    def double(self: Tensor) -> Tensor:
-        """Cast to float64.
-
-        Examples
-        --------
-        >>> import lucid
-        >>> lucid.zeros(3).double().dtype
-        lucid.float64
-
-        Notes
-        -----
-        Returns ``self`` unchanged when the source dtype is already
-        ``float64``.  Otherwise allocates a new tensor with widened
-        precision; device is preserved.
-        """
-        if self._impl.dtype == _C_engine.Dtype.F64:
-            return self
-        return to(self, float64)
-
-    def half(self: Tensor) -> Tensor:
-        """Cast to float16.
-
-        Examples
-        --------
-        >>> import lucid
-        >>> lucid.zeros(3).half().dtype
-        lucid.float16
-
-        Notes
-        -----
-        Returns ``self`` unchanged when the source dtype is already
-        ``float16``.  Lossy narrowing from float32/float64 may overflow to
-        ``inf`` for magnitudes above ~65504 and underflow to 0 for
-        magnitudes below ~6e-5.
-        """
-        if self._impl.dtype == _C_engine.Dtype.F16:
-            return self
-        return to(self, float16)
-
-    def int(self: Tensor) -> Tensor:
-        """Cast to int32.
-
-        Examples
-        --------
-        >>> import lucid
-        >>> lucid.tensor([1.7, 2.3]).int().dtype
-        lucid.int32
-
-        Notes
-        -----
-        Returns ``self`` unchanged when the source dtype is already
-        ``int32``.  Casts from floating point truncate toward zero;
-        values outside ``[-2**31, 2**31 - 1]`` produce undefined results.
-        """
-        if self._impl.dtype == _C_engine.Dtype.I32:
-            return self
-        return to(self, int32)
-
-    def long(self: Tensor) -> Tensor:
-        """Cast to int64.
-
-        Examples
-        --------
-        >>> import lucid
-        >>> lucid.tensor([1.7, 2.3]).long().dtype
-        lucid.int64
-
-        Notes
-        -----
-        Returns ``self`` unchanged when the source dtype is already
-        ``int64``.  Casts from floating point truncate toward zero.
-        Typically used for index tensors (e.g. ``gather`` / ``scatter``).
-        """
-        # 3.2.0 no-op fast path — the dominant case in training is
-        # ``lucid.tensor(int(label)).long()``, where the input is already
-        # I64 (Python ints default to I64).  Skip the to() machinery.
-        # cProfile measured ~60 k .long() calls / epoch = ~0.15 s.
-        if self._impl.dtype == _C_engine.Dtype.I64:
-            return self
-        return to(self, int64)
-
-    def bool(self: Tensor) -> Tensor:
-        """Cast to bool.
-
-        Examples
-        --------
-        >>> import lucid
-        >>> lucid.tensor([0.0, 1.5, -2.0]).bool()
-        tensor([False, True, True], dtype=lucid.bool)
-
-        Notes
-        -----
-        Returns ``self`` unchanged when the source dtype is already
-        ``bool``.  Otherwise each element is reduced to ``True`` if
-        nonzero and ``False`` if zero.
-        """
-        if self._impl.dtype == _C_engine.Dtype.Bool:
-            return self
-        return to(self, bool_)
-
-    for _name, _fn in [
-        ("to", to),
-        ("metal", metal),
-        ("cpu", cpu),
-        ("float", float),
-        ("double", double),
-        ("half", half),
-        ("int", int),
-        ("long", long),
-        ("bool", bool),
-    ]:
-        setattr(cls, _name, _fn)
+    for name, fn in _TO_METHODS:
+        fn.__name__ = name
+        fn.__qualname__ = f"_inject_to.<locals>.{name}"
+        setattr(cls, name, fn)
     _reset_class_annotation_cell(cls)
 
 

@@ -1215,6 +1215,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - share exact 0-d scalar builder and promotion helpers
 - type out-of-place Tensor methods as -> Tensor
 - unify try_unwrap helper, thread wrap_axis op names, and drop dead headers
+- decompose god functions in tensor, compile, and coreml
 
 ---
 

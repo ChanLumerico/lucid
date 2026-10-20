@@ -31,7 +31,7 @@ Acceptance:
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Protocol, cast, final, override
+from typing import TYPE_CHECKING, Callable, Protocol, cast, final, override
 
 from lucid._C import engine as _C_engine
 from lucid.autograd.function import Function, FunctionCtx
@@ -47,7 +47,7 @@ class _ExecutableLike(Protocol):
 
 
 if TYPE_CHECKING:
-    from lucid._C.engine.compile import Tracer
+    from lucid._C.engine.compile import TraceGraph, Tracer
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
     from lucid.nn.parameter import Parameter
@@ -60,7 +60,7 @@ __all__ = ["make_step"]
 class _StepEntry:
     """One compiled fwd+bwd executable + the I/O plan to invoke it."""
 
-    exe: object  # _C_engine.compile.PyCompiledExecutable
+    exe: _ExecutableLike  # _C_engine.compile.PyCompiledExecutable
     external_feeds: dict[int, object]
     # Per ``exe.input_ids[i]`` slot: ``None`` → pinned param/constant in
     # ``external_feeds``; integer → index into the ``step`` call's tensors
@@ -96,6 +96,317 @@ class _StepEntry:
     absent: tuple[bool, ...] = ()
 
 
+def _match_param_ids(
+    params: list[Parameter],
+    ext: dict[int, object],
+) -> tuple[list[int], list[bool]]:
+    """Match each parameter's ``TensorImpl`` identity against ``ext``."""
+    from lucid._dispatch import _unwrap
+
+    param_ids: list[int] = []
+    observed: list[bool] = []
+    for p in params:
+        p_impl = _unwrap(p)
+        found = next((tid for tid, impl in ext.items() if impl is p_impl), None)
+        # A parameter the trace never reached — GoogLeNet's auxiliary
+        # heads in eval, say — used to send the whole step to eager
+        # without a word.  Eager leaves its gradient None; so does this.
+        observed.append(found is not None)
+        if found is not None:
+            param_ids.append(found)
+    return param_ids, observed
+
+
+def _build_input_source(
+    exe: _ExecutableLike,
+    ext: dict[int, object],
+    x_args: tuple[Tensor, ...],
+) -> tuple[int | None, ...] | None:
+    """Build the positional-feed plan for ``exe.input_ids``."""
+    from lucid._dispatch import _unwrap
+    from lucid.compile._core.signature import leaf_tensors
+
+    positional_impls: dict[int, int] = {}
+    for i, a in enumerate(leaf_tensors(x_args, {})):
+        positional_impls.setdefault(id(_unwrap(a)), i)
+
+    input_source: list[int | None] = []
+    for tid in exe.input_ids:
+        impl = ext.get(tid)
+        if impl is None:
+            return None
+        input_source.append(positional_impls.get(id(impl)))
+    return tuple(input_source)
+
+
+def _lower_step_executable(
+    graph: TraceGraph,
+    ext: dict[int, object],
+    loss_id: int,
+    param_ids: list[int],
+    extra_output_ids: list[int],
+    *,
+    use_dynamic: bool = False,
+) -> _ExecutableLike | None:
+    """Lower ``graph`` with backward into a compiled executable, or ``None``."""
+    from lucid.compile._core.fallback import _fallback_notice
+
+    try:
+        exe = _C_engine.compile.compile_trace_with_backward(
+            graph,
+            ext,
+            loss_id,
+            param_ids,
+            use_dynamic,
+            extra_output_ids=extra_output_ids,
+        )
+    except RuntimeError as why:
+        _fallback_notice("lowering", str(why))
+        return None
+    return None if exe is None else cast(_ExecutableLike, exe)
+
+
+def _compile_step_entry(
+    model: Module,
+    loss_fn: Callable[..., Tensor],
+    params: list[Parameter],
+    x_args: tuple[Tensor, ...],
+    *,
+    use_dynamic: bool = False,
+) -> _StepEntry | None:
+    """Trace ``model`` + ``loss_fn`` once for ``x_args`` and compile."""
+    from lucid._dispatch import _unwrap, _wrap
+    from lucid._tensor.tensor import Tensor
+    from lucid.compile._core.attention_probe import maybe_probe_for_graph
+    from lucid.compile._core.bn_runstats import (
+        bn_counter_targets,
+        bn_writeback_targets,
+        model_has_cumulative_bn,
+    )
+    from lucid.compile._core.buffer_writes import outside_writes
+    from lucid.compile._core.fallback import _fallback_notice
+    from lucid.compile._core.signature import leaf_tensors
+    from lucid.compile._debug.trace_dump import trace_to_json
+
+    t0 = time.perf_counter()
+    traced = _trace_step(model, loss_fn, x_args)
+    if traced is None:
+        return None
+    tracer, loss_t = traced
+    graph = tracer.graph
+    maybe_probe_for_graph(graph)
+
+    ext = tracer.external_feeds
+    arguments = {id(_unwrap(t)) for t in leaf_tensors(x_args, {})}
+    writes = outside_writes(tracer, arguments)
+    if isinstance(writes, str):
+        _fallback_notice("argument-write", writes)
+        return None
+    write_ids, written = writes
+
+    found = tracer.lookup_id(_unwrap(loss_t)) if isinstance(loss_t, Tensor) else None
+    if found is None or model_has_cumulative_bn(model):
+        return None
+    loss_id = int(found)
+
+    bn_targets = bn_writeback_targets(graph, ext)
+    bn_stat_out_ids = [out_id for _, out_id, _ in bn_targets]
+    bn_stat_buffers = [_wrap(impl) for _, _, impl in bn_targets]
+
+    param_ids, observed = _match_param_ids(params, ext)
+    if not param_ids:
+        return None
+
+    exe_like = _lower_step_executable(
+        graph,
+        ext,
+        loss_id,
+        param_ids,
+        bn_stat_out_ids + write_ids,
+        use_dynamic=use_dynamic,
+    )
+    if exe_like is None:
+        return None
+
+    input_source = _build_input_source(exe_like, ext, x_args)
+    if input_source is None:
+        return None
+
+    grad_ids = list(exe_like.grad_output_ids)[: len(param_ids)]
+    absent = tuple(int(g) == -1 for g in grad_ids)
+    return _StepEntry(
+        exe=exe_like,
+        external_feeds=dict(ext),
+        input_source=input_source,
+        observed=() if all(observed) else tuple(observed),
+        absent=absent if any(absent) else (),
+        graph_json=trace_to_json(graph),
+        compile_ms=(time.perf_counter() - t0) * 1000.0,
+        bn_stat_buffers=bn_stat_buffers,
+        bn_stat_out_count=len(bn_stat_out_ids),
+        written=written,
+        bn_counters=bn_counter_targets(model, graph, ext),
+    )
+
+
+def _run_step_entry(
+    entry: _StepEntry,
+    params: list[Parameter],
+    x_args: tuple[Tensor, ...],
+) -> tuple[_C_engine.TensorImpl, list[_C_engine.TensorImpl | None]]:
+    """Execute one cached step entry; return ``(loss_impl, [grad_impls])``."""
+    from lucid._dispatch import _unwrap, _wrap
+    from lucid.compile._core.bn_runstats import advance_bn_counters
+    from lucid.compile._core.buffer_writes import write_back
+
+    exe = entry.exe
+    feed_impls: list[object] = [
+        entry.external_feeds[tid] if src is None else _unwrap(x_args[src])
+        for tid, src in zip(exe.input_ids, entry.input_source, strict=True)
+    ]
+    t0 = time.perf_counter()
+    outs = _C_engine.compile.run_executable(entry.exe, feed_impls)
+    entry.last_run_ms = (time.perf_counter() - t0) * 1000.0
+    entry.n_hits += 1
+
+    n_grads = sum(entry.observed) if entry.observed else len(params)
+    n_loss_grad = 1 + n_grads
+    n_writes = len(entry.written)
+    if len(outs) != n_loss_grad + entry.bn_stat_out_count + n_writes:
+        raise RuntimeError(
+            f"make_step: run_executable returned {len(outs)} outputs, "
+            f"expected {n_loss_grad + entry.bn_stat_out_count + n_writes} "
+            f"(1 loss + {n_grads} grads + {entry.bn_stat_out_count} BN stats "
+            f"+ {n_writes} buffer writes)"
+        )
+    for i, buf in enumerate(entry.bn_stat_buffers):
+        buf.copy_(_wrap(cast(_C_engine.TensorImpl, outs[n_loss_grad + i])))
+    first = n_loss_grad + entry.bn_stat_out_count
+    write_back(entry.written, list(outs[first : first + n_writes]))
+    advance_bn_counters(entry.bn_counters)
+
+    loss_impl = cast(_C_engine.TensorImpl, outs[0])
+    reached: list[_C_engine.TensorImpl | None] = [
+        None if entry.absent and entry.absent[i] else cast(_C_engine.TensorImpl, g)
+        for i, g in enumerate(outs[1:n_loss_grad])
+    ]
+    if not entry.observed:
+        return loss_impl, reached
+    it = iter(reached)
+    return loss_impl, [next(it) if seen else None for seen in entry.observed]
+
+
+@final
+class _CompiledStepFunction(Function):
+    """Autograd Function wrapping the compiled forward+backward step."""
+
+    _once_differentiable = True  # second derivatives through it are unverified
+
+    @override
+    @staticmethod
+    def forward(
+        ctx: FunctionCtx,
+        entry_holder: tuple[_StepEntry, list[Parameter]],
+        *step_args: Tensor,
+    ) -> Tensor:
+        """Run the cached executable; save grads for backward."""
+        from lucid._dispatch import _wrap
+
+        entry, params = entry_holder
+        n_user = len(step_args) - len(params)
+        x_args = step_args[:n_user]
+
+        loss_impl, grad_impls = _run_step_entry(entry, params, x_args)
+        ctx.saved_grad_impls = grad_impls
+        ctx.n_user = n_user
+        return _wrap(loss_impl)
+
+    @override
+    @staticmethod
+    def backward(ctx: FunctionCtx, grad_loss: Tensor) -> tuple[Tensor | None, ...]:
+        """Chain ``grad_loss`` into each saved per-parameter gradient."""
+        from lucid._dispatch import _wrap
+
+        saved_grad_impls = cast(
+            list[_C_engine.TensorImpl | None], ctx.saved_grad_impls
+        )
+        n_user = cast(int, ctx.n_user)
+        scaled = [
+            None if g is None else grad_loss * _wrap(g) for g in saved_grad_impls
+        ]
+        return tuple([None] * n_user + scaled)
+
+
+def _make_monolithic_step(
+    model: Module,
+    loss_fn: Callable[..., Tensor],
+) -> Callable[..., Tensor]:
+    """Build the monolithic (single-segment) compiled step callable."""
+    from lucid._tensor.tensor import Tensor
+    from lucid.compile._core.fallback import EagerFallbackSet
+    from lucid.compile._core.signature import (
+        ParamFingerprint,
+        leaf_tensors,
+        model_has_active_hooks,
+        tensors_have_active_hooks,
+    )
+
+    use_dynamic = False
+    cache: dict[object, _StepEntry] = {}
+    eager_only = EagerFallbackSet()
+
+    params = list(model.parameters())
+    if not params:
+        raise ValueError("make_step: model has no trainable parameters")
+    retrace = _retrace_on_replace(model, cache.clear, params)
+    fingerprint = ParamFingerprint(model, on_replaced=retrace)
+
+    def step(*x_args: Tensor) -> Tensor:
+        """Run one fwd+bwd compiled training step (or eager fallback)."""
+        try:
+            key = fingerprint.key_of(x_args, {}, dynamic=use_dynamic)
+        except (TypeError, AttributeError):  # fmt: skip
+            key = None
+
+        leaves = leaf_tensors(x_args, {})
+        if (
+            (key in eager_only if key is not None else False)
+            or model_has_active_hooks(model)
+            or tensors_have_active_hooks(leaves)
+        ):
+            return loss_fn(model(*x_args[:1]), *x_args[1:])
+
+        entry = cache.get(key) if key is not None else None
+        if entry is None:
+            entry = _compile_step_entry(
+                model, loss_fn, params, x_args, use_dynamic=use_dynamic
+            )
+            if entry is None:
+                if key is not None:
+                    eager_only.add(key)
+                return loss_fn(model(*x_args[:1]), *x_args[1:])
+            if key is not None:
+                cache[key] = entry
+
+        return cast(
+            Tensor, _CompiledStepFunction.apply((entry, params), *leaves, *params)
+        )
+
+    def clear_cache() -> None:
+        """Drop every cached executable + eager-fallback blacklist for this step callable."""
+        cache.clear()
+        eager_only.clear()
+
+    def graph_dump() -> str:
+        return _graph_dump(cache.items())
+
+    step.cache = cache  # type: ignore[attr-defined]
+    step.eager_only = eager_only  # type: ignore[attr-defined]
+    step.clear_cache = clear_cache  # type: ignore[attr-defined]
+    step.graph_dump = graph_dump  # type: ignore[attr-defined]
+    return step
+
+
 def make_step(
     model: Module,
     loss_fn: Callable[..., Tensor],
@@ -129,12 +440,7 @@ def make_step(
         Accepted for API symmetry with :func:`lucid.compile`, but the compiled
         *training* step is always per-shape static: any batch size works (one
         fwd+bwd executable per distinct shape), it just does not share a single
-        symbolic-batch executable across sizes.  Symbolic-batch is unavailable
-        here because the backward graph of common reductions (cross-entropy,
-        for one) aborts under a symbolic batch axis with an uncatchable MPSGraph
-        assertion — and training batch size is fixed across a run anyway, so the
-        per-shape compile happens once.  The forward-only :func:`lucid.compile`
-        path *does* offer symbolic-batch for non-conv graphs.
+        symbolic-batch executable across sizes.
     segments : int or {"auto"}, optional
         Number of executable segments (default ``1`` — the monolithic single
         executable described above).  When ``> 1`` and ``model`` is an
@@ -143,16 +449,6 @@ def make_step(
         executable and stitched with eager autograd
         (:func:`make_segmented_step`).  ``"auto"`` probes a few candidate counts
         on the first batch and keeps the fastest (:func:`make_autoseg_step`).
-        This bounds peak memory on deep models:
-        a monolithic executable holds every forward activation until its
-        backward consumes it (peak grows with depth), whereas split executables
-        each hold only one segment's activations (MPSGraph cannot CSE / retain
-        memory across executable boundaries) — the standard checkpointing
-        memory↔recompute trade.  Measured on a deep bottleneck stack (M4 Max):
-        a moderate split is a both-axes win (``1.08x`` faster + ``9%`` less
-        peak), a fine split saves the most memory (``17%``) at a slight time
-        cost.  Parameter gradients stay token-identical to ``segments=1``.
-        Raises for non-Sequential models.
 
     Returns
     -------
@@ -196,389 +492,7 @@ def make_step(
         from lucid.compile._entry.segmented_step import make_segmented_step
 
         return make_segmented_step(model, loss_fn, segments=segments, dynamic=dynamic)
-
-    from lucid._dispatch import _unwrap, _wrap
-    from lucid._tensor.tensor import Tensor
-    from lucid.compile._core.buffer_writes import outside_writes, write_back
-    from lucid.compile._core.bn_runstats import (
-        advance_bn_counters,
-        bn_counter_targets,
-        bn_writeback_targets,
-        model_has_cumulative_bn,
-    )
-    from lucid.compile._core.fallback import EagerFallbackSet, _fallback_notice
-    from lucid.compile._core.signature import (
-        ParamFingerprint,
-        leaf_tensors,
-        model_has_active_hooks,
-        tensors_have_active_hooks,
-    )
-
-    # Symbolic-batch is NOT offered for the compiled *training* step.  Unlike the
-    # forward-only path (see :class:`CompiledModule`, where conv is the single
-    # known abort and everything else shares one executable), the backward graph
-    # aborts under a symbolic batch axis for common reductions — cross-entropy,
-    # for one, lowers a batch-sized constant that MPSGraph rejects with
-    # ``shape[0] (-1) should be a strictly positive value`` — and the abort is an
-    # uncatchable process assertion.  There is no reliable predicate for "which
-    # backward will abort", so make_step always compiles per-shape static: any
-    # batch size still works (one executable per distinct shape), which is what
-    # training wants anyway since the batch size is fixed across a run.
-    use_dynamic = False
-
-    cache: dict[Any, _StepEntry] = {}
-    eager_only = EagerFallbackSet()
-
-    # Taken again, and every executable dropped, when the model's tensors are
-    # replaced (_retrace_on_replace); otherwise stable across calls.
-    params = list(model.parameters())
-    if not params:
-        raise ValueError("make_step: model has no trainable parameters")
-    retrace = _retrace_on_replace(model, cache.clear, params)
-    fingerprint = ParamFingerprint(model, on_replaced=retrace)  # LCD-489
-
-    def _compile_for(
-        x_args: tuple[Tensor, ...],
-    ) -> _StepEntry | None:
-        """Trace ``model`` + ``loss_fn`` once for this signature and compile.
-
-        Parameters
-        ----------
-        x_args : tuple of Tensor
-            ``(model_input, *loss_extra_inputs)`` — the same positional
-            tuple the returned ``step`` callable expects.
-
-        Returns
-        -------
-        _StepEntry or None
-            Compiled executable + feed plan, or ``None`` on any
-            failure condition (empty trace, unresolved parameter
-            id, builder rejection) — caller marks the signature
-            eager-only.
-        """
-        t0 = time.perf_counter()
-        traced = _trace_step(model, loss_fn, x_args)
-        if traced is None:
-            return None
-        tracer, loss_t = traced
-        graph = tracer.graph
-
-        # Resolve the fused-attention workaround capability flag before the
-        # emitters run, if this step's graph contains attention (probes once).
-        from lucid.compile._core.attention_probe import maybe_probe_for_graph
-
-        maybe_probe_for_graph(graph)
-
-        ext = tracer.external_feeds
-        # First, before any early return: the trace-time call already applied
-        # its in-place buffer writes, and whatever runs next — the executable
-        # or an eager fallback — must find the buffers as they were.
-        arguments = {id(_unwrap(t)) for t in leaf_tensors(x_args, {})}
-        writes = outside_writes(tracer, arguments)
-        if isinstance(writes, str):
-            _fallback_notice("argument-write", writes)
-            return None
-        write_ids, written = writes
-        # The tensor ``loss_fn`` returned — not whatever op ran last.  A model
-        # that computes its loss and then more (Dreamer's reconstructions and
-        # metrics) had its last metric differentiated as "the loss": 0.0008
-        # against eager's 2120, with non-finite gradients, and no error.
-        found = (
-            tracer.lookup_id(_unwrap(loss_t)) if isinstance(loss_t, Tensor) else None
-        )
-        if found is None:
-            return None
-        loss_id = int(found)
-
-        # 3.5 BatchNorm running-stats. A cumulative-MA BN (track_running_stats=
-        # True + momentum=None) can't be lowered into the graph (its update reads
-        # num_batches_tracked as a host scalar) → eager-fallback the whole step.
-        # A track_running_stats=False BN keeps no buffers and compiles unchanged
-        # (3-input node, nothing to write back). A fused-momentum BN traces as a
-        # 5-input/3-output node; surface its EMA outputs (new_rm/new_rv) and
-        # write them into the live module buffers after each run, else the
-        # running stats freeze at their trace-time value and eval() reads stale
-        # stats. The cumulative-vs-stateless distinction is invisible in the
-        # trace IR, so the model is the discriminator (see _bn_runstats).
-        if model_has_cumulative_bn(model):
-            return None
-        _bn_targets = bn_writeback_targets(graph, ext)
-        bn_stat_out_ids: list[int] = [out_id for _, out_id, _ in _bn_targets]
-        bn_stat_buffers: list[Tensor] = [_wrap(impl) for _, _, impl in _bn_targets]
-
-        # param_ids: match each Parameter (by TensorImpl identity)
-        # against ext.  Re-fetched on every compile in case the inner
-        # model mutated (e.g. .to() moved params).
-        p_impls = [_unwrap(p) for p in params]
-        param_ids: list[int] = []
-        observed: list[bool] = []
-        for p_impl in p_impls:
-            found = None
-            for tid, impl in ext.items():
-                if impl is p_impl:
-                    found = tid
-                    break
-            # A parameter the trace never reached — GoogLeNet's auxiliary
-            # heads in eval, say — used to send the whole step to eager
-            # without a word.  Eager leaves its gradient None; so does this.
-            observed.append(found is not None)
-            if found is not None:
-                param_ids.append(found)
-        if not param_ids:
-            return None
-
-        try:
-            exe = _C_engine.compile.compile_trace_with_backward(
-                graph,
-                ext,
-                loss_id,
-                param_ids,
-                use_dynamic,
-                extra_output_ids=bn_stat_out_ids + write_ids,
-            )
-        except RuntimeError as why:
-            # compile_trace_with_backward surfaces a RuntimeError when
-            # an op has no emitter or another invariant fails.  Either
-            # way it's an eager-only signature — and, as on the forward
-            # path, the reason is reported rather than dropped, since a
-            # fallback is otherwise silent.
-            _fallback_notice("lowering", str(why))
-            return None
-        if exe is None:
-            return None
-
-        # Build the positional-feed plan.  ``args`` to ``step`` is the
-        # user-supplied input tuple; everything else is a pinned param
-        # or a graph constant.
-        # By position among the call's tensors, nested ones included (a
-        # target list, say): bound only at the top level they were pinned
-        # at trace time, and the autograd Function below — which takes
-        # tensors only — failed on the list.
-        positional_impls: dict[int, int] = {}
-        for i, a in enumerate(leaf_tensors(x_args, {})):
-            positional_impls.setdefault(id(_unwrap(a)), i)
-
-        input_source: list[int | None] = []
-        for tid in exe.input_ids:
-            impl = ext.get(tid)
-            if impl is None:
-                return None
-            input_source.append(positional_impls.get(id(impl)))
-
-        from lucid.compile._debug.trace_dump import trace_to_json
-
-        grad_ids = list(cast(_ExecutableLike, exe).grad_output_ids)[: len(param_ids)]
-        absent = tuple(int(g) == -1 for g in grad_ids)
-
-        return _StepEntry(
-            exe=exe,
-            external_feeds=dict(ext),
-            input_source=tuple(input_source),
-            observed=() if all(observed) else tuple(observed),
-            absent=absent if any(absent) else (),
-            graph_json=trace_to_json(graph),
-            compile_ms=(time.perf_counter() - t0) * 1000.0,
-            bn_stat_buffers=bn_stat_buffers,
-            bn_stat_out_count=len(bn_stat_out_ids),
-            written=written,
-            bn_counters=bn_counter_targets(model, graph, ext),
-        )
-
-    def _run(
-        entry: _StepEntry, x_args: tuple[Tensor, ...]
-    ) -> tuple[_C_engine.TensorImpl, list[_C_engine.TensorImpl | None]]:
-        """Execute one cached step entry; return ``(loss_impl, [grad_impls])``.
-
-        The executable returns ``len(params) + 1`` storages — the loss
-        scalar followed by the per-parameter gradients in the same
-        order ``params`` was captured.  The caller wraps these into
-        Lucid Tensors and feeds them into the autograd graph.
-        """
-        feed_impls: list[object] = []
-        exe = cast(_ExecutableLike, entry.exe)
-        for tid, src in zip(exe.input_ids, entry.input_source, strict=True):
-            if src is None:
-                feed_impls.append(entry.external_feeds[tid])
-            else:
-                feed_impls.append(_unwrap(x_args[src]))
-        t0 = time.perf_counter()
-        outs = _C_engine.compile.run_executable(entry.exe, feed_impls)
-        entry.last_run_ms = (time.perf_counter() - t0) * 1000.0
-        entry.n_hits += 1
-        # 3.5 BatchNorm running-stats write-back: the BN EMA outputs trail
-        # [loss, *grads] (one pair per fused-momentum BN).  copy_ each into its
-        # live module buffer so eval() reads fresh stats.  The count assert
-        # guards against a C++/Python output-slice drift.
-        n_grads = sum(entry.observed) if entry.observed else len(params)
-        n_loss_grad = 1 + n_grads
-        n_writes = len(entry.written)
-        if len(outs) != n_loss_grad + entry.bn_stat_out_count + n_writes:
-            raise RuntimeError(
-                f"make_step: run_executable returned {len(outs)} outputs, "
-                f"expected {n_loss_grad + entry.bn_stat_out_count + n_writes} "
-                f"(1 loss + {n_grads} grads + {entry.bn_stat_out_count} BN stats "
-                f"+ {n_writes} buffer writes)"
-            )
-        for _i, _buf in enumerate(entry.bn_stat_buffers):
-            _buf.copy_(_wrap(cast(_C_engine.TensorImpl, outs[n_loss_grad + _i])))
-        _first = n_loss_grad + entry.bn_stat_out_count
-        write_back(entry.written, list(outs[_first : _first + n_writes]))
-        advance_bn_counters(entry.bn_counters)
-        # outs = [loss_impl, grad_param_0_impl, …]
-        loss_impl = cast(_C_engine.TensorImpl, outs[0])
-        reached: list[_C_engine.TensorImpl | None] = [
-            None if entry.absent and entry.absent[i] else cast(_C_engine.TensorImpl, g)
-            for i, g in enumerate(outs[1:n_loss_grad])
-        ]
-        if not entry.observed:
-            return loss_impl, reached
-        it = iter(reached)
-        grad_impls = [next(it) if seen else None for seen in entry.observed]
-        return loss_impl, grad_impls
-
-    @final
-    class _CompiledStepFunction(Function):
-        """Inner autograd.Function — only the *compiled* path runs through here.
-
-        The eager fallback is handled by ``step()`` itself BEFORE we
-        enter the Function, so this static method can assume a valid
-        cache entry was just looked up by the caller and passed in
-        via the first positional argument.
-        """
-
-        _once_differentiable = True  # second derivatives through it are unverified
-
-        # forward's 1st positional is a non-Tensor ``entry_holder`` (the _StepEntry
-        # holder), not a Tensor as Function.forward's *args base expects; a
-        # documented exception per CompiledModule's design.
-        @override
-        @staticmethod
-        def forward(
-            ctx: FunctionCtx,
-            entry_holder: list[_StepEntry],
-            *step_args: Tensor,
-        ) -> Tensor:
-            """Run the cached executable; save grads for backward.
-
-            ``entry_holder[0]`` is the :class:`_StepEntry` selected
-            by the outer ``step()`` cache lookup.  ``step_args`` is
-            laid out as ``(*x_args, *params)`` so the autograd graph
-            sees both the user inputs and the model parameters in
-            its next-edge slot list (the parameter gradients are
-            wired in :meth:`backward`).
-            """
-            # ``entry_holder`` is a 1-element list owning the
-            # ``_StepEntry``.  Wrapping it in a list keeps it out of
-            # the *Tensor*-only positional contract of Function.apply
-            # — the meta-class still passes it through to ``forward``
-            # unchanged because non-Tensor positional args are
-            # allowed (see :meth:`Function.forward` docstring).
-            #
-            # Layout of ``step_args``: (x, *extra_inputs, *params).
-            entry = entry_holder[0]
-            n_user = len(step_args) - len(params)
-            x_args = step_args[:n_user]
-
-            loss_impl, grad_impls = _run(entry, x_args)
-            ctx.saved_grad_impls = grad_impls
-            ctx.n_user = n_user
-            return _wrap(loss_impl)
-
-        # backward returns tuple[Tensor | None, ...] (one slot per next-edge: None
-        # for user inputs, Tensors for params); the base returns Tensor | tuple.
-        @override
-        @staticmethod
-        def backward(ctx: FunctionCtx, grad_loss: Tensor) -> tuple[Tensor | None, ...]:
-            """Chain ``grad_loss`` into each saved per-parameter gradient.
-
-            Returns one slot per autograd next-edge: ``None`` for
-            every user-input position (so backprop doesn't propagate
-            into data / targets) followed by the scaled gradients
-            for each parameter.
-            """
-            # Chain rule: ``grad_param_i = grad_loss * dL/dparam_i``.
-            # Returning ``None`` for the user-supplied inputs declines
-            # to back-propagate further into them (data / targets the
-            # optimizer ignores).  The ``entry_holder`` non-Tensor
-            # input does not appear in ``next_edges`` so no slot is
-            # produced for it here.
-            saved_grad_impls = cast(
-                list[_C_engine.TensorImpl | None], ctx.saved_grad_impls
-            )
-            n_user = cast(int, ctx.n_user)
-            scaled = [
-                None if g is None else grad_loss * _wrap(g) for g in saved_grad_impls
-            ]
-            return tuple([None] * n_user + scaled)
-
-    def step(*x_args: Tensor) -> Tensor:
-        """Run one fwd+bwd compiled training step (or eager fallback).
-
-        Parameters
-        ----------
-        *x_args : Tensor
-            ``(model_input, *loss_extra_inputs)`` — the same shape
-            ``model(input)`` + ``loss_fn(out, *extras)`` accept
-            together.
-
-        Returns
-        -------
-        Tensor
-            The scalar loss carrying a ``grad_fn`` that, when
-            ``.backward()`` is called, runs the captured gradients
-            into each model parameter's ``.grad``.  On compile
-            failure the loss tensor instead comes from the eager
-            forward + ``loss_fn`` and uses the regular autograd
-            graph for backward.
-        """
-        # Cache lookup / compile / eager-fallback decision happens
-        # OUTSIDE the autograd Function so the eager path doesn't
-        # accidentally end up with a "compiled" wrapper around it.
-        # Always per-shape static (use_dynamic is False, see the note at the top
-        # of make_step): each distinct shape gets its own fwd+bwd executable.
-        try:
-            key = fingerprint.key_of(x_args, {}, dynamic=use_dynamic)
-        except (TypeError, AttributeError):  # fmt: skip
-            key = None  # un-hashable → fresh per-call compile only
-
-        if (
-            (key is not None and key in eager_only)
-            or model_has_active_hooks(model)
-            or tensors_have_active_hooks(leaf_tensors(x_args, {}))
-        ):
-            out = model(*x_args[:1])
-            return loss_fn(out, *x_args[1:])
-
-        entry = cache.get(key) if key is not None else None
-        if entry is None:
-            entry = _compile_for(x_args)
-            if entry is None:
-                if key is not None:
-                    eager_only.add(key)
-                out = model(*x_args[:1])
-                return loss_fn(out, *x_args[1:])
-            if key is not None:
-                cache[key] = entry
-
-        leaves = leaf_tensors(x_args, {})
-        return cast(Tensor, _CompiledStepFunction.apply([entry], *leaves, *params))
-
-    # Handles for tests and telemetry, so they need not reach into the closure.
-    step.cache = cache  # type: ignore[attr-defined]
-    step.eager_only = eager_only  # type: ignore[attr-defined]
-
-    def clear_cache() -> None:
-        """Drop every cached executable + eager-fallback blacklist for this step callable."""
-        cache.clear()
-        eager_only.clear()
-
-    def graph_dump() -> str:
-        return _graph_dump(cache.items())
-
-    step.clear_cache = clear_cache  # type: ignore[attr-defined]
-    step.graph_dump = graph_dump  # type: ignore[attr-defined]
-
-    return step
+    return _make_monolithic_step(model, loss_fn)
 
 
 def _trace_step(
