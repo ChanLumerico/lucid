@@ -480,3 +480,40 @@ def test_malformed_calls_are_refused(
     x = lucid.tensor(_X)
     with pytest.raises(TypeError):
         getattr(lucid, fn)(x, *args, **kwargs)
+
+
+@pytest.mark.parametrize("fn", ["amax", "amin", "nansum", "nanmean"])
+def test_dim_none_honours_keepdim(device: str, fn: str) -> None:
+    x = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], device=device)
+    free = getattr(lucid, fn)(x, dim=None, keepdim=True)
+    assert free.shape == (1, 1)
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize("ord", ["fro", "nuc", 1, 2, float("inf")])
+@pytest.mark.parametrize("shape", [(0, 3), (3, 0), (0, 0), (2, 0, 3)], ids=str)
+@pytest.mark.parametrize("keepdim", [False, True])
+def test_matrix_norm_empty_axes_return_zero(
+    ref: ModuleType,
+    device: str,
+    ord: str | int | float,
+    shape: tuple[int, ...],
+    keepdim: bool,
+) -> None:
+    x = lucid.zeros(*shape, device=device)
+    rx = ref.zeros(*shape)
+    ours = LA.matrix_norm(x, ord=ord, keepdim=keepdim)
+    theirs = ref.linalg.matrix_norm(rx, ord=ord, keepdim=keepdim)
+    assert ours.shape == tuple(theirs.shape)
+    np.testing.assert_array_equal(_lucid_np(ours), _ref_np(theirs))
+
+
+@pytest.mark.parity
+def test_int64_prod_preserves_bits_above_2_pow_53_and_wraps_modulo_2_pow_64(
+    ref: ModuleType, device: str
+) -> None:
+    for vals in ([2**53 + 1, 1], [2**62, 4], [2**32 + 3, 2**31 + 5]):
+        x = lucid.tensor(vals, dtype=lucid.int64, device=device)
+        rx = ref.tensor(vals, dtype=ref.int64)
+        assert x.prod().item() == rx.prod().item()
+        assert lucid.prod(x, dim=0).item() == ref.prod(rx, dim=0).item()

@@ -490,10 +490,9 @@ def amax(
     amin : analogous minimum reduction.
     lucid.max : returns ``(values, indices)`` for a single axis.
     """
-    if dim is None:
-        return lucid.max(input)
-    _dim = _reduction_axes(input._impl, dim, "amax")
-    return lucid.max(input, _dim, keepdim)
+    return _wrap(
+        _C_engine.max(input._impl, _reduction_axes(input._impl, dim, "amax"), bool(keepdim))
+    )
 
 
 def amin(
@@ -528,10 +527,9 @@ def amin(
     amax : analogous maximum reduction.
     lucid.min : returns ``(values, indices)`` for a single axis.
     """
-    if dim is None:
-        return lucid.min(input)
-    _dim = _reduction_axes(input._impl, dim, "amin")
-    return lucid.min(input, _dim, keepdim)
+    return _wrap(
+        _C_engine.min(input._impl, _reduction_axes(input._impl, dim, "amin"), bool(keepdim))
+    )
 
 
 def aminmax(

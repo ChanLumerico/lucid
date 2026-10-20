@@ -70,9 +70,26 @@ struct AxisResult {
     Shape shape;
 };
 
+// Product along one axis for integer and bool buffers.
+// Accumulates in uint64_t so signed wraparound has defined two's-complement
+// semantics and int64 values above 2^53 keep all 64 bits.
+template <typename T>
+void prod_axis_int(const void* src, void* dst, const OIR& oir, bool as_bool = false) {
+    const auto* p = reinterpret_cast<const T*>(src);
+    auto* out = reinterpret_cast<T*>(dst);
+    for (std::size_t o = 0; o < oir.outer; ++o) {
+        for (std::size_t i = 0; i < oir.inner; ++i) {
+            std::uint64_t acc = 1;
+            for (std::size_t r = 0; r < oir.reduce_dim; ++r) {
+                acc *= static_cast<std::uint64_t>(p[(o * oir.reduce_dim + r) * oir.inner + i]);
+            }
+            out[o * oir.inner + i] = as_bool ? static_cast<T>(acc != 0) : static_cast<T>(acc);
+        }
+    }
+}
+
 // Apply a typed Accelerate kernel (k32 for F32, k64 for F64) along one axis.
 // Allocates the output buffer, then calls the appropriate typed overload.
-// Only F32 and F64 are supported; other dtypes raise a not-implemented error.
 template <class Kernel32, class Kernel64>
 AxisResult reduce_one_axis(const CpuStorage& in,
                            const Shape& in_shape,
@@ -117,67 +134,20 @@ AxisResult reduce_one_axis(const CpuStorage& in,
         break;
     }
     case Dtype::Bool:
-    case Dtype::I8:
-    case Dtype::I16:
-    case Dtype::I32:
-    case Dtype::I64: {
-        // Integers reduce through double, which holds every I32 exactly
-        // and every I64 up to 2^53 — the same headroom the promotion to
-        // I64 was introduced for.
-        const std::size_t in_numel = shape_numel(in_shape);
-        std::vector<double> wide_in(in_numel), wide_out(out_numel);
-        const auto load = [&](auto tag) {
-            using T = decltype(tag);
-            const auto* p = reinterpret_cast<const T*>(in.ptr.get());
-            for (std::size_t i = 0; i < in_numel; ++i)
-                wide_in[i] = static_cast<double>(p[i]);
-        };
-        const auto store = [&](auto tag) {
-            using T = decltype(tag);
-            auto* p = reinterpret_cast<T*>(r.data.ptr.get());
-            for (std::size_t i = 0; i < out_numel; ++i)
-                p[i] = static_cast<T>(wide_out[i]);
-        };
-        switch (dt) {
-        case Dtype::Bool:
-            load(std::uint8_t{});
-            break;
-        case Dtype::I8:
-            load(std::int8_t{});
-            break;
-        case Dtype::I16:
-            load(std::int16_t{});
-            break;
-        case Dtype::I32:
-            load(std::int32_t{});
-            break;
-        default:
-            load(std::int64_t{});
-            break;
-        }
-        k64(wide_in.data(), wide_out.data(), oir.outer, oir.reduce_dim, oir.inner);
-        switch (dt) {
-        case Dtype::Bool: {
-            auto* p = reinterpret_cast<std::uint8_t*>(r.data.ptr.get());
-            for (std::size_t i = 0; i < out_numel; ++i)
-                p[i] = wide_out[i] != 0.0 ? 1 : 0;
-            break;
-        }
-        case Dtype::I8:
-            store(std::int8_t{});
-            break;
-        case Dtype::I16:
-            store(std::int16_t{});
-            break;
-        case Dtype::I32:
-            store(std::int32_t{});
-            break;
-        default:
-            store(std::int64_t{});
-            break;
-        }
+        prod_axis_int<std::uint8_t>(in.ptr.get(), r.data.ptr.get(), oir, /*as_bool=*/true);
         break;
-    }
+    case Dtype::I8:
+        prod_axis_int<std::int8_t>(in.ptr.get(), r.data.ptr.get(), oir);
+        break;
+    case Dtype::I16:
+        prod_axis_int<std::int16_t>(in.ptr.get(), r.data.ptr.get(), oir);
+        break;
+    case Dtype::I32:
+        prod_axis_int<std::int32_t>(in.ptr.get(), r.data.ptr.get(), oir);
+        break;
+    case Dtype::I64:
+        prod_axis_int<std::int64_t>(in.ptr.get(), r.data.ptr.get(), oir);
+        break;
     default:
         ErrorBuilder(op_name).not_implemented("dtype not supported");
     }

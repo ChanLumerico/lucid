@@ -1178,4 +1178,43 @@ def _householder_product(H: Tensor, tau: Tensor) -> Tensor:
     return _wrap(_la.householder_product(_unwrap(H), _unwrap(tau)))
 
 
+def _check_matrix_norm_dims(rank: int, dim: tuple[int, int]) -> tuple[int, int]:
+    """Validate ``rank`` and ``dim`` for ``matrix_norm`` and return ``(d0, d1)``."""
+    if rank < 2:
+        raise ValueError(
+            f"matrix_norm: the input must have at least 2 dimensions, got {rank}"
+        )
+    if len(dim) != 2:
+        raise ValueError(f"matrix_norm: dim must be a pair of axes, got {dim!r}")
+    d0, d1 = int(dim[0]) % rank, int(dim[1]) % rank
+    if d0 == d1:
+        raise ValueError(f"matrix_norm: dim must name two distinct axes, got {dim!r}")
+    return d0, d1
+
+
+def _matrix_norm_sv(
+    xi: _C_engine.TensorImpl,
+    d0: int,
+    d1: int,
+    keepdim: bool,
+    sv_reduce: Callable[[_C_engine.TensorImpl, list[int], bool], _C_engine.TensorImpl],
+) -> Tensor:
+    """Reduce the singular values of ``xi`` along matrix axes ``(d0, d1)``."""
+    rank = len(xi.shape)
+    rest = [i for i in range(rank) if i not in (d0, d1)]
+    moved = (
+        _wrap(xi)
+        if rest + [d0, d1] == list(range(rank))
+        else _wrap(_C_engine.permute(xi, rest + [d0, d1]))
+    )
+    _, S, _ = svd(moved, full_matrices=False)
+    reduced = sv_reduce(_unwrap(S), [-1], False)
+    if not keepdim:
+        return _wrap(reduced)
+    shape = [1] * rank
+    for axis in rest:
+        shape[axis] = list(xi.shape)[axis]
+    return _wrap(_C_engine.reshape(reduced, shape))
+
+
 

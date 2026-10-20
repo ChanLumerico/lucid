@@ -2715,31 +2715,7 @@ def matrix_norm(
     xi = _require_normable(_unwrap(input), "matrix_norm")
     if dtype is not None:
         xi = _cast_for_norm(input, dtype, "matrix_norm")
-    rank = len(xi.shape)
-    if rank < 2:
-        raise ValueError(
-            f"matrix_norm: the input must have at least 2 dimensions, got {rank}"
-        )
-    if len(dim) != 2:
-        raise ValueError(f"matrix_norm: dim must be a pair of axes, got {dim!r}")
-
-    # Both axes as non-negative indices, once, up front.
-    #
-    # The two-pass orders (max/min absolute row or column sum) used to
-    # reduce the first axis and then reach for the second by the index it
-    # had *before* that reduction removed a dimension — which for the
-    # default ``dim=(-2, -1)`` named an axis that no longer existed, so
-    # every one of ``ord`` 1, -1, inf and -inf raised IndexError on a plain
-    # 2-D matrix.  With an explicit ``dim`` there was no error and the
-    # wrong axis was reduced instead, which is the worse half: a batch of
-    # matrices returned a per-column answer that looked like a norm.
-    #
-    # Reducing with ``keepdims=True`` throughout and dropping the two axes
-    # at the end keeps every index meaning the same thing from start to
-    # finish.
-    d0, d1 = int(dim[0]) % rank, int(dim[1]) % rank
-    if d0 == d1:
-        raise ValueError(f"matrix_norm: dim must name two distinct axes, got {dim!r}")
+    d0, d1 = _check_matrix_norm_dims(len(xi.shape), dim)
 
     def _drop(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
         """Remove the two reduced axes unless the caller keeps them."""
@@ -2756,7 +2732,9 @@ def matrix_norm(
     # This branch used to square the entries itself, which for a complex
     # input summed x·x instead of |x|²: ``(3.37-0.59j)`` on Metal where
     # the answer is a real 4.123, and an error on the CPU (CHA-231).
-    if ord == "fro":
+    if ord == "fro" or (
+        ord in (1, float("inf")) and (xi.shape[d0] == 0 or xi.shape[d1] == 0)
+    ):
         return vector_norm(input, 2, [d0, d1], keepdim, dtype=dtype)
 
     if ord in (1, -1, float("inf"), float("-inf")):
@@ -2779,27 +2757,9 @@ def matrix_norm(
             "svd has no complex kernel yet; ord='fro', 1, -1, inf and -inf "
             "reduce through |x| and accept a complex input"
         )
-
-    # Singular-value orders.  ``svd`` reads the matrix off the trailing two
-    # axes, so an arbitrary ``dim`` has to be moved there first; the
-    # remaining axes keep their relative order, which is what makes the
-    # result's shape the input's with ``d0`` and ``d1`` removed.
-    rest = [i for i in range(rank) if i not in (d0, d1)]
-    moved = (
-        _wrap(xi)
-        if rest + [d0, d1] == list(range(rank))
-        else _wrap(_C_engine.permute(xi, rest + [d0, d1]))
-    )
-    _, S, _ = svd(moved, full_matrices=False)
-    reduced = sv_reduce(_unwrap(S), [-1], False)
-    if not keepdim:
-        return _wrap(reduced)
-    # Put the two reduced axes back where they were, as size 1.  ``rest``
-    # is ascending, so the surviving extents are already in this order.
-    shape = [1] * rank
-    for axis in rest:
-        shape[axis] = list(xi.shape)[axis]
-    return _wrap(_C_engine.reshape(reduced, shape))
+    if ord in ("nuc", 2) and (xi.shape[d0] == 0 or xi.shape[d1] == 0):
+        return vector_norm(input, 2, [d0, d1], keepdim, dtype=dtype)
+    return _matrix_norm_sv(xi, d0, d1, keepdim, sv_reduce)
 
 
 def lstsq(
@@ -3613,11 +3573,11 @@ def diagonal(
 # The ``*_ex`` family reads LAPACK's ``info``; ``lu_factor`` and
 # ``ldl_factor`` above are its checked forms.
 from lucid.linalg._ex import (
-    _complete_svd_factors, _EighResult, _EigResult, _householder_product,
-    _LstsqResult, _lstsq_solution, _lu_factor_ex, _lu_solve_general,
-    _LuFactorResult, _LuResult, _pinv_with_tol, _QrResult, _SlogdetResult,
-    _sv_cutoff, cholesky_ex, inv_ex, ldl_factor, ldl_factor_ex, lu_factor_ex,
-    solve_ex, tensorinv, tensorsolve,
+    _check_matrix_norm_dims, _complete_svd_factors, _EighResult, _EigResult,
+    _householder_product, _LstsqResult, _lstsq_solution, _lu_factor_ex,
+    _lu_solve_general, _LuFactorResult, _LuResult, _matrix_norm_sv,
+    _pinv_with_tol, _QrResult, _SlogdetResult, _sv_cutoff, cholesky_ex, inv_ex,
+    ldl_factor, ldl_factor_ex, lu_factor_ex, solve_ex, tensorinv, tensorsolve,
 )
 
 __all__ = [
