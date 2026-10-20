@@ -109,6 +109,7 @@ void register_composite(py::module_& m) {
         "view", [](const TensorImplPtr& a, const Shape& shape) { return view_op(a, shape); },
         py::arg("a"), py::arg("shape"));
     m.def("_bitcast", &bitcast_op, py::arg("a"), py::arg("dtype"));
+    m.def("fma", &fma_op, py::arg("a"), py::arg("b"), py::arg("c"));
     m.def(
         "concat",
         [](const std::vector<TensorImplPtr>& xs, int dim) { return concatenate_op(xs, dim); },

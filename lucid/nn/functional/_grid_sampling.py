@@ -34,6 +34,8 @@ import math
 from typing import TYPE_CHECKING
 
 import lucid as _lucid
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap, _wrap
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -183,14 +185,13 @@ def _constant_zero(position: Tensor) -> Tensor:
     return _lucid.where(_lucid.isfinite(position), position, 0.0) * 0.0
 
 
-def _unnormalize(
-    coord: Tensor, size: int, align_corners: bool, volumetric: bool
-) -> Tensor:
+def _unnormalize(coord: Tensor, size: int, align_corners: bool, volumetric: bool) -> Tensor:
     """Map a normalised ``[-1, 1]`` coordinate onto pixel positions of an axis.
 
-    The 4-D reference scales by ``size / 2`` and the 5-D one by ``size``
-    before halving; they round alike and part only where ``coord * size``
-    overflows.
+    The 4-D reference scales by ``size / 2`` and the 5-D one contracts
+    ``(coord + 1) * size - 1`` in one fused multiply-add before halving;
+    they round alike inside the image and part where ``coord * size``
+    reaches ``2**23`` or overflows.
 
     Parameters
     ----------
@@ -212,7 +213,10 @@ def _unnormalize(
     if align_corners:
         return (coord + 1.0) * ((size - 1) / 2)
     if volumetric:
-        return ((coord + 1.0) * size - 1.0) / 2.0
+        c = _unwrap(coord + 1.0)
+        s = _C_engine.full([], float(size), c.dtype, c.device)
+        neg_one = _C_engine.full([], -1.0, c.dtype, c.device)
+        return _wrap(_C_engine.fma(c, s, neg_one)) * 0.5
     return (coord + 1.0) * (size / 2) - 0.5
 
 
@@ -290,9 +294,7 @@ def _index_of(position: Tensor) -> Tensor:
     return _lucid.where(_lucid.isnan(position), 0.0, position)
 
 
-def _gather(
-    flat: Tensor, coords: list[Tensor], sizes: list[int]
-) -> tuple[Tensor, Tensor]:
+def _gather(flat: Tensor, coords: list[Tensor], sizes: list[int]) -> tuple[Tensor, Tensor]:
     """Read ``flat`` at integral pixel coordinates; reads off the image are 0.
 
     A read off the image takes nothing from ``flat`` — not even a NaN or
@@ -459,9 +461,7 @@ def _bicubic(
         weights.append([w.unsqueeze(1) for w in cubic_coefficients(coord - base)])
         taps.append(
             [
-                _index_of(
-                    _pad(base + float(offset), size, padding_mode, align_corners, False)
-                )
+                _index_of(_pad(base + float(offset), size, padding_mode, align_corners, False))
                 for offset in (-1, 0, 1, 2)
             ]
         )
@@ -496,13 +496,10 @@ def check_options(x: Tensor, mode: str, padding_mode: str) -> None:
         tricubic filter either).
     """
     if mode not in _MODES:
-        raise ValueError(
-            f"grid_sample: unsupported mode {mode!r}; expected one of {_MODES}"
-        )
+        raise ValueError(f"grid_sample: unsupported mode {mode!r}; expected one of {_MODES}")
     if padding_mode not in _PADDINGS:
         raise ValueError(
-            f"grid_sample: unsupported padding_mode {padding_mode!r}; "
-            f"expected one of {_PADDINGS}"
+            f"grid_sample: unsupported padding_mode {padding_mode!r}; expected one of {_PADDINGS}"
         )
     if x.ndim not in (4, 5):
         raise ValueError(
@@ -554,17 +551,13 @@ def _check_operands(x: Tensor, grid: Tensor) -> None:
         )
     if int(grid.shape[0]) != int(x.shape[0]):
         raise ValueError(
-            f"grid_sample: batch size mismatch, input {tuple(x.shape)} "
-            f"vs grid {tuple(grid.shape)}"
+            f"grid_sample: batch size mismatch, input {tuple(x.shape)} vs grid {tuple(grid.shape)}"
         )
     if x.device != grid.device:
-        raise ValueError(
-            f"grid_sample: input is on {x.device} but grid is on {grid.device}"
-        )
+        raise ValueError(f"grid_sample: input is on {x.device} but grid is on {grid.device}")
     if x.dtype != grid.dtype:
         raise TypeError(
-            f"grid_sample: input and grid must have the same dtype, "
-            f"got {x.dtype} and {grid.dtype}"
+            f"grid_sample: input and grid must have the same dtype, got {x.dtype} and {grid.dtype}"
         )
 
 
@@ -744,8 +737,7 @@ def affine_grid_3d(theta: Tensor, size: list[int], align_corners: bool) -> Tenso
     n, _, d, h, w = size
     if tuple(int(s) for s in theta.shape) != (n, 3, 4):
         raise ValueError(
-            f"affine_grid: a 5-D size needs theta of shape ({n}, 3, 4), "
-            f"got {tuple(theta.shape)}"
+            f"affine_grid: a 5-D size needs theta of shape ({n}, 3, 4), got {tuple(theta.shape)}"
         )
     theta = _as_real(theta)
     xs = _base_axis(w, align_corners, theta).reshape(1, 1, w).expand(d, h, w)

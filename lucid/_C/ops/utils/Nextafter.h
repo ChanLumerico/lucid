@@ -81,7 +81,19 @@ public:
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
+class LUCID_API FmaBackward : public FuncOp<FmaBackward, 3> {
+public:
+    static const OpSchema schema_v1;
+    static constexpr GradReads<3> kGradReads{
+        {{false, true, false}, {true, false, false}, {false, false, false}}};
+    std::vector<Storage> apply(Storage grad_out) override;
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
+};
+
 LUCID_API TensorImplPtr nextafter_op(const TensorImplPtr& a, const TensorImplPtr& b);
+LUCID_API TensorImplPtr fma_op(const TensorImplPtr& a,
+                               const TensorImplPtr& b,
+                               const TensorImplPtr& c);
 LUCID_API TensorImplPtr bitcast_op(const TensorImplPtr& a, Dtype dtype);
 
 }  // namespace lucid

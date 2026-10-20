@@ -60,8 +60,7 @@ _IMAGES = [
 # reference is asked what Lucid computes.
 _DEPARTURES = {
     "nan-split": (
-        "reference 5-D forward/backward read NaN at different positions; "
-        "we follow the forward",
+        "reference 5-D forward/backward read NaN at different positions; we follow the forward",
         1.0,  # reads the last sample, clipped: the forward's position
     ),
     "overflow-wrap": (
@@ -71,21 +70,6 @@ _DEPARTURES = {
     ),
 }
 
-# Cells that differ from the reference for a reason another issue owns.
-#
-# LCD-433: the reference's 5-D unnormalise ``((g + 1) * size - 1) / 2`` is
-# one fused multiply-add on arm64; Lucid rounds twice, so far out the
-# reflected position can sit a whole sample away.  Until LCD-159 made
-# ``lucid.fmod`` exact, its rounding cancelled the missing FMA in some
-# cells and added to it in others; with the exact ``fmod`` these four are
-# the ones left, and LCD-433 alone decides them.
-_FMA = "LCD-433: 5-D reflection unnormalise needs a fused multiply-add"
-_PINNED = {
-    f"3d-3x4x5-{mode}-reflection-edges-1e10-{axis}": _FMA
-    for mode in ("bilinear", "nearest")
-    for axis in ("z", "all")
-}
-
 
 def _position(coord: float, size: int, align: bool) -> float:
     """The 5-D composite's pixel position of ``coord``, in float32."""
@@ -93,7 +77,8 @@ def _position(coord: float, size: int, align: bool) -> float:
         c = np.float32(coord) + np.float32(1)
         if align:
             return float(c * np.float32((size - 1) / 2))
-        return float((c * np.float32(size) - np.float32(1)) / np.float32(2))
+        fused = np.float32(float(c) * float(np.float32(size)) - 1.0)
+        return float(fused / np.float32(2))
 
 
 def _departure(
@@ -162,9 +147,7 @@ def _cases() -> list[Case]:
                     corners = "corners" if align else "edges"
                     for cname, coord in _COORDS.items():
                         for axis_label, axes in _axes(shape):
-                            name = (
-                                f"{label}-{mode}-{pad}-{corners}-{cname}-{axis_label}"
-                            )
+                            name = f"{label}-{mode}-{pad}-{corners}-{cname}-{axis_label}"
                             point = _point(shape, axes, coord)
                             stand_in = _stand_in(shape, mode, pad, align, point)
                             out.append((name, shape, mode, pad, align, point, stand_in))
@@ -175,14 +158,7 @@ CASES = _cases()
 
 
 def _params() -> list[Any]:
-    out = []
-    for case in CASES:
-        name = case[0]
-        marks = []
-        if name in _PINNED:
-            marks.append(pytest.mark.xfail(strict=True, reason=_PINNED[name]))
-        out.append(pytest.param(*case, marks=marks, id=name))
-    return out
+    return [pytest.param(*case, id=case[0]) for case in CASES]
 
 
 # ``rotate`` (the engine's, behind the image transforms) cast its rounded
@@ -294,14 +270,10 @@ def _reference(
     point: list[float],
 ) -> dict[str, np.ndarray]:
     image = np.arange(float(math.prod(shape)), dtype=np.float32).reshape(shape)
-    grid = np.array(point, dtype=np.float32).reshape(
-        (1,) * (len(shape) - 1) + (len(point),)
-    )
+    grid = np.array(point, dtype=np.float32).reshape((1,) * (len(shape) - 1) + (len(point),))
     x = ref.tensor(image, requires_grad=True)
     g = ref.tensor(grid, requires_grad=True)
-    y = ref.nn.functional.grid_sample(
-        x, g, mode=mode, padding_mode=pad, align_corners=align
-    )
+    y = ref.nn.functional.grid_sample(x, g, mode=mode, padding_mode=pad, align_corners=align)
     y.sum().backward()
     return {
         "y": y.detach().double().numpy().ravel(),
@@ -310,9 +282,7 @@ def _reference(
     }
 
 
-def _check(
-    got: dict[str, Any], want: dict[str, np.ndarray], keys: tuple[str, ...]
-) -> None:
+def _check(got: dict[str, Any], want: dict[str, np.ndarray], keys: tuple[str, ...]) -> None:
     for key in keys:
         np.testing.assert_allclose(
             _array(got[key]), want[key], atol=1e-5, equal_nan=True, err_msg=key
@@ -332,9 +302,7 @@ def test_far_coordinates(
     stand_in: list[float],
 ) -> None:
     got = _result(device, name)
-    assert (
-        "crash" not in got
-    ), f"{name} on {device} killed the interpreter: {got['crash']}"
+    assert "crash" not in got, f"{name} on {device} killed the interpreter: {got['crash']}"
     want = _reference(ref, shape, mode, pad, align, point)
     kinds = {k for k in _kinds(shape, mode, pad, align, point) if k is not None}
     if not kinds:
@@ -359,18 +327,70 @@ def test_every_departure_has_a_reason() -> None:
         assert reason and math.isfinite(stand_in)
 
 
-@pytest.mark.parametrize(
-    "name,angle,cy,cx", ROTATIONS, ids=[case[0] for case in ROTATIONS]
-)
+@pytest.mark.parametrize("name,angle,cy,cx", ROTATIONS, ids=[case[0] for case in ROTATIONS])
 def test_rotate_far_or_nan_centre(
     device: str, name: str, angle: float, cy: float, cx: float
 ) -> None:
     # A far centre puts every source outside the image (zeros); a NaN
     # position reads sample 0, the one rule both devices share.
     got = _result(device, name)
-    assert (
-        "crash" not in got
-    ), f"{name} on {device} killed the interpreter: {got['crash']}"
+    assert "crash" not in got, f"{name} on {device} killed the interpreter: {got['crash']}"
     y = _array(got["y"])
     far = math.isinf(cx) or abs(cy) > 1e9
     np.testing.assert_array_equal(y, np.zeros(16) if far else np.full(16, 1.0))
+
+
+@pytest.mark.parametrize(
+    "dtype_name,a_val,b_val,c_val,want_fma,want_two_round",
+    [
+        ("float16", 1001.0, 3.0, -1.0, 3002.0, 3004.0),
+        ("bfloat16", 129.0, 3.0, -1.0, 386.0, 388.0),
+        ("float32", 1e10, 3.0, -1.0, 29999998976.0, 30000001024.0),
+        (
+            "float64",
+            float(2**52 + 1),
+            3.0,
+            -1.0,
+            float(3 * 2**52 + 2),
+            float(3 * 2**52 + 4),
+        ),
+    ],
+)
+def test_fma_single_rounding_and_gradients(
+    device: str,
+    dtype_name: str,
+    a_val: float,
+    b_val: float,
+    c_val: float,
+    want_fma: float,
+    want_two_round: float,
+) -> None:
+    """LCD-433: _C_engine.fma rounds once where a * b + c rounds twice."""
+    import lucid
+    from lucid._C import engine as _C_engine
+    from lucid._dispatch import _unwrap, _wrap
+
+    if device == "metal" and dtype_name == "float64":
+        pytest.skip("float64 is CPU-only")
+    dt = getattr(lucid, dtype_name)
+    a = lucid.tensor([a_val, 2.0], dtype=dt, device=device, requires_grad=True)
+    b = lucid.tensor(b_val, dtype=dt, device=device, requires_grad=True)
+    c = lucid.tensor([c_val, 1.0], dtype=dt, device=device, requires_grad=True)
+
+    two_round = a * b + c
+    fused = _wrap(_C_engine.fma(_unwrap(a), _unwrap(b), _unwrap(c)))
+    assert float(two_round[0].item()) == want_two_round
+    assert float(fused[0].item()) == want_fma
+
+    ga, gb, gc = lucid.autograd.grad(fused.sum(), (a, b, c), create_graph=True)
+    np.testing.assert_allclose(ga.to("cpu").numpy(), [b_val, b_val])
+    np.testing.assert_allclose(gb.to("cpu").numpy(), a_val + 2.0)
+    np.testing.assert_allclose(gc.to("cpu").numpy(), [1.0, 1.0])
+    (ga.sum() + gb).backward()
+    assert a.grad is not None and b.grad is not None
+    np.testing.assert_allclose(a.grad.to("cpu").numpy(), [1.0, 1.0])
+    np.testing.assert_allclose(b.grad.to("cpu").numpy(), 2.0)
+
+    i = lucid.tensor([1, 2], dtype=lucid.int32, device=device)
+    with pytest.raises(_C_engine.InvalidArgument, match="floating-point"):
+        _C_engine.fma(_unwrap(i), _unwrap(i), _unwrap(i))

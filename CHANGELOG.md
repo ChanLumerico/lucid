@@ -126,6 +126,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - support requires_grad on 0-d op-math scalars (LCD-300)
 
+- add fused multiply-add op and 5-D grid_sample FMA (LCD-433)
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

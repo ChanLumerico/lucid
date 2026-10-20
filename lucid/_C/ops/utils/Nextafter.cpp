@@ -12,22 +12,28 @@
 
 #include "Nextafter.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <limits>
 
+#include <mlx/fast.h>
 #include <mlx/ops.h>
 
 #include "../../backend/Dispatcher.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../core/Half.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../kernel/BinaryKernel.h"  // detail::broadcast_shapes
 #include "../../kernel/NaryKernel.h"
+#include "../bfunc/Mul.h"
 #include "../gfunc/Gfunc.h"  // zeros_like_op
-#include "Layout.h"          // broadcast_to_op
+#include "../ufunc/Reductions.h"
+#include "Layout.h"  // broadcast_to_op
+#include "View.h"    // reshape_op
 #include "_Detail.h"
 
 namespace lucid {
@@ -209,5 +215,209 @@ TensorImplPtr bitcast_op(const TensorImplPtr& a, Dtype dtype) {
     cpu.dtype = dtype;
     return fresh(Storage{std::move(cpu)}, a->shape(), dtype, Device::CPU);
 }
+
+namespace {
+
+template <typename T>
+void run_fma_float(const void* a, const void* b, const void* c, void* dst, std::size_t n) {
+    const auto* pa = reinterpret_cast<const T*>(a);
+    const auto* pb = reinterpret_cast<const T*>(b);
+    const auto* pc = reinterpret_cast<const T*>(c);
+    auto* pd = reinterpret_cast<T*>(dst);
+    for (std::size_t i = 0; i < n; ++i)
+        pd[i] = std::fma(pa[i], pb[i], pc[i]);
+}
+
+void run_fma_f16(const void* a, const void* b, const void* c, void* dst, std::size_t n) {
+#if defined(__ARM_FEATURE_FP16_SCALAR_ARITHMETIC)
+    const auto* pa = reinterpret_cast<const _Float16*>(a);
+    const auto* pb = reinterpret_cast<const _Float16*>(b);
+    const auto* pc = reinterpret_cast<const _Float16*>(c);
+    auto* pd = reinterpret_cast<_Float16*>(dst);
+    for (std::size_t i = 0; i < n; ++i)
+        pd[i] = __builtin_elementwise_fma(pa[i], pb[i], pc[i]);
+#else
+    const auto* pa = reinterpret_cast<const std::uint16_t*>(a);
+    const auto* pb = reinterpret_cast<const std::uint16_t*>(b);
+    const auto* pc = reinterpret_cast<const std::uint16_t*>(c);
+    auto* pd = reinterpret_cast<std::uint16_t*>(dst);
+    for (std::size_t i = 0; i < n; ++i) {
+        const double fa = backend::detail::half_bits_to_float(pa[i]);
+        const double fb = backend::detail::half_bits_to_float(pb[i]);
+        const double fc = backend::detail::half_bits_to_float(pc[i]);
+        pd[i] = backend::detail::float_to_half_bits(static_cast<float>(std::fma(fa, fb, fc)));
+    }
+#endif
+}
+
+void run_fma_bf16(const void* a, const void* b, const void* c, void* dst, std::size_t n) {
+    const auto* pa = reinterpret_cast<const std::uint16_t*>(a);
+    const auto* pb = reinterpret_cast<const std::uint16_t*>(b);
+    const auto* pc = reinterpret_cast<const std::uint16_t*>(c);
+    auto* pd = reinterpret_cast<std::uint16_t*>(dst);
+    for (std::size_t i = 0; i < n; ++i) {
+        const float fa = backend::detail::bfloat16_bits_to_float(pa[i]);
+        const float fb = backend::detail::bfloat16_bits_to_float(pb[i]);
+        const float fc = backend::detail::bfloat16_bits_to_float(pc[i]);
+        pd[i] = backend::detail::float_to_bfloat16_bits(std::fma(fa, fb, fc));
+    }
+}
+
+CpuStorage cpu_at_shape(const TensorImplPtr& t, const Shape& out_shape, Dtype dt) {
+    CpuStorage raw = to_cpu(t);
+    return (t->shape() == out_shape) ? std::move(raw)
+                                     : detail::broadcast_cpu(raw, t->shape(), out_shape, dt);
+}
+
+CpuStorage fma_cpu(const TensorImplPtr& a,
+                   const TensorImplPtr& b,
+                   const TensorImplPtr& c,
+                   const Shape& out_shape,
+                   Dtype dt) {
+    const CpuStorage ca = cpu_at_shape(a, out_shape, dt);
+    const CpuStorage cb = cpu_at_shape(b, out_shape, dt);
+    const CpuStorage cc = cpu_at_shape(c, out_shape, dt);
+    const std::size_t n = shape_numel(out_shape);
+    CpuStorage out = allocate_cpu(out_shape, dt);
+    if (dt == Dtype::F32)
+        run_fma_float<float>(ca.ptr.get(), cb.ptr.get(), cc.ptr.get(), out.ptr.get(), n);
+    else if (dt == Dtype::F64)
+        run_fma_float<double>(ca.ptr.get(), cb.ptr.get(), cc.ptr.get(), out.ptr.get(), n);
+    else if (dt == Dtype::F16)
+        run_fma_f16(ca.ptr.get(), cb.ptr.get(), cc.ptr.get(), out.ptr.get(), n);
+    else if (dt == Dtype::BF16)
+        run_fma_bf16(ca.ptr.get(), cb.ptr.get(), cc.ptr.get(), out.ptr.get(), n);
+    else
+        ErrorBuilder("fma").not_implemented("dtype not supported");
+    return out;
+}
+
+GpuStorage fma_gpu(const GpuStorage& a,
+                   const GpuStorage& b,
+                   const GpuStorage& c,
+                   const Shape& out_shape,
+                   Dtype dt) {
+    namespace mx = ::mlx::core;
+    const auto mlx_shape = gpu::to_mlx_shape(out_shape);
+    const auto mlx_dt = gpu::to_mlx_dtype(dt);
+    const std::size_t n = shape_numel(out_shape);
+    if (n == 0)
+        return gpu::wrap_mlx_array(mx::zeros(mlx_shape, mlx_dt), dt);
+    auto to_1d = [&](const GpuStorage& s) {
+        const auto& arr = *s.arr;
+        auto bcast = (arr.shape() == mlx_shape) ? arr : mx::broadcast_to(arr, mlx_shape);
+        return mx::reshape(bcast, {static_cast<int>(n)});
+    };
+    static auto kernel = mx::fast::metal_kernel("lucid_fma", {"a", "b", "c"}, {"out"},
+                                                "uint elem = thread_position_in_grid.x;\n"
+                                                "if (elem < static_cast<uint>(a_shape[0])) {\n"
+                                                "    out[elem] = fma(a[elem], b[elem], c[elem]);\n"
+                                                "}",
+                                                "", true, false, mx::CompileOptions{});
+    const int n_i = static_cast<int>(n);
+    const int tg = static_cast<int>(std::min<std::size_t>(n, 256));
+    auto outs = kernel({to_1d(a), to_1d(b), to_1d(c)}, {{n_i}}, {mlx_dt}, {n_i, 1, 1}, {tg, 1, 1},
+                       {}, std::nullopt, false, {});
+    return gpu::wrap_mlx_array(mx::reshape(outs[0], mlx_shape), dt);
+}
+
+TensorImplPtr unreduce_to_shape(const TensorImplPtr& grad, const Shape& target) {
+    if (grad->shape() == target)
+        return grad;
+    const Shape& gs = grad->shape();
+    const int ng = static_cast<int>(gs.size());
+    const int nt = static_cast<int>(target.size());
+    std::vector<int> axes;
+    for (int i = 0; i < ng - nt; ++i)
+        axes.push_back(i);
+    for (int i = 0; i < nt; ++i) {
+        if (target[static_cast<std::size_t>(i)] == 1 &&
+            gs[static_cast<std::size_t>(i + ng - nt)] != 1)
+            axes.push_back(i + ng - nt);
+    }
+    auto reduced = axes.empty() ? grad : sum_op(grad, axes, false);
+    return (reduced->shape() == target) ? reduced : reshape_op(reduced, target);
+}
+
+}  // namespace
+
+TensorImplPtr
+fma_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in, const TensorImplPtr& c_in) {
+    Validator::input(a_in, "fma.a").non_null();
+    Validator::input(b_in, "fma.b").non_null();
+    Validator::input(c_in, "fma.c").non_null();
+
+    const Dtype dt = a_in->dtype();
+    if (b_in->dtype() != dt)
+        throw DtypeMismatch(std::string(dtype_name(dt)), std::string(dtype_name(b_in->dtype())),
+                            "fma");
+    if (c_in->dtype() != dt)
+        throw DtypeMismatch(std::string(dtype_name(dt)), std::string(dtype_name(c_in->dtype())),
+                            "fma");
+    if (!is_floating_point(dt))
+        ErrorBuilder("fma").invalid_argument(
+            "dtype must be floating-point (F16, BF16, F32, or F64)");
+
+    auto [a1, b1] = detail::align_binary_devices(a_in, b_in, "fma");
+    auto [b, c] = detail::align_binary_devices(b1, c_in, "fma");
+    auto [a, _] = detail::align_binary_devices(a1, b, "fma");
+
+    const Shape out_shape =
+        detail::broadcast_shapes(detail::broadcast_shapes(a->shape(), b->shape()), c->shape());
+    const Device dev = a->device();
+    OpScopeFull scope{"fma", dev, dt, out_shape};
+
+    Storage out_storage;
+    if (PhantomMode::is_enabled()) [[unlikely]] {
+        out_storage = phantom_storage(out_shape, dt, dev);
+    } else if (dev == Device::GPU && dt != Dtype::F64) {
+        out_storage =
+            Storage{fma_gpu(std::get<GpuStorage>(a->storage()), std::get<GpuStorage>(b->storage()),
+                            std::get<GpuStorage>(c->storage()), out_shape, dt)};
+    } else {
+        out_storage = to_device_storage(fma_cpu(a, b, c, out_shape, dt), dev, out_shape);
+    }
+
+    auto result = fresh(std::move(out_storage), out_shape, dt, dev);
+    const std::array<bool, 3> saves{b->requires_grad(), a->requires_grad(), false};
+    kernel::NaryKernel<FmaBackward, 3>::wire_autograd(std::make_shared<FmaBackward>(), {a, b, c},
+                                                      result, saves);
+    return result;
+}
+
+const OpSchema FmaBackward::schema_v1{"fma", 1, AmpPolicy::KeepInput, true};
+
+std::vector<Storage> FmaBackward::apply(Storage grad_out) {
+    auto g = std::make_shared<TensorImpl>(std::move(grad_out), out_shape_, dtype_, device_, false);
+    auto wrap_saved = [this](std::size_t k) {
+        return std::make_shared<TensorImpl>(saved_inputs_[k], input_shapes_[k], dtype_, device_,
+                                            false);
+    };
+    Storage da = next_edges_[0].is_valid()
+                     ? unreduce_to_shape(mul_op(g, wrap_saved(1)), input_shapes_[0])->storage()
+                     : Storage{};
+    Storage db = next_edges_[1].is_valid()
+                     ? unreduce_to_shape(mul_op(g, wrap_saved(0)), input_shapes_[1])->storage()
+                     : Storage{};
+    Storage dc =
+        next_edges_[2].is_valid() ? unreduce_to_shape(g, input_shapes_[2])->storage() : Storage{};
+    return {std::move(da), std::move(db), std::move(dc)};
+}
+
+std::vector<TensorImplPtr> FmaBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+    TensorImplPtr da =
+        next_edges_[0].is_valid()
+            ? unreduce_to_shape(mul_op(grad_out, saved_impl_inputs_[1]), input_shapes_[0])
+            : nullptr;
+    TensorImplPtr db =
+        next_edges_[1].is_valid()
+            ? unreduce_to_shape(mul_op(grad_out, saved_impl_inputs_[0]), input_shapes_[1])
+            : nullptr;
+    TensorImplPtr dc =
+        next_edges_[2].is_valid() ? unreduce_to_shape(grad_out, input_shapes_[2]) : nullptr;
+    return {std::move(da), std::move(db), std::move(dc)};
+}
+
+LUCID_REGISTER_OP(FmaBackward)
 
 }  // namespace lucid
