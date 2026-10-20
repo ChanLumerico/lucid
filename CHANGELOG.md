@@ -172,6 +172,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - fuse exact Metal divmod in custom kernel (LCD-448)
 
+- fast-path zero-safe prod, cumprod, scatter_prod grads (LCD-322)
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats

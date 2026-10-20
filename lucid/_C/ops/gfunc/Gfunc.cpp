@@ -698,22 +698,112 @@ std::pair<TensorImplPtr, TensorImplPtr> scatter_prod_grads(const TensorImplPtr& 
                                                            const TensorImplPtr& base,
                                                            const TensorImplPtr& idx,
                                                            const TensorImplPtr& src,
-                                                           const TensorImplPtr& out,
                                                            int dim) {
-    auto base_zero = equal_op(base, zeros_like_op(base));
-    auto base_1 = where_op(base_zero, ones_like_op(base), base);
-    auto grad_base = mul_op(g, div_op(scatter_prod_op(base_1, idx, src, dim), base_1));
+    auto nil_b = zeros_like_op(base);
+    auto one_b = ones_like_op(base);
+    auto nil_s = zeros_like_op(src);
+    auto one_s = ones_like_op(src);
+    auto base_zero = equal_op(base, nil_b);
+    auto src_zero = equal_op(src, nil_s);
+    auto base_1 = where_op(base_zero, one_b, base);
+    auto src_1 = where_op(src_zero, one_s, src);
 
-    auto src_zero = equal_op(src, zeros_like_op(src));
-    auto src_1 = where_op(src_zero, ones_like_op(src), src);
-    auto zero_marks = where_op(src_zero, ones_like_op(src), zeros_like_op(src));
-    auto zeros_here =
-        gather_op(scatter_add_op(zeros_like_op(base), idx, zero_marks, dim), idx, dim);
-    auto lone_zero = logical_and_op(src_zero, equal_op(zeros_here, ones_like_op(zeros_here)));
-    auto without_lone = scatter_prod_op(base, idx, where_op(lone_zero, src_1, src), dim);
-    auto at_lone = gather_op(mul_op(g, without_lone), idx, dim);
-    auto elsewhere = div_op(gather_op(mul_op(g, out), idx, dim), src_1);
-    return {grad_base, where_op(lone_zero, at_lone, elsewhere)};
+    auto nz_prod = scatter_prod_op(base_1, idx, src_1, dim);
+    auto src_zmarks = where_op(src_zero, one_s, nil_s);
+    auto src_zcount = scatter_add_op(nil_b, idx, src_zmarks, dim);
+    auto g_nz = mul_op(g, nz_prod);
+    auto grad_base = where_op(equal_op(src_zcount, nil_b), div_op(g_nz, base_1), nil_b);
+
+    auto base_zmarks = where_op(base_zero, one_b, nil_b);
+    auto total_zcount = add_op(base_zmarks, src_zcount);
+    auto no_other_zeros = equal_op(gather_op(total_zcount, idx, dim), src_zmarks);
+    auto grad_src = where_op(no_other_zeros, div_op(gather_op(g_nz, idx, dim), src_1), nil_s);
+    return {grad_base, grad_src};
+}
+
+bool same_off_axis_shape(const Shape& bs, const Shape& is, int dim) {
+    if (bs.size() != is.size())
+        return false;
+    for (std::size_t a = 0; a < bs.size(); ++a) {
+        if (static_cast<int>(a) != dim && bs[a] != is[a])
+            return false;
+    }
+    return true;
+}
+
+template <typename IdxT, typename Fn>
+void walk_scatter_pairs(const IdxT* idx,
+                        std::size_t outer,
+                        std::size_t base_d,
+                        std::size_t idx_d,
+                        std::size_t inner,
+                        Fn&& fn) {
+    const auto d_signed = static_cast<std::int64_t>(base_d);
+    for (std::size_t o = 0; o < outer; ++o) {
+        for (std::size_t r = 0; r < idx_d; ++r) {
+            for (std::size_t in = 0; in < inner; ++in) {
+                const std::size_t j = (o * idx_d + r) * inner + in;
+                std::int64_t k = static_cast<std::int64_t>(idx[j]);
+                if (k < 0)
+                    k += d_signed;
+                if (k >= 0 && k < d_signed)
+                    fn(j, (o * base_d + static_cast<std::size_t>(k)) * inner + in);
+            }
+        }
+    }
+}
+
+template <typename T, typename IdxT>
+std::vector<Storage> cpu_scatter_prod_grads(const Storage& g_s,
+                                            const TensorImplPtr& base,
+                                            const TensorImplPtr& idx,
+                                            const TensorImplPtr& src,
+                                            int dim) {
+    const Shape& bs = base->shape();
+    const Shape& is = idx->shape();
+    const Dtype dt = base->dtype();
+    std::size_t outer = 1, inner = 1;
+    for (int a = 0; a < dim; ++a)
+        outer *= static_cast<std::size_t>(bs[static_cast<std::size_t>(a)]);
+    for (std::size_t a = static_cast<std::size_t>(dim) + 1; a < bs.size(); ++a)
+        inner *= static_cast<std::size_t>(bs[a]);
+    const auto base_d = static_cast<std::size_t>(bs[static_cast<std::size_t>(dim)]);
+    const auto idx_d = static_cast<std::size_t>(is[static_cast<std::size_t>(dim)]);
+    const std::size_t base_n = outer * base_d * inner;
+
+    CpuStorage gb_s = allocate_cpu(bs, dt);
+    CpuStorage gs_s = allocate_cpu(is, dt);
+    const auto* g = reinterpret_cast<const T*>(std::get<CpuStorage>(g_s).ptr.get());
+    const auto* b = reinterpret_cast<const T*>(std::get<CpuStorage>(base->storage()).ptr.get());
+    const auto* s = reinterpret_cast<const T*>(std::get<CpuStorage>(src->storage()).ptr.get());
+    auto* gb = reinterpret_cast<T*>(gb_s.ptr.get());
+    auto* gs = reinterpret_cast<T*>(gs_s.ptr.get());
+    const auto* idx_p =
+        reinterpret_cast<const IdxT*>(std::get<CpuStorage>(idx->storage()).ptr.get());
+
+    std::vector<T> nz_prod(base_n);
+    std::vector<int> zero_cnt(base_n, 0);
+    for (std::size_t p = 0; p < base_n; ++p) {
+        const bool is_z = b[p] == T(0);
+        nz_prod[p] = is_z ? T(1) : b[p];
+        zero_cnt[p] = is_z ? 1 : 0;
+    }
+    walk_scatter_pairs(idx_p, outer, base_d, idx_d, inner, [&](std::size_t j, std::size_t p) {
+        const bool is_z = s[j] == T(0);
+        zero_cnt[p] += is_z ? 1 : 0;
+        nz_prod[p] *= is_z ? T(1) : s[j];
+    });
+    for (std::size_t p = 0; p < base_n; ++p) {
+        const bool is_z = b[p] == T(0);
+        const int src_zeros = zero_cnt[p] - (is_z ? 1 : 0);
+        gb[p] = src_zeros == 0 ? g[p] * (nz_prod[p] / (is_z ? T(1) : b[p])) : T(0);
+    }
+    walk_scatter_pairs(idx_p, outer, base_d, idx_d, inner, [&](std::size_t j, std::size_t p) {
+        const bool is_z = s[j] == T(0);
+        const int other_zeros = zero_cnt[p] - (is_z ? 1 : 0);
+        gs[j] = other_zeros == 0 ? g[p] * (nz_prod[p] / (is_z ? T(1) : s[j])) : T(0);
+    });
+    return {Storage{std::move(gb_s)}, Storage{std::move(gs_s)}};
 }
 
 // What the scatter_amax / scatter_amin / scatter_prod backwards hold: both
@@ -945,10 +1035,25 @@ TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
         std::string node_name() const override { return "scatter_prod"; }
 
         std::vector<Storage> apply(Storage g) override {
+            if (device_ == Device::CPU &&
+                (saved_indices_->dtype() == Dtype::I64 || saved_indices_->dtype() == Dtype::I32) &&
+                same_off_axis_shape(saved_base_->shape(), saved_indices_->shape(), dim_)) {
+                const bool i64 = saved_indices_->dtype() == Dtype::I64;
+                if (dtype_ == Dtype::F32)
+                    return i64 ? cpu_scatter_prod_grads<float, std::int64_t>(
+                                     g, saved_base_, saved_indices_, saved_src_, dim_)
+                               : cpu_scatter_prod_grads<float, std::int32_t>(
+                                     g, saved_base_, saved_indices_, saved_src_, dim_);
+                if (dtype_ == Dtype::F64)
+                    return i64 ? cpu_scatter_prod_grads<double, std::int64_t>(
+                                     g, saved_base_, saved_indices_, saved_src_, dim_)
+                               : cpu_scatter_prod_grads<double, std::int32_t>(
+                                     g, saved_base_, saved_indices_, saved_src_, dim_);
+            }
             NoGradGuard no_grad;
             auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
-            auto [grad_base, grad_src] = scatter_prod_grads(g_impl, saved_base_, saved_indices_,
-                                                            saved_src_, saved_out_, dim_);
+            auto [grad_base, grad_src] =
+                scatter_prod_grads(g_impl, saved_base_, saved_indices_, saved_src_, dim_);
             return {grad_base->storage(), grad_src->storage()};
         }
     };

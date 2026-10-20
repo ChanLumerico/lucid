@@ -164,6 +164,59 @@ TensorImplPtr cumprod_grad(const TensorImplPtr& g,
     return where_op(before, at_before, where_op(first, at_first, after));
 }
 
+template <typename T>
+Storage cpu_cumprod_grad(const CpuStorage& g_in,
+                         const CpuStorage& x_in,
+                         const CpuStorage& y_in,
+                         const Shape& shape,
+                         int axis,
+                         Dtype dt) {
+    std::size_t outer = 1, inner = 1;
+    const auto len = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
+    for (int d = 0; d < axis; ++d)
+        outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
+    for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
+        inner *= static_cast<std::size_t>(shape[d]);
+    CpuStorage out = helpers::allocate_cpu(shape, dt);
+    const auto* g = reinterpret_cast<const T*>(g_in.ptr.get());
+    const auto* x = reinterpret_cast<const T*>(x_in.ptr.get());
+    const auto* y = reinterpret_cast<const T*>(y_in.ptr.get());
+    auto* dx = reinterpret_cast<T*>(out.ptr.get());
+    for (std::size_t o = 0; o < outer; ++o) {
+        for (std::size_t in = 0; in < inner; ++in) {
+            const std::size_t base = o * len * inner + in;
+            std::size_t z = len;
+            T lead = T(1);
+            for (std::size_t r = 0; r < len; ++r) {
+                const T xv = x[base + r * inner];
+                if (xv == T(0)) {
+                    z = r;
+                    break;
+                }
+                lead *= xv;
+            }
+            if (z < len) {
+                T run = T(1), wsum = g[base + z * inner];
+                for (std::size_t r = z + 1; r < len; ++r) {
+                    dx[base + r * inner] = T(0);
+                    run *= x[base + r * inner];
+                    wsum += g[base + r * inner] * run;
+                }
+                dx[base + z * inner] = lead * wsum;
+            }
+            T suf = T(0);
+            for (std::size_t r = len; r-- > z;)
+                suf += g[base + r * inner] * y[base + r * inner];
+            for (std::size_t r = z; r-- > 0;) {
+                const std::size_t idx = base + r * inner;
+                suf += g[idx] * y[idx];
+                dx[idx] = suf / x[idx];
+            }
+        }
+    }
+    return out;
+}
+
 // Private backward node for cumprod.
 //
 // Saved state:
@@ -181,6 +234,19 @@ public:
 
     // From the values saved at forward, under no-grad.
     std::vector<Storage> apply(Storage grad_out) override {
+        if (device_ == Device::CPU) {
+            const auto& g_cpu = std::get<CpuStorage>(grad_out);
+            const auto& x_cpu = std::get<CpuStorage>(saved_inputs_[0]);
+            const auto& y_cpu = std::get<CpuStorage>(saved_y_);
+            if (dtype_ == Dtype::F32) {
+                return {
+                    cpu_cumprod_grad<float>(g_cpu, x_cpu, y_cpu, input_shape_, axis_, Dtype::F32)};
+            }
+            if (dtype_ == Dtype::F64) {
+                return {
+                    cpu_cumprod_grad<double>(g_cpu, x_cpu, y_cpu, input_shape_, axis_, Dtype::F64)};
+            }
+        }
         NoGradGuard no_grad;
         auto wrap = [this](Storage s) {
             return std::make_shared<TensorImpl>(std::move(s), input_shape_, dtype_, device_, false);

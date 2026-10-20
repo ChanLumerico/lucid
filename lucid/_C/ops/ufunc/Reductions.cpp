@@ -368,18 +368,90 @@ prod_of_others(const TensorImplPtr& x, const std::vector<int>& axes, bool differ
     auto x_1 = where_op(zero, one, x);
 
     auto nonzero_prod = slice_wide(prod_op(x_1, axes, true));
-    auto zeros_prod = slice_wide(prod_op(where_op(zero, x, one), axes, true));
     auto zero_count = slice_wide(sum_op(where_op(zero, one, nil), axes, true));
     auto count_is = [&](double n) { return equal_op(zero_count, full_like_op(zero_count, n)); };
-
-    auto at_nonzero = mul_op(div_op(nonzero_prod, x_1), zeros_prod);
-    auto other_zeros = where_op(count_is(1.0), one, nil);
-    if (differentiable) {
-        // (sum of the slice's zeros) - x_i: the other zero of a pair.
-        auto zeros_sum = slice_wide(sum_op(where_op(zero, x, nil), axes, true));
-        other_zeros = where_op(count_is(2.0), sub_op(zeros_sum, x), other_zeros);
+    auto at_nonzero = div_op(nonzero_prod, x_1);
+    if (!differentiable) {
+        return where_op(zero, where_op(count_is(1.0), nonzero_prod, nil),
+                        where_op(count_is(0.0), at_nonzero, nil));
     }
+    auto zeros_prod = slice_wide(prod_op(where_op(zero, x, one), axes, true));
+    at_nonzero = mul_op(at_nonzero, zeros_prod);
+    auto other_zeros = where_op(count_is(1.0), one, nil);
+    // (sum of the slice's zeros) - x_i: the other zero of a pair.
+    auto zeros_sum = slice_wide(sum_op(where_op(zero, x, nil), axes, true));
+    other_zeros = where_op(count_is(2.0), sub_op(zeros_sum, x), other_zeros);
     return where_op(zero, mul_op(nonzero_prod, other_zeros), at_nonzero);
+}
+
+template <typename T>
+void cpu_prod_grad_row(const T* xo, T go, T* dxo, std::size_t n) {
+    T nz = T(1);
+    int zc = 0;
+    for (std::size_t r = 0; r < n; ++r) {
+        const bool is_z = xo[r] == T(0);
+        zc += is_z ? 1 : 0;
+        nz *= is_z ? T(1) : xo[r];
+    }
+    if (zc == 0) {
+        for (std::size_t r = 0; r < n; ++r)
+            dxo[r] = go * (nz / xo[r]);
+        return;
+    }
+    std::memset(dxo, 0, n * sizeof(T));
+    if (zc == 1) {
+        for (std::size_t r = 0; r < n; ++r) {
+            if (xo[r] == T(0)) {
+                dxo[r] = go * nz;
+                break;
+            }
+        }
+    }
+}
+
+template <typename T>
+Storage cpu_prod_grad_1d(const CpuStorage& x_in, const CpuStorage& g_in, const OIR& oir, Dtype dt) {
+    const std::size_t in_n = oir.outer * oir.reduce_dim * oir.inner;
+    CpuStorage out;
+    out.dtype = dt;
+    out.nbytes = in_n * dtype_size(dt);
+    out.ptr = allocate_aligned_bytes(out.nbytes);
+    const auto* x = reinterpret_cast<const T*>(x_in.ptr.get());
+    const auto* g = reinterpret_cast<const T*>(g_in.ptr.get());
+    auto* dx = reinterpret_cast<T*>(out.ptr.get());
+    if (oir.inner == 1) {
+        for (std::size_t o = 0; o < oir.outer; ++o)
+            cpu_prod_grad_row(x + o * oir.reduce_dim, g[o], dx + o * oir.reduce_dim,
+                              oir.reduce_dim);
+        return out;
+    }
+    std::vector<T> nz_prod(oir.inner);
+    std::vector<int> zero_cnt(oir.inner);
+    for (std::size_t o = 0; o < oir.outer; ++o) {
+        std::fill(nz_prod.begin(), nz_prod.end(), T(1));
+        std::fill(zero_cnt.begin(), zero_cnt.end(), 0);
+        const T* xo = x + o * oir.reduce_dim * oir.inner;
+        const T* go = g + o * oir.inner;
+        T* dxo = dx + o * oir.reduce_dim * oir.inner;
+        for (std::size_t r = 0; r < oir.reduce_dim; ++r) {
+            const T* xr = xo + r * oir.inner;
+            for (std::size_t i = 0; i < oir.inner; ++i) {
+                const bool is_z = xr[i] == T(0);
+                zero_cnt[i] += is_z ? 1 : 0;
+                nz_prod[i] *= is_z ? T(1) : xr[i];
+            }
+        }
+        for (std::size_t r = 0; r < oir.reduce_dim; ++r) {
+            const T* xr = xo + r * oir.inner;
+            T* dxr = dxo + r * oir.inner;
+            for (std::size_t i = 0; i < oir.inner; ++i) {
+                const int zc = zero_cnt[i];
+                dxr[i] = zc == 0 ? go[i] * (nz_prod[i] / xr[i])
+                                 : (zc == 1 && xr[i] == T(0) ? go[i] * nz_prod[i] : T(0));
+            }
+        }
+    }
+    return out;
 }
 
 }  // namespace
@@ -388,8 +460,20 @@ prod_of_others(const TensorImplPtr& x, const std::vector<int>& axes, bool differ
 // saved by value — the graph-mode formula below, value for value, under
 // no-grad.
 Storage ProdBackward::grad_formula(const Storage& grad_out) {
-    NoGradGuard no_grad;
     const Shape& shape = this->full_input_shape_;
+    const bool one_or_all = this->reduce_axes_.size() == 1 ||
+                            (!shape.empty() && this->reduce_axes_.size() == shape.size());
+    if (this->device_ == Device::CPU && one_or_all) {
+        const OIR oir = this->reduce_axes_.size() == 1 ? oir_for_axis(shape, this->reduce_axes_[0])
+                                                       : OIR{1, shape_numel(shape), 1};
+        const auto& x_cpu = std::get<CpuStorage>(this->saved_inputs_[0]);
+        const auto& g_cpu = std::get<CpuStorage>(grad_out);
+        if (this->dtype_ == Dtype::F32)
+            return cpu_prod_grad_1d<float>(x_cpu, g_cpu, oir, Dtype::F32);
+        if (this->dtype_ == Dtype::F64)
+            return cpu_prod_grad_1d<double>(x_cpu, g_cpu, oir, Dtype::F64);
+    }
+    NoGradGuard no_grad;
     Storage g_bcast =
         broadcast_back_for_reduce(grad_out, this->out_shape_, shape, this->reduce_axes_,
                                   this->keepdims_, this->dtype_, this->device_);
