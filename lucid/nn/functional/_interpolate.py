@@ -55,11 +55,12 @@ _RANKS: dict[str, tuple[int, ...]] = {
     "linear": (1,),
     "bilinear": (2,),
     "bicubic": (2,),
+    "lanczos": (2,),
     "trilinear": (3,),
 }
 _LINEAR = frozenset({"linear", "bilinear", "trilinear"})
 _INTERPOLATING = _LINEAR | {"bicubic"}
-_ANTIALIASED = frozenset({"bilinear", "bicubic"})
+_ANTIALIASED = frozenset({"bilinear", "bicubic", "lanczos"})
 
 # Each tap: the input index every output sample reads, and its weight
 # (``None`` when the only tap has weight one — nearest).
@@ -223,12 +224,30 @@ def _keys_cubic(x: float) -> float:
     return 0.0
 
 
+def _sinc(x: float) -> float:
+    if x == 0.0:
+        return 1.0
+    x *= math.pi
+    return math.sin(x) / x
+
+
+def _lanczos3(x: float) -> float:
+    return _sinc(x) * _sinc(x / 3.0) if -3.0 <= x < 3.0 else 0.0
+
+
+_ANTIALIAS_KERNELS: dict[str, tuple[int, Callable[[float], float]]] = {
+    "bilinear": (2, _triangle),
+    "bicubic": (4, _keys_cubic),
+    "lanczos": (6, _lanczos3),
+}
+
+
 def _antialias_taps(
     in_size: int,
     out_size: int,
     align_corners: bool,
     scale: float | None,
-    cubic: bool,
+    mode: str,
 ) -> _Taps:
     """Taps of the filter stretched over the input samples one output covers.
 
@@ -241,8 +260,7 @@ def _antialias_taps(
     """
     if out_size == in_size:
         return [(list(range(out_size)), None)]
-    width = 4 if cubic else 2
-    kernel: Callable[[float], float] = _keys_cubic if cubic else _triangle
+    width, kernel = _ANTIALIAS_KERNELS[mode]
     # The stretched filter is built in double for every dtype.
     ratio = _coordinate_scale(in_size, out_size, align_corners, scale, wide=True)
     support = width * 0.5 * ratio if ratio >= 1.0 else width * 0.5
@@ -411,6 +429,13 @@ def _resolve(
     return sizes, scales
 
 
+def _check_lanczos(align_corners: bool | None, antialias: bool) -> None:
+    if align_corners:
+        raise ValueError("Lanczos mode does not support align_corners=True")
+    if not antialias:
+        raise ValueError("Lanczos mode requires antialias=True")
+
+
 def _check_mode(
     x: Tensor, mode: str, align_corners: bool | None, antialias: bool
 ) -> None:
@@ -424,7 +449,9 @@ def _check_mode(
             f"interpolate: mode {mode!r} resamples {_RANKS[mode]} spatial axes, "
             f"got an input of shape {tuple(x.shape)} ({rank} spatial)"
         )
-    if align_corners is not None and mode not in _INTERPOLATING:
+    if mode == "lanczos":
+        _check_lanczos(align_corners, antialias)
+    elif align_corners is not None and mode not in _INTERPOLATING:
         raise ValueError(
             "interpolate: align_corners can only be set with the interpolating "
             f"modes {sorted(_INTERPOLATING)}, not {mode!r}"
@@ -434,7 +461,7 @@ def _check_mode(
             f"interpolate: antialias is only defined for {sorted(_ANTIALIASED)} "
             f"on 4-D input, not {mode!r}"
         )
-    if mode != "nearest" and mode != "nearest-exact" and not x.is_floating_point():
+    if mode not in ("nearest", "nearest-exact") and not x.is_floating_point():
         raise TypeError(
             f"interpolate: mode {mode!r} needs a floating-point input, got {x.dtype}"
         )
@@ -519,9 +546,7 @@ def _axis_plan(
     """
     mode, corners, wide = rule.mode, rule.align_corners, rule.wide
     if rule.antialias:
-        taps = _antialias_taps(
-            in_size, out_size, corners, scale, cubic=mode == "bicubic"
-        )
+        taps = _antialias_taps(in_size, out_size, corners, scale, mode)
     elif mode in ("nearest", "nearest-exact"):
         exact = mode == "nearest-exact"
         indices = _nearest_indices(in_size, out_size, scale, exact, rule.pins, wide)

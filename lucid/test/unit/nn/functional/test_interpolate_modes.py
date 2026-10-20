@@ -196,6 +196,29 @@ class TestRefusals:
                 ValueError,
                 "antialias",
             ),
+            (
+                (1, 1, 4, 4),
+                {"size": 2, "mode": "lanczos"},
+                ValueError,
+                "Lanczos mode requires antialias=True",
+            ),
+            (
+                (1, 1, 4, 4),
+                {
+                    "size": 2,
+                    "mode": "lanczos",
+                    "antialias": True,
+                    "align_corners": True,
+                },
+                ValueError,
+                "Lanczos mode does not support align_corners=True",
+            ),
+            (
+                (1, 1, 4),
+                {"size": 2, "mode": "lanczos", "antialias": True},
+                ValueError,
+                "spatial axes",
+            ),
         ],
     )
     def test_refused_with(
@@ -223,6 +246,7 @@ class TestRefusals:
                 ("bilinear", 1.7, False),
                 ("bicubic", 1.7, False),
                 ("bicubic", 0.6, True),
+                ("lanczos", 0.6, True),
             )
             for path in PATHS
         ],
@@ -250,7 +274,9 @@ def test_the_composite_differentiates_twice(
 def _second_derivative_matches(mode: str, scale: float, antialias: bool) -> None:
     rng = np.random.default_rng(0)
     x0 = rng.standard_normal((1, 2, 5, 7))
-    out = F.interpolate(lucid.tensor(x0), scale_factor=scale, mode=mode)
+    out = F.interpolate(
+        lucid.tensor(x0), scale_factor=scale, mode=mode, antialias=antialias
+    )
     r0 = lucid.tensor(rng.standard_normal(tuple(out.shape)))
     u = rng.standard_normal(x0.shape)
     e = rng.standard_normal(x0.shape)

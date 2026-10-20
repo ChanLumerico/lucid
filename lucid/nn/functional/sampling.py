@@ -64,21 +64,21 @@ def interpolate(
     input : Tensor
         Input of shape ``(N, C, *spatial)``.  ``"nearest"``,
         ``"nearest-exact"`` and ``"area"`` take 1, 2 or 3 spatial axes;
-        ``"linear"`` takes 1, ``"bilinear"`` / ``"bicubic"`` 2 and
-        ``"trilinear"`` 3.
+        ``"linear"`` takes 1, ``"bilinear"`` / ``"bicubic"`` / ``"lanczos"``
+        2 and ``"trilinear"`` 3.
     size : int or tuple of int, optional
         Target spatial size.  Mutually exclusive with ``scale_factor``.
     scale_factor : float or tuple of float, optional
         Multiplicative factor applied to each spatial axis.  Output size
         is ``floor(in_size * scale_factor)``.
     mode : str, optional
-        One of ``"nearest"``, ``"nearest-exact"``, ``"linear"``,
-        ``"bilinear"``, ``"bicubic"``, ``"trilinear"``, ``"area"``.
+        One of ``"nearest"``, ``"nearest-exact"``, ``"linear"``, ``"bilinear"``,
+        ``"bicubic"``, ``"lanczos"``, ``"trilinear"``, ``"area"``.
         Default ``"nearest"``.
     align_corners : bool, optional
         Only accepted by ``"linear"`` / ``"bilinear"`` / ``"bicubic"`` /
-        ``"trilinear"``.  If ``True``, the corner pixels of the input
-        and output are exactly aligned, and the values at those corners
+        ``"trilinear"`` (and ``False`` for ``"lanczos"``).  If ``True``, the
+        corner pixels of the input and output are aligned and their values
         are preserved.  If ``False`` (default), pixels are treated as
         ``1×1`` squares and the sampling grid is centred.
     recompute_scale_factor : bool, optional
@@ -86,10 +86,10 @@ def interpolate(
         resolved output size rather than ``1 / scale_factor``.  Not
         allowed together with ``size``.
     antialias : bool, optional
-        For ``"bilinear"`` and ``"bicubic"``: when downsampling, widen
-        the filter over every input sample an output sample covers, so
-        detail finer than the output grid is averaged rather than
-        aliased.  Default ``False``.
+        For ``"bilinear"``, ``"bicubic"`` and ``"lanczos"`` (required for
+        ``"lanczos"``): when downsampling, widen the filter over every input
+        sample an output sample covers, so detail finer than the output
+        grid is averaged rather than aliased.  Default ``False``.
 
     Returns
     -------
@@ -139,13 +139,7 @@ def interpolate(
     (1, 3, 8, 8)
     """
     return _resample(
-        input,
-        size,
-        scale_factor,
-        mode,
-        align_corners,
-        recompute_scale_factor,
-        antialias,
+        input, size, scale_factor, mode, align_corners, recompute_scale_factor, antialias
     )
 
 

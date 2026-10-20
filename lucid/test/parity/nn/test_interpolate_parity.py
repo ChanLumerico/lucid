@@ -83,7 +83,7 @@ _ANTIALIAS = [
         corners,
         id=f"{mode}-{tag}-{'corners' if corners else 'edges'}",
     )
-    for mode in ("bilinear", "bicubic")
+    for mode in ("bilinear", "bicubic", "lanczos")
     for tag, shape, kw in (
         ("x0.5", _AA_SHAPE, {"scale_factor": 0.5}),
         ("x0.3", _AA_SHAPE, {"scale_factor": 0.3}),
@@ -100,7 +100,7 @@ _ANTIALIAS = [
         ("x1.1-same-size", (1, 2, 3, 8), {"scale_factor": (1.1, 1.0)}),
         ("x1.7-up", _AA_SHAPE, {"scale_factor": 1.7}),
     )
-    for corners in (True, False)
+    for corners in ((False,) if mode == "lanczos" else (True, False))
 ]
 
 
@@ -172,7 +172,7 @@ class TestInterpolateAntialias:
         kw = {**kw, "mode": mode, "align_corners": align_corners, "antialias": True}
         _compare(ref, device, shape, kw, seed=7)
 
-    @pytest.mark.parametrize("mode", ["bilinear", "bicubic"])
+    @pytest.mark.parametrize("mode", ["bilinear", "bicubic", "lanczos"])
     def test_an_output_width_of_one_is_not_a_constant_column(
         self, ref: Any, device: str, mode: str
     ) -> None:
