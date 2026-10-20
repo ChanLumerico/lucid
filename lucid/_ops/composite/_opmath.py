@@ -86,32 +86,37 @@ def _scale_pow2(work: Tensor, exp_t: Tensor, limit: float) -> Tensor:
 
 
 def _normalize_metal_f32(work: Tensor) -> tuple[Tensor, Tensor, Tensor]:
-    bits = _wrap(_C_engine._bitcast(work.detach()._impl, _C_engine.Dtype.I32))
-    abs_bits = bits & 0x7FFFFFFF
-    is_sub = ((abs_bits >> 23) == 0) & (abs_bits != 0)
-    signed_frac = lucid.where(bits < 0, -abs_bits, abs_bits).to(dtype=lucid.float32)
-    shift = lucid.where(is_sub, lucid.full_like(work, 149.0), lucid.zeros_like(work))
+    with lucid.no_grad():
+        bits = _wrap(_C_engine._bitcast(work._impl, _C_engine.Dtype.I32))
+        abs_bits = bits & 0x7FFFFFFF
+        is_sub = ((abs_bits >> 23) == 0) & (abs_bits != 0)
+        signed_frac = lucid.where(bits < 0, -abs_bits, abs_bits).to(dtype=lucid.float32)
+        shift = lucid.where(
+            is_sub, lucid.full_like(work, 149.0), lucid.zeros_like(work)
+        )
     return lucid.where(is_sub, signed_frac, work), shift, bits
 
 
 def _restore_metal_f32_subnormals(
     work_norm: Tensor, exp_eff: Tensor, bits: Tensor, out: Tensor
 ) -> Tensor:
-    w_det, e_det = work_norm.detach(), exp_eff.detach()
-    scaled = _scale_pow2(lucid.abs(w_det), lucid.trunc(e_det) + 149.0, 300.0)
-    finite_nz = (
-        (lucid.abs(w_det) > 0.0)
-        & (~lucid.isinf(w_det))
-        & (~lucid.isnan(w_det))
-        & (~lucid.isnan(e_det))
-    )
-    flushed = (
-        finite_nz
-        & (lucid.abs(out.detach()) == 0.0)
-        & (scaled >= 0.5)
-        & (scaled <= float(1 << 23))
-    )
-    sign_bit = (bits & (-0x80000000)).broadcast_to(out.shape)
-    sub_bits = sign_bit | lucid.round(scaled).to(dtype=lucid.int32)
-    sub_f32 = _wrap(_C_engine._bitcast(sub_bits._impl, _C_engine.Dtype.F32))
+    with lucid.no_grad():
+        scaled = _scale_pow2(
+            lucid.abs(work_norm), lucid.trunc(exp_eff) + 149.0, 300.0
+        )
+        finite_nz = (
+            (lucid.abs(work_norm) > 0.0)
+            & (~lucid.isinf(work_norm))
+            & (~lucid.isnan(work_norm))
+            & (~lucid.isnan(exp_eff))
+        )
+        flushed = (
+            finite_nz
+            & (lucid.abs(out) == 0.0)
+            & (scaled >= 0.5)
+            & (scaled <= float(1 << 23))
+        )
+        sign_bit = (bits & (-0x80000000)).broadcast_to(out.shape)
+        sub_bits = sign_bit | lucid.round(scaled).to(dtype=lucid.int32)
+        sub_f32 = _wrap(_C_engine._bitcast(sub_bits._impl, _C_engine.Dtype.F32))
     return lucid.where(flushed, sub_f32, out)

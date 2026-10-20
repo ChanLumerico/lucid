@@ -30,14 +30,6 @@ _EMPTY_PERMUTES = [
     ((0, 5), (1, 0)),
 ]
 
-# Why a permuted empty view's strides differ from the reference's after a
-# write, per device.  A Metal view reports the reference's layout (LCD-513).
-_REPACKED = {
-    "cpu": "LCD-467: an in-place write into a view whose base is gone re-packs "
-    "the view's strides",
-}
-
-
 @pytest.mark.parametrize("shape,perm", _EMPTY_PERMUTES)
 def test_empty_permuted_view_inplace_ops_succeed(
     ref: ModuleType,
@@ -61,15 +53,43 @@ def test_empty_permuted_view_keeps_its_strides_through_a_write(
     device: str,
     shape: tuple[int, ...],
     perm: tuple[int, ...],
-    request: pytest.FixtureRequest,
 ) -> None:
-    if device in _REPACKED:
-        request.applymarker(pytest.mark.xfail(strict=True, reason=_REPACKED[device]))
     x = lucid.zeros(*shape, device=device).permute(*perm)
     rx = ref.zeros(*shape).permute(*perm)
     x.mul_(2.0)
     rx.mul_(2.0)
     assert x.stride() == rx.stride()
+
+
+def test_dropped_base_view_keeps_its_strides_through_a_write(
+    ref: ModuleType,
+) -> None:
+    y = lucid.arange(6.0).reshape(2, 3).t()
+    ry = ref.arange(6.0).reshape(2, 3).t()
+    y.mul_(2.0).add_(1.0)
+    ry.mul_(2.0).add_(1.0)
+    assert y.stride() == ry.stride() == (1, 3)
+    assert y.is_contiguous() == ry.is_contiguous() is False
+    assert y.tolist() == ry.tolist()
+
+    # A view of a dropped intermediate in an autograd graph also keeps its
+    # strided layout across an in-place write and propagates gradients.
+    x = lucid.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], requires_grad=True)
+    rx = ref.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], requires_grad=True)
+    v = (x + 1.0).t()
+    rv = (rx + 1.0).t()
+    v.mul_(3.0).erfc_()
+    rv.mul_(3.0).erfc_()
+    assert v.stride() == rv.stride() == (1, 3)
+    assert v.reshape(-1).tolist() == pytest.approx(
+        rv.reshape(-1).tolist(), rel=1e-5, abs=1e-5
+    )
+    v.sum().backward()
+    rv.sum().backward()
+    assert x.grad is not None and rx.grad is not None
+    assert x.grad.reshape(-1).tolist() == pytest.approx(
+        rx.grad.reshape(-1).tolist(), rel=1e-5, abs=1e-5
+    )
 
 
 @pytest.mark.parametrize(

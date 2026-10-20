@@ -516,7 +516,7 @@ bool TensorImpl::write_lands_in_buffer() const {
     // The rule take_storage_from follows once a graph is recorded.
     if (!storage_is_cpu(storage_))
         return false;
-    return is_aliased() ||
+    return is_aliased() || !is_dense() ||
            gradient_slot_write(storage_, family_ ? family_.use_count() : 1) == SlotWrite::kInto;
 }
 
@@ -548,9 +548,10 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     const bool graph = out.requires_grad() || out.grad_fn();
     if (!graph && write_into_shared(out))
         return;
-    // A CPU tensor with live views takes the values into its buffer, graph or
-    // no graph: a new slot would leave the views reading the old ones.  So
-    // does a tensor read from ``.grad``.  Either way its snapshot was a copy
+    // A CPU tensor with live views or a strided layout takes the values into
+    // its buffer, graph or no graph: a new slot would leave the views reading
+    // the old ones or repack this tensor's strides.  So does a tensor read
+    // from ``.grad``.  Either way its snapshot was a copy
     // (inplace::snapshot, by write_lands_in_buffer — the same rule), so no
     // node of this op holds the bytes being replaced; a node that had saved
     // the gradient tensor earlier would hold its pointer, and the write was
@@ -558,7 +559,7 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     // A Metal member with live views writes into the family's root, where
     // they read.  Its snapshot shared the root's old value, which no write
     // changes: an MLX array is a value.
-    if (gpu_member() || (storage_is_cpu(storage_) && (is_aliased() || slot == SlotWrite::kInto))) {
+    if (gpu_member() || write_lands_in_buffer()) {
         write_through(out, name);
         return;
     }

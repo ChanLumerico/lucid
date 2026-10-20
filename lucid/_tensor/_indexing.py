@@ -958,7 +958,9 @@ def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
     if old.is_metal_shared and not old.requires_grad and not records:
         old.copy_from(impl)
         return
-    if old.is_aliased():
+    if old.is_aliased() or (
+        old.device == _C_engine.Device.CPU and not old.is_contiguous()
+    ):
         _C_engine.assign_inplace(old, impl, "__setitem__")
         return
     if not records:
@@ -1001,7 +1003,9 @@ def _adopt_inplace(t: Tensor, impl: _C_engine.TensorImpl, name: str) -> Tensor:
     if impl is not t._impl:
         if impl.dtype != t._impl.dtype:
             impl = _C_engine.astype(impl, t._impl.dtype)
-        if t._impl.is_aliased():
+        if t._impl.is_aliased() or (
+            t._impl.device == _C_engine.Device.CPU and not t._impl.is_contiguous()
+        ):
             _C_engine.assign_inplace(t._impl, impl, name)
         else:
             t._impl.assign_from(impl, name)
