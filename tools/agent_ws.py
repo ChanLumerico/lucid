@@ -48,6 +48,7 @@ import contextlib
 import fcntl
 import fnmatch
 import functools
+import hashlib
 import json
 import os
 import re
@@ -452,12 +453,110 @@ def _newest_cpp_mtime(root: Path) -> float:
     return newest
 
 
+def _cpp_source_hash(root: Path) -> str:
+    """SHA-256 over relative path and bytes across ``lucid/_C/**/*.{cpp,h,mm,def}``."""
+    c_dir = root / "lucid" / "_C"
+    if not c_dir.is_dir():
+        return ""
+    files = sorted(
+        p
+        for pat in ("*.cpp", "*.h", "*.mm", "*.def")
+        for p in c_dir.rglob(pat)
+        if p.is_file()
+    )
+    if not files:
+        return ""
+    digest = hashlib.sha256()
+    for p in files:
+        try:
+            rel = p.relative_to(root).as_posix()
+            data = p.read_bytes()
+        except OSError:
+            continue
+        digest.update(f"{rel}\0".encode())
+        digest.update(data)
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _header_abi_version(root: Path) -> int | None:
+    """Parse ``LUCID_ABI_VERSION`` from ``lucid/_C/version.h``, if present."""
+    vh = root / "lucid" / "_C" / "version.h"
+    if not vh.is_file():
+        return None
+    try:
+        text = vh.read_text()
+    except OSError:
+        return None
+    m = re.search(r"^\s*#\s*define\s+LUCID_ABI_VERSION\s+(\d+)\b", text, re.MULTILINE)
+    return int(m.group(1)) if m else None
+
+
+def _so_abi_version(root: Path) -> int | None:
+    """Read ``_C_engine.ABI_VERSION`` using ``root/.venv/bin/python3``, if runnable."""
+    py = root / ".venv/bin/python3"
+    if not py.is_file():
+        return None
+    proc = subprocess.run(
+        [str(py), "-c", "from lucid import _C_engine; print(_C_engine.ABI_VERSION)"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    out = proc.stdout.strip()
+    return int(out) if out.isdigit() else None
+
+
+def _engine_stamp_path(root: Path) -> Path:
+    return root / "build" / ".engine_stamp"
+
+
+def _write_engine_stamp(root: Path, src_hash: str) -> None:
+    if not src_hash:
+        return
+    stamp = _engine_stamp_path(root)
+    stamp.parent.mkdir(parents=True, exist_ok=True)
+    stamp.write_text(f"{src_hash}\n")
+
+
+def _engine_is_stale(root: Path) -> bool:
+    """True when ``root``'s ``engine.cpython-*.so`` does not match its ``lucid/_C`` sources.
+
+    Checks ``LUCID_ABI_VERSION`` against ``_C_engine.ABI_VERSION`` and the
+    recorded ``build/.engine_stamp`` source digest first so a ``git rebase``
+    or checkout that bumps file mtimes without changing C++ sources (or after
+    cloning a fresh ``main`` ``.so``) does not false-positive on mtime alone.
+    Falls back to mtime comparison when neither stamp nor ABI probe applies.
+    """
+    sos = list(root.glob("lucid/_C/engine.cpython-*.so"))
+    cpp_mtime = _newest_cpp_mtime(root)
+    if not sos:
+        return cpp_mtime > 0.0
+    hdr_abi = _header_abi_version(root)
+    so_abi = _so_abi_version(root)
+    if hdr_abi is not None and so_abi is not None and hdr_abi != so_abi:
+        return True
+    stamp = _engine_stamp_path(root)
+    if stamp.is_file():
+        recorded = stamp.read_text().strip()
+        current = _cpp_source_hash(root)
+        if recorded and current:
+            return recorded != current
+    if hdr_abi is not None and so_abi is not None:
+        return False
+    return any(cpp_mtime > so.stat().st_mtime for so in sos)
+
+
 def bootstrap(root: Path, main_root: Path) -> list[str]:
     """Idempotent; cheap when already done (one stat)."""
     done: list[str] = []
     if root.resolve() == main_root.resolve():
         return done
     # 1. Engine binary: an APFS clone costs no space and no time.
+    cloned_so = False
     for so in main_root.glob("lucid/_C/engine.cpython-*.so"):
         dst = root / so.relative_to(main_root)
         if not dst.exists() or so.stat().st_mtime > dst.stat().st_mtime:
@@ -465,13 +564,13 @@ def bootstrap(root: Path, main_root: Path) -> list[str]:
             dst.unlink(missing_ok=True)
             subprocess.run(["cp", "-c", str(so), str(dst)], check=True)
             done.append(f"cloned {dst.relative_to(root)}")
-    cpp_mtime = _newest_cpp_mtime(root)
-    for dst in root.glob("lucid/_C/engine.cpython-*.so"):
-        if cpp_mtime > dst.stat().st_mtime:
-            done.append(
-                "⚠ engine .so is older than lucid/_C sources — run: python3 tools/agent_ws.py build"
-            )
-            break
+            cloned_so = True
+    if cloned_so and not _engine_is_stale(main_root):
+        _write_engine_stamp(root, _cpp_source_hash(main_root))
+    if _engine_is_stale(root) and list(root.glob("lucid/_C/engine.cpython-*.so")):
+        done.append(
+            "⚠ engine .so is older than lucid/_C sources — run: python3 tools/agent_ws.py build"
+        )
     # 2. A light venv: `lucid` and `tools` from this worktree, then the main
     #    venv's site-packages for every dependency.  `lucid` therefore resolves
     #    to this worktree even for `python tools/x.py`, and the shared editable
@@ -651,18 +750,13 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
 
 
 def _check_engine_freshness(root: Path) -> bool:
-    """Verify that the worktree's ``engine.cpython-*.so`` is not older than ``lucid/_C`` sources."""
+    """Verify that the worktree's ``engine.cpython-*.so`` matches its ``lucid/_C`` sources."""
     sos = list(root.glob("lucid/_C/engine.cpython-*.so"))
-    cpp_mtime = _newest_cpp_mtime(root)
-    if sos:
-        if any(cpp_mtime > so.stat().st_mtime for so in sos):
-            print("engine     ✗ engine .so is older than its sources — run: agent_ws.py build")
-            return False
-        print(f"engine     {sos[0].relative_to(root)}  ✓")
-        return True
-    if cpp_mtime > 0.0:
+    if _engine_is_stale(root):
         print("engine     ✗ engine .so is older than its sources — run: agent_ws.py build")
         return False
+    if sos:
+        print(f"engine     {sos[0].relative_to(root)}  ✓")
     return True
 
 
@@ -1079,7 +1173,10 @@ def cmd_build(args: argparse.Namespace) -> int:
         "build/agent",
     ]
     with held_lock(HEAVY_LOCK, f"build {root.name}", wait=True):
-        return subprocess.call(command, cwd=root, env=env)
+        rc = subprocess.call(command, cwd=root, env=env)
+    if rc == 0:
+        _write_engine_stamp(root, _cpp_source_hash(root))
+    return rc
 
 
 def ensure_merge_drivers(root: Path) -> list[str]:

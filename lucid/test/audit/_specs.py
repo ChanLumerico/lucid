@@ -673,6 +673,14 @@ def _indexing(name: str, domain: str) -> Iterator[Call]:
     elif name in ("where",):
         cond = lucid.tensor((_probe.rng(6).random((4, 5)) > 0.5))
         yield Call([cond, x, src], {}, 1, "where(cond, a, b)")
+    elif name in ("index_put", "index_put_"):
+        rows = _probe.as_int(_probe.rng(3).permutation(4)[:3])
+        yield Call(
+            [x, (rows,), _f((3, 5), domain)],
+            {},
+            0,
+            "index_put(x, (rows,), values)",
+        )
 
 
 def _shape_with_args(name: str, domain: str) -> Iterator[Call]:
@@ -1065,7 +1073,7 @@ _FAMILIES: list[tuple[str, Callable[[str, str], Iterator[Call]]]] = [
         _factory,
     ),
     (
-        r"^(gather|scatter|scatter_add|scatter_reduce|index_select|take|"
+        r"^(gather|scatter|scatter_add|scatter_reduce|index_select|index_put_?|take|"
         r"take_along_dim|take_along_axis|masked_fill_?|searchsorted|bucketize|"
         r"narrow|where)$",
         _indexing,
@@ -1473,12 +1481,11 @@ def _ctc_resized(call: Call, array: np.ndarray) -> Call:
 
 
 def _bounds_resized(call: Call, array: np.ndarray) -> Call:
-    """``x.clamp_(lo, hi)``: a tensor bound of the receiver's shape follows it.
+    """``x.op_(peer, ...)``: a tensor peer of the receiver's shape follows it.
 
     An in-place op cannot grow its receiver, so a resized ``x`` against
-    bounds of the old shape is refused for a result that no longer fits:
-    the probe's refusal, not the op's (LCD-532, once LCD-519 made
-    ``clamp_`` refuse as ``add_`` does).
+    peers of the old shape is refused for a result that no longer fits:
+    the probe's refusal, not the op's (LCD-532, LCD-536).
     """
     if not 0 <= call.primary < len(call.args):
         return call.with_primary(array)
@@ -1501,10 +1508,6 @@ _JOINT_RESIZE: dict[str, Callable[[Call, np.ndarray], Call]] = {
     "lucid.linalg.ldl_solve": _linear_system_resized,
     "lucid.nn.utils.pack_padded_sequence": _padded_batch_resized,
     "F.ctc_loss": _ctc_resized,
-    "Tensor.clamp_": _bounds_resized,
-    "Tensor.clamp_min_": _bounds_resized,
-    "Tensor.clamp_max_": _bounds_resized,
-    "Tensor.clip_": _bounds_resized,
 }
 
 
@@ -1554,6 +1557,13 @@ def invocations(
     # a finding can still be re-derived by hand.
     _DRAWN.clear()
     joint = _JOINT_RESIZE.get(qualname) if qualname is not None else None
+    if (
+        joint is None
+        and qualname is not None
+        and qualname.startswith("Tensor.")
+        and name.endswith("_")
+    ):
+        joint = _bounds_resized
     for call in _candidates(name, domain, qualname, fn):
         if joint is not None and call.joint is None:
             call.joint = joint

@@ -178,7 +178,7 @@ sys.exit(0 if ref_module() and zoo_module() else 1)
     # framework — and is worth saying out loud rather than folding together.
     echo "==> Symbol x axis audit"
     set +e
-    "$PYTHON_BIN" -m lucid.test.audit --audit-only
+    "$PYTHON_BIN" -m lucid.test.audit --audit-only --json "${LUCID_AUDIT_JSON:-build/audit-report.json}"
     audit_status=$?
     set -e
     if [ "$audit_status" -eq 2 ]; then

@@ -151,6 +151,13 @@ jobs:
           name: lucid-wheel-py3.14
           path: dist/*.whl
 
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.part == 'checks'
+        with:
+          name: lucid-audit-report
+          path: build/audit-report.json
+          if-no-files-found: ignore
+
   # Lucid beside each `mlx` a user may have installed: none, the [mlx]
   # extra's floor, and the newest release.  The engine links its own pinned
   # MLX, renamed (LCD-292), so every case must run that pin; the interop and

@@ -223,6 +223,7 @@ class Report:
         }
 
     def write_json(self, path: Path) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(self.as_dict(), indent=2, sort_keys=False) + "\n")
 
 

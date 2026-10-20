@@ -315,3 +315,58 @@ def test_bootstrap_refreshes_stale_so_and_warns_when_cpp_is_newer(
     assert any("engine .so is older than lucid/_C sources" in line for line in done2)
     assert not agent_ws._check_engine_freshness(wt_root)
 
+
+def test_doctor_trusts_matching_source_stamp_or_abi_over_mtime(
+    tmp_path: Path,
+) -> None:
+    """LCD-536: a rebase or checkout that bumps C++ mtime without changing
+    either the C++ source hash or ``ABI_VERSION`` does not false-positive in ``doctor``."""
+    spec = importlib.util.spec_from_file_location("agent_ws", AGENT_WS)
+    assert spec is not None and spec.loader is not None
+    agent_ws = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(agent_ws)
+
+    main_root = tmp_path / "main"
+    wt_root = tmp_path / "wt"
+    (main_root / "lucid" / "_C").mkdir(parents=True)
+    (wt_root / "lucid" / "_C").mkdir(parents=True)
+
+    so_rel = Path("lucid/_C/engine.cpython-314-darwin.so")
+    for root in (main_root, wt_root):
+        (root / "lucid" / "_C" / "version.h").write_text("#define LUCID_ABI_VERSION 7\n")
+        (root / "lucid" / "_C" / "foo.cpp").write_text("// identical\n")
+        os.utime(root / "lucid" / "_C" / "version.h", (1000.0, 1000.0))
+        os.utime(root / "lucid" / "_C" / "foo.cpp", (1000.0, 1000.0))
+
+    main_so = main_root / so_rel
+    main_so.write_bytes(b"v2")
+    os.utime(main_so, (2000.0, 2000.0))
+
+    done = agent_ws.bootstrap(wt_root, main_root)
+    assert f"cloned {so_rel}" in done
+    assert agent_ws._engine_stamp_path(wt_root).is_file()
+
+    # Simulate a git rebase touching C++ mtimes without changing source bytes:
+    wt_so = wt_root / so_rel
+    future = wt_so.stat().st_mtime + 500.0
+    os.utime(wt_root / "lucid" / "_C" / "foo.cpp", (future, future))
+    assert agent_ws._check_engine_freshness(wt_root)
+
+    # Actual C++ source change invalidates the stamp:
+    (wt_root / "lucid" / "_C" / "foo.cpp").write_text("// modified\n")
+    os.utime(wt_root / "lucid" / "_C" / "foo.cpp", (future + 10.0, future + 10.0))
+    assert not agent_ws._check_engine_freshness(wt_root)
+
+    # Without a stamp, matching ABI_VERSION overrides mtime while a mismatch flags stale:
+    agent_ws._engine_stamp_path(wt_root).unlink()
+    venv_bin = wt_root / ".venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    fake_py = venv_bin / "python3"
+    fake_py.write_text("#!/bin/sh\necho 7\n")
+    fake_py.chmod(0o755)
+    assert agent_ws._check_engine_freshness(wt_root)
+
+    (wt_root / "lucid" / "_C" / "version.h").write_text("#define LUCID_ABI_VERSION 8\n")
+    assert not agent_ws._check_engine_freshness(wt_root)
+
+

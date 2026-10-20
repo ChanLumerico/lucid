@@ -292,12 +292,40 @@ def test_only_fail_is_a_defect() -> None:
     assert defects == [Status.FAIL]
 
 
-def test_report_serialises() -> None:
+def test_report_serialises(tmp_path: pytest.TempPathFactory) -> None:
+    from pathlib import Path
+
     report = Report(surface_total=2, axes_run=["grad"])
     report.add(Finding("grad", "lucid.exp", Status.PASS, "rel 1e-11", {"rel": 1e-11}))
     payload = report.as_dict()
     assert payload["coverage"]["symbols_total"] == 2
     assert payload["findings"][0]["symbol"] == "lucid.exp"
+    out = Path(str(tmp_path)) / "nested" / "audit-report.json"
+    report.write_json(out)
+    assert out.is_file()
+
+
+def test_inplace_tensor_methods_resize_tensor_peers_and_index_put_runs() -> None:
+    """LCD-536: in-place Tensor methods shrink same-shape tensor peers on the
+    edge axis, and ``index_put`` / ``index_put_`` pass a tuple of index tensors."""
+    edge = _axes.axis_by_name("edge")
+    entry = _axes.axis_by_name("entry")
+    assert edge is not None and entry is not None
+    ctx = _axes.Context(quick=True)
+    for name in ("add_", "mul_", "lerp_", "masked_fill_"):
+        sym = _surface.Symbol(f"Tensor.{name}", "tensor", "method", getattr(lucid.Tensor, name))
+        finding = edge.run(sym, ctx)
+        assert finding.status is Status.PASS, (name, finding)
+    for qual, obj in (
+        ("lucid.index_put", lucid.index_put),
+        ("Tensor.index_put_", lucid.Tensor.index_put_),
+    ):
+        kind = "method" if qual.startswith("Tensor.") else "op"
+        sub = "tensor" if kind == "method" else "lucid"
+        sym = _surface.Symbol(qual, sub, kind, obj)
+        finding = entry.run(sym, ctx)
+        assert finding.status is Status.PASS, (qual, finding)
+
 
 
 # ── baseline ─────────────────────────────────────────────────────────────────
