@@ -119,9 +119,6 @@ _UNORDERED = {"eigvals"}
 _REFERENCE_GAPS: dict[tuple[str, str], str] = {
     ("lstsq", "inf"): "lstsq uses the SVD minimum-norm solution (gelss: zeros), "
     "the reference defaults to QR with pivoting (gelsy: [nan, 0])",
-    ("lstsq", "mixed_batch"): "lstsq refuses a batch",
-    ("lstsq", "indefinite_batch"): "lstsq refuses a batch",
-    ("lstsq", "empty_batch"): "lstsq refuses a batch",
     ("eigvals", "nan"): "eigvals raises on a non-finite input, the reference "
     "returns NaN",
     ("eigvals", "inf"): "eigvals raises on a non-finite input, the reference "

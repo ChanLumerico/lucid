@@ -2862,48 +2862,11 @@ def lstsq(
     >>> sol
     tensor([[3.], [3.]])
     """
-    A = input
-    B = b
     unsupported_if(rcond is not None, "lstsq", "rcond", rcond)
     unsupported_if(driver is not None, "lstsq", "driver", driver)
-
-    # The backend takes ``m`` from ``A.shape[-2]`` and then copies ``m``
-    # rows out of ``B`` without consulting how many ``B`` actually has, so
-    # all three malformed cases were answered rather than refused — and
-    # two of them read memory that was not theirs:
-    #
-    #   A 1-D          ``shape[-2]`` on a rank-1 shape underflows, and the
-    #                  allocator was asked for 1.8e19 bytes;
-    #   A batched      the batch is dropped and the first matrix answered
-    #                  for all of them;
-    #   B too short    ``m`` rows are read from a shorter buffer — a plain
-    #                  over-read, and the SIGSEGV this guard was written
-    #                  for, caught mid-``memmove`` in the audit's grad2
-    #                  axis.
-    if A.ndim != 2:
-        raise ValueError(
-            f"lstsq: A must be a single 2-D matrix, got shape {tuple(A.shape)}. "
-            f"Batched input is not supported — loop over the batch."
-        )
-    if B.ndim not in (1, 2):
-        raise ValueError(f"lstsq: B must be 1-D or 2-D, got shape {tuple(B.shape)}")
-    if int(B.shape[0]) != int(A.shape[0]):
-        raise ValueError(
-            f"lstsq: B must have one row per row of A — A is {tuple(A.shape)} "
-            f"({int(A.shape[0])} rows), B is {tuple(B.shape)} "
-            f"({int(B.shape[0])} rows)"
-        )
-
-    # The minimum-norm least-squares solution is A⁺ B, from the SVD.  The
-    # engine's lstsq kernel answered correctly only for a tall matrix of
-    # full column rank: a wide system came back with an x that did not even
-    # satisfy A x = b, a rank-deficient one with a residual above the
-    # least-squares minimum — and none of it recorded a gradient.  The
-    # pseudo-inverse is right for every shape and rank and differentiates
-    # (twice).
-    sol = lucid.matmul(pinv(A), B)
-    dev = _unwrap(A).device
-    dt = _unwrap(A).dtype
+    sol = _lstsq_solution(input, b, _broadcast_batch)
+    dev = _unwrap(input).device
+    dt = _unwrap(input).dtype
     empty = _wrap(_C_engine.zeros([0], dt, dev))
     return sol, empty, empty, empty
 
@@ -3020,55 +2983,7 @@ def householder_product(input: Tensor, tau: Tensor) -> Tensor:
     >>> Q.shape
     (4, 3)
     """
-    H = input
-    # The backend reads ``m`` and ``n`` off the last two dimensions and
-    # loops over neither a batch nor a missing axis, so both malformed
-    # cases used to be answered instead of refused: a 1-D ``H`` indexed
-    # ``shape[-2]`` on a rank-1 shape and came back as an empty ``(0, 0)``,
-    # and a batched ``H`` silently returned the first matrix's ``Q`` alone
-    # — a wrong answer wearing the right dtype.  Both are rejected here,
-    # at the one place that knows the shapes, rather than deeper down
-    # where the sizes have already become arithmetic.
-    if H.ndim != 2:
-        raise ValueError(
-            f"householder_product: H must be a single 2-D matrix, got shape "
-            f"{tuple(H.shape)}. Batched input is not supported — loop over the "
-            f"batch, or use lucid.linalg.qr, which does."
-        )
-    if tau.ndim != 1:
-        raise ValueError(
-            f"householder_product: tau must be 1-D, got shape {tuple(tau.shape)}"
-        )
-    k = min(int(H.shape[0]), int(H.shape[1]))
-    if int(tau.shape[0]) < k:
-        raise ValueError(
-            f"householder_product: tau must hold at least min(m, n) = {k} "
-            f"reflectors for H of shape {tuple(H.shape)}, got {int(tau.shape[0])}"
-        )
-    if (H.requires_grad or tau.requires_grad) and lucid.is_grad_enabled():
-        return _householder_product_differentiable(H, tau)
-    return _wrap(_la.householder_product(_unwrap(H), _unwrap(tau)))
-
-
-def _householder_product_differentiable(H: Tensor, tau: Tensor) -> Tensor:
-    """``H_1 ... H_k`` applied to the first ``n`` columns of ``I``, in ops.
-
-    The kernel records no gradient, so a loss through it trained nothing.
-    The product is short — one rank-one update per reflector — so it is
-    spelled out here, right to left, and differentiates in both ``H`` and
-    ``tau`` (twice).
-    """
-    m, n = int(H.shape[-2]), int(H.shape[-1])
-    k = min(m, n)
-    # Column i of V is the reflector v_i: zero above row i, one at row i,
-    # the packed entries below.
-    eye = lucid.eye(m, n, dtype=H.dtype, device=H.device)
-    V = lucid.tril(H, -1) + eye
-    Q = eye
-    for i in range(k - 1, -1, -1):
-        v = V[:, i : i + 1]
-        Q = Q - tau[i] * lucid.matmul(v, lucid.matmul(v.mT, Q))
-    return Q
+    return _householder_product(input, tau)
 
 
 # ── Full LU decomposition (P, L, U) ────────────────────────────────────────
@@ -3696,6 +3611,8 @@ def diagonal(
 # ``ldl_factor`` above are its checked forms.
 from lucid.linalg._ex import (
     _complete_svd_factors,
+    _householder_product,
+    _lstsq_solution,
     _lu_factor_ex,
     _pinv_with_tol,
     _sv_cutoff,
@@ -3705,6 +3622,7 @@ from lucid.linalg._ex import (
     ldl_factor_ex,
     lu_factor_ex,
     solve_ex,
+    tensorinv,
 )
 
 __all__ = [
@@ -3748,6 +3666,7 @@ __all__ = [
     "cholesky_ex",
     "inv_ex",
     "solve_ex",
+    "tensorinv",
     "matrix_exp",
     "diagonal",
 ]

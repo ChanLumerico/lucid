@@ -76,9 +76,9 @@ class MaxPool1d(Module):
         ``dilation=1`` gives the standard contiguous window.
         Default: ``1``.
     return_indices : bool, optional
-        If ``True``, the forward pass also returns the flat indices of
-        the selected maxima.  Currently not supported (raises
-        ``NotImplementedError``).  Default: ``False``.
+        If ``True``, the forward pass returns ``(output, indices)`` where
+        ``indices`` holds the argmax locations for :class:`MaxUnpool1d`.
+        Default: ``False``.
     ceil_mode : bool, optional
         When ``True``, use ceiling instead of floor to compute the output
         length.  Default: ``False``.
@@ -217,7 +217,7 @@ class MaxPool2d(Module):
     dilation : int or tuple[int, int], optional
         Spacing between kernel elements.  Default: ``1``.
     return_indices : bool, optional
-        Not yet supported.  Default: ``False``.
+        If ``True``, returns ``(output, indices)``.  Default: ``False``.
     ceil_mode : bool, optional
         Use ceiling instead of floor for output size.  Default: ``False``.
 
@@ -776,7 +776,7 @@ class AdaptiveMaxPool2d(Module):
         Target ``(H_out, W_out)``.  A scalar is broadcast to both
         dimensions.
     return_indices : bool, optional
-        Not yet supported.  Default: ``False``.
+        If ``True``, returns ``(output, indices)``.  Default: ``False``.
 
     Attributes
     ----------
@@ -891,7 +891,7 @@ class MaxPool3d(Module):
     dilation : int or tuple[int, int, int], optional
         Spacing between kernel elements.  Default: ``1``.
     return_indices : bool, optional
-        Not yet supported.  Default: ``False``.
+        If ``True``, returns ``(output, indices)``.  Default: ``False``.
     ceil_mode : bool, optional
         Use ceiling for output size.  Default: ``False``.
 
@@ -1232,7 +1232,7 @@ class AdaptiveMaxPool1d(Module):
     output_size : int or tuple[int, ...]
         Desired output length.
     return_indices : bool, optional
-        Not yet supported.  Default: ``False``.
+        If ``True``, returns ``(output, indices)``.  Default: ``False``.
 
     Attributes
     ----------
@@ -1324,7 +1324,7 @@ class AdaptiveMaxPool3d(Module):
     output_size : int or tuple[int, int, int]
         Target ``(D_out, H_out, W_out)``.  A scalar is broadcast.
     return_indices : bool, optional
-        Not yet supported.  Default: ``False``.
+        If ``True``, returns ``(output, indices)``.  Default: ``False``.
 
     Attributes
     ----------
@@ -1827,11 +1827,8 @@ class MaxUnpool1d(_MaxUnpoolNd):
 
     Notes
     -----
-    - The ``indices`` tensor must be obtained from the paired
-      :class:`MaxPool1d` with ``return_indices=True``.  Currently,
-      ``return_indices=True`` is not yet implemented for :class:`MaxPool1d`,
-      so :class:`MaxUnpool1d` requires the caller to supply compatible
-      indices by another means.
+    - The ``indices`` tensor is typically obtained from a paired
+      :class:`MaxPool1d` with ``return_indices=True``.
     - The output is sparse — only the positions corresponding to maxima
       are non-zero.  This sparsity is intentional and matches the original
       architecture (SegNet, etc.).

@@ -31,22 +31,31 @@ def _matrix(m: int, n: int) -> lucid.Tensor:
     return lucid.randn(m, n, dtype=lucid.float64)
 
 
-def test_a_batched_H_is_refused_rather_than_silently_truncated() -> None:
-    H = lucid.randn(3, 4, 3, dtype=lucid.float64)
-    tau = lucid.randn(3, 3, dtype=lucid.float64)
-    with pytest.raises(ValueError, match="single 2-D matrix"):
-        LA.householder_product(H, tau)
+def test_a_batched_H_solves_every_matrix_in_the_batch() -> None:
+    lucid.manual_seed(0)
+    H_np = np.random.default_rng(0).standard_normal((3, 4, 3)) * 0.2
+    tau_np = np.random.default_rng(1).standard_normal((3, 3)) * 0.2
+    q = LA.householder_product(lucid.tensor(H_np), lucid.tensor(tau_np))
+    assert tuple(q.shape) == (3, 4, 3)
+    for i in range(3):
+        qi = LA.householder_product(lucid.tensor(H_np[i]), lucid.tensor(tau_np[i]))
+        np.testing.assert_allclose(q[i].numpy(), qi.numpy(), rtol=1e-12, atol=1e-12)
+    with pytest.raises(ValueError, match="batch dimensions"):
+        LA.householder_product(
+            lucid.randn(3, 4, 3, dtype=lucid.float64),
+            lucid.randn(2, 3, dtype=lucid.float64),
+        )
 
 
 def test_a_one_dimensional_H_is_refused_rather_than_returning_empty() -> None:
     H = lucid.randn(4, dtype=lucid.float64)
     tau = lucid.randn(4, dtype=lucid.float64)
-    with pytest.raises(ValueError, match="single 2-D matrix"):
+    with pytest.raises(ValueError, match="at least 2 dimensions"):
         LA.householder_product(H, tau)
 
 
 def test_a_non_vector_tau_is_refused() -> None:
-    with pytest.raises(ValueError, match="tau must be 1-D"):
+    with pytest.raises(ValueError, match="one dimension less than H"):
         LA.householder_product(_matrix(4, 3), lucid.randn(2, 3, dtype=lucid.float64))
 
 
@@ -92,18 +101,23 @@ def test_a_longer_tau_is_accepted() -> None:
 
 def test_lstsq_refuses_a_one_dimensional_A() -> None:
     """``shape[-2]`` on a rank-1 shape underflowed into a 1.8e19-byte ask."""
-    with pytest.raises(ValueError, match="single 2-D matrix"):
+    with pytest.raises(ValueError, match="at least 2 dimensions"):
         LA.lstsq(
             lucid.randn(4, dtype=lucid.float64), lucid.randn(4, dtype=lucid.float64)
         )
 
 
-def test_lstsq_refuses_a_batched_A() -> None:
-    with pytest.raises(ValueError, match="single 2-D matrix"):
-        LA.lstsq(
-            lucid.randn(3, 4, 3, dtype=lucid.float64),
-            lucid.randn(3, 4, 2, dtype=lucid.float64),
-        )
+def test_lstsq_solves_a_batched_A() -> None:
+    rng = np.random.default_rng(0)
+    a_np = rng.standard_normal((3, 4, 3))
+    b_np = rng.standard_normal((3, 4, 2))
+    sol, *_ = LA.lstsq(lucid.tensor(a_np), lucid.tensor(b_np))
+    assert tuple(sol.shape) == (3, 3, 2)
+    for i in range(3):
+        want, *_ = np.linalg.lstsq(a_np[i], b_np[i], rcond=None)
+        np.testing.assert_allclose(sol[i].numpy(), want, rtol=1e-10, atol=1e-10)
+    sol_vec, *_ = LA.lstsq(lucid.tensor(a_np), lucid.tensor(b_np[:, :, 0]))
+    np.testing.assert_allclose(sol_vec.numpy(), sol[:, :, 0].numpy(), rtol=1e-12, atol=1e-12)
 
 
 def test_lstsq_refuses_a_B_with_too_few_rows() -> None:
@@ -144,3 +158,24 @@ def test_qr_still_handles_a_batch() -> None:
     assert tuple(q.shape) == (3, 4, 3)
     recon = (q @ r).numpy()
     np.testing.assert_allclose(recon, a.numpy(), rtol=1e-10, atol=1e-10)
+
+
+def test_tensorinv_inverts_tensordot_and_differentiates() -> None:
+    rng = np.random.default_rng(42)
+    m = 4 * 6
+    a_np = (rng.standard_normal((m, m)) * 0.2 + np.eye(m)).reshape(4, 6, 8, 3)
+    a = lucid.tensor(a_np, requires_grad=True)
+    inv_a = LA.tensorinv(a, ind=2)
+    assert tuple(inv_a.shape) == (8, 3, 4, 6)
+    np.testing.assert_allclose(
+        inv_a.detach().numpy(), np.linalg.tensorinv(a_np, ind=2), rtol=1e-10, atol=1e-10
+    )
+    prod = lucid.tensordot(a, inv_a, dims=2).reshape(m, m)
+    np.testing.assert_allclose(prod.detach().numpy(), np.eye(m), rtol=1e-10, atol=1e-10)
+    inv_a.sum().backward()
+    assert a.grad is not None and np.isfinite(a.grad.numpy()).all()
+    for bad_ind in (0, -1, 5):
+        with pytest.raises(RuntimeError):
+            LA.tensorinv(a, ind=bad_ind)
+    with pytest.raises(RuntimeError):
+        LA.tensorinv(lucid.ones(2, 3, 5, dtype=lucid.float64), ind=1)

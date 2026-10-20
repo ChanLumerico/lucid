@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 
+- `lucid.linalg.tensorinv` and batched `lstsq` / `householder_product` (LCD-57)
+
 - `Tensor.divide` and `Tensor.true_divide` matching `lucid.divide` and `lucid.true_divide` (LCD-507)
 
 - parallel-agent workspace with worktree claims and fast-forward land

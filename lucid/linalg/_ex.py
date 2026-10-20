@@ -846,3 +846,151 @@ def _pinv_with_tol(
     return P
 
 
+def tensorinv(input: Tensor, ind: int = 2) -> Tensor:
+    r"""Compute the multiplicative inverse of :func:`lucid.tensordot`.
+
+    If :math:`m = \prod_{i < \text{ind}} \text{input.shape}[i]` and
+    :math:`n = \prod_{i \ge \text{ind}} \text{input.shape}[i]`, requires
+    :math:`m = n` and computes a tensor :math:`X` of shape
+    ``input.shape[ind:] + input.shape[:ind]`` such that
+    ``tensordot(input, X, ind)`` is the ``ind``-dimensional identity tensor.
+
+    Parameters
+    ----------
+    input : Tensor
+        Tensor to invert.  Must satisfy
+        ``prod(input.shape[:ind]) == prod(input.shape[ind:])``.
+    ind : int, optional
+        Positive index at which to split the dimensions of ``input``.
+        Default: ``2``.
+
+    Returns
+    -------
+    Tensor
+        Inverse tensor of shape ``input.shape[ind:] + input.shape[:ind]``.
+
+    Raises
+    ------
+    RuntimeError
+        If ``ind <= 0``, ``ind > input.ndim``, or
+        ``prod(input.shape[:ind]) != prod(input.shape[ind:])``.
+    LinAlgError
+        If the reshaped ``(m, m)`` matrix is not invertible.
+    """
+    A = input
+    if ind <= 0:
+        raise _C_engine.InvalidArgument(
+            f"linalg.tensorinv: expected a strictly positive integer for 'ind', but got {ind}"
+        )
+    if ind > A.ndim:
+        raise _C_engine.InvalidArgument(
+            f"linalg.tensorinv: expected 'ind' <= input.ndim ({A.ndim}), but got {ind}"
+        )
+    shape = tuple(int(s) for s in A.shape)
+    front = shape[:ind]
+    back = shape[ind:]
+    m = 1
+    for s in front:
+        m *= s
+    n = 1
+    for s in back:
+        n *= s
+    if m != n:
+        raise _C_engine.ShapeMismatch(
+            f"linalg.tensorinv: expected prod(input.shape[ind:]) == prod(input.shape[:ind]), "
+            f"but got {n} != {m} for shape {shape} and ind={ind}"
+        )
+    return inv(A.reshape(m, n)).reshape(*(back + front))
+
+
+def _check_lstsq_shapes(
+    a_shape: tuple[int, ...], b_shape: tuple[int, ...]
+) -> tuple[bool, tuple[int, ...]]:
+    """Return ``(vec_rhs, b_batch)`` or raise ``ValueError`` for malformed shapes."""
+    a_ndim, b_ndim = len(a_shape), len(b_shape)
+    if a_ndim < 2:
+        raise ValueError(f"lstsq: A must have at least 2 dimensions, got shape {a_shape}")
+    if b_ndim < 1 or not (0 <= a_ndim - b_ndim <= 1):
+        raise ValueError(
+            f"lstsq: A.ndim must be >= B.ndim and A.ndim - B.ndim <= 1, "
+            f"got A of shape {a_shape} and B of shape {b_shape}"
+        )
+    vec_rhs = (b_ndim == 1) or (a_ndim - 1 == b_ndim and a_shape[:-2] == b_shape[:-1])
+    b_rows = b_shape[-1] if vec_rhs else (b_shape[-2] if b_ndim >= 2 else -1)
+    if b_rows != a_shape[-2]:
+        raise ValueError(
+            f"lstsq: B must have one row per row of A — A is {a_shape} "
+            f"({a_shape[-2]} rows), B is {b_shape}"
+        )
+    b_batch = b_shape[:-1] if a_ndim > b_ndim else b_shape[:-2]
+    return vec_rhs, b_batch
+
+
+def _lstsq_solution(
+    A: Tensor, B: Tensor, broadcast_batch: Callable[[tuple[int, ...], tuple[int, ...]], tuple[int, ...]]
+) -> Tensor:
+    """Validate shapes and compute the minimum-norm least-squares solution ``A⁺ B``."""
+    a_shape = tuple(int(s) for s in A.shape)
+    b_shape = tuple(int(s) for s in B.shape)
+    vec_rhs, b_batch = _check_lstsq_shapes(a_shape, b_shape)
+    batch = broadcast_batch(a_shape[:-2], b_batch)
+    b_mat = B.unsqueeze(-1) if vec_rhs else B
+    sol_mat = lucid.matmul(lucid.linalg.pinv(A), b_mat)
+    target_shape = (*batch, a_shape[-1], int(b_mat.shape[-1]))
+    if tuple(int(s) for s in sol_mat.shape) != target_shape:
+        sol_mat = sol_mat.expand(*target_shape).contiguous()
+    return sol_mat.squeeze(-1) if vec_rhs else sol_mat
+
+
+def _householder_product_ops(H: Tensor, tau: Tensor) -> Tensor:
+    """``H_1 ... H_r`` applied to the first ``k`` columns of ``I``, in ops."""
+    m, n = int(H.shape[-2]), int(H.shape[-1])
+    k = min(m, n)
+    r = min(k, int(tau.shape[-1]))
+    q_shape = (*tuple(int(s) for s in H.shape[:-2]), m, k)
+    if 0 in q_shape:
+        return lucid.zeros(*q_shape, dtype=H.dtype, device=H.device)
+    eye = lucid.eye(m, k, dtype=H.dtype, device=H.device)
+    V = lucid.tril(H[..., :, :k], -1) + eye
+    Q = eye if H.ndim == 2 else lucid.broadcast_to(eye, q_shape).contiguous()
+    for i in range(r - 1, -1, -1):
+        v = V[..., :, i : i + 1]
+        t_i = tau[..., i : i + 1].unsqueeze(-1)
+        Q = Q - t_i * lucid.matmul(v, lucid.matmul(v.mT, Q))
+    return Q
+
+
+def _check_householder_shapes(h_shape: tuple[int, ...], t_shape: tuple[int, ...]) -> tuple[int, int]:
+    """Validate ``(H, tau)`` shapes and return ``(k, r)``."""
+    if len(h_shape) < 2 or len(t_shape) != len(h_shape) - 1:
+        raise ValueError(
+            f"householder_product: expected H with at least 2 dimensions and "
+            f"tau with one dimension less than H, got H {h_shape}, tau {t_shape}"
+        )
+    if t_shape[:-1] != h_shape[:-2]:
+        raise ValueError(
+            f"householder_product: expected batch dimensions of tau {t_shape[:-1]} "
+            f"to match H.shape[:-2] {h_shape[:-2]}"
+        )
+    m, n, r = h_shape[-2], h_shape[-1], t_shape[-1]
+    k = min(m, n)
+    bad = r < k if len(h_shape) == 2 else (m < n or r > n)
+    if bad:
+        raise ValueError(
+            f"householder_product: invalid shapes H {h_shape} "
+            f"(at least min(m, n) = {k}) and tau {t_shape}"
+        )
+    return k, r
+
+
+def _householder_product(H: Tensor, tau: Tensor) -> Tensor:
+    """Validate ``(H, tau)`` and compute ``householder_product(H, tau)``."""
+    k, r = _check_householder_shapes(
+        tuple(int(s) for s in H.shape), tuple(int(s) for s in tau.shape)
+    )
+    use_ops = H.ndim > 2 or r != k or ((H.requires_grad or tau.requires_grad) and lucid.is_grad_enabled())
+    if use_ops:
+        return _householder_product_ops(H, tau)
+    return _wrap(_la.householder_product(_unwrap(H), _unwrap(tau)))
+
+

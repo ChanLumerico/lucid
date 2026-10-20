@@ -6592,6 +6592,12 @@
         "k:driver="
       ]
     },
+    "lucid.linalg.tensorinv": {
+      "params": [
+        "a:input",
+        "a:ind="
+      ]
+    },
     "lucid.linalg.vander": {
       "params": [
         "a:x",
