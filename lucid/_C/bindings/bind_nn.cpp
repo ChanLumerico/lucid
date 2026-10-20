@@ -438,10 +438,10 @@ void register_nn(py::module_& m) {
 
     // Embedding lookup and positional encoding utilities.
     m.def("embedding", &embedding_op, py::arg("weight"), py::arg("indices"),
-          py::arg("padding_idx") = -1,
+          py::arg("padding_idx") = -1, py::arg("scale_grad_by_freq") = false,
           "Index-gather rows from weight ([N, D]) by indices. "
-          "padding_idx (-1 = none) zeroes those rows in the output and "
-          "blocks gradient flow.");
+          "padding_idx (-1 = none) blocks gradient flow for that row; "
+          "scale_grad_by_freq divides each row's gradient by its index frequency.");
 
     m.def("sinusoidal_pos_embedding", &sinusoidal_pos_embedding_op, py::arg("seq_len"),
           py::arg("embed_dim"), py::arg("dtype") = Dtype::F32, py::arg("device") = Device::CPU,

@@ -47,6 +47,7 @@ class _ExecutableLike(Protocol):
 
 
 if TYPE_CHECKING:
+    from lucid._C.engine.compile import Tracer
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
     from lucid.nn.parameter import Parameter
@@ -198,8 +199,6 @@ def make_step(
 
     from lucid._dispatch import _unwrap, _wrap
     from lucid._tensor.tensor import Tensor
-    from lucid.autograd._grad_mode import no_grad
-    from lucid.compile import _tracing
     from lucid.compile._core.buffer_writes import outside_writes, write_back
     from lucid.compile._core.bn_runstats import (
         advance_bn_counters,
@@ -212,6 +211,7 @@ def make_step(
         ParamFingerprint,
         leaf_tensors,
         model_has_active_hooks,
+        tensors_have_active_hooks,
     )
 
     # Symbolic-batch is NOT offered for the compiled *training* step.  Unlike the
@@ -257,14 +257,11 @@ def make_step(
             eager-only.
         """
         t0 = time.perf_counter()
-        with no_grad():
-            with _tracing(watch=x_args, module=model) as tracer:
-                x_out = model(*x_args[:1])
-                loss_t = loss_fn(x_out, *x_args[1:])
-
-        graph = tracer.graph
-        if not graph.ops:
+        traced = _trace_step(model, loss_fn, x_args)
+        if traced is None:
             return None
+        tracer, loss_t = traced
+        graph = tracer.graph
 
         # Resolve the fused-attention workaround capability flag before the
         # emitters run, if this step's graph contains attention (probes once).
@@ -544,7 +541,11 @@ def make_step(
         except (TypeError, AttributeError):  # fmt: skip
             key = None  # un-hashable → fresh per-call compile only
 
-        if (key is not None and key in eager_only) or model_has_active_hooks(model):
+        if (
+            (key is not None and key in eager_only)
+            or model_has_active_hooks(model)
+            or tensors_have_active_hooks(leaf_tensors(x_args, {}))
+        ):
             out = model(*x_args[:1])
             return loss_fn(out, *x_args[1:])
 
@@ -578,6 +579,30 @@ def make_step(
     step.graph_dump = graph_dump  # type: ignore[attr-defined]
 
     return step
+
+
+def _trace_step(
+    model: Module,
+    loss_fn: Callable[..., Tensor],
+    x_args: tuple[Tensor, ...],
+) -> tuple[Tracer, Tensor] | None:
+    """Trace ``model`` + ``loss_fn`` under :func:`no_grad`, declining on tensor hooks."""
+    from lucid.autograd._grad_mode import no_grad
+    from lucid.compile import _tracing
+    from lucid.compile._core.fallback import _fallback_notice
+
+    try:
+        with no_grad(), _tracing(watch=x_args, module=model) as tracer:
+            x_out = model(*x_args[:1])
+            loss_t = loss_fn(x_out, *x_args[1:])
+    except RuntimeError as why:
+        if "register_hook" not in str(why):
+            raise
+        _fallback_notice("tensor-hook", str(why))
+        return None
+    if not tracer.graph.ops:
+        return None
+    return tracer, loss_t
 
 
 def _retrace_on_replace(

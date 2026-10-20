@@ -70,11 +70,13 @@ from lucid.compile._core.signature import (
     ParamFingerprint,
     leaf_tensors,
     model_has_active_hooks,
+    tensors_have_active_hooks,
 )
 from lucid.nn.module import Module, _ModuleWrapper
 from lucid.nn.parameter import Parameter
 
 if TYPE_CHECKING:
+    from lucid._C.engine.compile import Tracer
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
 
@@ -865,7 +867,11 @@ class CompiledModule[**P, R](_ModuleWrapper):
 
         self._call_counter[key] = self._call_counter.get(key, 0) + 1
 
-        if key in self._eager_only or model_has_active_hooks(self._model):
+        if (
+            key in self._eager_only
+            or model_has_active_hooks(self._model)
+            or tensors_have_active_hooks(leaf_tensors(args, kwargs))
+        ):
             return run_eager(self._model, args, kwargs)
 
         entry = self._cache.get(key)
@@ -1012,6 +1018,34 @@ class CompiledModule[**P, R](_ModuleWrapper):
             return None
         return cast(_ExecutableLike, exe)
 
+    def _trace_forward(
+        self,
+        args: tuple[object, ...],
+        kwargs: dict[str, object],
+    ) -> tuple[Tracer, object] | None:
+        """Trace ``self._model(*args, **kwargs)`` under :func:`no_grad`."""
+        from lucid._tensor.tensor import Tensor
+        from lucid.autograd._grad_mode import no_grad
+        from lucid.compile import _tracing
+
+        try:
+            with (
+                no_grad(),
+                _tracing(
+                    watch=(args, kwargs), module=self._model, fold_constants=True
+                ) as tracer,
+            ):
+                return_value = self._model(*(cast(Tensor, a) for a in args), **kwargs)
+        except RuntimeError as why:
+            if "register_hook" not in str(why):
+                raise
+            _fallback_notice("tensor-hook", str(why))
+            return None
+        if not tracer.graph.ops:
+            _fallback_notice("empty-trace", "traced call recorded no operations")
+            return None
+        return tracer, return_value
+
     def _compile_for(
         self,
         key: CacheKey,
@@ -1038,9 +1072,6 @@ class CompiledModule[**P, R](_ModuleWrapper):
         """
         # Local imports keep ``lucid.compile`` import-cheap.
         from lucid._dispatch import _unwrap
-        from lucid._tensor.tensor import Tensor
-        from lucid.autograd._grad_mode import no_grad
-        from lucid.compile import _tracing
         from lucid.compile._core.bn_runstats import model_has_tracking_bn
         from lucid.compile._core.buffer_writes import outside_writes
 
@@ -1063,31 +1094,12 @@ class CompiledModule[**P, R](_ModuleWrapper):
             )
             return None
 
-        # kwargs are traced as-is (line below) and their tensor values are
-        # recorded as external feeds; the feed-binding step resolves each feed
-        # to an arg index OR a kwarg name (non-tensor kwargs are baked into the
-        # trace structure — captured by the CacheKey — and need no binding).
-
-        # Trace under no_grad — kernel hooks fire before the GradMode
-        # short-circuit so the captured DAG is identical to the
-        # autograd-on path, minus the (unused) backward wiring.
         t_compile_start = time.perf_counter()
-        with no_grad():
-            # Every live tensor the call reads is watched — its arguments,
-            # the model's parameters and buffers — so what the trace does not
-            # see is a constant, folded into one feed (``Tracer.fold_constants``).
-            with _tracing(
-                watch=(args, kwargs), module=self._model, fold_constants=True
-            ) as tracer:
-                # Module.__call__ wants Tensor positionals; the runtime
-                # may receive non-Tensor extras (CompileModule preserves
-                # whatever the user passed).  Cast each at the boundary.
-                return_value = self._model(*(cast(Tensor, a) for a in args), **kwargs)
-
-        graph = tracer.graph
-        if not graph.ops:
-            _fallback_notice("empty-trace", "traced call recorded no operations")
+        traced = self._trace_forward(args, kwargs)
+        if traced is None:
             return None
+        tracer, return_value = traced
+        graph = tracer.graph
 
         # If this graph has attention, make sure the fused-attention workaround
         # capability flag is resolved before the emitters run (probes once).

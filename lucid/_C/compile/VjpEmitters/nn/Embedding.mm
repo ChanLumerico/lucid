@@ -47,29 +47,87 @@ namespace lucid::compile {
 
 namespace {
 
+MPSGraphTensor* embedding_keep_mask(MPSGraph* g, const OpNode& node, const GraphAxisIndex& ix) {
+    MPSGraphTensor* keep = ix.in_range;
+    auto pad_it = node.attrs.find("padding_idx");
+    if (pad_it == node.attrs.end())
+        return keep;
+    const auto* pad_p = std::get_if<std::int64_t>(&pad_it->second);
+    if (pad_p == nullptr || *pad_p < 0)
+        return keep;
+    MPSGraphTensor* pad_c = [g constantWithScalar:static_cast<double>(*pad_p)
+                                         dataType:ix.safe.dataType];
+    return [g logicalANDWithPrimaryTensor:keep
+                          secondaryTensor:[g notEqualWithPrimaryTensor:ix.safe
+                                                       secondaryTensor:pad_c
+                                                                  name:nil]
+                                     name:@"embedding_vjp_keep"];
+}
+
+MPSGraphTensor* scale_embedding_vjp_by_freq(MPSGraph* g,
+                                            const OpNode& node,
+                                            MPSGraphTensor* dW,
+                                            MPSGraphTensor* grad,
+                                            const GraphAxisIndex& ix,
+                                            MPSGraphTensor* keep,
+                                            NSArray<NSNumber*>* idx_col_shape,
+                                            std::int64_t V) {
+    auto freq_it = node.attrs.find("scale_grad_by_freq");
+    if (freq_it == node.attrs.end())
+        return dW;
+    const auto* freq_p = std::get_if<bool>(&freq_it->second);
+    if (freq_p == nullptr || !*freq_p)
+        return dW;
+    NSArray<NSNumber*>* count_base_ns = @[ [NSNumber numberWithLongLong:V], @1 ];
+    MPSGraphTensor* count_base = [g constantWithScalar:0.0
+                                                 shape:count_base_ns
+                                              dataType:grad.dataType];
+    MPSGraphTensor* ones_col = [g constantWithScalar:1.0
+                                               shape:idx_col_shape
+                                            dataType:grad.dataType];
+    MPSGraphTensor* count_updates = graph_drop_out_of_range(g, ones_col, keep, GraphScatter::Add);
+    if (count_updates == nil)
+        return nil;
+    MPSGraphTensor* counts = [g scatterAlongAxis:(NSInteger)0
+                                  withDataTensor:count_base
+                                   updatesTensor:count_updates
+                                   indicesTensor:ix.safe
+                                            mode:MPSGraphScatterModeAdd
+                                            name:@"embedding_vjp_counts"];
+    MPSGraphTensor* one_c = [g constantWithScalar:1.0 dataType:grad.dataType];
+    MPSGraphTensor* denom = [g maximumWithPrimaryTensor:counts
+                                        secondaryTensor:one_c
+                                                   name:@"embedding_vjp_denom"];
+    return [g divisionWithPrimaryTensor:dW secondaryTensor:denom name:@"embedding_vjp_scaled_dW"];
+}
+
 class EmbeddingVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "embedding"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
         if (node.inputs.size() < 2 || grad_outs.empty() || grad_outs[0] == nullptr)
             return false;
         TensorId w_id = node.inputs[0];
         TensorId i_id = node.inputs[1];
-        if (w_id < 0 || i_id < 0) return false;
+        if (w_id < 0 || i_id < 0)
+            return false;
 
         MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
         MPSGraphTensor* grad = as_tensor(grad_outs[0]);
         MPSGraphTensor* W = as_tensor(bctx.forward(w_id));
         MPSGraphTensor* idx = as_tensor(bctx.forward(i_id));
-        if (g == nil || grad == nil || W == nil || idx == nil) return false;
+        if (g == nil || grad == nil || W == nil || idx == nil)
+            return false;
 
         // SDK guard — the API matches the forward scatter_add path.
-        if (![g respondsToSelector:@selector(scatterAlongAxis:withDataTensor:updatesTensor:indicesTensor:mode:name:)])
+        if (![g respondsToSelector:@selector(scatterAlongAxis:withDataTensor:updatesTensor:
+                                             indicesTensor:mode:name:)])
             return false;
 
         std::vector<std::int64_t> w_shape = shape_of_mps(W);
-        if (w_shape.size() != 2) return false;
+        if (w_shape.size() != 2)
+            return false;
         const std::int64_t V = w_shape[0];
         const std::int64_t D = w_shape[1];
 
@@ -79,67 +137,55 @@ public:
         // resulting shape-mismatch.  Trace placeholders carry static
         // shapes by construction so this is fine.
         std::vector<std::int64_t> idx_shape = shape_of_mps(idx);
-        if (idx_shape.empty()) return false;
+        if (idx_shape.empty())
+            return false;
         std::int64_t M = 1;
-        for (std::int64_t d : idx_shape) M *= d;
-        if (M <= 0) return false;
+        for (std::int64_t d : idx_shape)
+            M *= d;
+        if (M <= 0)
+            return false;
 
         // (idx_shape...) → (M,) → (M, 1)
-        NSArray<NSNumber*>* idx_col_shape =
-            @[ [NSNumber numberWithLongLong:M], @1 ];
-        MPSGraphTensor* idx_col =
-            [g reshapeTensor:idx withShape:idx_col_shape name:nil];
+        NSArray<NSNumber*>* idx_col_shape = @[ [NSNumber numberWithLongLong:M], @1 ];
+        MPSGraphTensor* idx_col = [g reshapeTensor:idx withShape:idx_col_shape name:nil];
         // A row contributes when its index names a row of the table and is
         // not ``padding_idx``, as in eager's ``embedding_backward``.  An
         // index outside the table read NaN in the forward and sends nothing
         // back (policy B, ``OpEmitters/_IndexBounds.h``).  The rest are
         // selected away, not multiplied by 0: ``0 * inf`` is NaN.
         const GraphAxisIndex ix = graph_axis_index(g, idx_col, V, NegativeIndex::OutOfRange);
-        if (ix.safe == nil) return false;
-        MPSGraphTensor* keep = ix.in_range;
-        auto pad_it = node.attrs.find("padding_idx");
-        if (pad_it != node.attrs.end()) {
-            const auto* pad_p = std::get_if<std::int64_t>(&pad_it->second);
-            if (pad_p != nullptr && *pad_p >= 0) {
-                MPSGraphTensor* pad_c =
-                    [g constantWithScalar:static_cast<double>(*pad_p)
-                                 dataType:ix.safe.dataType];
-                keep = [g logicalANDWithPrimaryTensor:keep
-                                      secondaryTensor:[g notEqualWithPrimaryTensor:ix.safe
-                                                                   secondaryTensor:pad_c
-                                                                              name:nil]
-                                                 name:@"embedding_vjp_keep"];
-            }
-        }
+        if (ix.safe == nil)
+            return false;
+        MPSGraphTensor* keep = embedding_keep_mask(g, node, ix);
         // (M, 1) → (M, D)  — replicate the same scalar idx across D cols.
-        std::vector<std::int64_t> idx_grid_shape{ M, D };
+        std::vector<std::int64_t> idx_grid_shape{M, D};
         NSArray<NSNumber*>* idx_grid_ns = shape_to_ns(idx_grid_shape);
-        MPSGraphTensor* idx_grid =
-            [g broadcastTensor:ix.safe toShape:idx_grid_ns name:nil];
+        MPSGraphTensor* idx_grid = [g broadcastTensor:ix.safe toShape:idx_grid_ns name:nil];
 
         // grad: (Si..., D) → (M, D).
-        std::vector<std::int64_t> grad_grid_shape{ M, D };
+        std::vector<std::int64_t> grad_grid_shape{M, D};
         NSArray<NSNumber*>* grad_grid_ns = shape_to_ns(grad_grid_shape);
         MPSGraphTensor* grad_grid = graph_drop_out_of_range(
             g, [g reshapeTensor:grad withShape:grad_grid_ns name:nil],
             [g broadcastTensor:keep toShape:grad_grid_ns name:nil], GraphScatter::Add);
-        if (grad_grid == nil) return false;
+        if (grad_grid == nil)
+            return false;
 
         // base = zeros((V, D))   dtype = grad's dtype (chain dtype
         // under autocast — W may be F32 master while grad is F16).
-        std::vector<std::int64_t> base_shape{ V, D };
+        std::vector<std::int64_t> base_shape{V, D};
         NSArray<NSNumber*>* base_ns = shape_to_ns(base_shape);
-        MPSGraphTensor* base = [g constantWithScalar:0.0
-                                                shape:base_ns
-                                             dataType:grad.dataType];
+        MPSGraphTensor* base = [g constantWithScalar:0.0 shape:base_ns dataType:grad.dataType];
 
-        MPSGraphTensor* dW =
-            [g scatterAlongAxis:(NSInteger)0
-                  withDataTensor:base
-                   updatesTensor:grad_grid
-                   indicesTensor:idx_grid
-                            mode:MPSGraphScatterModeAdd
-                            name:@"embedding_vjp_dW"];
+        MPSGraphTensor* dW = [g scatterAlongAxis:(NSInteger)0
+                                  withDataTensor:base
+                                   updatesTensor:grad_grid
+                                   indicesTensor:idx_grid
+                                            mode:MPSGraphScatterModeAdd
+                                            name:@"embedding_vjp_dW"];
+        dW = scale_embedding_vjp_by_freq(g, node, dW, grad, ix, keep, idx_col_shape, V);
+        if (dW == nil)
+            return false;
         bctx.accumulate_grad(w_id, from_tensor(dW));
         // idx has no grad — leave it.
         return true;
@@ -162,52 +208,57 @@ public:
 class GatherVjp final : public VjpEmitter {
 public:
     std::string_view op_name() const override { return "gather"; }
-    bool emit(BackwardContext& bctx, const OpNode& node,
-              const std::vector<void*>& grad_outs) override {
+    bool
+    emit(BackwardContext& bctx, const OpNode& node, const std::vector<void*>& grad_outs) override {
         if (node.inputs.size() != 2 || grad_outs.empty() || grad_outs[0] == nullptr)
             return false;
         TensorId d_id = node.inputs[0];
         TensorId i_id = node.inputs[1];
-        if (d_id < 0 || i_id < 0) return false;
+        if (d_id < 0 || i_id < 0)
+            return false;
 
         auto ax_it = node.attrs.find("axis");
-        if (ax_it == node.attrs.end()) return false;
+        if (ax_it == node.attrs.end())
+            return false;
         const auto* axp = std::get_if<std::int64_t>(&ax_it->second);
-        if (axp == nullptr) return false;
+        if (axp == nullptr)
+            return false;
         const NSInteger axis = (NSInteger)*axp;
 
         MPSGraph* g = (__bridge MPSGraph*)bctx.graph();
-        if (![g respondsToSelector:@selector(scatterAlongAxis:withDataTensor:updatesTensor:indicesTensor:mode:name:)])
+        if (![g respondsToSelector:@selector(scatterAlongAxis:withDataTensor:updatesTensor:
+                                             indicesTensor:mode:name:)])
             return false;
 
         MPSGraphTensor* grad = as_tensor(grad_outs[0]);
         MPSGraphTensor* data = as_tensor(bctx.forward(d_id));
         MPSGraphTensor* idx = as_tensor(bctx.forward(i_id));
-        if (grad == nil || data == nil || idx == nil) return false;
+        if (grad == nil || data == nil || idx == nil)
+            return false;
 
         std::vector<std::int64_t> d_shape = shape_of_mps(data);
-        if (d_shape.empty()) return false;
+        if (d_shape.empty())
+            return false;
         NSArray<NSNumber*>* base_ns = shape_to_ns(d_shape);
         // Base dtype = grad's dtype (chain dtype) so scatter-add of
         // grad updates onto base works under autocast.
-        MPSGraphTensor* base = [g constantWithScalar:0.0
-                                                shape:base_ns
-                                             dataType:grad.dataType];
+        MPSGraphTensor* base = [g constantWithScalar:0.0 shape:base_ns dataType:grad.dataType];
 
         // The forward answered NaN where the index was out of range; nothing
         // was read there, so nothing flows back (policy B).
         const GraphAxisIndex ix =
             graph_axis_index(g, idx, static_extent(data, axis), NegativeIndex::Wrap);
-        if (ix.safe == nil) return false;
+        if (ix.safe == nil)
+            return false;
         MPSGraphTensor* updates = graph_drop_out_of_range(g, grad, ix.in_range, GraphScatter::Add);
-        if (updates == nil) return false;
-        MPSGraphTensor* d_data =
-            [g scatterAlongAxis:axis
-                  withDataTensor:base
-                   updatesTensor:updates
-                   indicesTensor:ix.safe
-                            mode:MPSGraphScatterModeAdd
-                            name:@"gather_vjp"];
+        if (updates == nil)
+            return false;
+        MPSGraphTensor* d_data = [g scatterAlongAxis:axis
+                                      withDataTensor:base
+                                       updatesTensor:updates
+                                       indicesTensor:ix.safe
+                                                mode:MPSGraphScatterModeAdd
+                                                name:@"gather_vjp"];
         bctx.accumulate_grad(d_id, from_tensor(d_data));
         return true;
     }

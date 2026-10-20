@@ -331,15 +331,18 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
     "lucid.compile._entry.module": (
         ("Module", "lucid.nn.module", "Module"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
+        ("Tracer", "lucid._C.engine.compile", "Tracer"),
     ),
     "lucid.compile._entry.segmented_step": (
         ("Module", "lucid.nn.module", "Module"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
+        ("Tracer", "lucid._C.engine.compile", "Tracer"),
     ),
     "lucid.compile._entry.step": (
         ("Module", "lucid.nn.module", "Module"),
         ("Parameter", "lucid.nn.parameter", "Parameter"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
+        ("Tracer", "lucid._C.engine.compile", "Tracer"),
     ),
     "lucid.compile._optim.compiler": (
         ("Optimizer", "lucid.optim.optimizer", "Optimizer"),

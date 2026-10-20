@@ -488,7 +488,11 @@ class _FusedStep:
             parameter and optimizer-state buffers have already been
             updated **in-place** before this returns.
         """
-        from lucid.compile._core.signature import model_has_active_hooks
+        from lucid.compile._core.signature import (
+            leaf_tensors,
+            model_has_active_hooks,
+            tensors_have_active_hooks,
+        )
 
         copt = self._copt
         copt._sync_params()
@@ -498,7 +502,9 @@ class _FusedStep:
             self._plans.clear()
             self._eager_only.clear()
             self._reachable = None
-        if model_has_active_hooks(self._model):
+        if model_has_active_hooks(self._model) or tensors_have_active_hooks(
+            leaf_tensors(args, {})
+        ):
             return self._run_eager(args)
         flags = copt._flags_now()
         key = self._key(

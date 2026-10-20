@@ -82,7 +82,8 @@ class LUCID_API EmbeddingBackward : public FuncOp<EmbeddingBackward, 1> {
 public:
     static constexpr bool kKeepsOwnValues = true;
     static const OpSchema schema_v1;
-    int padding_idx_ = -1;   // Row that receives no gradient; -1 for none.
+    int padding_idx_ = -1;  // Row that receives no gradient; -1 for none.
+    bool scale_grad_by_freq_ = false;
     Shape weight_shape_;     // (num_embeddings, embed_dim).
     Storage saved_indices_;  // Integer index tensor from forward.
     Shape saved_indices_shape_;
@@ -101,6 +102,9 @@ public:
     // padding_idx : int
     //     Row the backward leaves without gradient; pass a negative
     //     value to disable.  The lookup returns that row as stored.
+    // scale_grad_by_freq : bool
+    //     When ``true``, divide each row's accumulated gradient by the
+    //     number of times its index appears in ``indices``.
     //
     // Returns
     // -------
@@ -126,8 +130,10 @@ public:
     //     If ``weight`` is not 2-D.
     // DeviceMismatch
     //     If ``weight`` and ``indices`` live on different devices.
-    static TensorImplPtr
-    forward(const TensorImplPtr& weight, const TensorImplPtr& indices, int padding_idx);
+    static TensorImplPtr forward(const TensorImplPtr& weight,
+                                 const TensorImplPtr& indices,
+                                 int padding_idx,
+                                 bool scale_grad_by_freq = false);
 
     // Scatter-add backward.
     //
@@ -263,7 +269,8 @@ public:
 //     Output of shape ``(*indices.shape, embed_dim)``.
 LUCID_API TensorImplPtr embedding_op(const TensorImplPtr& weight,
                                      const TensorImplPtr& indices,
-                                     int padding_idx);
+                                     int padding_idx,
+                                     bool scale_grad_by_freq = false);
 
 // Generate the fixed sinusoidal position-encoding matrix from
 // Vaswani et al. 2017, "Attention Is All You Need".

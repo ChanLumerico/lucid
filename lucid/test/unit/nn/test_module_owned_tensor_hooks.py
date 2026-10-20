@@ -190,6 +190,61 @@ def test_the_result_reads_the_unscaled_gradient(device: str) -> None:
     assert weight.grad.tolist()[1] == [1.0] * 3
 
 
+def test_scale_grad_by_freq_supports_create_graph_and_compiled_steps(
+    ref: ModuleType, device: str
+) -> None:
+    """``scale_grad_by_freq=True`` works under ``create_graph=True`` and compiled steps."""
+
+    def _second_deriv(lib: ModuleType, dev: str) -> tuple[list[float], list[float]]:
+        emb = _embedding(lib, dev, padding_idx=4)
+        idx = lib.tensor(_IDX, dtype=lib.int64, device=dev)
+        cot = lib.ones((2, 4, 3), dtype=lib.float32, device=dev, requires_grad=True)
+        out = emb(idx)  # type: ignore[operator]
+        (dw,) = lib.autograd.grad((out * cot).sum(), (emb.weight,), create_graph=True)
+        (dcot,) = lib.autograd.grad((dw * dw).sum(), (cot,))
+        return (
+            dw.reshape(-1).detach().cpu().tolist(),
+            dcot.reshape(-1).detach().cpu().tolist(),
+        )
+
+    got_dw, got_dcot = _second_deriv(lucid, device)
+    want_dw, _ = _second_deriv(ref, "cpu")
+    for g, w in zip(got_dw, want_dw, strict=True):
+        assert abs(g - w) <= 1e-5 * max(1.0, abs(w))
+    # Row 1 appears 4 times, row 2 once, row 4 is padding_idx (0), row 0 once:
+    # d(dw[r]^2)/dcot[i] = 2 * dw[r] / count[r] = 2 * 1 / count[r].
+    expected_counts = [4, 4, 4, 1, 0, 0, 1, 4]
+    for pos, cnt in enumerate(expected_counts):
+        want_val = 0.0 if cnt == 0 else 2.0 / cnt
+        for col in range(3):
+            assert abs(got_dcot[pos * 3 + col] - want_val) <= 1e-5
+
+    if device == "metal":
+        emb_step = _embedding(lucid, "metal", padding_idx=4)
+        idx_m = lucid.tensor(_IDX, dtype=lucid.int64, device="metal")
+        up_m = lucid.arange(24, dtype=lucid.float32, device="metal").reshape(2, 4, 3)
+        step = lucid.compile.make_step(emb_step, lambda y, u: (y * u).sum())
+        step(idx_m, up_m).backward()
+        assert len(step.cache) == 1
+        got_step = _grad(emb_step)
+        want_step = _with_padding_idx(ref, "cpu")
+        for gr, wr in zip(got_step, want_step, strict=True):
+            for g, w in zip(gr, wr, strict=True):
+                assert abs(g - w) <= 1e-5 * max(1.0, abs(w))
+
+        emb_fused = _embedding(lucid, "metal", padding_idx=4)
+        opt_f = lucid.optim.SGD(emb_fused.parameters(), lr=0.1)
+        fstep = lucid.compile.fused_step(emb_fused, lambda y, u: (y * u).sum(), opt_f)
+        _ = fstep(idx_m, up_m)
+        assert fstep.cache_info()["entries"] == 1
+        for row_i, (gr, wr) in enumerate(
+            zip(emb_fused.weight.detach().cpu().tolist(), want_step, strict=True)
+        ):
+            for col_i, (g, w) in enumerate(zip(gr, wr, strict=True)):
+                expected = _TABLE[row_i][col_i] - 0.1 * w
+                assert abs(g - expected) <= 1e-5 * max(1.0, abs(expected))
+
+
 # ── class guard: no engine-held library callable closes over ``self`` ─────
 
 

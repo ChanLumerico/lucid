@@ -64,6 +64,7 @@ from lucid._C import engine as _C_engine
 from lucid.autograd.function import Function, FunctionCtx
 
 if TYPE_CHECKING:
+    from lucid._C.engine.compile import Tracer
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
 
@@ -198,6 +199,29 @@ class _Segment:
     cache: dict[tuple[tuple[int, ...], str], _SegCompiled] = field(default_factory=dict)
 
 
+def _trace_segment_fn(
+    watch: tuple[object, ...], fn: Callable[[], Tensor]
+) -> tuple[Tracer, Tensor] | None:
+    """Trace *fn* under ``no_grad()``, returning ``None`` on a tensor hook or empty graph."""
+    from lucid.autograd._grad_mode import no_grad
+    from lucid.compile import _tracing
+    from lucid.compile._core.attention_probe import maybe_probe_for_graph
+    from lucid.compile._core.buffer_writes import refuse
+
+    try:
+        with no_grad(), _tracing(watch=watch) as tracer:
+            out = fn()
+    except RuntimeError as why:
+        if "register_hook" not in str(why):
+            raise
+        return None
+    if not tracer.graph.ops:
+        return None
+    maybe_probe_for_graph(tracer.graph)
+    refuse(tracer)
+    return tracer, out
+
+
 def _compile_segment(seg: _Segment, x: Tensor) -> _SegCompiled | None:
     """Trace + compile the forward and backward executables for ``seg`` at ``x``.
 
@@ -207,25 +231,17 @@ def _compile_segment(seg: _Segment, x: Tensor) -> _SegCompiled | None:
     """
     import lucid
     from lucid._dispatch import _unwrap
-    from lucid.autograd._grad_mode import no_grad
-    from lucid.compile import _tracing
-    from lucid.compile._core.buffer_writes import refuse
-    from lucid.compile._core.attention_probe import maybe_probe_for_graph
 
     param_impls = [_unwrap(p) for p in seg.params]
     x_impl = _unwrap(x)
 
     # --- Trace 1: forward only (x -> y) -----------------------------------
-    with no_grad():
-        with _tracing(watch=(x, seg.params)) as t_fwd:
-            y = seg.forward_fn(x)
-    g_fwd = t_fwd.graph
-    if not g_fwd.ops:
+    traced_fwd = _trace_segment_fn((x, seg.params), lambda: seg.forward_fn(x))
+    if traced_fwd is None:
         return None
-    maybe_probe_for_graph(g_fwd)
+    t_fwd, y = traced_fwd
+    g_fwd = t_fwd.graph
     ext_fwd = t_fwd.external_feeds
-    # No write-back here: a traced in-place buffer write sends the step eager.
-    refuse(t_fwd)
     # The segment's output, not whatever op it recorded last.
     found = t_fwd.lookup_id(_unwrap(y))
     if found is None:
@@ -264,18 +280,14 @@ def _compile_segment(seg: _Segment, x: Tensor) -> _SegCompiled | None:
     # ``grad_out`` is a fresh leaf feed shaped like ``y``; the backward feeds the
     # upstream cotangent into this slot.
     go = lucid.zeros(y.shape, dtype=y.dtype, device=y.device)
-    with no_grad():
-        with _tracing(watch=(x, seg.params)) as t_bwd:
-            y2 = seg.forward_fn(x)
-            # Records the cotangent-product reduction as the trace's final op;
-            # its output id (graph.ops[-1]) is the loss the backward derives.
-            (y2 * go).sum()
-    g_bwd = t_bwd.graph
-    if not g_bwd.ops:
+    traced_bwd = _trace_segment_fn(
+        (x, seg.params), lambda: (seg.forward_fn(x) * go).sum()
+    )
+    if traced_bwd is None:
         return None
-    maybe_probe_for_graph(g_bwd)
+    t_bwd, _ = traced_bwd
+    g_bwd = t_bwd.graph
     ext_bwd = t_bwd.external_feeds
-    refuse(t_bwd)
     loss_id = g_bwd.ops[-1].outputs[0].id
 
     x_id_bwd: int | None = None
@@ -430,6 +442,11 @@ def make_segmented_step(
     """
     import lucid.nn as nn
     from lucid._tensor.tensor import Tensor
+    from lucid.compile._core.signature import (
+        leaf_tensors,
+        model_has_active_hooks,
+        tensors_have_active_hooks,
+    )
 
     if not isinstance(model, nn.Sequential):
         raise TypeError(
@@ -495,7 +512,11 @@ def make_segmented_step(
 
     def step(*x_args: Tensor) -> Tensor:
         """Run one segmented compiled training step (or eager fallback)."""
-        if eager_only["flag"]:
+        if (
+            eager_only["flag"]
+            or model_has_active_hooks(model)
+            or tensors_have_active_hooks(leaf_tensors(x_args, {}))
+        ):
             return _run_eager(x_args)
 
         # Compile every segment for this input chain on the first call.  Forward

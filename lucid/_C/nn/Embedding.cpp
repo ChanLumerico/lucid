@@ -39,6 +39,7 @@
 #include "../kernel/NaryKernel.h"
 #include "../ops/bfunc/Add.h"
 #include "../ops/bfunc/Compare.h"
+#include "../ops/bfunc/Div.h"
 #include "../ops/bfunc/Mul.h"
 #include "../ops/bfunc/Sub.h"
 #include "../ops/bfunc/_BinaryOp.h"
@@ -54,9 +55,34 @@ namespace lucid {
 
 const OpSchema EmbeddingBackward::schema_v1{"embedding", 1, AmpPolicy::Promote, true};
 
+namespace {
+
+TensorImplPtr scale_embedding_grad_by_freq(const TensorImplPtr& dw,
+                                           const Storage& saved_indices,
+                                           const Shape& saved_indices_shape,
+                                           Dtype saved_indices_dtype,
+                                           const Shape& weight_shape,
+                                           std::int64_t looked,
+                                           Dtype dt,
+                                           Device dev) {
+    const std::int64_t rows = weight_shape[0];
+    auto indices = std::make_shared<TensorImpl>(saved_indices, saved_indices_shape,
+                                                saved_indices_dtype, dev, false);
+    auto flat_idx = reshape_op(indices, {looked});
+    auto ones = ones_op({looked}, Dtype::I32, dev);
+    auto zeros = zeros_op({rows}, Dtype::I32, dev);
+    auto counts = scatter_add_op(zeros, flat_idx, ones, 0);
+    auto denom = where_op(equal_op(counts, zeros), ones_op({rows}, Dtype::I32, dev), counts);
+    auto scale = broadcast_to_op(reshape_op(astype_op(denom, dt), {rows, 1}), weight_shape);
+    return div_op(dw, scale);
+}
+
+}  // namespace
+
 TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
                                          const TensorImplPtr& indices,
-                                         int padding_idx) {
+                                         int padding_idx,
+                                         bool scale_grad_by_freq) {
     if (!weight || !indices)
         ErrorBuilder("embedding").fail("null input");
     if (weight->device() != indices->device())
@@ -73,6 +99,7 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
     out_shape.push_back(D);
     OpScopeFull scope{schema_v1.name, weight->device(), weight->dtype(), out_shape};
     scope.set_attr("padding_idx", static_cast<std::int64_t>(padding_idx));
+    scope.set_attr("scale_grad_by_freq", scale_grad_by_freq);
 
     auto& be = backend::Dispatcher::for_device(weight->device());
     Storage out_storage =
@@ -87,6 +114,7 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
     bwd->saved_indices_shape_ = indices->shape();
     bwd->saved_indices_dtype_ = indices->dtype();
     bwd->padding_idx_ = padding_idx;
+    bwd->scale_grad_by_freq_ = scale_grad_by_freq;
     bwd->weight_shape_ = weight->shape();
     kernel::NaryKernel<EmbeddingBackward, 1>::wire_autograd(std::move(bwd), {weight}, out, false);
 
@@ -103,23 +131,39 @@ TensorImplPtr EmbeddingBackward::forward(const TensorImplPtr& weight,
 
 std::vector<Storage> EmbeddingBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
-    return {be.embedding_backward(grad_out, saved_indices_, weight_shape_, saved_indices_shape_,
-                                  padding_idx_, dtype_)};
+    Storage dw = be.embedding_backward(grad_out, saved_indices_, weight_shape_,
+                                       saved_indices_shape_, padding_idx_, dtype_);
+    std::int64_t looked = 1;
+    for (auto d : saved_indices_shape_)
+        looked *= d;
+    if (!scale_grad_by_freq_ || looked == 0)
+        return {std::move(dw)};
+    GradModeGuard no_grad(false);
+    amp::AutocastGuard no_amp(dtype_, device_, false);
+    auto dw_impl =
+        std::make_shared<TensorImpl>(std::move(dw), weight_shape_, dtype_, device_, false);
+    return {scale_embedding_grad_by_freq(dw_impl, saved_indices_, saved_indices_shape_,
+                                         saved_indices_dtype_, weight_shape_, looked, dtype_,
+                                         device_)
+                ->storage()};
 }
 
 std::vector<TensorImplPtr> EmbeddingBackward::apply_for_graph(const TensorImplPtr& grad_out) {
     // dW[r] = sum of g over the positions that looked row r up, except the
     // padding row, which takes none: a scatter-add of g's rows by index.
+    amp::AutocastGuard no_amp(dtype_, device_, false);
     const std::int64_t rows = weight_shape_[0];
     const std::int64_t width = weight_shape_[1];
     std::int64_t looked = 1;
     for (auto d : saved_indices_shape_)
         looked *= d;
+    auto base = zeros_op(weight_shape_, dtype_, device_);
+    if (looked == 0)
+        return {base};
     auto indices = std::make_shared<TensorImpl>(saved_indices_, saved_indices_shape_,
                                                 saved_indices_dtype_, device_, false);
     auto index = broadcast_to_op(reshape_op(indices, {looked, 1}), Shape{looked, width});
     auto src = reshape_op(grad_out, {looked, width});
-    auto base = zeros_op(weight_shape_, dtype_, device_);
     TensorImplPtr dw = scatter_add_op(base, index, src, 0);
     if (padding_idx_ >= 0 && padding_idx_ < rows) {
         auto row = arange_op(0.0, static_cast<double>(rows), 1.0, Dtype::I64, device_);
@@ -127,12 +171,19 @@ std::vector<TensorImplPtr> EmbeddingBackward::apply_for_graph(const TensorImplPt
         auto keep = broadcast_to_op(reshape_op(padding, {rows, 1}), weight_shape_);
         dw = where_op(keep, zeros_like_op(dw), dw);
     }
+    if (scale_grad_by_freq_) {
+        dw = scale_embedding_grad_by_freq(dw, saved_indices_, saved_indices_shape_,
+                                          saved_indices_dtype_, weight_shape_, looked, dtype_,
+                                          device_);
+    }
     return {dw};
 }
 
-TensorImplPtr
-embedding_op(const TensorImplPtr& weight, const TensorImplPtr& indices, int padding_idx) {
-    return EmbeddingBackward::forward(weight, indices, padding_idx);
+TensorImplPtr embedding_op(const TensorImplPtr& weight,
+                           const TensorImplPtr& indices,
+                           int padding_idx,
+                           bool scale_grad_by_freq) {
+    return EmbeddingBackward::forward(weight, indices, padding_idx, scale_grad_by_freq);
 }
 LUCID_REGISTER_OP(EmbeddingBackward)
 

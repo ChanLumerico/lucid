@@ -444,3 +444,86 @@ def test_global_module_hook_and_internal_weight_norm_hook() -> None:
     finally:
         gh.remove()
     assert not model_has_active_hooks(wn_model)
+
+
+def test_parameter_and_mid_forward_tensor_hooks_under_compile_and_steps() -> None:
+    """Parameter tensor hooks and mid-forward tensor hooks work across compile entrypoints."""
+    m = _DropScaleNet(p=0.0).to(COMPILE_DEVICE)
+    m.eval()
+    x = metal_tensor(4, 8)
+
+    opt = lucid.optim.SGD(m.parameters(), lr=0.1)
+    fstep = lucid.compile.fused_step(m, lambda y: (y * y).sum(), opt)
+    _ = fstep(x)
+    assert fstep.cache_info()["entries"] == 1
+
+    # Registering a tensor hook on a parameter routes fused_step to eager so the hook runs,
+    # and removing it resumes compiled execution.
+    seen_param_grads: list[int] = []
+    hp = m.fc1.weight.register_hook(
+        lambda g: (seen_param_grads.append(g.numel()), g * 0.0)[1]
+    )
+    try:
+        assert model_has_active_hooks(m)
+        w_before = m.fc1.weight.detach().cpu().tolist()
+        _ = fstep(x)
+        assert len(seen_param_grads) == 1
+        assert m.fc1.weight.detach().cpu().tolist() == w_before
+    finally:
+        hp.remove()
+    assert not model_has_active_hooks(m)
+
+    # Segmented make_step respects module hooks and mid-forward tensor hooks.
+    seq = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 4)).to(COMPILE_DEVICE)
+    seg_step = lucid.compile.make_step(seq, lambda y: (y * y).sum(), segments=2)
+    seg_step(x).backward()
+    assert all(len(c) == 1 for c in seg_step.cache)
+
+    mod_hook_calls: list[int] = []
+    hm = seq[0].register_forward_hook(
+        lambda mod, inp, out: mod_hook_calls.append(out.numel())
+    )
+    try:
+        for p in seq.parameters():
+            p.grad = None
+        seg_step(x).backward()
+        assert len(mod_hook_calls) == 1
+    finally:
+        hm.remove()
+
+    # Mid-forward tensor hook inside forward falls back cleanly to eager under
+    # CompiledModule, make_step, segmented make_step, and fused_step.
+    class _MidHookLinear(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc = nn.Linear(8, 4)
+            self.hook_calls = 0
+
+        def forward(self, inp: lucid.Tensor) -> lucid.Tensor:
+            h = self.fc(inp)
+            if h.requires_grad or not lucid.is_grad_enabled():
+
+                def _scale(g: lucid.Tensor) -> lucid.Tensor:
+                    self.hook_calls += 1
+                    return g * 0.25
+
+                h.register_hook(_scale)
+            return h * 2.0
+
+    mh = _MidHookLinear().to(COMPILE_DEVICE)
+    cm_mh = lucid.compile(mh)
+    out_mh = cm_mh(x)
+    out_mh.sum().backward()
+    assert mh.hook_calls == 1
+
+    mh.hook_calls = 0
+    for p in mh.parameters():
+        p.grad = None
+    step_mh = lucid.compile.make_step(mh, lambda y: y.sum())
+    step_mh(x).backward()
+    assert mh.hook_calls == 1
+
+    seq_mh = nn.Sequential(_MidHookLinear(), nn.ReLU()).to(COMPILE_DEVICE)
+    seg_mh = lucid.compile.make_step(seq_mh, lambda y: y.sum(), segments=2)
+    seg_mh(x).backward()
+    assert seq_mh[0].hook_calls == 1  # type: ignore[union-attr]

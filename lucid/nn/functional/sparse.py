@@ -8,7 +8,6 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._unsupported import unsupported_if
-from lucid.autograd._hooks import _register_tensor_hook
 from lucid.nn.functional._index_checks import (
     _check_indices,
     _check_table,
@@ -172,10 +171,8 @@ def embedding(
     # survive; relying on that is relying on an over-read staying inside
     # the page.
     idx = input if input.dtype == lucid.int64 else input.to(lucid.int64)
-    out = _wrap(_C_engine.nn.embedding(_unwrap(weight), _unwrap(idx), pad))
-    if scale_grad_by_freq and out.requires_grad:
-        return _scale_grad_by_freq(out, idx, int(weight.shape[0]))
-    return out
+    by_freq = bool(scale_grad_by_freq)
+    return _wrap(_C_engine.nn.embedding(_unwrap(weight), _unwrap(idx), pad, by_freq))
 
 
 def _renorm_rows(
@@ -200,33 +197,6 @@ def _renorm_rows(
             norms > max_norm, max_norm / (norms + 1e-7), lucid.ones_like(norms)
         )
         weight.index_copy_(0, flat, rows * scale)
-
-
-def _scale_grad_by_freq(out: Tensor, idx: Tensor, num_embeddings: int) -> Tensor:
-    """``out`` whose gradient reaches the table divided by each index's count.
-
-    The count is a property of this one lookup, so it is applied at this
-    lookup's node: a hook on the gather's output divides the gradient at
-    every position by how often that position's index occurs in ``idx``.
-    Summed back into the table, row ``i`` receives the sum of its
-    positions' gradients over ``count(i)`` — the scaled row gradient.  The
-    hook is owned by the graph node, not by any module or table, so it
-    lives and dies with the graph, follows the lookup across ``.to()`` and
-    copies, and keeps a second lookup before the same backward scaled by
-    its own counts.  The caller sees a view of the gather, so a hook or
-    ``retain_grad`` of their own on the result reads the unscaled gradient.
-    """
-    flat = idx.reshape(-1)
-    counts = lucid.zeros(num_embeddings, dtype=lucid.int64, device=idx.device)
-    counts = counts.scatter_add(0, flat, lucid.ones_like(flat))
-    scale = 1.0 / counts.index_select(0, flat).to(out.dtype)
-    scale = scale.reshape(*idx.shape, 1)
-
-    def divide_by_count(grad: Tensor) -> Tensor:
-        return grad * scale
-
-    _register_tensor_hook(out, divide_by_count)
-    return out.view(tuple(out.shape))
 
 
 def _bag_mode(mode: str, sparse: bool, scale_grad_by_freq: bool) -> int:

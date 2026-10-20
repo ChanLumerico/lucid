@@ -20,6 +20,13 @@ from lucid._dispatch import _unwrap, _wrap
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
+_HOOK_VERSION: int = 0
+
+
+def _tensor_hook_version() -> int:
+    """Monotonic counter bumped whenever a tensor gradient hook is added or removed."""
+    return _HOOK_VERSION
+
 
 class RemovableHandle:
     r"""Handle returned by :meth:`~lucid.Tensor.register_hook`.
@@ -107,6 +114,8 @@ class RemovableHandle:
         for i, registered in enumerate(self._hooks_list):
             if registered is self._hook:
                 del self._hooks_list[i]
+                global _HOOK_VERSION
+                _HOOK_VERSION += 1
                 return
 
     def __enter__(self) -> RemovableHandle:
@@ -171,6 +180,17 @@ def _register_tensor_hook(
     Called by :meth:`~lucid.Tensor.register_hook`.  The slot's runner is
     installed on the first registration and shared by every later one.
     """
+    global _HOOK_VERSION
     runner = _C_engine._tensor_hook_runner(_unwrap(tensor), _HookRunner)
     runner.hooks.append(hook)
+    _HOOK_VERSION += 1
     return RemovableHandle(runner.hooks, hook)
+
+
+def _has_active_tensor_hooks(tensor: Tensor) -> bool:
+    """Return ``True`` if *tensor* has at least one active gradient hook."""
+    impl = _unwrap(tensor)
+    if not _C_engine._has_tensor_hooks(impl):
+        return False
+    runner = _C_engine._tensor_hook_runner(impl, _HookRunner)
+    return bool(getattr(runner, "hooks", True))

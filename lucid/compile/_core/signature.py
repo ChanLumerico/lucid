@@ -309,7 +309,9 @@ def _internal_pre_hook_keys(mod: Module) -> set[int]:
 
 
 def _sub_has_active_hooks(sub: Module) -> bool:
-    """Return ``True`` if single module ``sub`` has user forward or backward hooks."""
+    """Return ``True`` if single module ``sub`` has user forward, backward, or parameter hooks."""
+    from lucid.autograd._hooks import _has_active_tensor_hooks
+
     if (
         getattr(sub, "_forward_hooks", None)
         or getattr(sub, "_backward_pre_hooks", None)
@@ -317,7 +319,14 @@ def _sub_has_active_hooks(sub: Module) -> bool:
     ):
         return True
     pre_hooks = getattr(sub, "_forward_pre_hooks", None)
-    return bool(pre_hooks and (set(pre_hooks) - _internal_pre_hook_keys(sub)))
+    if pre_hooks and (set(pre_hooks) - _internal_pre_hook_keys(sub)):
+        return True
+    params = getattr(sub, "_parameters", None)
+    if isinstance(params, dict):
+        for p in params.values():
+            if p is not None and _has_active_tensor_hooks(p):
+                return True
+    return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -350,10 +359,11 @@ def _tree_walk(model: object) -> _TreeWalk:
     modules.  The version is read before the walk: a change made while it
     runs moves it past the version stored, and the next call walks again.
     """
+    from lucid.autograd._hooks import _tensor_hook_version
     from lucid.nn._tree_version import _tree_version
     from lucid.nn.module import Module
 
-    version = _tree_version()
+    version = _tree_version() + _tensor_hook_version()
     roots = _root_modules(model)
     cached = _WALKS.get(model) if isinstance(model, Module) else None
     if cached is not None and cached.version == version and cached.walked_from(roots):
@@ -390,6 +400,13 @@ def model_has_active_hooks(model: object) -> bool:
     ):
         return True
     return _tree_walk(model).hooked
+
+
+def tensors_have_active_hooks(tensors: Iterable[Tensor]) -> bool:
+    """Return ``True`` if any tensor in ``tensors`` carries an active tensor gradient hook (``Tensor.register_hook``)."""
+    from lucid.autograd._hooks import _has_active_tensor_hooks
+
+    return any(_has_active_tensor_hooks(t) for t in tensors)
 
 
 def leaf_tensors(args: Iterable[object], kwargs: dict[str, object]) -> list[Tensor]:
