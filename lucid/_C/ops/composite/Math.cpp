@@ -144,7 +144,14 @@ TensorImplPtr atan2_op(const TensorImplPtr& y_in, const TensorImplPtr& x_in) {
         ErrorBuilder("atan2").fail("null input");
     const auto [y_dev, x_dev] = detail::align_binary_devices(y_in, x_in, "atan2");
     const AmpScope amp{"atan2", y_dev->device()};
-    const auto [y, x] = cast_operands(amp, y_dev, x_dev);
+    const auto [y_amp, x_amp] = cast_operands(amp, y_dev, x_dev);
+    auto to_float = [](const TensorImplPtr& t) {
+        return (!is_floating_point(t->dtype()) && !is_complex(t->dtype()))
+                   ? astype_op(t, Dtype::F32)
+                   : t;
+    };
+    const TensorImplPtr y = to_float(y_amp);
+    const TensorImplPtr x = to_float(x_amp);
 
     auto zero_x = full_like_op(x, 0.0);
     auto zero_y = full_like_op(y, 0.0);

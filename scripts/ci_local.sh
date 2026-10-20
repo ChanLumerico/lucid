@@ -38,7 +38,7 @@ export PYTHONPATH="$ROOT/scripts/ci_mirror${PYTHONPATH:+:$PYTHONPATH}"
 # CI's pytest loads one plugin, pytest-benchmark.  Any other a venv carries
 # would be refused by the mirror as pytest starts.
 export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
-export PYTEST_PLUGINS=pytest_benchmark.plugin
+export PYTEST_PLUGINS=pytest_benchmark.plugin,hypothesis.extra.pytestplugin
 export LUCID_CI_SKIP_BUILD=1
 export LUCID_CI_SKIP_PUBLISH=1
 
