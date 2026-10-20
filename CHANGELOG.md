@@ -1066,6 +1066,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - sever freed frontier and release node-owned saved members
 
+- preserve float32 subnormals in Metal frexp and ldexp
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

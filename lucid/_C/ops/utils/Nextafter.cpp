@@ -190,4 +190,24 @@ std::vector<TensorImplPtr> NextafterBackward::apply_for_graph(const TensorImplPt
 
 LUCID_REGISTER_OP(NextafterBackward)
 
+TensorImplPtr bitcast_op(const TensorImplPtr& a, Dtype dtype) {
+    Validator::input(a, "bitcast.a").non_null();
+    if (dtype_size(a->dtype()) != dtype_size(dtype))
+        ErrorBuilder("bitcast").invalid_argument("bitcast requires equal element byte widths");
+    if (a->dtype() == dtype)
+        return a;
+    if (a->is_phantom())
+        return fresh(Storage{PhantomStorage{0, dtype, a->device()}}, a->shape(), dtype,
+                     a->device());
+    if (a->device() == Device::GPU) {
+        const auto& ga = std::get<GpuStorage>(a->storage());
+        auto out = ::mlx::core::view(*ga.arr, gpu::to_mlx_dtype(dtype));
+        return fresh(Storage{gpu::wrap_mlx_array(std::move(out), dtype)}, a->shape(), dtype,
+                     Device::GPU);
+    }
+    CpuStorage cpu = to_cpu(a);
+    cpu.dtype = dtype;
+    return fresh(Storage{std::move(cpu)}, a->shape(), dtype, Device::CPU);
+}
+
 }  // namespace lucid

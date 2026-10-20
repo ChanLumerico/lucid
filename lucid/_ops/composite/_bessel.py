@@ -170,6 +170,24 @@ def _i0(x: Tensor) -> Tensor:
     return lucid.exp(lucid.abs(x)) * _i0e(x)
 
 
+def _i0_as_fit(input: Tensor) -> Tensor:
+    ax = lucid.abs(input)
+    ax_safe = _above(ax, 3.75)
+    t_small = (lucid.clip(input, -3.75, 3.75) * (1.0 / 3.75)) ** 2
+    val_small, t_pow = lucid.full_like(input, _AS_I0_SMALL[0]), lucid.ones_like(input)
+    for c in _AS_I0_SMALL[1:]:
+        t_pow = t_pow * t_small
+        val_small = val_small + c * t_pow
+    y_large = 3.75 / ax_safe
+    val_large, y_pow = lucid.full_like(input, _AS_I0_LARGE[0]), lucid.ones_like(input)
+    for c in _AS_I0_LARGE[1:]:
+        y_pow = y_pow * y_large
+        val_large = val_large + c * y_pow
+    return lucid.where(
+        ax <= 3.75, val_small, val_large * lucid.exp(ax_safe) / lucid.sqrt(ax_safe)
+    )
+
+
 def _i1e(x: Tensor) -> Tensor:
     """``exp(-|x|) I1(x)``; odd in ``x``.
 

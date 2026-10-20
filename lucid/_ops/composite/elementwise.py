@@ -17,10 +17,18 @@ from typing import TYPE_CHECKING, cast
 
 import lucid
 from lucid import _promotion
+from lucid._C import _C_engine
 from lucid._dispatch import _binary_operands, _float_input, _wrap
 from lucid._ops.composite import _bessel
 from lucid._ops.composite._gamma import _lgamma, _polygamma
-from lucid._ops.composite._opmath import _in_float32, _real
+from lucid._ops.composite._opmath import (
+    _in_float32,
+    _normalize_metal_f32,
+    _pow2,
+    _real,
+    _restore_metal_f32_subnormals,
+    _scale_pow2,
+)
 from lucid._ops.composite._shared import _is_tensor
 from lucid._types import Scalar, TensorOrScalar
 
@@ -1284,10 +1292,6 @@ def copysign(input: Tensor, other: TensorOrScalar) -> Tensor:
     return lucid.where(y < 0.0, -mag, mag)
 
 
-def _pow2(k: Tensor) -> Tensor:
-    return lucid.where(k < 0.0, 1.0 / (2.0 ** (-k)), 2.0**k)
-
-
 def ldexp(input: Tensor, other: Tensor | Scalar) -> Tensor:
     r"""Element-wise :math:`\text{input} \cdot 2^{\text{exponent}}`.
 
@@ -1320,11 +1324,18 @@ def ldexp(input: Tensor, other: Tensor | Scalar) -> Tensor:
         else lucid.tensor(_promotion.as_number(other), dtype=work_dtype, device=input.device)
     )
     limit = 2400.0 if work_dtype == lucid.float64 else 300.0
-    k = lucid.clip(lucid.trunc(exp_t), -limit, limit)
-    k1 = lucid.trunc(k / 3.0)
-    k2 = lucid.trunc((k - k1) * 0.5)
-    k3 = lucid.where(lucid.abs(exp_t) > limit, k - k1 - k2, exp_t - k1 - k2)
-    out = ((work * _pow2(k1)) * _pow2(k2)) * _pow2(k3)
+    if (
+        work.device.type == "metal"
+        and work_dtype == lucid.float32
+        and not work._impl.is_phantom
+        and _C_engine.compile.current_tracer() is None
+    ):
+        work_norm, shift, bits = _normalize_metal_f32(work)
+        exp_eff = exp_t - shift
+        out = _scale_pow2(work_norm, exp_eff, limit)
+        out = _restore_metal_f32_subnormals(work_norm, exp_eff, bits, out)
+    else:
+        out = _scale_pow2(work, exp_t, limit)
     return out.to(dtype=orig) if orig != work_dtype else out
 
 
@@ -1341,6 +1352,14 @@ def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
         orig_dtype if orig_dtype in (lucid.float32, lucid.float64) else lucid.float32
     )
     work = input if orig_dtype == work_dtype else input.to(dtype=work_dtype)
+    shift: Tensor | None = None
+    if (
+        work.device.type == "metal"
+        and work_dtype == lucid.float32
+        and not work._impl.is_phantom
+        and _C_engine.compile.current_tracer() is None
+    ):
+        work, shift, _ = _normalize_metal_f32(work)
     abs_x = lucid.abs(work)
     special = (abs_x == 0.0) | lucid.isinf(work) | lucid.isnan(work)
     safe_abs = lucid.where(special, lucid.full_like(work, 1.0), abs_x)
@@ -1353,6 +1372,8 @@ def frexp(input: Tensor) -> tuple[Tensor, Tensor]:
     m, e_float = lucid.where(hi, m * 0.5, m), lucid.where(hi, e_float + 1.0, e_float)
     lo = (~special) & (lucid.abs(m) < 0.5)
     m, e_float = lucid.where(lo, m * 2.0, m), lucid.where(lo, e_float - 1.0, e_float)
+    if shift is not None:
+        e_float = e_float - shift
     m = lucid.where(special, work, m)
     return (m.to(dtype=orig_dtype) if orig_dtype != work_dtype else m), e_float.to(
         dtype=lucid.int32
@@ -1503,29 +1524,7 @@ def i0(input: Tensor) -> Tensor:
     x = _real(input)
     if x.dtype == lucid.float64:
         return _bessel._i0(x)
-    return _in_float32(_i0_as_fit, x)
-
-
-def _i0_as_fit(input: Tensor) -> Tensor:
-    ax = lucid.abs(input)
-    ax_safe = lucid.clamp(ax, min=3.75)
-    t_small = (lucid.clip(input, -3.75, 3.75) * (1.0 / 3.75)) ** 2
-    val_small, t_pow = lucid.full_like(input, _bessel._AS_I0_SMALL[0]), lucid.ones_like(
-        input
-    )
-    for c in _bessel._AS_I0_SMALL[1:]:
-        t_pow = t_pow * t_small
-        val_small = val_small + c * t_pow
-    y_large = 3.75 / ax_safe
-    val_large, y_pow = lucid.full_like(input, _bessel._AS_I0_LARGE[0]), lucid.ones_like(
-        input
-    )
-    for c in _bessel._AS_I0_LARGE[1:]:
-        y_pow = y_pow * y_large
-        val_large = val_large + c * y_pow
-    return lucid.where(
-        ax <= 3.75, val_small, val_large * lucid.exp(ax_safe) / lucid.sqrt(ax_safe)
-    )
+    return _in_float32(_bessel._i0_as_fit, x)
 
 
 __all__ = [

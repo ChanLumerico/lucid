@@ -82,5 +82,6 @@ public:
 };
 
 LUCID_API TensorImplPtr nextafter_op(const TensorImplPtr& a, const TensorImplPtr& b);
+LUCID_API TensorImplPtr bitcast_op(const TensorImplPtr& a, Dtype dtype);
 
 }  // namespace lucid

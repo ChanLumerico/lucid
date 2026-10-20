@@ -24,6 +24,7 @@
 #include "../ops/ufunc/Discrete.h"
 #include "../ops/ufunc/Trig.h"
 #include "../ops/utils/Concat.h"
+#include "../ops/utils/Nextafter.h"
 #include "../ops/utils/Select.h"
 #include "../ops/utils/View.h"
 
@@ -107,6 +108,7 @@ void register_composite(py::module_& m) {
     m.def(
         "view", [](const TensorImplPtr& a, const Shape& shape) { return view_op(a, shape); },
         py::arg("a"), py::arg("shape"));
+    m.def("_bitcast", &bitcast_op, py::arg("a"), py::arg("dtype"));
     m.def(
         "concat",
         [](const std::vector<TensorImplPtr>& xs, int dim) { return concatenate_op(xs, dim); },

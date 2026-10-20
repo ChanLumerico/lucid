@@ -106,17 +106,9 @@ def test_frexp_matches_reference_across_full_range(
     ref: ModuleType,
     device: str,
     dtype_name: str,
-    request: pytest.FixtureRequest,
 ) -> None:
     if device == "metal" and dtype_name == "float64":
         pytest.skip("Metal does not support float64")
-    if device == "metal" and dtype_name == "float32":
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                reason="LCD-468: Metal frexp of a float32 subnormal returns (x, 0)",
-            )
-        )
     l_dt = getattr(lucid, dtype_name)
     r_dt = getattr(ref, dtype_name)
     if dtype_name in ("float16", "bfloat16"):
@@ -127,6 +119,8 @@ def test_frexp_matches_reference_across_full_range(
             -0.5,
             1.0,
             -1.0,
+            1e-7,
+            -1e-7,
             1e-4,
             60000.0,
             -60000.0,
@@ -142,8 +136,12 @@ def test_frexp_matches_reference_across_full_range(
             -0.5,
             1.0,
             -1.0,
+            1.401298464324817e-45,
+            -1.401298464324817e-45,
             1e-40,
             -1e-40,
+            1.5e-39,
+            -1.5e-39,
             1e-38,
             1e38,
             -1e38,
@@ -157,6 +155,8 @@ def test_frexp_matches_reference_across_full_range(
     rx = ref.tensor(vals, dtype=r_dt)
     lm, le = lucid.frexp(lx)
     rm, re = ref.frexp(rx)
+    round_trip = lucid.ldexp(lm, le)
+    want_rt = ref.ldexp(rm, re)
 
     assert lm.dtype == l_dt
     assert le.dtype == lucid.int32
@@ -175,12 +175,23 @@ def test_frexp_matches_reference_across_full_range(
         else:
             assert g == pytest.approx(w, rel=1e-6, abs=1e-7)
 
+    for g, w in zip(round_trip.tolist(), want_rt.tolist(), strict=True):
+        if math.isnan(w):
+            assert math.isnan(g)
+        elif math.isinf(w):
+            assert g == w
+        elif w == 0.0:
+            assert g == 0.0
+            assert math.copysign(1.0, g) == math.copysign(1.0, w)
+        else:
+            assert g == pytest.approx(w, rel=1e-6, abs=0.0)
+
 
 @pytest.mark.parametrize(
     "m_vals,e_vals",
     [
         ([0.5, -0.75, 0.5877471566200256, 1.0], [128, 127, 127, -126]),
-        ([1e30, -1e30, 0.5, -0.0, 0.0], [-200, -200, -130, 50, -50]),
+        ([1e30, -1e30, 0.5, -0.5, -0.0, 0.0], [-200, -200, -130, -148, 50, -50]),
     ],
 )
 def test_ldexp_extreme_exponents_and_gradients(
@@ -188,16 +199,7 @@ def test_ldexp_extreme_exponents_and_gradients(
     device: str,
     m_vals: list[float],
     e_vals: list[int],
-    request: pytest.FixtureRequest,
 ) -> None:
-    exact = [abs(math.ldexp(m, e)) for m, e in zip(m_vals, e_vals, strict=True)]
-    if device == "metal" and any(0.0 < v < 2.0**-126 for v in exact):
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                reason="LCD-468: Metal ldexp flushes a float32 subnormal to zero",
-            )
-        )
     lm = lucid.tensor(m_vals, dtype=lucid.float32, device=device)
     le = lucid.tensor(e_vals, dtype=lucid.int32, device=device)
     rm = ref.tensor(m_vals, dtype=ref.float32)
