@@ -465,3 +465,46 @@ def test_nonzero_supports_narrow_int_and_complex(
     rx = ref.tensor(vals, dtype=ref_dt).reshape(2, 2)
     _same(lucid.nonzero(x), ref.nonzero(rx))
 
+
+@pytest.mark.parametrize("right", [False, True])
+def test_searchsorted_and_bucketize_duplicates_nan_empty_and_2d(
+    ref: ModuleType, device: str, right: bool
+) -> None:
+    # 1-D with duplicates and NaN
+    seq_vals = [1.0, 2.0, 2.0, 4.0, NAN]
+    q_vals = [-1.0, 1.0, 2.0, 3.0, 5.0, NAN]
+    seq = lucid.tensor(seq_vals, device=device)
+    q = lucid.tensor(q_vals, device=device)
+    rseq = ref.tensor(seq_vals)
+    rq = ref.tensor(q_vals)
+    _same(lucid.searchsorted(seq, q, right=right), ref.searchsorted(rseq, rq, right=right))
+    _same(lucid.bucketize(q, seq, right=right), ref.bucketize(rq, rseq, right=right))
+
+    # Empty sequence and empty queries
+    empty = lucid.zeros(0, device=device)
+    rempty = ref.zeros(0)
+    _same(lucid.searchsorted(empty, q, right=right), ref.searchsorted(rempty, rq, right=right))
+    _same(lucid.searchsorted(seq, empty, right=right), ref.searchsorted(rseq, rempty, right=right))
+
+    # N-D row-wise searchsorted
+    seq_2d = lucid.tensor([[1.0, 3.0, 5.0], [2.0, 4.0, 6.0]], device=device)
+    q_2d = lucid.tensor([[0.0, 3.0, 7.0], [2.5, 4.0, 5.5]], device=device)
+    rseq_2d = ref.tensor([[1.0, 3.0, 5.0], [2.0, 4.0, 6.0]])
+    rq_2d = ref.tensor([[0.0, 3.0, 7.0], [2.5, 4.0, 5.5]])
+    _same(
+        lucid.searchsorted(seq_2d, q_2d, right=right),
+        ref.searchsorted(rseq_2d, rq_2d, right=right),
+    )
+
+
+def test_searchsorted_1m_by_1m_completes_in_bounded_memory() -> None:
+    # Previously materialised a 1M x 1M broadcast comparison (1 TB -> OOM-killed, LCD-218).
+    seq = lucid.arange(1_000_000, dtype=lucid.float32)
+    q = lucid.linspace(-10.0, 1_000_010.0, 1_000_000, dtype=lucid.float32)
+    out = lucid.searchsorted(seq, q)
+    assert out.shape == (1_000_000,)
+    assert out.dtype == lucid.int64
+    assert int(out[0].item()) == 0
+    assert int(out[-1].item()) == 1_000_000
+
+

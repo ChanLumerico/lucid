@@ -1,15 +1,10 @@
 // lucid/_C/ops/composite/Search.h
 //
-// Sorted-array search ops built on top of broadcasting comparisons.  The
-// trick: counting how many elements of a sorted reference are strictly less
-// than (or less-than-or-equal to) each query value is exactly the index
-// where the query would be inserted to keep the array sorted.  No specialised
-// binary-search kernel needed — broadcast + compare + reduce primitives
-// already produce the answer.
-//
+// Sorted-array binary search ops:
 //   searchsorted(sorted_1d, values)
 //       — for each query, return the leftmost (right=false) or rightmost
-//         (right=true) insertion point in ``sorted_1d``.
+//         (right=true) insertion point in ``sorted_1d`` (or per row of an
+//         N-D ``sorted_1d`` whose leading N-1 dimensions match ``values``).
 //   bucketize(values, boundaries)
 //       — alias of searchsorted with the argument order flipped.
 
@@ -20,15 +15,11 @@
 
 namespace lucid {
 
-// Per-query insertion point into a sorted 1-D reference.
+// Per-query insertion point into a sorted 1-D (or row-wise N-D) reference.
 //
-// Composite over :func:`reshape_op` + :func:`broadcast_to_op` +
-// (:func:`less_op` | :func:`less_equal_op`) + :func:`astype_op` +
-// :func:`sum_op`.  The 1-D reference is broadcast to
-// ``[1, ..., 1, N]`` and the queries to ``S + [1]``; both expand to the
-// full ``S + [N]`` grid, the comparison is reduced over the trailing axis,
-// and the bool $\to$ F32 $\to$ I64 cast chain produces the standard
-// ``searchsorted`` dtype.  Not differentiable — integer output.
+// Evaluates each query via binary search in $O(\log N)$ time and $O(1)$
+// auxiliary memory per query, ordering ``NaN`` after ``+inf`` to match the
+// reference.  Not differentiable — integer output.
 //
 // Math
 // ----
@@ -43,7 +34,8 @@ namespace lucid {
 // Parameters
 // ----------
 // sorted_1d : TensorImplPtr
-//     1-D ascending-sorted reference of length $N$.
+//     1-D ascending-sorted reference of length $N$, or an N-D tensor whose
+//     leading $N - 1$ dimensions match ``values``.
 // values : TensorImplPtr
 //     Query tensor of arbitrary shape ``S``.
 // right : bool
@@ -58,13 +50,7 @@ namespace lucid {
 // Raises
 // ------
 // Failure
-//     If either input is null or ``sorted_1d`` is not 1-D.
-//
-// Notes
-// -----
-// The reduction kernel only supports float dtypes; the bool comparison is
-// cast to F32 for the sum, then back to I64 to match the canonical
-// ``searchsorted`` dtype.
+//     If either input is null or the shapes are incompatible.
 //
 // See Also
 // --------
