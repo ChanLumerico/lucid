@@ -20,19 +20,16 @@
 #include "../autograd/Engine.h"
 #include "../autograd/Helpers.h"
 #include "../backend/Dispatcher.h"
-#include "../compile/Tracer.h"
 #include "../core/Error.h"
-#include "../core/ErrorBuilder.h"
-#include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
-#include "../core/Profiler.h"
+#include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
 #include "../kernel/NaryKernel.h"
-#include "../ops/bfunc/_BinaryOp.h"
 #include "../ops/composite/Indexing.h"
 #include "../ops/gfunc/Gfunc.h"
+#include "../ops/ufunc/Astype.h"
 #include "../ops/ufunc/Reductions.h"
 #include "ConvNd.h"
 
@@ -45,6 +42,87 @@ const OpSchema ConvTranspose2dBackward::schema_v1{"conv_transpose2d", 1, AmpPoli
 template <>
 const OpSchema ConvTranspose3dBackward::schema_v1{"conv_transpose3d", 1, AmpPolicy::Promote, true};
 
+namespace {
+
+template <int N>
+backend::IBackend::ConvTransposeNdOpts make_conv_transpose_opts(int groups,
+                                                                const int (&stride)[N],
+                                                                const int (&pad)[N],
+                                                                const int (&dilation)[N],
+                                                                const int (&opad)[N]) {
+    backend::IBackend::ConvTransposeNdOpts opts{};
+    opts.N = N;
+    opts.groups = groups;
+    for (int i = 0; i < N; ++i) {
+        opts.stride[i] = stride[i];
+        opts.pad[i] = pad[i];
+        opts.dilation[i] = dilation[i];
+        opts.opad[i] = opad[i];
+    }
+    return opts;
+}
+
+template <int N>
+void validate_conv_transpose_params(const std::string& op,
+                                    int groups,
+                                    const int (&stride)[N],
+                                    const int (&pad)[N],
+                                    const int (&opad)[N],
+                                    const int (&dilation)[N]) {
+    require_at_least(groups, 1, op + ": groups");
+    require_each_at_least(stride, 1, op + ": stride");
+    require_each_at_least(pad, 0, op + ": padding");
+    require_each_at_least(opad, 0, op + ": output_padding");
+    require_each_at_least(dilation, 1, op + ": dilation");
+    for (int i = 0; i < N; ++i) {
+        if (opad[i] >= std::max(stride[i], dilation[i])) {
+            ErrorBuilder(op).invalid_argument("output_padding must be smaller than stride or "
+                                              "dilation, got " +
+                                              std::to_string(opad[i]) + " on axis " +
+                                              std::to_string(i));
+        }
+    }
+}
+
+std::array<TensorImplPtr, 3> cast_conv_transpose_operands(const TensorImplPtr& x,
+                                                          const TensorImplPtr& W,
+                                                          const TensorImplPtr& b,
+                                                          Dtype eff_dt) {
+    std::array<TensorImplPtr, 3> out{astype_op(x, eff_dt), astype_op(W, eff_dt),
+                                     astype_op(b, eff_dt)};
+    if (out[1]->dtype() != eff_dt || out[2]->dtype() != eff_dt)
+        throw DtypeMismatch(std::string(dtype_name(eff_dt)),
+                            std::string(dtype_name(out[1]->dtype())), "conv_transpose");
+    return out;
+}
+
+template <int N>
+TensorImplPtr finish_conv_transpose_forward(Storage out_storage,
+                                            Shape out_shape,
+                                            Dtype eff_dt,
+                                            const std::array<TensorImplPtr, 3>& ins,
+                                            int groups,
+                                            const int (&stride)[N],
+                                            const int (&pad)[N],
+                                            const int (&opad)[N],
+                                            const int (&dilation)[N]) {
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), eff_dt,
+                                            ins[0]->device(), false);
+    auto bwd = std::make_shared<ConvTransposeNdBackward<N>>();
+    bwd->groups_ = groups;
+    for (int i = 0; i < N; ++i) {
+        bwd->stride_[i] = stride[i];
+        bwd->pad_[i] = pad[i];
+        bwd->opad_[i] = opad[i];
+        bwd->dilation_[i] = dilation[i];
+    }
+    kernel::NaryKernel<ConvTransposeNdBackward<N>, 3>::wire_autograd(
+        std::move(bwd), {ins[0], ins[1], ins[2]}, out, {true, true, false});
+    return out;
+}
+
+}  // namespace
+
 template <int N>
 TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
                                                   const TensorImplPtr& W,
@@ -56,29 +134,18 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
                                                   int groups) {
     if (!x || !W || !b)
         ErrorBuilder("conv_transpose").fail("null input");
-    if (x->dtype() != W->dtype() || x->dtype() != b->dtype())
-        throw DtypeMismatch(std::string(dtype_name(x->dtype())),
-                            std::string(dtype_name(W->dtype())), "conv_transpose");
+    const std::string op(ConvTransposeNdBackward<N>::schema_v1.name);
+    validate_conv_transpose_params(op, groups, stride, pad, opad, dilation);
     if (x->device() != W->device() || x->device() != b->device())
         throw DeviceMismatch(std::string(device_name(x->device())),
                              std::string(device_name(W->device())), "conv_transpose");
-    const std::string op(ConvTransposeNdBackward<N>::schema_v1.name);
     require_rank(x->shape(), N + 2, op + ": x", channels_first_layout(N, "N", "C_in"));
     require_rank(W->shape(), N + 2, op + ": weight",
                  channels_first_layout(N, "C_in", "C_out/groups"));
-    require_at_least(groups, 1, op + ": groups");
-    require_each_at_least(stride, 1, op + ": stride");
-    require_each_at_least(pad, 0, op + ": padding");
-    require_each_at_least(opad, 0, op + ": output_padding");
-    require_each_at_least(dilation, 1, op + ": dilation");
-    // An output padding picks one of the ``max(stride, dilation)`` output
-    // extents that map back to this input extent; any more reaches past them.
-    for (int i = 0; i < N; ++i)
-        if (opad[i] >= std::max(stride[i], dilation[i]))
-            ErrorBuilder(op).invalid_argument("output_padding must be smaller than stride or "
-                                              "dilation, got " +
-                                              std::to_string(opad[i]) + " on axis " +
-                                              std::to_string(i));
+
+    SchemaGuard sg{ConvTransposeNdBackward<N>::schema_v1, x->dtype(), x->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const auto ins = cast_conv_transpose_operands(x, W, b, eff_dt);
 
     const int B = static_cast<int>(x->shape()[0]);
     const int Cin = static_cast<int>(x->shape()[1]);
@@ -121,54 +188,23 @@ TensorImplPtr ConvTransposeNdBackward<N>::forward(const TensorImplPtr& x,
         K_total *= K[i];
     }
 
-    OpScopeFull scope{ConvTransposeNdBackward<N>::schema_v1.name, x->device(), x->dtype(),
-                      out_shape};
+    OpScopeFull scope{ConvTransposeNdBackward<N>::schema_v1.name, x->device(), eff_dt, out_shape};
     scope.set_flops(static_cast<std::int64_t>(2) * B * Cout_g * O_total * Cin * K_total);
     // Reported for the compile / Core ML emitters, which have no other way
     // to recover the geometry from the traced shapes alone.
-    {
-        std::vector<std::int64_t> Sv(stride, stride + N);
-        std::vector<std::int64_t> Pv(pad, pad + N);
-        std::vector<std::int64_t> OPv(opad, opad + N);
-        std::vector<std::int64_t> Dv(dilation, dilation + N);
-        scope.set_attr("stride", std::move(Sv));
-        scope.set_attr("padding", std::move(Pv));
-        scope.set_attr("output_padding", std::move(OPv));
-        scope.set_attr("dilation", std::move(Dv));
-        scope.set_attr("groups", static_cast<std::int64_t>(groups));
-    }
+    scope.set_attr("stride", std::vector<std::int64_t>(stride, stride + N));
+    scope.set_attr("padding", std::vector<std::int64_t>(pad, pad + N));
+    scope.set_attr("output_padding", std::vector<std::int64_t>(opad, opad + N));
+    scope.set_attr("dilation", std::vector<std::int64_t>(dilation, dilation + N));
+    scope.set_attr("groups", static_cast<std::int64_t>(groups));
 
-    backend::IBackend::ConvTransposeNdOpts opts{};
-    opts.N = N;
-    opts.groups = groups;
-    for (int i = 0; i < N; ++i) {
-        opts.stride[i] = stride[i];
-        opts.pad[i] = pad[i];
-        opts.dilation[i] = dilation[i];
-        opts.opad[i] = opad[i];
-    }
-
+    const auto opts = make_conv_transpose_opts(groups, stride, pad, dilation, opad);
     Storage out_storage =
         backend::Dispatcher::for_device(x->device())
-            .conv_transpose_nd_forward(x->storage(), W->storage(), b->storage(), B, Cin, Cout, S, K,
-                                       O, opts, out_shape, x->dtype());
-
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
-                                            x->dtype(), x->device(), false);
-    // wire_autograd (below) records on_op_io internally — no explicit call.
-
-    auto bwd = std::make_shared<ConvTransposeNdBackward<N>>();
-    bwd->groups_ = groups;
-    for (int i = 0; i < N; ++i) {
-        bwd->stride_[i] = stride[i];
-        bwd->pad_[i] = pad[i];
-        bwd->opad_[i] = opad[i];
-        bwd->dilation_[i] = dilation[i];
-    }
-    // saved_inputs_[0..1] will hold {x, W}; the bias is read by shape alone.
-    kernel::NaryKernel<ConvTransposeNdBackward<N>, 3>::wire_autograd(std::move(bwd), {x, W, b}, out,
-                                                                     {true, true, false});
-    return out;
+            .conv_transpose_nd_forward(ins[0]->storage(), ins[1]->storage(), ins[2]->storage(), B,
+                                       Cin, Cout, S, K, O, opts, out_shape, eff_dt);
+    return finish_conv_transpose_forward(std::move(out_storage), std::move(out_shape), eff_dt, ins,
+                                         groups, stride, pad, opad, dilation);
 }
 
 template <int N>
@@ -184,15 +220,8 @@ std::vector<Storage> ConvTransposeNdBackward<N>::apply(Storage grad_out) {
         O[i] = static_cast<int>(this->out_shape_[2 + i]);
     }
 
-    backend::IBackend::ConvTransposeNdOpts opts{};
-    opts.N = N;
-    opts.groups = this->groups_;
-    for (int i = 0; i < N; ++i) {
-        opts.stride[i] = this->stride_[i];
-        opts.pad[i] = this->pad_[i];
-        opts.dilation[i] = this->dilation_[i];
-        opts.opad[i] = this->opad_[i];
-    }
+    const auto opts = make_conv_transpose_opts(this->groups_, this->stride_, this->pad_,
+                                               this->dilation_, this->opad_);
 
     // Returns [dx, dW, db].
     return backend::Dispatcher::for_device(this->device_)

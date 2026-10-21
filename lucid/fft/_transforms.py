@@ -15,6 +15,7 @@ from typing import final, override
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._autocast import _autocast_entry
 from lucid._ops._dims import _wrap_dim
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function as _AutogradFunction
@@ -337,7 +338,14 @@ def _transform(
     ``extra`` is the class's last argument: the direction of the complex
     pair, or the transform sizes of a real one.
     """
-    out = fn.apply(x, s, axes, norm, N, extra)
+    if fn is _FftnAutograd:
+        op_name = "ifftn" if extra else "fftn"
+    elif fn is _RfftnAutograd:
+        op_name = "rfftn"
+    else:
+        op_name = "irfftn"
+    with _autocast_entry(op_name, _unwrap(x)) as (x_impl,):
+        out = fn.apply(_wrap(x_impl), s, axes, norm, N, extra)
     if not isinstance(out, Tensor):
         raise TypeError(f"{fn.__name__} returned {type(out).__name__}")
     return out

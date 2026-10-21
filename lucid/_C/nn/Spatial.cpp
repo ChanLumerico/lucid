@@ -72,28 +72,31 @@ AffineGridBackward::forward(const TensorImplPtr& theta, int N, int H, int W, boo
         ErrorBuilder("affine_grid")
             .invalid_argument("H and W must be >= 0, got H=" + std::to_string(H) +
                               ", W=" + std::to_string(W));
+    SchemaGuard sg{schema_v1, theta->dtype(), theta->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const TensorImplPtr theta_eff = astype_op(theta, eff_dt);
 
     Shape out_shape{static_cast<std::int64_t>(N), static_cast<std::int64_t>(H),
                     static_cast<std::int64_t>(W), 2};
-    OpScopeFull scope{schema_v1.name, theta->device(), theta->dtype(), out_shape};
+    OpScopeFull scope{schema_v1.name, theta_eff->device(), eff_dt, out_shape};
     scope.set_attr("H", static_cast<std::int64_t>(H));
     scope.set_attr("W", static_cast<std::int64_t>(W));
     scope.set_attr("align_corners", align_corners);
 
-    auto& be = backend::Dispatcher::for_device(theta->device());
+    auto& be = backend::Dispatcher::for_device(theta_eff->device());
     Storage out_storage =
-        be.affine_grid_forward(theta->storage(), N, H, W, align_corners, theta->dtype());
+        be.affine_grid_forward(theta_eff->storage(), N, H, W, align_corners, eff_dt);
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, theta->dtype(),
-                                            theta->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), out_shape, eff_dt,
+                                            theta_eff->device(), false);
     // wire_autograd records on_op_io internally, but the early-return
     // below skips it when grad is off — record explicitly so the trace
     // captures inputs in both code paths.
     if (auto* trc = ::lucid::compile::current_tracer()) {
-        trc->on_op_io({theta}, out);
+        trc->on_op_io({theta_eff}, out);
     }
 
-    if (!GradMode::is_enabled() || !theta->requires_grad())
+    if (!GradMode::is_enabled() || !theta_eff->requires_grad())
         return out;
 
     auto bwd = std::make_shared<AffineGridBackward>();
@@ -101,8 +104,9 @@ AffineGridBackward::forward(const TensorImplPtr& theta, int N, int H, int W, boo
     bwd->N_ = N;
     bwd->H_ = H;
     bwd->W_ = W;
-    bwd->orig_theta_shape_ = theta->shape();
-    kernel::NaryKernel<AffineGridBackward, 1>::wire_autograd(std::move(bwd), {theta}, out, false);
+    bwd->orig_theta_shape_ = theta_eff->shape();
+    kernel::NaryKernel<AffineGridBackward, 1>::wire_autograd(std::move(bwd), {theta_eff}, out,
+                                                             false);
     return out;
 }
 

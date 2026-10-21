@@ -92,8 +92,11 @@ LUCID_REGISTER_OP(InvBackward)
 // backend, wraps the result in a TensorImpl, and wires InvBackward.
 // The wire_autograd call passes save_inputs=false because the backward only
 // needs B = A⁻¹ (saved_output_), not the original input A.
-TensorImplPtr inv_op(const TensorImplPtr& a) {
-    Validator::input(a, "inv.a").float_only().square_2d();
+TensorImplPtr inv_op(const TensorImplPtr& a_in) {
+    Validator::input(a_in, "inv.a").non_null().square_2d();
+    SchemaGuard sg{InvBackward::schema_v1, a_in->dtype(), a_in->device()};
+    const TensorImplPtr a = astype_op(a_in, sg.effective_dtype());
+    Validator::input(a, "inv.a").float_only();
     OpScopeFull scope{"inv", a->device(), a->dtype(), a->shape()};
 
     Storage out_storage = backend::Dispatcher::for_device(a->device())

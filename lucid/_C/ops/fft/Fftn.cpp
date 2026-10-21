@@ -18,8 +18,8 @@ TensorImplPtr fftn_op(const TensorImplPtr& a,
     return fft_detail::run_nd_fft(
         "fftn", "fftn.a", a, n, axes_in, Dtype::C128, fft_detail::dtype_for_complex_fft,
         fft_detail::complex_fft_out_shape,
-        [&](const std::vector<int>& axes, const Shape& out_shape) {
-            return fft_detail::cpu_complex_fftn_f64(a, n, axes, out_shape, /*inverse=*/false);
+        [&](const TensorImplPtr& x, const std::vector<int>& axes, const Shape& out_shape) {
+            return fft_detail::cpu_complex_fftn_f64(x, n, axes, out_shape, /*inverse=*/false);
         },
         [&](const ::mlx::core::array& in_arr, const std::vector<int>& axes) {
             return n.empty()

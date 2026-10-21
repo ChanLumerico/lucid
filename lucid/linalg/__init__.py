@@ -10,6 +10,7 @@ from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dtype import _ENGINE_TO_DTYPE, to_engine_dtype
 from lucid._ops._adapters import _outer_adapter
+from lucid._ops._autocast import _autocast_entry
 from lucid._ops._dims import _wrap_dim
 from lucid._ops._reduce import _p_norm, _reduction_axes, _require_normable
 from lucid._promotion import try_unwrap as _try_unwrap
@@ -266,7 +267,8 @@ def cholesky(input: Tensor, *, upper: bool = False) -> Tensor:
     >>> L @ L.T
     tensor([[4., 2.], [2., 3.]])
     """
-    return cast(Tensor, _CholeskyAutograd.apply(input, upper))
+    with _autocast_entry("cholesky", _unwrap(input)) as (x_impl,):
+        return cast(Tensor, _CholeskyAutograd.apply(_wrap(x_impl), upper))
 
 
 from lucid.autograd.function import Function as _AutogradFunction
@@ -429,6 +431,16 @@ def norm(
     """
     _require_normable(_unwrap(input), "norm")
     x = _wrap(_cast_for_norm(input, dtype)) if dtype is not None else input
+    with _autocast_entry("norm", _unwrap(x)) as (x_impl,):
+        return _norm_body(_wrap(x_impl), ord, dim, keepdim)
+
+
+def _norm_body(
+    x: Tensor,
+    ord: int | float | str | None,
+    dim: int | list[int] | tuple[int, ...] | None,
+    keepdim: bool,
+) -> Tensor:
     rank = len(_unwrap(x).shape)
     axes: tuple[int, ...] | None
     if dim is None:
@@ -440,12 +452,7 @@ def norm(
 
     if axes is None:
         if ord is None:
-            # Flat 2-norm over everything, whatever the rank.
             return _scaled(x, ord, lambda t: vector_norm(t, 2, None, keepdim))
-        # An order without axes: only a vector or a single matrix says
-        # unambiguously which reduction was meant.  Above rank 2 there is
-        # a batch and no way to tell whether the caller wanted one norm or
-        # one per matrix, so refuse rather than pick.
         if rank == 2:
             return _scaled(x, ord, lambda t: matrix_norm(t, ord, (0, 1), keepdim))
         if rank == 1 and not isinstance(ord, str):
@@ -471,8 +478,7 @@ def norm(
         return _scaled(x, ord, lambda t: matrix_norm(t, m_ord, pair, keepdim))
     if len(axes) == 1:
         v_ord: int | float = 2 if ord is None else ord
-        one = [axes[0]]
-        return _scaled(x, ord, lambda t: vector_norm(t, v_ord, one, keepdim))
+        return _scaled(x, ord, lambda t: vector_norm(t, v_ord, [axes[0]], keepdim))
     raise ValueError(f"norm: dim must name one or two axes, got {dim!r}")
 
 
@@ -711,17 +717,17 @@ def svd(
     tensor([2., 1.])
     """
     unsupported_if(driver is not None, "svd", "driver", driver)
-    u_impl, s_impl, vh_impl = _la.svd(_unwrap(A))
-    if not _C_engine.grad_enabled() or not A.requires_grad:
-        return _complete_svd_factors(
-            A, _wrap(u_impl), _wrap(s_impl), _wrap(vh_impl), full_matrices
-        )
-    # Pass TensorImpl (not Tensor) so _make_apply ignores them in the
-    # differentiable-input scan — no spurious cross-edges in the graph.
-    U = _SVDUGrad.apply(A, u_impl, s_impl, vh_impl)
-    S = _SVDSGrad.apply(A, u_impl, s_impl, vh_impl)
-    Vh = _SVDVhGrad.apply(A, u_impl, s_impl, vh_impl)
-    return _complete_svd_factors(A, U, S, Vh, full_matrices)
+    with _autocast_entry("svd", _unwrap(A)) as (a_impl,):
+        A_cast = _wrap(a_impl)
+        u_impl, s_impl, vh_impl = _la.svd(a_impl)
+        if not _C_engine.grad_enabled() or not A_cast.requires_grad:
+            return _complete_svd_factors(
+                A_cast, _wrap(u_impl), _wrap(s_impl), _wrap(vh_impl), full_matrices
+            )
+        U = _SVDUGrad.apply(A_cast, u_impl, s_impl, vh_impl)
+        S = _SVDSGrad.apply(A_cast, u_impl, s_impl, vh_impl)
+        Vh = _SVDVhGrad.apply(A_cast, u_impl, s_impl, vh_impl)
+        return _complete_svd_factors(A_cast, U, S, Vh, full_matrices)
 
 
 def svdvals(A: Tensor, *, driver: str | None = None) -> Tensor:
@@ -761,13 +767,15 @@ def svdvals(A: Tensor, *, driver: str | None = None) -> Tensor:
     tensor([4., 3.])
     """
     unsupported_if(driver is not None, "svdvals", "driver", driver)
-    if _C_engine.grad_enabled() and A.requires_grad:
-        _, S, _ = svd(A, full_matrices=False)
-        return S
-    result = _la.svd(_unwrap(A), False)
-    if isinstance(result, (list, tuple)):
-        return _wrap(result[0])
-    return _wrap(result)
+    with _autocast_entry("svdvals", _unwrap(A)) as (a_impl,):
+        A_cast = _wrap(a_impl)
+        if _C_engine.grad_enabled() and A_cast.requires_grad:
+            _, S, _ = svd(A_cast, full_matrices=False)
+            return S
+        result = _la.svd(a_impl, False)
+        if isinstance(result, (list, tuple)):
+            return _wrap(result[0])
+        return _wrap(result)
 
 
 # ── QR with backward ─────────────────────────────────────────────────────────
@@ -997,13 +1005,15 @@ def qr(A: Tensor, mode: str = "reduced") -> tuple[Tensor, Tensor]:
         mode,
         detail="Only the reduced factorisation is computed.",
     )
-    q_impl, r_impl = _la.qr(_unwrap(A))
-    if not _C_engine.grad_enabled() or not A.requires_grad:
-        return _QrResult(_wrap(q_impl), _wrap(r_impl))
-    Q = _QRQGrad.apply(A, q_impl, r_impl)
-    R = _QRRGradWithA.apply(A, q_impl, r_impl)
-    assert isinstance(Q, Tensor) and isinstance(R, Tensor)
-    return _QrResult(Q, R)
+    with _autocast_entry("qr", _unwrap(A)) as (a_impl,):
+        A_cast = _wrap(a_impl)
+        q_impl, r_impl = _la.qr(a_impl)
+        if not _C_engine.grad_enabled() or not A_cast.requires_grad:
+            return _QrResult(_wrap(q_impl), _wrap(r_impl))
+        Q = _QRQGrad.apply(A_cast, q_impl, r_impl)
+        R = _QRRGradWithA.apply(A_cast, q_impl, r_impl)
+        assert isinstance(Q, Tensor) and isinstance(R, Tensor)
+        return _QrResult(Q, R)
 
 
 @final
@@ -1294,11 +1304,13 @@ def eig(input: Tensor) -> tuple[Tensor, Tensor]:
     >>> w
     tensor([(2.+0.j), (3.+0.j)], dtype=lucid.complex64)
     """
-    if input.requires_grad and lucid.is_grad_enabled():
-        w, V = cast(tuple[Tensor, Tensor], _Eig.apply(input))
-        return _EigResult(w, V)
-    raw_vals, raw_vecs = _la.eig(_unwrap(input))
-    return _EigResult(_wrap(raw_vals), _wrap(raw_vecs))
+    with _autocast_entry("eig", _unwrap(input)) as (a_impl,):
+        A_cast = _wrap(a_impl)
+        if A_cast.requires_grad and lucid.is_grad_enabled():
+            w, V = cast(tuple[Tensor, Tensor], _Eig.apply(A_cast))
+            return _EigResult(w, V)
+        raw_vals, raw_vecs = _la.eig(a_impl)
+        return _EigResult(_wrap(raw_vals), _wrap(raw_vecs))
 
 
 def eigvals(input: Tensor) -> Tensor:
@@ -1332,10 +1344,12 @@ def eigvals(input: Tensor) -> Tensor:
     >>> eigvals(lucid.tensor([[2.0, 0.0], [0.0, 3.0]]))
     tensor([(2.+0.j), (3.+0.j)], dtype=lucid.complex64)
     """
-    if input.requires_grad and lucid.is_grad_enabled():
-        return cast(tuple[Tensor, Tensor], _Eig.apply(input))[0]
-    vals, _ = _la.eig(_unwrap(input))
-    return _wrap(vals)
+    with _autocast_entry("eigvals", _unwrap(input)) as (a_impl,):
+        A_cast = _wrap(a_impl)
+        if A_cast.requires_grad and lucid.is_grad_enabled():
+            return cast(tuple[Tensor, Tensor], _Eig.apply(A_cast))[0]
+        vals, _ = _la.eig(a_impl)
+        return _wrap(vals)
 
 
 def _complex_matmul(a: Tensor, b: Tensor) -> Tensor:
@@ -1549,13 +1563,15 @@ def eigh(input: Tensor, UPLO: str = "L") -> tuple[Tensor, Tensor]:
     >>> w
     tensor([1.382, 3.618])
     """
-    w_impl, V_impl = _la.eigh(_unwrap(input), UPLO)
-    if not _C_engine.grad_enabled() or not input.requires_grad:
-        return _EighResult(_wrap(w_impl), _wrap(V_impl))
-    w = _EighWGrad.apply(input, w_impl, V_impl)
-    V = _EighVGrad.apply(input, w_impl, V_impl)
-    assert isinstance(w, Tensor) and isinstance(V, Tensor)
-    return _EighResult(w, V)
+    with _autocast_entry("eigh", _unwrap(input)) as (a_impl,):
+        A_cast = _wrap(a_impl)
+        w_impl, V_impl = _la.eigh(a_impl, UPLO)
+        if not _C_engine.grad_enabled() or not A_cast.requires_grad:
+            return _EighResult(_wrap(w_impl), _wrap(V_impl))
+        w = _EighWGrad.apply(A_cast, w_impl, V_impl)
+        V = _EighVGrad.apply(A_cast, w_impl, V_impl)
+        assert isinstance(w, Tensor) and isinstance(V, Tensor)
+        return _EighResult(w, V)
 
 
 def eigvalsh(input: Tensor, UPLO: str = "L") -> Tensor:
@@ -1591,11 +1607,13 @@ def eigvalsh(input: Tensor, UPLO: str = "L") -> Tensor:
     >>> eigvalsh(lucid.tensor([[2.0, 1.0], [1.0, 3.0]]))
     tensor([1.382, 3.618])
     """
-    if _C_engine.grad_enabled() and input.requires_grad:
-        w, _ = eigh(input, UPLO)
-        return w
-    vals, _ = _la.eigh(_unwrap(input), UPLO)
-    return _wrap(vals)
+    with _autocast_entry("eigvalsh", _unwrap(input)) as (a_impl,):
+        A_cast = _wrap(a_impl)
+        if _C_engine.grad_enabled() and A_cast.requires_grad:
+            w, _ = eigh(A_cast, UPLO)
+            return w
+        vals, _ = _la.eigh(a_impl, UPLO)
+        return _wrap(vals)
 
 
 def lu_factor(A: Tensor, *, pivot: bool = True) -> tuple[Tensor, Tensor]:
@@ -1855,13 +1873,15 @@ def matrix_rank(
                 "matrix_rank: tol cannot be specified together with atol or rtol"
             )
         atol, rtol = tol, 0.0
-    with lucid.no_grad():
-        sv = eigvalsh(input).abs() if hermitian else svdvals(input)
-        if sv.numel() == 0:
-            return lucid.zeros(
-                tuple(input.shape[:-2]), dtype=lucid.int64, device=input.device
-            )
-        return (sv > _sv_cutoff(input, sv, atol=atol, rtol=rtol)).sum(dim=-1)
+    with _autocast_entry("matrix_rank", _unwrap(input)) as (a_impl,):
+        A_cast = _wrap(a_impl)
+        with lucid.no_grad():
+            sv = eigvalsh(A_cast).abs() if hermitian else svdvals(A_cast)
+            if sv.numel() == 0:
+                return lucid.zeros(
+                    tuple(A_cast.shape[:-2]), dtype=lucid.int64, device=A_cast.device
+                )
+            return (sv > _sv_cutoff(A_cast, sv, atol=atol, rtol=rtol)).sum(dim=-1)
 
 
 _COND_ORDERS: tuple[int | float | str | None, ...] = (
@@ -1958,43 +1978,13 @@ def cond(input: Tensor, p: int | float | str | None = None) -> Tensor:
             f"shape {tuple(input.shape)}"
         )
     if input.is_complex():
-        # Every order needs a kernel linalg has only for real input: the
-        # singular values (spectral orders, "nuc") or the inverse (the
-        # rest).  Said here, once and by name, rather than by whichever of
-        # ``svd`` / ``inv_ex`` happens to fail first.
         needs = "SVD" if p is None or p in (2, -2, "nuc") else "inverse"
         raise NotImplementedError(
             f"cond(p={p!r}): a complex A needs a complex {needs}, which linalg "
             "does not have yet"
         )
-    if input.numel() == 0:
-        # No entries, no singular values to compare: 0, as the reference
-        # answers — the extreme-value reductions below have no identity and
-        # refused an empty axis.
-        return lucid.zeros(tuple(input.shape[:-2]), dtype=input.dtype, device=input.device)
-    if p is None or p in (2, -2):
-        _, S, _ = svd(input, full_matrices=False)
-        S_impl = _unwrap(S)
-        smax = _C_engine.max(S_impl, [-1], False)
-        smin = _C_engine.min(S_impl, [-1], False)
-        ratio = (smin, smax) if p == -2 else (smax, smin)
-        return _wrap(_C_engine.div(*ratio))
-    if p == "nuc":
-        _, S, _ = svd(input, full_matrices=False)
-        return S.sum(dim=-1) * (1.0 / S).sum(dim=-1)
-    if not square:
-        raise ValueError(
-            f"cond(p={p!r}): input must be a square matrix or a batch of them, got "
-            f"shape {tuple(input.shape)}"
-        )
-    # A singular matrix has no inverse; its norm is taken as infinite, and
-    # 0·∞ (a zero matrix) counts as infinite too.  inv_ex judges each matrix
-    # of a batch on its own.
-    Ainv, info = inv_ex(input)
-    failed = (info != 0).reshape(*tuple(info.shape), 1, 1)
-    Ainv = lucid.where(failed, float("inf"), Ainv)
-    out = matrix_norm(input, ord=p) * matrix_norm(Ainv, ord=p)
-    return lucid.where(lucid.isnan(out), float("inf"), out)
+    with _autocast_entry("cond", _unwrap(input)) as (a_impl,):
+        return _cond_compute(_wrap(a_impl), p, square)
 
 
 def multi_dot(tensors: list[Tensor]) -> Tensor:
@@ -3532,11 +3522,12 @@ def diagonal(
 # The ``*_ex`` family reads LAPACK's ``info``; ``lu_factor`` and
 # ``ldl_factor`` above are its checked forms.
 from lucid.linalg._ex import (
-    _check_matrix_norm_dims, _complete_svd_factors, _EighResult, _EigResult,
-    _householder_product, _LstsqResult, _lstsq_solution, _lu_factor_ex,
-    _lu_solve_general, _LuFactorResult, _LuResult, _matrix_norm_sv,
-    _pinv_with_tol, _QrResult, _SlogdetResult, _sv_cutoff, cholesky_ex, inv_ex,
-    ldl_factor, ldl_factor_ex, lu_factor_ex, solve_ex, tensorinv, tensorsolve,
+    _check_matrix_norm_dims, _complete_svd_factors, _cond_compute, _EighResult,
+    _EigResult, _householder_product, _LstsqResult, _lstsq_solution,
+    _lu_factor_ex, _lu_solve_general, _LuFactorResult, _LuResult,
+    _matrix_norm_sv, _pinv_with_tol, _QrResult, _SlogdetResult, _sv_cutoff,
+    cholesky_ex, inv_ex, ldl_factor, ldl_factor_ex, lu_factor_ex, solve_ex,
+    tensorinv, tensorsolve,
 )
 
 __all__ = [

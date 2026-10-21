@@ -42,12 +42,14 @@ namespace lucid {
 // linalg_svd() so both sides agree on memory layout.  The backend returns a
 // vector of Storage objects: one element when compute_uv=false, three when
 // compute_uv=true (order: [U, S, Vh]).
-std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a, bool compute_uv) {
+std::vector<TensorImplPtr> svd_op(const TensorImplPtr& a_in, bool compute_uv) {
     using namespace linalg_detail;
-    Validator::input(a, "svd.a").non_null();
-    require_float(a->dtype(), "svd");
-    if (a->shape().size() < 2)
+    Validator::input(a_in, "svd.a").non_null();
+    if (a_in->shape().size() < 2)
         ErrorBuilder("svd").invalid_argument("input must be at least 2-D");
+    const AmpScope amp{"svd", a_in->device()};
+    const TensorImplPtr a = amp.cast(a_in);
+    require_float(a->dtype(), "svd");
     OpScopeFull scope{"svd", a->device(), a->dtype(), a->shape()};
 
     const auto& sh = a->shape();

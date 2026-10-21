@@ -52,6 +52,7 @@
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
 #include "../../core/fwd.h"
+#include "../utils/Promote.h"
 
 namespace lucid::fft_detail {
 
@@ -704,7 +705,7 @@ inline ::mlx::core::array as_mlx_input(const TensorImplPtr& a) {
 template <typename DtypeFn, typename ShapeFn, typename DoubleFn, typename MlxFn>
 inline TensorImplPtr run_nd_fft(const char* op_name,
                                 const char* input_label,
-                                const TensorImplPtr& a,
+                                const TensorImplPtr& a_in,
                                 const std::vector<std::int64_t>& n,
                                 const std::vector<int>& axes_in,
                                 Dtype double_out_dtype,
@@ -712,7 +713,9 @@ inline TensorImplPtr run_nd_fft(const char* op_name,
                                 ShapeFn&& resolve_shape,
                                 DoubleFn&& run_double_cpu,
                                 MlxFn&& run_mlx) {
-    Validator::input(a, input_label).non_null();
+    Validator::input(a_in, input_label).non_null();
+    const AmpScope amp{op_name, a_in->device()};
+    const TensorImplPtr a = amp.cast(a_in);
     OpScopeFull scope{op_name, a->device(), a->dtype(), a->shape()};
 
     const Dtype out_dtype = resolve_dtype(a->dtype(), a->device());
@@ -731,7 +734,7 @@ inline TensorImplPtr run_nd_fft(const char* op_name,
         out = Storage{
             PhantomStorage{shape_numel(out_shape) * dtype_size(out_dtype), out_dtype, a->device()}};
     } else if (out_dtype == double_out_dtype) {
-        out = run_double_cpu(axes, out_shape);
+        out = run_double_cpu(a, axes, out_shape);
     } else {
         auto in_arr = as_mlx_input(a);
         ::mlx::core::array out_arr = run_mlx(in_arr, axes);

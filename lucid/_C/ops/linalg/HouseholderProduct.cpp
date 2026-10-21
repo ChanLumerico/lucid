@@ -9,10 +9,15 @@
 #include "_Detail.h"
 namespace lucid {
 
-TensorImplPtr householder_product_op(const TensorImplPtr& H, const TensorImplPtr& tau) {
+TensorImplPtr householder_product_op(const TensorImplPtr& H_in, const TensorImplPtr& tau_in) {
     using namespace linalg_detail;
-    Validator::input(H, "householder_product.H").float_only().non_null();
-    Validator::input(tau, "householder_product.tau").float_only().non_null();
+    Validator::input(H_in, "householder_product.H").non_null();
+    Validator::input(tau_in, "householder_product.tau").non_null();
+    const AmpScope amp{"householder_product", H_in->device()};
+    const TensorImplPtr H = amp.cast(H_in);
+    const TensorImplPtr tau = amp.cast(tau_in);
+    Validator::input(H, "householder_product.H").float_only();
+    Validator::input(tau, "householder_product.tau").float_only();
 
     const auto& hs = H->shape();
     if (hs.size() < 2)

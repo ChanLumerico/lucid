@@ -43,13 +43,15 @@ namespace lucid {
 // wsh drops the last dimension (n scalars per n×n matrix).
 // vsh is the same as the input shape (the full n×n orthogonal eigenvector matrix).
 // The backend guarantees eigenvalues in wsh are sorted ascending.
-std::vector<TensorImplPtr> eigh_op(const TensorImplPtr& a, const std::string& uplo) {
+std::vector<TensorImplPtr> eigh_op(const TensorImplPtr& a_in, const std::string& uplo) {
     using namespace linalg_detail;
-    Validator::input(a, "eigh.a").non_null();
+    Validator::input(a_in, "eigh.a").non_null();
     if (uplo != "L" && uplo != "U")
         ErrorBuilder("eigh").invalid_argument("UPLO must be 'L' or 'U', got " + uplo);
+    require_square_matrix(a_in->shape(), "eigh.a");
+    const AmpScope amp{"eigh", a_in->device()};
+    const TensorImplPtr a = amp.cast(a_in);
     require_float(a->dtype(), "eigh");
-    require_square_matrix(a->shape(), "eigh.a");
     OpScopeFull scope{"eigh", a->device(), a->dtype(), a->shape()};
 
     const auto& sh = a->shape();

@@ -35,6 +35,7 @@
 #include "../../core/MemoryStats.h"
 #include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
+#include "../../core/SchemaGuard.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
@@ -300,9 +301,11 @@ TensorImplPtr scan_dispatch(const TensorImplPtr& a, int axis, bool is_prod, cons
 // Dispatch cumsum, then wire CumsumBackward.  The axis is re-normalised here
 // (after scan_dispatch validated it) so that bwd->axis_ is always non-negative.
 TensorImplPtr cumsum_op(const TensorImplPtr& a_in, int axis) {
+    Validator::input(a_in, "cumsum.a").non_null();
     if (a_in->shape().empty())
         return on_scalar_axis(a_in, axis, "cumsum", cumsum_op);
-    const auto a = promote_int_for_scan(a_in);  // int8/16/32/bool -> I64 (sum parity)
+    SchemaGuard sg{CumsumBackward::schema_v1, a_in->dtype(), a_in->device()};
+    const auto a = promote_int_for_scan(astype_op(a_in, sg.effective_dtype()));
     auto out = scan_dispatch(a, axis, false, "cumsum");
     int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
     auto bwd = std::make_shared<CumsumBackward>();
@@ -314,9 +317,11 @@ TensorImplPtr cumsum_op(const TensorImplPtr& a_in, int axis) {
 
 // Dispatch cumprod, then wire CumprodBackward with both input and output saved.
 TensorImplPtr cumprod_op(const TensorImplPtr& a_in, int axis) {
+    Validator::input(a_in, "cumprod.a").non_null();
     if (a_in->shape().empty())
         return on_scalar_axis(a_in, axis, "cumprod", cumprod_op);
-    const auto a = promote_int_for_scan(a_in);  // int8/16/32/bool -> I64 (sum parity)
+    SchemaGuard sg{CumprodBackward::schema_v1, a_in->dtype(), a_in->device()};
+    const auto a = promote_int_for_scan(astype_op(a_in, sg.effective_dtype()));
     auto out = scan_dispatch(a, axis, true, "cumprod");
     int ax = axis < 0 ? axis + (int)a->shape().size() : axis;
     auto bwd = std::make_shared<CumprodBackward>();

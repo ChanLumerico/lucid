@@ -51,8 +51,11 @@ namespace lucid {
 // TensorImpl therefore has requires_grad=false and is treated as a leaf in the
 // gradient graph.  Attempting to call backward through cholesky_op will not
 // propagate gradients to the input.
-TensorImplPtr cholesky_op(const TensorImplPtr& a, bool upper) {
-    Validator::input(a, "cholesky.a").float_only().square_2d();
+TensorImplPtr cholesky_op(const TensorImplPtr& a_in, bool upper) {
+    Validator::input(a_in, "cholesky.a").non_null().square_2d();
+    const AmpScope amp{"cholesky", a_in->device()};
+    const TensorImplPtr a = amp.cast(a_in);
+    Validator::input(a, "cholesky.a").float_only();
     OpScopeFull scope{"cholesky", a->device(), a->dtype(), a->shape()};
 
     // A degenerate matrix has a decomposition; LAPACK just will not be

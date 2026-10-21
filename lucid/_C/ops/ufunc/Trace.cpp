@@ -27,6 +27,7 @@
 #include "../../core/GradMode.h"
 #include "../../core/OpSchema.h"
 #include "../../core/Profiler.h"
+#include "../../core/SchemaGuard.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
@@ -35,6 +36,7 @@
 #include "../bfunc/_BinaryOp.h"
 #include "../gfunc/Gfunc.h"
 #include "../utils/Layout.h"
+#include "Astype.h"
 #include "_Detail.h"
 
 namespace lucid {
@@ -79,10 +81,12 @@ const OpSchema TraceBackward::schema_v1{"trace", 1, AmpPolicy::KeepInput, true};
 // For ndim > 2 the last two dimensions are contracted; the output shape is
 // the batch prefix (sh[2:]).  Autograd is currently omitted for the batch case
 // because trace_backward only supports 2-D inputs.
-TensorImplPtr trace_op(const TensorImplPtr& a) {
-    Validator::input(a, "trace.a").non_null();
-    if (a->shape().size() < 2)
+TensorImplPtr trace_op(const TensorImplPtr& a_in) {
+    Validator::input(a_in, "trace.a").non_null();
+    if (a_in->shape().size() < 2)
         ErrorBuilder("trace").fail("input must have ndim >= 2");
+    SchemaGuard sg{TraceBackward::schema_v1, a_in->dtype(), a_in->device()};
+    const TensorImplPtr a = astype_op(a_in, sg.effective_dtype());
     const Dtype dt = a->dtype();
     const Device device = a->device();
     const auto& sh = a->shape();

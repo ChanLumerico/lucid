@@ -98,10 +98,17 @@ std::vector<TensorImplPtr> SolveBackward::apply_for_graph(const TensorImplPtr& g
 
 LUCID_REGISTER_OP(SolveBackward)
 
-TensorImplPtr solve_op(const TensorImplPtr& a, const TensorImplPtr& b) {
+TensorImplPtr solve_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in) {
     using namespace linalg_detail;
-    Validator::input(a, "solve.a").float_only().square_2d();
-    Validator::pair(a, b, "solve").same_dtype().same_device();
+    Validator::input(a_in, "solve.a").non_null().square_2d();
+    Validator::input(b_in, "solve.b").non_null();
+    Validator::pair(a_in, b_in, "solve").same_device();
+    SchemaGuard sg{SolveBackward::schema_v1, a_in->dtype(), a_in->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const TensorImplPtr a = astype_op(a_in, eff_dt);
+    const TensorImplPtr b = astype_op(b_in, eff_dt);
+    Validator::input(a, "solve.a").float_only();
+    Validator::pair(a, b, "solve").same_dtype();
     const SolveRhs rhs = solve_rhs_contract(a->shape(), b->shape(), VectorRhs::OrBatched, "solve");
     OpScopeFull scope{"solve", a->device(), a->dtype(), rhs.a_shape};
 

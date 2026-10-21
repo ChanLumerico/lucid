@@ -47,6 +47,7 @@
 #include "../../core/fwd.h"
 #include "../../kernel/BinaryKernel.h"
 #include "../utils/Layout.h"
+#include "../utils/Promote.h"
 #include "../utils/View.h"
 
 namespace lucid::linalg_detail {

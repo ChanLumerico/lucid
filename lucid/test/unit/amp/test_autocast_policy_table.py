@@ -279,10 +279,19 @@ def _cpu(fn: _Fn, want: str | None = None) -> _Case:
 
 _CASES: dict[str, _Case] = {
     # ── LOWER ──
+    "affine_grid": _Case(
+        lambda lib, F, m: F.affine_grid(m(1, 2, 3), (1, 1, 4, 4), align_corners=False)
+    ),
     "bmm": _Case(lambda lib, F, m: lib.bmm(m(1, 3, 4), m(1, 4, 2))),
     "conv1d": _Case(lambda lib, F, m: F.conv1d(m(1, 2, 8), m(3, 2, 3))),
     "conv2d": _Case(lambda lib, F, m: F.conv2d(m(1, 2, 8, 8), m(3, 2, 3, 3))),
     "conv3d": _Case(lambda lib, F, m: F.conv3d(m(1, 2, 4, 4, 4), m(3, 2, 3, 3, 3))),
+    "conv_transpose1d": _Case(
+        lambda lib, F, m: F.conv_transpose1d(m(1, 2, 8), m(2, 3, 3))
+    ),
+    "conv_transpose2d": _Case(
+        lambda lib, F, m: F.conv_transpose2d(m(1, 2, 8, 8), m(2, 3, 3, 3))
+    ),
     "einsum": _Case(
         lambda lib, F, m: lib.einops.einsum("ij,jk->ik", m(3, 4), m(4, 2)),
         lambda lib, F, m: lib.einsum("ij,jk->ik", m(3, 4), m(4, 2)),
@@ -300,6 +309,10 @@ _CASES: dict[str, _Case] = {
         lambda lib, F, m: F.scaled_dot_product_attention(
             m(1, 2, 4, 8), m(1, 2, 4, 8), m(1, 2, 4, 8), attn_mask=m(4, 4)
         )
+    ),
+    # ── FP32 on Metal, LOWER on the CPU ──
+    "conv_transpose3d": _Case(
+        lambda lib, F, m: F.conv_transpose3d(m(1, 2, 4, 4, 4), m(2, 3, 3, 3, 3))
     ),
     # ── FP32 on both ──
     "bce_with_logits": _Case(
@@ -340,8 +353,10 @@ _CASES: dict[str, _Case] = {
         )
     ),
     "nll_loss": _Case(lambda lib, F, m: F.nll_loss(m(3, 5), m.ints([0, 2, 4]))),
+    "norm": _Case(lambda lib, F, m: lib.linalg.norm(m(4))),
     "prod": _Case(lambda lib, F, m: m(4, 3).prod(0)),
     "smooth_l1_loss": _Case(lambda lib, F, m: F.smooth_l1_loss(m(4), m(4))),
+    "trace": _Case(lambda lib, F, m: lib.trace(m(3, 3))),
     "triplet_margin_loss": _Case(
         lambda lib, F, m: F.triplet_margin_loss(m(2, 4), m(2, 4), m(2, 4))
     ),
@@ -354,6 +369,8 @@ _CASES: dict[str, _Case] = {
     "batch_norm_eval": _Case(_bn(train=False, rank=4)),
     "cosh": _Case(lambda lib, F, m: lib.cosh(m(4))),
     "cosine_similarity": _Case(lambda lib, F, m: F.cosine_similarity(m(2, 4), m(2, 4))),
+    "cumprod": _Case(lambda lib, F, m: lib.cumprod(m(4), 0)),
+    "cumsum": _Case(lambda lib, F, m: lib.cumsum(m(4), 0)),
     "erfinv": _Case(lambda lib, F, m: lib.erfinv(m(4))),
     "exp": _Case(lambda lib, F, m: lib.exp(m(4))),
     "expm1": _Case(lambda lib, F, m: lib.expm1(m(4))),
@@ -380,13 +397,38 @@ _CASES: dict[str, _Case] = {
     "sum": _Case(lambda lib, F, m: m(4, 3).sum(0)),
     "tan": _Case(lambda lib, F, m: lib.tan(m(4))),
     # ── KEEP on Metal, FP32 on the CPU ──
+    "avg_pool3d": _Case(lambda lib, F, m: F.avg_pool3d(m(1, 2, 4, 4, 4), 2)),
+    "cholesky": _cpu(lambda lib, F, m: lib.linalg.cholesky(m.spd(3))),
+    "cholesky_ex": _cpu(lambda lib, F, m: lib.linalg.cholesky_ex(m.spd(3))[0]),
+    "cond": _cpu(lambda lib, F, m: lib.linalg.cond(m.spd(3))),
+    "eig": _cpu(lambda lib, F, m: lib.linalg.eig(m.spd(3))[0].abs()),
+    "eigh": _cpu(lambda lib, F, m: lib.linalg.eigh(m.spd(3))[0]),
+    "eigvals": _cpu(lambda lib, F, m: lib.linalg.eigvals(m.spd(3)).abs()),
+    "eigvalsh": _cpu(lambda lib, F, m: lib.linalg.eigvalsh(m.spd(3))),
+    "fftn": _cpu(lambda lib, F, m: lib.fft.fft(m(8)).abs()),
     "grid_sample": _Case(
         lambda lib, F, m: F.grid_sample(
             m(1, 1, 4, 4), m(1, 3, 3, 2), align_corners=False
         )
     ),
+    "householder_product": _cpu(
+        lambda lib, F, m: lib.linalg.householder_product(m(3, 2), m(2))
+    ),
+    "ifftn": _cpu(lambda lib, F, m: lib.fft.ifft(m(8)).abs()),
+    "inv": _cpu(lambda lib, F, m: lib.linalg.inv(m.spd(3))),
+    "inv_ex": _cpu(lambda lib, F, m: lib.linalg.inv_ex(m.spd(3))[0]),
     "irfftn": _cpu(lambda lib, F, m: lib.fft.irfft(m(8))),
+    "matrix_rank": _cpu(
+        lambda lib, F, m: lib.linalg.matrix_rank(m.spd(3)), want="int64"
+    ),
+    "max_pool3d": _Case(lambda lib, F, m: F.max_pool3d(m(1, 2, 4, 4, 4), 2)),
     "polar": _cpu(lambda lib, F, m: lib.polar(m(3, pos=True), m(3)).abs()),
+    "qr": _cpu(lambda lib, F, m: lib.linalg.qr(m(3, 3))[0]),
+    "rfftn": _cpu(lambda lib, F, m: lib.fft.rfft(m(8)).abs()),
+    "solve": _cpu(lambda lib, F, m: lib.linalg.solve(m.spd(3), m(3))),
+    "stft": _cpu(lambda lib, F, m: lib.stft(m(64), 16, return_complex=True).abs()),
+    "svd": _cpu(lambda lib, F, m: lib.linalg.svd(m(3, 3))[1]),
+    "svdvals": _cpu(lambda lib, F, m: lib.linalg.svdvals(m(3, 3))),
     "view_as_complex": _cpu(lambda lib, F, m: lib.view_as_complex(m(3, 2)).abs()),
     # ── WIDEST: one dtype in, that dtype out (mixed operands below) ──
     "addcdiv": _Case(lambda lib, F, m: lib.addcdiv(m(3), m(3), m(3, pos=True))),
@@ -455,17 +497,15 @@ _KEEP_CASES: dict[str, _Case] = {
 
 # Rows the engine does not apply yet, with the card that wires each.  The
 # xfails are strict: wiring a row flips its test.
-_E2 = "LCD-500 E2: the op bypasses SchemaGuard"
-_E2_LINALG = "LCD-500 E2: ops/linalg and the fft primitives have no autocast entry"
 _A1 = "LCD-500 A1: Python composite, wired by @amp_op"
 _NOT_WIRED: dict[str, tuple[str, _Case]] = {
     "adaptive_avg_pool3d": (
         _A1,
-        _cpu(lambda lib, F, m: F.adaptive_avg_pool3d(m(1, 2, 4, 4, 4), 2)),
+        _cpu(lambda lib, F, m: F.adaptive_avg_pool3d(m(1, 2, 5, 5, 5), 2)),
     ),
     "adaptive_max_pool3d": (
         _A1,
-        _cpu(lambda lib, F, m: F.adaptive_max_pool3d(m(1, 2, 4, 4, 4), 2)),
+        _cpu(lambda lib, F, m: F.adaptive_max_pool3d(m(1, 2, 5, 5, 5), 2)),
     ),
     "addbmm": (
         _A1,
@@ -474,15 +514,6 @@ _NOT_WIRED: dict[str, tuple[str, _Case]] = {
     "addmm": (_A1, _Case(lambda lib, F, m: lib.addmm(m(3, 2), m(3, 4), m(4, 2)))),
     "addmv": (_A1, _Case(lambda lib, F, m: lib.addmv(m(3), m(3, 4), m(4)))),
     "addr": (_A1, _Case(lambda lib, F, m: lib.addr(m(3, 4), m(3), m(4)))),
-    "affine_grid": (
-        _E2,
-        _Case(
-            lambda lib, F, m: F.affine_grid(
-                m(1, 2, 3), (1, 1, 4, 4), align_corners=False
-            )
-        ),
-    ),
-    "avg_pool3d": (_E2, _Case(lambda lib, F, m: F.avg_pool3d(m(1, 2, 4, 4, 4), 2))),
     "baddbmm": (
         _A1,
         _Case(lambda lib, F, m: lib.baddbmm(m(1, 3, 2), m(1, 3, 4), m(1, 4, 2))),
@@ -492,31 +523,6 @@ _NOT_WIRED: dict[str, tuple[str, _Case]] = {
         _Case(lambda lib, F, m: F.binary_cross_entropy(m.unit(4), m.unit(4))),
     ),
     "cdist": (_A1, _Case(lambda lib, F, m: lib.cdist(m(3, 4), m(2, 4)))),
-    "cholesky": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.cholesky(m.spd(3)))),
-    "cholesky_ex": (
-        _E2_LINALG,
-        _cpu(lambda lib, F, m: lib.linalg.cholesky_ex(m.spd(3))[0]),
-    ),
-    "cond": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.cond(m.spd(3)))),
-    "conv_transpose1d": (
-        _E2,
-        _Case(lambda lib, F, m: F.conv_transpose1d(m(1, 2, 8), m(2, 3, 3))),
-    ),
-    "conv_transpose2d": (
-        _E2,
-        _Case(lambda lib, F, m: F.conv_transpose2d(m(1, 2, 8, 8), m(2, 3, 3, 3))),
-    ),
-    "conv_transpose3d": (
-        _E2,
-        _Case(lambda lib, F, m: F.conv_transpose3d(m(1, 2, 4, 4, 4), m(2, 3, 3, 3, 3))),
-    ),
-    "cumprod": (_E2, _Case(lambda lib, F, m: lib.cumprod(m(4), 0))),
-    "cumsum": (_E2, _Case(lambda lib, F, m: lib.cumsum(m(4), 0))),
-    "eig": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.eig(m.spd(3))[0].abs())),
-    "eigh": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.eigh(m.spd(3))[0])),
-    "eigvals": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.eigvals(m.spd(3)).abs())),
-    "eigvalsh": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.eigvalsh(m.spd(3)))),
-    "fftn": (_E2_LINALG, _cpu(lambda lib, F, m: lib.fft.fft(m(8)).abs())),
     "fractional_max_pool2d": (
         _A1,
         _cpu(
@@ -535,21 +541,9 @@ _NOT_WIRED: dict[str, tuple[str, _Case]] = {
         _A1,
         _Case(lambda lib, F, m: F.gaussian_nll_loss(m(4), m(4), m(4, pos=True))),
     ),
-    "householder_product": (
-        _E2_LINALG,
-        _cpu(lambda lib, F, m: lib.linalg.householder_product(m(3, 2), m(2))),
-    ),
-    "ifftn": (_E2_LINALG, _cpu(lambda lib, F, m: lib.fft.ifft(m(8)).abs())),
     "instance_norm": (_A1, _Case(lambda lib, F, m: F.instance_norm(m(2, 3, 4)))),
-    "inv": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.inv(m.spd(3)))),
-    "inv_ex": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.inv_ex(m.spd(3))[0])),
     "lstsq": (_A1, _cpu(lambda lib, F, m: lib.linalg.lstsq(m.spd(3), m(3, 1))[0])),
     "matrix_norm": (_A1, _Case(lambda lib, F, m: lib.linalg.matrix_norm(m(3, 3)))),
-    "matrix_rank": (
-        _E2_LINALG,
-        _cpu(lambda lib, F, m: lib.linalg.matrix_rank(m.spd(3)), want="int64"),
-    ),
-    "max_pool3d": (_E2, _Case(lambda lib, F, m: F.max_pool3d(m(1, 2, 4, 4, 4), 2))),
     "max_unpool2d": (
         _A1,
         _cpu(
@@ -562,21 +556,20 @@ _NOT_WIRED: dict[str, tuple[str, _Case]] = {
         _A1,
         _cpu(
             lambda lib, F, m: F.max_unpool3d(
-                *F.max_pool3d(m(1, 1, 4, 4, 4), 2, return_indices=True), 2
+                m(1, 1, 2, 2, 2),
+                m.ints([[[[[0, 1], [8, 9]], [[32, 33], [40, 41]]]]]),
+                2,
             )
         ),
     ),
     "mv": (_A1, _Case(lambda lib, F, m: lib.mv(m(3, 4), m(4)))),
     "nanquantile": (_A1, _cpu(lambda lib, F, m: lib.nanquantile(m(4), 0.5))),
-    "norm": (_E2, _Case(lambda lib, F, m: lib.linalg.norm(m(4)))),
     "poisson_nll_loss": (
         _A1,
         _Case(lambda lib, F, m: F.poisson_nll_loss(m(4), m(4, pos=True))),
     ),
     "prelu": (_A1, _Case(lambda lib, F, m: F.prelu(m(1, 2, 3), m(2)))),
-    "qr": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.qr(m(3, 3))[0])),
     "quantile": (_A1, _cpu(lambda lib, F, m: lib.quantile(m(4), 0.5))),
-    "rfftn": (_E2_LINALG, _cpu(lambda lib, F, m: lib.fft.rfft(m(8)).abs())),
     "soft_margin_loss": (
         _A1,
         _Case(lambda lib, F, m: F.soft_margin_loss(m(4), m.signs(4))),
@@ -588,14 +581,6 @@ _NOT_WIRED: dict[str, tuple[str, _Case]] = {
         "engine softplus by a half 1 / beta (activations.py, the `mul` after it)",
         _Case(lambda lib, F, m: F.softplus(m(4))),
     ),
-    "solve": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.solve(m.spd(3), m(3)))),
-    "stft": (
-        _A1,
-        _cpu(lambda lib, F, m: lib.stft(m(64), 16, return_complex=True).abs()),
-    ),
-    "svd": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.svd(m(3, 3))[1])),
-    "svdvals": (_E2_LINALG, _cpu(lambda lib, F, m: lib.linalg.svdvals(m(3, 3)))),
-    "trace": (_E2, _Case(lambda lib, F, m: lib.trace(m(3, 3)))),
     "vecdot": (_A1, _Case(lambda lib, F, m: lib.linalg.vecdot(m(3, 4), m(3, 4)))),
     "vector_norm": (_A1, _Case(lambda lib, F, m: lib.linalg.vector_norm(m(4)))),
 }
@@ -732,10 +717,6 @@ _MIXED: dict[str, _MixedFn] = {
 _MIXED_NOT_WIRED = {
     ("index_copy", "cpu"): "LCD-500 A1: index_copy checks one dtype before the engine",
     ("index_put", "metal"): "LCD-500 A1: index_put checks one dtype before the engine",
-    (
-        "scatter_add",
-        "metal",
-    ): "LCD-500 E2a: scatter_add entry (Gfunc.cpp, after LCD-466 c2)",
 }
 
 

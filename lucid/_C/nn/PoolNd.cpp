@@ -32,6 +32,7 @@
 #include "../core/GradMode.h"
 #include "../core/OpRegistry.h"
 #include "../core/Profiler.h"
+#include "../core/SchemaGuard.h"
 #include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../core/Validate.h"
@@ -112,20 +113,23 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
                                             const int (&pad)[N],
                                             bool ceil_mode) {
     validate_input<N>(x, MaxPoolNdBackward<N>::schema_v1.name, K, stride_in, pad);
+    SchemaGuard sg{MaxPoolNdBackward<N>::schema_v1, x->dtype(), x->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const TensorImplPtr x_eff = astype_op(x, eff_dt);
     int stride[N];
     // stride == 0 is a sentinel meaning "use kernel size" (non-overlapping).
     for (int i = 0; i < N; ++i)
         stride[i] = (stride_in[i] == 0) ? K[i] : stride_in[i];
 
-    const int B = static_cast<int>(x->shape()[0]);
-    const int C = static_cast<int>(x->shape()[1]);
+    const int B = static_cast<int>(x_eff->shape()[0]);
+    const int C = static_cast<int>(x_eff->shape()[1]);
     int S[N], O[N];
     int O_total = 1, S_total = 1;
     for (int i = 0; i < N; ++i) {
-        S[i] = static_cast<int>(x->shape()[2 + i]);
+        S[i] = static_cast<int>(x_eff->shape()[2 + i]);
         O[i] = compute_out(S[i], K[i], stride[i], pad[i], ceil_mode);
         if (O[i] <= 0)
-            throw ShapeMismatch(x->shape(), Shape{}, "max_pool: output non-positive");
+            throw ShapeMismatch(x_eff->shape(), Shape{}, "max_pool: output non-positive");
         O_total *= O[i];
         S_total *= S[i];
     }
@@ -140,7 +144,7 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         out_shape.push_back(static_cast<std::int64_t>(O[i]));
 
-    OpScopeFull scope{MaxPoolNdBackward<N>::schema_v1.name, x->device(), x->dtype(), out_shape};
+    OpScopeFull scope{MaxPoolNdBackward<N>::schema_v1.name, x_eff->device(), eff_dt, out_shape};
     // 3.5 Phase 1.2: report pool params so the compile-path emitter can
     // rebuild the descriptor.
     {
@@ -159,14 +163,15 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
         opts.stride[i] = stride[i];
         opts.pad[i] = pad[i];
     }
-    auto& be = backend::Dispatcher::for_device(x->device());
+    auto& be = backend::Dispatcher::for_device(x_eff->device());
     // max_pool_nd_forward returns [output, argmax].
-    auto pool_out = be.max_pool_nd_forward(x->storage(), x->shape(), out_shape, opts, x->dtype());
+    auto pool_out =
+        be.max_pool_nd_forward(x_eff->storage(), x_eff->shape(), out_shape, opts, eff_dt);
     Storage out_storage = std::move(pool_out[0]);
     Storage saved_argmax = std::move(pool_out[1]);
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
-                                            x->dtype(), x->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), eff_dt,
+                                            x_eff->device(), false);
     // wire_autograd (below) records ``on_op_io`` internally — calling it
     // again here would double-feed the trace (2 inputs instead of 1) and
     // abort the compile.
@@ -181,7 +186,7 @@ TensorImplPtr MaxPoolNdBackward<N>::forward(const TensorImplPtr& x,
         bwd->stride_[i] = stride[i];
         bwd->pad_[i] = pad[i];
     }
-    kernel::NaryKernel<MaxPoolNdBackward<N>, 1>::wire_autograd(std::move(bwd), {x}, out, false);
+    kernel::NaryKernel<MaxPoolNdBackward<N>, 1>::wire_autograd(std::move(bwd), {x_eff}, out, false);
     return out;
 }
 
@@ -209,19 +214,22 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
                                             bool ceil_mode,
                                             bool count_include_pad) {
     validate_input<N>(x, AvgPoolNdBackward<N>::schema_v1.name, K, stride_in, pad);
+    SchemaGuard sg{AvgPoolNdBackward<N>::schema_v1, x->dtype(), x->device()};
+    const Dtype eff_dt = sg.effective_dtype();
+    const TensorImplPtr x_eff = astype_op(x, eff_dt);
     int stride[N];
     for (int i = 0; i < N; ++i)
         stride[i] = (stride_in[i] == 0) ? K[i] : stride_in[i];
 
-    const int B = static_cast<int>(x->shape()[0]);
-    const int C = static_cast<int>(x->shape()[1]);
+    const int B = static_cast<int>(x_eff->shape()[0]);
+    const int C = static_cast<int>(x_eff->shape()[1]);
     int S[N], O[N];
     int O_total = 1, S_total = 1;
     for (int i = 0; i < N; ++i) {
-        S[i] = static_cast<int>(x->shape()[2 + i]);
+        S[i] = static_cast<int>(x_eff->shape()[2 + i]);
         O[i] = compute_out(S[i], K[i], stride[i], pad[i], ceil_mode);
         if (O[i] <= 0)
-            throw ShapeMismatch(x->shape(), Shape{}, "avg_pool: output non-positive");
+            throw ShapeMismatch(x_eff->shape(), Shape{}, "avg_pool: output non-positive");
         O_total *= O[i];
         S_total *= S[i];
     }
@@ -233,7 +241,7 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
     for (int i = 0; i < N; ++i)
         out_shape.push_back(static_cast<std::int64_t>(O[i]));
 
-    OpScopeFull scope{AvgPoolNdBackward<N>::schema_v1.name, x->device(), x->dtype(), out_shape};
+    OpScopeFull scope{AvgPoolNdBackward<N>::schema_v1.name, x_eff->device(), eff_dt, out_shape};
     // 3.5 Phase 1.2: report pool params for the compile-path emitter.
     {
         std::vector<std::int64_t> Kv(K, K + N), Sv(stride, stride + N), Pv(pad, pad + N);
@@ -253,12 +261,12 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
         avg_opts.stride[i] = stride[i];
         avg_opts.pad[i] = pad[i];
     }
-    auto& avg_be = backend::Dispatcher::for_device(x->device());
+    auto& avg_be = backend::Dispatcher::for_device(x_eff->device());
     Storage out_storage =
-        avg_be.avg_pool_nd_forward(x->storage(), x->shape(), out_shape, avg_opts, x->dtype());
+        avg_be.avg_pool_nd_forward(x_eff->storage(), x_eff->shape(), out_shape, avg_opts, eff_dt);
 
-    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape),
-                                            x->dtype(), x->device(), false);
+    auto out = std::make_shared<TensorImpl>(std::move(out_storage), std::move(out_shape), eff_dt,
+                                            x_eff->device(), false);
     // wire_autograd (below) records ``on_op_io`` internally — calling it
     // again here would double-feed the trace.
 
@@ -271,7 +279,7 @@ TensorImplPtr AvgPoolNdBackward<N>::forward(const TensorImplPtr& x,
         bwd->stride_[i] = stride[i];
         bwd->pad_[i] = pad[i];
     }
-    kernel::NaryKernel<AvgPoolNdBackward<N>, 1>::wire_autograd(std::move(bwd), {x}, out, false);
+    kernel::NaryKernel<AvgPoolNdBackward<N>, 1>::wire_autograd(std::move(bwd), {x_eff}, out, false);
     return out;
 }
 

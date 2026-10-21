@@ -38,6 +38,7 @@
 #include "../../core/Helpers.h"
 #include "../../core/OpRegistry.h"
 #include "../../core/Profiler.h"
+#include "../../core/SchemaGuard.h"
 #include "../../core/Scope.h"
 #include "../../core/TensorImpl.h"
 #include "../../core/Validate.h"
@@ -45,6 +46,7 @@
 #include "../../ops/bfunc/Div.h"
 #include "../../ops/bfunc/Mul.h"
 #include "../../ops/ufunc/Arith.h"
+#include "../../ops/ufunc/Astype.h"
 #include "../../ops/ufunc/ScalarParam.h"
 #include "../../ops/utils/Layout.h"
 #include "../../ops/utils/View.h"
@@ -173,9 +175,11 @@ Shape reduced_shape(const Shape& sh, const std::vector<int>& axes, bool keepdims
 // saved_output_ captures the forward norm value N so the backward can
 // compute A/N without re-running the forward.
 // save_inputs=true stores A in saved_inputs_[0] for the L2 numerator.
-TensorImplPtr norm_op(const TensorImplPtr& a, double ord, std::vector<int> axis, bool keepdims) {
+TensorImplPtr norm_op(const TensorImplPtr& a_in, double ord, std::vector<int> axis, bool keepdims) {
     using namespace linalg_detail;
-    Validator::input(a, "norm.a").non_null();
+    Validator::input(a_in, "norm.a").non_null();
+    SchemaGuard sg{NormBackward::schema_v1, a_in->dtype(), a_in->device()};
+    const TensorImplPtr a = astype_op(a_in, sg.effective_dtype());
     require_float(a->dtype(), "norm");
     // Checked here, for both devices: the CPU kernel took an axis the input
     // lacks without a word — ``dims=[1]`` on a 1-D input returned ``|x|``

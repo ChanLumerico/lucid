@@ -40,12 +40,14 @@ namespace lucid {
 // The backend receives the pre-computed output shapes (qsh, rsh) so it can
 // allocate exactly the right amount of memory for Q and R.  The shapes follow
 // the "thin" convention: k = min(m, n) caps the inner dimension.
-std::vector<TensorImplPtr> qr_op(const TensorImplPtr& a) {
+std::vector<TensorImplPtr> qr_op(const TensorImplPtr& a_in) {
     using namespace linalg_detail;
-    Validator::input(a, "qr.a").non_null();
-    require_float(a->dtype(), "qr");
-    if (a->shape().size() < 2)
+    Validator::input(a_in, "qr.a").non_null();
+    if (a_in->shape().size() < 2)
         ErrorBuilder("qr").invalid_argument("input must be at least 2-D");
+    const AmpScope amp{"qr", a_in->device()};
+    const TensorImplPtr a = amp.cast(a_in);
+    require_float(a->dtype(), "qr");
     OpScopeFull scope{"qr", a->device(), a->dtype(), a->shape()};
 
     const auto& sh = a->shape();

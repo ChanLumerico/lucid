@@ -38,11 +38,13 @@ namespace lucid {
 //
 // wsh drops the last dimension (the redundant n in n×n).
 // vsh is identical to the input shape (the full n×n eigenvector matrix).
-std::vector<TensorImplPtr> eig_op(const TensorImplPtr& a) {
+std::vector<TensorImplPtr> eig_op(const TensorImplPtr& a_in) {
     using namespace linalg_detail;
-    Validator::input(a, "eig.a").non_null();
+    Validator::input(a_in, "eig.a").non_null();
+    require_square_matrix(a_in->shape(), "eig.a");
+    const AmpScope amp{"eig", a_in->device()};
+    const TensorImplPtr a = amp.cast(a_in);
     require_float(a->dtype(), "eig");
-    require_square_matrix(a->shape(), "eig.a");
     OpScopeFull scope{"eig", a->device(), a->dtype(), a->shape()};
 
     const auto& sh = a->shape();

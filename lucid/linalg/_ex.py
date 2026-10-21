@@ -16,6 +16,7 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dtype import finfo as _finfo
+from lucid._ops._autocast import _autocast_entry
 from lucid._ops._dims import _wrap_dim
 from lucid._tensor._indexing import broadcast_shapes as _broadcast_batch
 from lucid._tensor.tensor import Tensor
@@ -365,16 +366,17 @@ def cholesky_ex(
     >>> int(info)
     2
     """
-    A = input
-    try:
-        return _CholeskyExResult(cholesky(A, upper=upper), _info_zero(A))
-    except LinAlgError:
-        pass  # located per matrix below
-    info = _potrf_info(A, upper)
-    if check_errors:
-        _raise_ex_failure("cholesky_ex", info, _not_positive_definite)
-    out = _on_the_rest(lambda M: cholesky(M, upper=upper), A, info)
-    return _CholeskyExResult(_with_partial_factors(out, A, info, upper), info)
+    with _autocast_entry("cholesky_ex", _unwrap(input)) as (a_impl,):
+        A = _wrap(a_impl)
+        try:
+            return _CholeskyExResult(cholesky(A, upper=upper), _info_zero(A))
+        except LinAlgError:
+            pass  # located per matrix below
+        info = _potrf_info(A, upper)
+        if check_errors:
+            _raise_ex_failure("cholesky_ex", info, _not_positive_definite)
+        out = _on_the_rest(lambda M: cholesky(M, upper=upper), A, info)
+        return _CholeskyExResult(_with_partial_factors(out, A, info, upper), info)
 
 
 def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
@@ -426,14 +428,16 @@ def inv_ex(A: Tensor, *, check_errors: bool = False) -> tuple[Tensor, Tensor]:
     >>> int(info)
     2
     """
-    try:
-        return _InvExResult(inv(A), _info_zero(A))
-    except LinAlgError:
-        pass  # located per matrix below
-    info = _getrf_info(A)
-    if check_errors:
-        _raise_ex_failure("inv_ex", info, _singular_reason("inversion"))
-    return _InvExResult(_on_the_rest(lambda M: inv(M), A, info), info)
+    with _autocast_entry("inv_ex", _unwrap(A)) as (a_impl,):
+        A_cast = _wrap(a_impl)
+        try:
+            return _InvExResult(inv(A_cast), _info_zero(A_cast))
+        except LinAlgError:
+            pass  # located per matrix below
+        info = _getrf_info(A_cast)
+        if check_errors:
+            _raise_ex_failure("inv_ex", info, _singular_reason("inversion"))
+        return _InvExResult(_on_the_rest(lambda M: inv(M), A_cast, info), info)
 
 
 def solve_ex(
@@ -557,9 +561,7 @@ def lu_factor_ex(
     return _lu_factor_ex(A, check_errors=check_errors, op="lu_factor_ex")
 
 
-def _lu_factor_ex(
-    A: Tensor, *, check_errors: bool, op: str
-) -> _LuFactorExResult:
+def _lu_factor_ex(A: Tensor, *, check_errors: bool, op: str) -> _LuFactorExResult:
     """``(LU, pivots, info)``, ``info`` being ``getrf``'s own code from the
     kernel; ``check_errors`` raises for the first matrix it marks."""
     LU, pivots, info = _lu_factor_packed(A)
@@ -704,9 +706,7 @@ def ldl_factor_ex(
     return _ldl_factor_ex(input, check_errors=check_errors, op="ldl_factor_ex")
 
 
-def _ldl_factor_ex(
-    A: Tensor, *, check_errors: bool, op: str
-) -> _LdlFactorExResult:
+def _ldl_factor_ex(A: Tensor, *, check_errors: bool, op: str) -> _LdlFactorExResult:
     """``(LD, pivots, info)``, ``info`` being ``sytrf``'s own code from the
     kernel; ``check_errors`` raises for the first matrix it marks.  The
     kernel takes real input only, for which symmetric and Hermitian are one
@@ -927,6 +927,32 @@ def _pinv_with_tol(
     return P
 
 
+def _cond_compute(A: Tensor, p: int | float | str | None, square: bool) -> Tensor:
+    """Compute ``cond(A, p)`` after validation and autocast entry."""
+    if A.numel() == 0:
+        return lucid.zeros(tuple(A.shape[:-2]), dtype=A.dtype, device=A.device)
+    if p is None or p in (2, -2):
+        _, S, _ = svd(A, full_matrices=False)
+        S_impl = _unwrap(S)
+        smax = _C_engine.max(S_impl, [-1], False)
+        smin = _C_engine.min(S_impl, [-1], False)
+        ratio = (smin, smax) if p == -2 else (smax, smin)
+        return _wrap(_C_engine.div(*ratio))
+    if p == "nuc":
+        _, S, _ = svd(A, full_matrices=False)
+        return S.sum(dim=-1) * (1.0 / S).sum(dim=-1)
+    if not square:
+        raise ValueError(
+            f"cond(p={p!r}): input must be a square matrix or a batch of them, got "
+            f"shape {tuple(A.shape)}"
+        )
+    Ainv, info = inv_ex(A)
+    failed = (info != 0).reshape(*tuple(info.shape), 1, 1)
+    Ainv = lucid.where(failed, float("inf"), Ainv)
+    out = lucid.linalg.matrix_norm(A, ord=p) * lucid.linalg.matrix_norm(Ainv, ord=p)
+    return lucid.where(lucid.isnan(out), float("inf"), out)
+
+
 def tensorinv(input: Tensor, ind: int = 2) -> Tensor:
     r"""Compute the multiplicative inverse of :func:`lucid.tensordot`.
 
@@ -1061,9 +1087,7 @@ def _lu_solve_general(
             raise _C_engine.ShapeMismatch(
                 "linalg.lu_solve: The input tensor B must have at least 2 dimensions."
             )
-        return _lu_solve_general(
-            LU, piv, B.mT, left=True, adjoint=not adjoint
-        ).mT
+        return _lu_solve_general(LU, piv, B.mT, left=True, adjoint=not adjoint).mT
     lu_sh = tuple(int(s) for s in LU.shape)
     b_sh = tuple(int(s) for s in B.shape)
     if len(lu_sh) < 2 or lu_sh[-1] != lu_sh[-2]:
@@ -1094,7 +1118,9 @@ def _check_lstsq_shapes(
     """Return ``(vec_rhs, b_batch)`` or raise ``ValueError`` for malformed shapes."""
     a_ndim, b_ndim = len(a_shape), len(b_shape)
     if a_ndim < 2:
-        raise ValueError(f"lstsq: A must have at least 2 dimensions, got shape {a_shape}")
+        raise ValueError(
+            f"lstsq: A must have at least 2 dimensions, got shape {a_shape}"
+        )
     if b_ndim < 1 or not (0 <= a_ndim - b_ndim <= 1):
         raise ValueError(
             f"lstsq: A.ndim must be >= B.ndim and A.ndim - B.ndim <= 1, "
@@ -1112,7 +1138,9 @@ def _check_lstsq_shapes(
 
 
 def _lstsq_solution(
-    A: Tensor, B: Tensor, broadcast_batch: Callable[[tuple[int, ...], tuple[int, ...]], tuple[int, ...]]
+    A: Tensor,
+    B: Tensor,
+    broadcast_batch: Callable[[tuple[int, ...], tuple[int, ...]], tuple[int, ...]],
 ) -> Tensor:
     """Validate shapes and compute the minimum-norm least-squares solution ``A⁺ B``."""
     a_shape = tuple(int(s) for s in A.shape)
@@ -1145,7 +1173,9 @@ def _householder_product_ops(H: Tensor, tau: Tensor) -> Tensor:
     return Q
 
 
-def _check_householder_shapes(h_shape: tuple[int, ...], t_shape: tuple[int, ...]) -> tuple[int, int]:
+def _check_householder_shapes(
+    h_shape: tuple[int, ...], t_shape: tuple[int, ...]
+) -> tuple[int, int]:
     """Validate ``(H, tau)`` shapes and return ``(k, r)``."""
     if len(h_shape) < 2 or len(t_shape) != len(h_shape) - 1:
         raise ValueError(
@@ -1173,10 +1203,22 @@ def _householder_product(H: Tensor, tau: Tensor) -> Tensor:
     k, r = _check_householder_shapes(
         tuple(int(s) for s in H.shape), tuple(int(s) for s in tau.shape)
     )
-    use_ops = H.ndim > 2 or r != k or ((H.requires_grad or tau.requires_grad) and lucid.is_grad_enabled())
-    if use_ops:
-        return _householder_product_ops(H, tau)
-    return _wrap(_la.householder_product(_unwrap(H), _unwrap(tau)))
+    with _autocast_entry("householder_product", _unwrap(H), _unwrap(tau)) as (
+        h_impl,
+        t_impl,
+    ):
+        H_cast, tau_cast = _wrap(h_impl), _wrap(t_impl)
+        use_ops = (
+            H_cast.ndim > 2
+            or r != k
+            or (
+                (H_cast.requires_grad or tau_cast.requires_grad)
+                and lucid.is_grad_enabled()
+            )
+        )
+        if use_ops:
+            return _householder_product_ops(H_cast, tau_cast)
+        return _wrap(_la.householder_product(h_impl, t_impl))
 
 
 def _check_matrix_norm_dims(rank: int, dim: tuple[int, int]) -> tuple[int, int]:
@@ -1217,6 +1259,3 @@ def _matrix_norm_sv(
     for axis in rest:
         shape[axis] = list(xi.shape)[axis]
     return _wrap(_C_engine.reshape(reduced, shape))
-
-
-

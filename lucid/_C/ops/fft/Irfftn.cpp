@@ -15,8 +15,8 @@ TensorImplPtr irfftn_op(const TensorImplPtr& a,
     return fft_detail::run_nd_fft(
         "irfftn", "irfftn.a", a, n, axes_in, Dtype::F64, fft_detail::dtype_for_irfft,
         fft_detail::irfft_out_shape,
-        [&](const std::vector<int>& axes, const Shape& out_shape) {
-            return fft_detail::cpu_irfftn_c128(a, n, axes, out_shape);
+        [&](const TensorImplPtr& x, const std::vector<int>& axes, const Shape& out_shape) {
+            return fft_detail::cpu_irfftn_c128(x, n, axes, out_shape);
         },
         [&](const ::mlx::core::array& in_arr, const std::vector<int>& axes) {
             return n.empty()

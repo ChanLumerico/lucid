@@ -62,6 +62,7 @@
 #include "../../ops/composite/Indexing.h"
 #include "../../ops/composite/Logical.h"
 #include "../../ops/ufunc/Transpose.h"
+#include "../../ops/utils/Promote.h"
 #include "../../ops/utils/ScalarAxis.h"
 #include "../../ops/utils/Select.h"
 #include "../../ops/utils/View.h"
@@ -515,10 +516,16 @@ AxisScatterOperands axis_scatter_operands(const char* op,
 // ── scatter_add ───────────────────────────────────────────────────────────────
 // Autograd: d/d(base)=grad_out; d/d(src)=gather(grad_out, dim, index).
 
-TensorImplPtr scatter_add_op(const TensorImplPtr& base,
+TensorImplPtr scatter_add_op(const TensorImplPtr& base_in,
                              const TensorImplPtr& indices,
-                             const TensorImplPtr& src,
+                             const TensorImplPtr& src_in,
                              int dim) {
+    Validator::input(base_in, "scatter_add.base").non_null();
+    Validator::input(src_in, "scatter_add.src").non_null();
+    const AmpScope amp{"scatter_add", base_in->device()};
+    const auto cast_ops = amp.cast_widest({base_in, src_in});
+    const TensorImplPtr& base = cast_ops[0];
+    const TensorImplPtr& src = cast_ops[1];
     if (auto out = on_scalar_scatter("scatter_add", base, indices, src, dim, scatter_add_op))
         return out;
     auto [d, values] = axis_scatter_operands("scatter_add", base, indices, src, dim);
