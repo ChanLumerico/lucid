@@ -33,7 +33,7 @@ from lucid.coreml._convert import (
     scatter_along_axis,
     widened,
 )
-from lucid.coreml._linear import fused_linear_gelu, fused_linear_relu, linear
+from lucid.coreml._linear import fused_linear_gelu, fused_linear_relu, linear, matmul
 
 if TYPE_CHECKING:
     from lucid.coreml._build import Builder
@@ -668,14 +668,7 @@ def _cumsum(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
     ]
 
 
-@_emitter("matmul")
-def _matmul(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
-    return "matmul", [
-        ("x", ins[0]),
-        ("y", ins[1]),
-        ("transpose_x", b.const_bool(False)),
-        ("transpose_y", b.const_bool(False)),
-    ]
+_emitter("matmul")(matmul)
 
 
 @_emitter("layer_norm")

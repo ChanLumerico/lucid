@@ -33,9 +33,8 @@ pytestmark = pytest.mark.skipif(
     reason="the engine was built without the Core ML writer",
 )
 
-# Cases not run at all.  ``x @ (x @ x)`` never finishes loading — Core ML's
-# CPU graph compiler spins (CHA-20) — and a model that writes it still hangs.
-# ``matrix_power`` used to; it multiplies on the left now and is run below.
+# Cases not run at all (currently empty; ``x @ (x @ x)`` is de-aliased in
+# ``_matmul`` so Apple's BNNS graph compiler terminates — LCD-20).
 NEVER_RUN: dict[str, str] = {}
 
 # Cases whose export is refused, and why.
@@ -150,3 +149,43 @@ def test_every_cpu_result_is_recorded_by_the_tracer(dtype: str) -> None:
                 if t._impl is not x._impl and tracer.lookup_id(t._impl) is None:
                     unseen.append(case.name)
     assert not unseen, f"results the CPU tracer never recorded: {unseen}"
+
+
+def test_right_associated_self_matmul_loads_and_matches_eager(
+    tmp_path: object,
+) -> None:
+    """LCD-20: ``x @ (x @ x)`` and right-associated variants load without hanging."""
+    with M.on_device("cpu"):
+        x2d = M.make_input("std", "f32", (4, 4), 1).to("cpu")
+        asked2d = M.make_input("std", "f32", (4, 4), 2).to("cpu")
+        recipes = [
+            ("cubic", lambda x: x @ (x @ x)),
+            ("relu_cubic", lambda x: x @ lucid.nn.functional.relu(x @ x)),
+            ("affine_cubic", lambda x: x @ ((x @ x) + 0.5)),
+            ("quartic_right", lambda x: x @ (x @ (x @ x))),
+        ]
+        for label, fn in recipes:
+            model = _Apply(fn).eval()
+            want = model(asked2d)
+            pkg = cml.export(model, x2d, f"{tmp_path}/{label}.mlpackage")
+            try:
+                got = pkg.predict(asked2d)
+            finally:
+                pkg.close()
+            assert lucid.allclose(want, got, rtol=1e-4, atol=1e-4), label
+
+        x3d = M.make_input("std", "f32", (2, 4, 4), 3).to("cpu")
+        asked3d = M.make_input("std", "f32", (3, 4, 4), 4).to("cpu")
+        batched = _Apply(lambda x: x @ (x @ x)).eval()
+        want3d = batched(asked3d)
+        pkg3d = cml.export(
+            batched,
+            x3d,
+            f"{tmp_path}/batched.mlpackage",
+            shape_range={0: (1, 4)},
+        )
+        try:
+            got3d = pkg3d.predict(asked3d)
+        finally:
+            pkg3d.close()
+        assert lucid.allclose(want3d, got3d, rtol=1e-4, atol=1e-4)

@@ -13,7 +13,54 @@ if TYPE_CHECKING:
     from lucid.coreml._build import Builder
     from lucid.coreml._emit import Bindings, EmitResult, TracedOp
 
-__all__ = ["fused_linear_gelu", "fused_linear_relu", "linear"]
+__all__ = ["fused_linear_gelu", "fused_linear_relu", "linear", "matmul"]
+
+
+def matmul(b: Builder, _op: TracedOp, ins: list[str]) -> EmitResult:
+    """``x @ y``, de-aliasing ``x @ x`` so Core ML's BNNS compiler terminates.
+
+    Apple's CPU MIL-to-BNNS graph compiler (``bnns::GraphCompile``) enters an
+    infinite loop when a self-aliased ``matmul(x=v, y=v)`` feeds the right-hand
+    side of a downstream ``matmul(x=v, y=...)`` such as ``x @ (x @ x)`` or
+    ``x @ relu(x @ x)`` (LCD-20).  MIL's ``noop_elimination`` and
+    ``fuse_transpose_matmul`` passes canonicalise ``identity`` and transposed
+    operands back into the self-aliased form, whereas a full-extent
+    ``slice_by_size`` along every axis is preserved as a distinct SSA value
+    with identical shape (including dynamic ``shape_range`` axes) and bits.
+
+    Parameters
+    ----------
+    b : Builder
+        Program being written.
+    _op : TracedOp
+        The traced ``matmul`` operation.
+    ins : list of str
+        Value names of ``x`` and ``y``.
+
+    Returns
+    -------
+    EmitResult
+        MIL's ``matmul`` operation and its bindings.
+    """
+    lhs, rhs = ins[0], ins[1]
+    if lhs == rhs:
+        dims = b.shape_of(rhs)
+        rank = len(dims)
+        rhs = b.emit(
+            "slice_by_size",
+            [
+                ("x", rhs),
+                ("begin", b.const_ints([0] * rank)),
+                ("size", b.const_ints([-1] * rank)),
+            ],
+            dims,
+        )
+    return "matmul", [
+        ("x", lhs),
+        ("y", rhs),
+        ("transpose_x", b.const_bool(False)),
+        ("transpose_y", b.const_bool(False)),
+    ]
 
 
 def linear(b: Builder, op: TracedOp, ins: list[str]) -> EmitResult:
