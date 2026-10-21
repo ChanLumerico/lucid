@@ -74,6 +74,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid._ops.composite.complex"
+    },
+    {
+      "kind": "module",
       "module": "lucid._ops.composite.indexing"
     },
     {
@@ -103,10 +107,6 @@
     {
       "kind": "module",
       "module": "lucid._tensor._indexing"
-    },
-    {
-      "kind": "module",
-      "module": "lucid._tensor._metal_views"
     },
     {
       "kind": "module",
@@ -447,6 +447,10 @@
     {
       "kind": "module",
       "module": "lucid.utils.tokenizer._char"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.tokenizer._lookup_common"
     },
     {
       "kind": "module",
@@ -798,6 +802,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.distributions.gamma"
+    },
+    {
+      "kind": "module",
       "module": "lucid.fft._transforms"
     },
     {
@@ -849,6 +857,10 @@
     {
       "kind": "module",
       "module": "lucid.diffeq._event"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.gamma"
     },
     {
       "kind": "module",
@@ -1318,6 +1330,10 @@
   "lucid.distributions": [
     {
       "kind": "module",
+      "module": "lucid.distributions.constraint_registry"
+    },
+    {
+      "kind": "module",
       "module": "lucid.distributions.transformed_distribution"
     },
     {
@@ -1379,6 +1395,54 @@
     {
       "kind": "module",
       "module": "lucid.distributions._kl_cross"
+    }
+  ],
+  "lucid.distributions.categorical.OneHotCategoricalStraightThrough": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions"
+    }
+  ],
+  "lucid.distributions.constraint_registry.CatTransform": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions.transforms"
+    }
+  ],
+  "lucid.distributions.constraint_registry.ConstraintRegistry": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.transforms"
+    }
+  ],
+  "lucid.distributions.constraint_registry.PositiveDefiniteTransform": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.transforms"
+    }
+  ],
+  "lucid.distributions.constraint_registry.SoftplusTransform": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.transforms"
+    }
+  ],
+  "lucid.distributions.constraint_registry.StackTransform": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions.transforms"
     }
   ],
   "lucid.distributions.continuous_extra.FisherSnedecor": [
@@ -1537,6 +1601,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions.uniform"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.von_mises"
     }
   ],
   "lucid.distributions.distribution.ExponentialFamily": [
@@ -1733,6 +1801,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions.transformed_distribution"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.von_mises"
     }
   ],
   "lucid.distributions.kl.kl_divergence": [
@@ -1777,10 +1849,24 @@
       "module": "lucid.distributions"
     }
   ],
+  "lucid.distributions.multivariate.LowRankMultivariateNormal": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
+    }
+  ],
   "lucid.distributions.multivariate.MultivariateNormal": [
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions._kl_cross"
     },
     {
       "kind": "module",
@@ -1817,6 +1903,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions.kl"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.von_mises"
     }
   ],
   "lucid.distributions.relaxed.RelaxedBernoulli": [
@@ -1840,6 +1930,10 @@
   "lucid.distributions.transformed_distribution.ComposeTransform": [
     {
       "kind": "module",
+      "module": "lucid.distributions.constraint_registry"
+    },
+    {
+      "kind": "module",
       "module": "lucid.distributions.transforms"
     }
   ],
@@ -1847,6 +1941,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions._kl_cross"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.constraint_registry"
     },
     {
       "kind": "module",
@@ -1865,6 +1963,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions.transforms"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.von_mises"
     }
   ],
   "lucid.distributions.transforms.AbsTransform": [
@@ -1877,18 +1979,20 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
-    }
-  ],
-  "lucid.distributions.transforms.CatTransform": [
+    },
     {
       "kind": "module",
-      "module": "lucid.distributions"
+      "module": "lucid.distributions.constraint_registry"
     }
   ],
   "lucid.distributions.transforms.CorrCholeskyTransform": [
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.constraint_registry"
     }
   ],
   "lucid.distributions.transforms.CumulativeDistributionTransform": [
@@ -1905,18 +2009,30 @@
     {
       "kind": "module",
       "module": "lucid.distributions._kl_cross"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.constraint_registry"
     }
   ],
   "lucid.distributions.transforms.IndependentTransform": [
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.constraint_registry"
     }
   ],
   "lucid.distributions.transforms.LowerCholeskyTransform": [
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.constraint_registry"
     }
   ],
   "lucid.distributions.transforms.PowerTransform": [
@@ -1935,24 +2051,34 @@
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.constraint_registry"
     }
   ],
   "lucid.distributions.transforms.SoftmaxTransform": [
     {
       "kind": "module",
       "module": "lucid.distributions"
-    }
-  ],
-  "lucid.distributions.transforms.StackTransform": [
+    },
     {
       "kind": "module",
-      "module": "lucid.distributions"
+      "module": "lucid.distributions.constraint_registry"
     }
   ],
   "lucid.distributions.transforms.StickBreakingTransform": [
     {
       "kind": "module",
       "module": "lucid.distributions"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.constraint_registry"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.von_mises"
     }
   ],
   "lucid.distributions.transforms.TanhTransform": [
@@ -1969,6 +2095,24 @@
     {
       "kind": "module",
       "module": "lucid.distributions._kl_cross"
+    }
+  ],
+  "lucid.distributions.von_mises.GeneralizedPareto": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions"
+    }
+  ],
+  "lucid.distributions.von_mises.LogisticNormal": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions"
+    }
+  ],
+  "lucid.distributions.von_mises.VonMises": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions"
     }
   ],
   "lucid.fft": [
@@ -11946,6 +12090,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models._utils._text"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative._common._actor"
     },
     {
@@ -12385,6 +12533,10 @@
     {
       "kind": "module",
       "module": "lucid.coreml._build"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.distributions.constraint_registry"
     },
     {
       "kind": "module",
@@ -12862,10 +13014,6 @@
   "lucid.nn.functional.activations.gumbel_softmax": [
     {
       "kind": "module",
-      "module": "lucid.distributions.relaxed"
-    },
-    {
-      "kind": "module",
       "module": "lucid.nn.functional"
     }
   ],
@@ -12950,6 +13098,10 @@
     }
   ],
   "lucid.nn.functional.activations.logsigmoid": [
+    {
+      "kind": "module",
+      "module": "lucid.distributions.transforms"
+    },
     {
       "kind": "module",
       "module": "lucid.nn.functional"
@@ -14345,6 +14497,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.modules.upsampling"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.quantized._utils"
     },
     {
       "kind": "module",
@@ -16362,7 +16518,7 @@
   "lucid.quantization._functional.fake_quantize": [
     {
       "kind": "module",
-      "module": "lucid.nn.quantized.activation"
+      "module": "lucid.nn.quantized._utils"
     },
     {
       "kind": "module",
@@ -16378,15 +16534,7 @@
     },
     {
       "kind": "module",
-      "module": "lucid.nn.quantized.functional_module"
-    },
-    {
-      "kind": "module",
       "module": "lucid.nn.quantized.linear"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.nn.quantized.modules"
     },
     {
       "kind": "module",
@@ -16454,10 +16602,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.nn.quantized.activation"
-    },
-    {
-      "kind": "module",
       "module": "lucid.nn.quantized.conv"
     },
     {
@@ -16474,15 +16618,7 @@
     },
     {
       "kind": "module",
-      "module": "lucid.nn.quantized.functional_module"
-    },
-    {
-      "kind": "module",
       "module": "lucid.nn.quantized.linear"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.nn.quantized.modules"
     },
     {
       "kind": "module",
@@ -17304,23 +17440,11 @@
     },
     {
       "kind": "module",
-      "module": "lucid.utils.tokenizer._char"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.utils.tokenizer._regex"
+      "module": "lucid.utils.tokenizer._lookup_common"
     },
     {
       "kind": "module",
       "module": "lucid.utils.tokenizer._unigram"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.utils.tokenizer._whitespace"
-    },
-    {
-      "kind": "module",
-      "module": "lucid.utils.tokenizer._word"
     },
     {
       "kind": "module",
