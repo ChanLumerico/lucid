@@ -473,7 +473,7 @@ def conj_physical(input: Tensor) -> Tensor:
     >>> lucid.conj_physical(z)
     tensor([(1.-2.j), (3.+4.j)], dtype=lucid.complex64)
     """
-    return lucid.conj(input)
+    return lucid.conj(input) if input.is_complex() else input.clone()
 
 
 def resolve_conj(input: Tensor) -> Tensor:

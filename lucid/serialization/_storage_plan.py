@@ -11,11 +11,10 @@ sharing nor the values may be guessed:
   buffer to every value equal to it (``clone()``, ``contiguous()``, a leading
   slice, the weights ``load_state_dict`` copied in), and those tensors never
   see each other's writes.  A Metal tensor is therefore saved as sharing only
-  with the views :mod:`lucid._tensor._metal_views` links back to it, while it
-  is alive, each placed where that module's layout puts it in the storage;
-  a view whose base is gone shares only its own elements with its views.
-  Members of an engine view family that carry no link (``Parameter(x)`` and
-  ``x``) are saved apart until the engine names a family to Python (LCD-477).
+  with members of its engine view family (``TensorImpl.family_id``) and the
+  views :mod:`lucid._tensor._metal_views` links back to it, while it is alive,
+  each placed where that layout puts it in the storage; a view whose base is
+  gone shares only its own elements with its views.
 
 * **Values are each tensor's own.**  A shared storage is assembled from every
   member's ``to_bytes()``, laid out by its geometry, and each member is then
@@ -150,9 +149,8 @@ def _metal_chain(t: _T) -> tuple[_T, _Chain]:
 
 
 def _owns_storage(root: _T) -> bool:
-    """Whether ``root`` is its storage's owner, not a view whose base is gone."""
-    link: _Link | None = root.__dict__.get(_LINK_ATTR)
-    return link is None or link.kind not in _VIEW_KINDS
+    """Whether ``root``'s layout is in its own storage, not a gone base's."""
+    return _metal_views._layout(root) == _metal_views._own_layout(root)
 
 
 def _metal_geometry(t: _T, root: _T) -> tuple[list[int], list[int], int] | None:
@@ -234,13 +232,17 @@ def _address_space(root: _T) -> tuple[str, int]:
     """The space a member's positions are measured in.
 
     CPU tensors share one space, the process's memory, measured by address.
-    A Metal tensor is a space of its own, measured from its first element,
-    which the views linked to it share.  Two Metal tensors that read one MLX
-    buffer are not thereby one storage: the buffer of ``ema.load_state_dict(
-    model.state_dict())``'s weights is the model's, and the two must not
-    alias after a load.
+    A Metal tensor is a space of its own — its engine view family when it has
+    one, or its Python identity — measured from the first element of that
+    space, which the views linked to it share.  Two Metal tensors that read
+    one MLX buffer are not thereby one storage: the buffer of
+    ``ema.load_state_dict(model.state_dict())``'s weights is the model's, and
+    the two must not alias after a load.
     """
-    return ("value", id(root)) if root.is_metal else ("memory", 0)
+    if not root.is_metal:
+        return ("memory", 0)
+    fid = root._impl.family_id()
+    return ("family", fid) if fid else ("value", id(root))
 
 
 @final

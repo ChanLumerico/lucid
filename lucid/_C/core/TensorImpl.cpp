@@ -569,6 +569,14 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
         write_through(out, name);
         return;
     }
+    if (family_ && !is_aliased()) {
+        if (const auto carried =
+                static_cast<std::int64_t>(family_->version.load(std::memory_order_relaxed));
+            carried > 0)
+            ensure_autograd()->version += carried;
+        family_.reset();
+        view_ancestors_.clear();
+    }
     if (out.gpu_member()) {
         // ``out`` reads a family's root: take its elements, laid out densely.
         storage_ = out.storage();

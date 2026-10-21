@@ -246,6 +246,13 @@ public:
     // tensor is not a Metal family member.
     const void* family_key() const noexcept { return gpu_member() ? family_.get() : nullptr; }
 
+    // Stable non-zero identity shared by every member of this tensor's view
+    // family (on both CPU and Metal), or ``0`` when the tensor belongs to no
+    // view family.
+    std::uintptr_t family_id() const noexcept {
+        return reinterpret_cast<std::uintptr_t>(family_.get());
+    }
+
     // Returns the byte offset of this tensor's first element from the start
     // of :func:`raw_storage` (the handle coordinate frame).
     //

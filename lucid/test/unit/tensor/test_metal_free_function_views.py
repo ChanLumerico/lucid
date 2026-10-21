@@ -46,6 +46,7 @@ FREE_VIEWS: dict[str, tuple[tuple[int, ...], View]] = {
     "broadcast_to": ((2, 3, 4), lambda x: lucid.broadcast_to(x, (2, 3, 4))),
     "as_strided": ((2, 3, 4), lambda x: lucid.as_strided(x, (3, 4), (4, 1), 4)),
     "detach": ((2, 3, 4), lambda x: lucid.detach(x)),
+    "contiguous": ((2, 3, 4), lambda x: lucid.contiguous(x)),
     "swapaxes": ((2, 3, 4), lambda x: lucid.swapaxes(x, 1, 2)),
     "swapdims": ((2, 3, 4), lambda x: lucid.swapdims(x, 0, 1)),
     "moveaxis": ((2, 3, 4), lambda x: lucid.moveaxis(x, 2, 0)),

@@ -237,15 +237,6 @@ def test_weights_copied_into_another_model_stay_apart(device: str) -> None:
     assert _bits(r["ema"]["weight"]) == before
 
 
-_METAL_FAMILY_UNSEEN = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "LCD-477: a Metal view family is invisible to Python, so "
-        "Parameter(x) and x are saved apart (their values still round-trip)"
-    ),
-)
-
-
 class TestParameters:
     def test_parameter_of_a_tensor_keeps_its_values(self, device: str) -> None:
         x = _base(device)
@@ -258,19 +249,26 @@ class TestParameters:
         assert _bits(r["p"]) == _bits(x)
         assert _bits(r["x"]) == _bits(x)
 
-    @pytest.mark.parametrize(
-        "device",
-        [pytest.param("cpu"), pytest.param("metal", marks=_METAL_FAMILY_UNSEEN)],
-    )
     def test_parameter_of_a_tensor_shares_with_it(self, device: str) -> None:
-        if device == "metal" and not lucid.metal.is_available():
-            pytest.skip("no Metal device")
         x = _base(device)
         r = _roundtrip({"x": x, "p": nn.Parameter(x)})
         assert isinstance(r, dict)
         with lucid.no_grad():
             r["x"].copy_(_marker(x, 2.0))
         assert _bits(r["p"]) == _bits(_marker(x, 2.0))
+
+    def test_engine_family_members_survive_repeated_roundtrip(
+        self, device: str
+    ) -> None:
+        x = _base(device)
+        r1 = _roundtrip({"x": x, "p": nn.Parameter(x), "f": nn.Flatten(0)(x)})
+        r = _roundtrip(r1)
+        assert isinstance(r, dict)
+        marker = _marker(x, 4.0)
+        with lucid.no_grad():
+            r["x"].copy_(marker)
+        assert _bits(r["p"]) == _bits(marker)
+        assert _bits(r["f"]) == _bits(marker.reshape(-1))
 
     def test_parameter_of_a_view_alone_trains_after_load(self, device: str) -> None:
         # A view saved alone loads dense, owning its elements.  (Stepping a

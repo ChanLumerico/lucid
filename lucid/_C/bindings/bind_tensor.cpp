@@ -186,6 +186,40 @@ transfer_storage_impl(const std::shared_ptr<lucid::TensorImpl>& t, lucid::Device
                                                              t->dtype(), target_device,
                                                              t->requires_grad()));
 }
+
+std::shared_ptr<lucid::TensorImpl>
+make_view_from_elements(const std::shared_ptr<lucid::TensorImpl>& base,
+                        const std::vector<std::int64_t>& shape,
+                        const std::vector<std::int64_t>& stride,
+                        std::int64_t offset) {
+    // Testing hook: a view of ``base`` described in elements, for geometries
+    // no public op makes.  The offset is from ``base``'s own first element,
+    // as make_view's is.
+    if (!base || shape.size() != stride.size() || offset < 0)
+        throw std::invalid_argument(
+            "_make_view: shape and stride need the same length and offset >= 0");
+    const auto elem = static_cast<std::int64_t>(lucid::dtype_size(base->dtype()));
+    lucid::Shape view_shape(shape.begin(), shape.end());
+    lucid::Stride byte_stride;
+    byte_stride.reserve(stride.size());
+    // Bounds are the buffer's: ``base`` may itself start partway in.
+    std::int64_t last = static_cast<std::int64_t>(base->storage_offset()) + offset * elem;
+    bool empty = false;
+    for (std::size_t i = 0; i < shape.size(); ++i) {
+        if (shape[i] < 0 || stride[i] < 0)
+            throw std::invalid_argument("_make_view: negative shape or stride");
+        empty = empty || shape[i] == 0;
+        byte_stride.push_back(stride[i] * elem);
+        last += (shape[i] - 1) * stride[i] * elem;
+    }
+    const auto size = static_cast<std::int64_t>(lucid::storage_nbytes(base->raw_storage()));
+    if (!empty && last + elem > size)
+        throw std::invalid_argument("_make_view: the view reaches past the end of the storage");
+    return traced_derive("_make_view", base,
+                         lucid::TensorImpl::make_view(base, std::move(view_shape),
+                                                      std::move(byte_stride),
+                                                      static_cast<std::size_t>(offset * elem)));
+}
 }  // namespace
 
 namespace lucid::bindings {
@@ -316,45 +350,13 @@ void register_tensor_impl(py::module_& m) {
              "Total byte size of the underlying storage allocation.")
         .def("storage_data_ptr", &TensorImpl::allocation_base,
              "Address of the first byte of the underlying storage allocation.")
+        .def("family_id", &TensorImpl::family_id,
+             "Non-zero identity shared by members of the same view family, or 0.")
         .def("data_ptr", &data_address,
              "Address of the first element: the storage base plus the byte offset.")
-        .def_static(
-            "_make_view",
-            [](const std::shared_ptr<TensorImpl>& base, const std::vector<std::int64_t>& shape,
-               const std::vector<std::int64_t>& stride,
-               std::int64_t offset) -> std::shared_ptr<TensorImpl> {
-                // Testing hook: a view of ``base`` described in elements, for
-                // geometries no public op makes.  The offset is from ``base``'s
-                // own first element, as make_view's is.
-                if (!base || shape.size() != stride.size() || offset < 0)
-                    throw std::invalid_argument(
-                        "_make_view: shape and stride need the same length and offset >= 0");
-                const auto elem = static_cast<std::int64_t>(dtype_size(base->dtype()));
-                Shape view_shape(shape.begin(), shape.end());
-                Stride byte_stride;
-                byte_stride.reserve(stride.size());
-                // Bounds are the buffer's: ``base`` may itself start partway in.
-                std::int64_t last =
-                    static_cast<std::int64_t>(base->storage_offset()) + offset * elem;
-                bool empty = false;
-                for (std::size_t i = 0; i < shape.size(); ++i) {
-                    if (shape[i] < 0 || stride[i] < 0)
-                        throw std::invalid_argument("_make_view: negative shape or stride");
-                    empty = empty || shape[i] == 0;
-                    byte_stride.push_back(stride[i] * elem);
-                    last += (shape[i] - 1) * stride[i] * elem;
-                }
-                const auto size = static_cast<std::int64_t>(storage_nbytes(base->raw_storage()));
-                if (!empty && last + elem > size)
-                    throw std::invalid_argument(
-                        "_make_view: the view reaches past the end of the storage");
-                return traced_derive(
-                    "_make_view", base,
-                    TensorImpl::make_view(base, std::move(view_shape), std::move(byte_stride),
-                                          static_cast<std::size_t>(offset * elem)));
-            },
-            py::arg("base"), py::arg("shape"), py::arg("stride"), py::arg("offset"),
-            "Testing hook: a view of base given in elements (shape, stride, offset).")
+        .def_static("_make_view", &make_view_from_elements, py::arg("base"), py::arg("shape"),
+                    py::arg("stride"), py::arg("offset"),
+                    "Testing hook: a view of base given in elements (shape, stride, offset).")
         // data_as_python / grad_as_python return the underlying buffer as a
         // numpy array view without copying; the TensorImpl must outlive the
         // returned array (keep-alive is handled by pybind11's default policy
