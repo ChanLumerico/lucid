@@ -1,2 +1,2 @@
 __version__: str = "3.15.5"
-_EXPECTED_ABI: int = 32
+_EXPECTED_ABI: int = 33

@@ -17,8 +17,8 @@ namespace py = pybind11;
 
 namespace lucid::bindings {
 
-// Registers the OpSchema read-only descriptor and the three registry query
-// functions: op_lookup, op_registry_all, op_registry_size.
+// Registers the OpSchema read-only descriptor and the two registry query
+// functions: op_lookup and op_registry_all.
 void register_op_registry(py::module_& m) {
     // OpSchema contains only compile-time-constant string_views and plain POD
     // fields.  The `name` and `determinism_note` fields are string_view, so
@@ -50,8 +50,6 @@ void register_op_registry(py::module_& m) {
                    ", input_arity=" + std::to_string(s.input_arity) + ")";
         });
 
-    m.def("schema_hash", &schema_hash, py::arg("schema"));
-
     // op_lookup returns None if the name is not registered rather than raising
     // so callers can use a simple `if schema := engine.op_lookup(name)` idiom.
     // The returned pointer is borrowed from the static registry; reference
@@ -77,8 +75,6 @@ void register_op_registry(py::module_& m) {
             return all;
         },
         py::return_value_policy::reference);
-
-    m.def("op_registry_size", &OpRegistry::size);
 }
 
 }  // namespace lucid::bindings

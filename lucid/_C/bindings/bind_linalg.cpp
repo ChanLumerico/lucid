@@ -21,8 +21,6 @@
 #include "../ops/linalg/LDLFactor.h"
 #include "../ops/linalg/LUFactor.h"
 #include "../ops/linalg/LUSolve.h"
-#include "../ops/linalg/Lstsq.h"
-#include "../ops/linalg/MatrixPower.h"
 #include "../ops/linalg/Norm.h"
 #include "../ops/linalg/Pinv.h"
 #include "../ops/linalg/QR.h"
@@ -65,7 +63,6 @@ void register_linalg(py::module_& m) {
     // svd is registered directly; it returns a tuple internally via its own
     // Python-friendly signature.
     m.def("svd", &svd_op, py::arg("a"), py::arg("compute_uv") = true);
-    m.def("matrix_power", &matrix_power_op, py::arg("a"), py::arg("n"));
     m.def("pinv", &pinv_op, py::arg("a"));
 
     // eig returns (eigenvalues, eigenvectors) for general (possibly complex)
@@ -111,19 +108,6 @@ void register_linalg(py::module_& m) {
           "Triangular solve: compute X such that A X = B.\n"
           "upper=True  → A is upper triangular.\n"
           "unitriangular=True → A has implicit unit diagonal.");
-
-    // lstsq: minimum-norm least-squares solution min‖AX−B‖₂.
-    // Returns a 1-element list; unpack [0] to get the solution tensor.
-    m.def(
-        "lstsq",
-        [](const TensorImplPtr& a, const TensorImplPtr& b) {
-            auto r = lstsq_op(a, b);
-            return r[0];
-        },
-        py::arg("a"), py::arg("b"),
-        "Least-squares solution: min||AX - B||_2.\n"
-        "CPU: LAPACK sgels/dgels.  GPU: CPU fallback.\n"
-        "Returns the solution tensor X with shape (N, NRHS).");
 
     // lu_solve: solve AX = B given the packed LU factorisation from lu_factor.
     m.def("lu_solve", &lu_solve_op, py::arg("LU"), py::arg("pivots"), py::arg("b"),

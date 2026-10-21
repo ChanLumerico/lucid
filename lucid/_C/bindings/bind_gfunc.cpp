@@ -1,7 +1,7 @@
 // lucid/_C/bindings/bind_gfunc.cpp
 //
 // Registers tensor-creation ("generator function") ops: zeros, ones, full,
-// empty, eye, arange, linspace, diag, and the _like variants.  These ops
+// empty, eye, arange, linspace, logspace, and the _like variants.  These ops
 // produce new tensors from scalar or shape arguments rather than from existing
 // tensors, so they do not have backward nodes and do not appear in the binary-
 // or unary-op registration files.
@@ -66,7 +66,7 @@ void register_gfunc(py::module_& m) {
         py::arg("shape"), py::arg("dtype") = Dtype::F32, py::arg("device") = Device::CPU,
         py::arg("requires_grad") = false);
 
-    // eye, arange, linspace, and diag delegate directly to their C++ ops
+    // eye, arange, and linspace delegate directly to their C++ ops
     // without shape conversion because they take scalar dimension arguments.
     // eye: omitted M defaults to square (N×N); k is the diagonal offset.
     m.def(
@@ -83,8 +83,6 @@ void register_gfunc(py::module_& m) {
     m.def("linspace", &linspace_op, py::arg("start"), py::arg("stop"), py::arg("num") = 50,
           py::arg("dtype") = Dtype::F32, py::arg("device") = Device::CPU,
           py::arg("requires_grad") = false);
-
-    m.def("diag", &diag_op, py::arg("v"), py::arg("k") = 0);
 
     m.def("logspace", &logspace_op, py::arg("start"), py::arg("stop"), py::arg("num") = 50,
           py::arg("base") = 10.0, py::arg("dtype") = Dtype::F32, py::arg("device") = Device::CPU,

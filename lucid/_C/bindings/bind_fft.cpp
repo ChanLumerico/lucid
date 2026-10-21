@@ -8,48 +8,17 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include <mlx/array.h>
-#include <mlx/ops.h>
-
-#include "../backend/Dispatcher.h"
-#include "../core/Profiler.h"
-#include "../core/Scope.h"
 #include "../core/TensorImpl.h"
 #include "../ops/fft/Fftn.h"
 #include "../ops/fft/Ifftn.h"
 #include "../ops/fft/Irfftn.h"
 #include "../ops/fft/Rfftn.h"
-#include "../ops/fft/_Detail.h"
 
 namespace py = pybind11;
 
 namespace lucid::bindings {
 
-// Helper used by lucid.fft.hfft / ihfft (Python composites).  Conjugates a
-// complex tensor; for real tensors this is a no-op identity.  Lives in the
-// fft binding rather than as a top-level op because it has only one consumer.
-static TensorImplPtr conj_complex(const TensorImplPtr& a) {
-    if (!is_complex(a->dtype()))
-        return a;  // real conjugate ≡ identity
-    OpScopeFull scope{"fft._conj_complex", a->device(), a->dtype(), a->shape()};
-    Storage out_st = backend::Dispatcher::for_device(a->device())
-                         .complex_conj(a->storage(), a->shape(), a->dtype());
-    return fft_detail::fresh(std::move(out_st), a->shape(), a->dtype(), a->device());
-}
-
-// The previous ``scale_op`` helper (private ``_C_engine.fft._scale``) was a
-// workaround for CpuBackend lacking ``full(C64)`` — the standard
-// ``Tensor * float`` path needed a broadcast scalar that the backend
-// couldn't build.  P2-B (2026-05-08) extended both backends to support
-// C64 ``full`` / ``ones`` / ``mul``, so the helper is no longer needed.
-// ``_conj_complex`` is also redundant now that the public ``lucid.conj``
-// engine op exists, but we keep it here for the small handful of internal
-// fft callers — it lets them stay independent of registry-driven dispatch.
-
 void register_fft(py::module_& m) {
-    m.def("_conj_complex", &conj_complex, py::arg("a"),
-          "Complex conjugate.  No-op on real tensors.  Used by hfft/ihfft.");
-
     m.def(
         "fftn",
         [](const TensorImplPtr& a, std::vector<std::int64_t> n, std::vector<int> dim) {

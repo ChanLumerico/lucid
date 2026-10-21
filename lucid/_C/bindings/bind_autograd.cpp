@@ -6,8 +6,6 @@
 //   - register_custom_function() — wires up lucid.autograd.Function so Python
 //     subclasses can define custom forward/backward passes (delegates to
 //     CustomFunction.h for the heavy lifting)
-//   - _run_fusion_pass() — testing helper that runs the op-fusion pass on the
-//     backward graph and returns the number of fusions detected
 //   - _tensor_hook_runner() / _has_tensor_hooks() — the engine side of
 //     Tensor.register_hook (autograd/TensorHooks.h)
 
@@ -21,7 +19,6 @@
 #include "../autograd/AccumulateGrad.h"
 #include "../autograd/CustomFunction.h"
 #include "../autograd/Engine.h"
-#include "../autograd/FusionPass.h"
 #include "../autograd/Helpers.h"
 #include "../autograd/ModuleHookNode.h"
 #include "../autograd/Node.h"
@@ -177,21 +174,6 @@ void register_autograd(py::module_& m) {
     // and the _register_python_backward_node() hook used by lucid.autograd.Function.
     lucid::register_custom_function(m);
     lucid::register_module_hook_nodes(m);
-
-    // _run_fusion_pass is exposed for unit tests and profiling; in production
-    // it is called automatically inside Engine::backward before the BFS
-    // traversal.  Returns 0 if root has no grad_fn (leaf or detached tensor).
-    m.def(
-        "_run_fusion_pass",
-        [](std::shared_ptr<TensorImpl> root) -> int {
-            if (!root || !root->grad_fn())
-                return 0;
-            return lucid::run_fusion_pass(root->grad_fn().get());
-        },
-        py::arg("root"),
-        "Run the op-fusion pass on the backward graph rooted at `root`. "
-        "Returns the number of fusion patterns detected. "
-        "Called automatically by Engine::backward(); exposed here for testing.");
 
     // Process-wide opt-in flag for ``check_version_match`` — mirrored as
     // ``lucid.autograd.graph.allow_mutation_on_saved_tensors`` on the Python

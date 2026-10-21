@@ -17,7 +17,7 @@
 //     nll_loss, huber_loss
 //   - Attention: scaled_dot_product_attention,
 //     scaled_dot_product_attention_with_weights
-//   - Embeddings: embedding, sinusoidal_pos_embedding, rotary_pos_embedding
+//   - Embeddings: embedding, rotary_pos_embedding
 //   - Spatial / vision: affine_grid, grid_sample,
 //     interpolate_{bilinear,trilinear,nearest_2d,nearest_3d},
 //     one_hot, rotate
@@ -442,10 +442,6 @@ void register_nn(py::module_& m) {
           "Index-gather rows from weight ([N, D]) by indices. "
           "padding_idx (-1 = none) blocks gradient flow for that row; "
           "scale_grad_by_freq divides each row's gradient by its index frequency.");
-
-    m.def("sinusoidal_pos_embedding", &sinusoidal_pos_embedding_op, py::arg("seq_len"),
-          py::arg("embed_dim"), py::arg("dtype") = Dtype::F32, py::arg("device") = Device::CPU,
-          "Standard sinusoidal positional table — no autograd.");
 
     m.def("rotary_pos_embedding", &rotary_pos_embedding_op, py::arg("input"),
           py::arg("position_ids") = TensorImplPtr{}, py::arg("interleaved") = true,

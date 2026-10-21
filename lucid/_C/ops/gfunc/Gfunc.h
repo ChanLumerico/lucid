@@ -248,33 +248,6 @@ LUCID_API TensorImplPtr linspace_op(double start,
                                     Device device,
                                     bool requires_grad = false);
 
-// Extract a diagonal from a 2-D matrix or construct a 2-D matrix from
-// a 1-D diagonal vector.
-//
-// Follows ``numpy.diag`` semantics:
-//   - If ``v`` is 1-D of length $N$, output is 2-D of shape
-//     $(N + |k|, N + |k|)$ with ``v`` on diagonal $k$ and zeros elsewhere.
-//   - If ``v`` is 2-D, output is 1-D containing entries
-//     ``v[i, i + k]`` for valid $i$.
-//
-// Parameters
-// ----------
-// v : TensorImplPtr
-//     1-D or 2-D input tensor.
-// k : int64_t
-//     Diagonal index (``0`` main, ``>0`` above, ``<0`` below).
-//
-// Returns
-// -------
-// TensorImplPtr
-//     1-D or 2-D output (the opposite rank from ``v``).
-//
-// Raises
-// ------
-// LucidError
-//     If ``v`` is neither 1-D nor 2-D.
-LUCID_API TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k = 0);
-
 // Create a zero-filled tensor matching ``a`` in shape, dtype, and device.
 //
 // Parameters

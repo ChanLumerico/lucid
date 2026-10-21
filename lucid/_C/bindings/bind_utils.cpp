@@ -177,18 +177,7 @@ void register_utils(py::module_& m) {
         },
         py::arg("a"), "Flatten to 1-D (alias for reshape(a, [-1])).");
 
-    // Histogram ops return (counts_tensor, edges_tensor) tuples.  The C++ ops
-    // return a std::vector<TensorImplPtr> which is indexed explicitly before
-    // being wrapped in py::make_tuple.
-    m.def(
-        "histogram",
-        [](const TensorImplPtr& a, std::int64_t bins, double lo, double hi, bool density) {
-            auto out = histogram_op(a, bins, lo, hi, density);
-            return py::make_tuple(out.at(0), out.at(1));
-        },
-        py::arg("a"), py::arg("bins") = 10, py::arg("lo"), py::arg("hi"),
-        py::arg("density") = false);
-
+    // Histogram2d returns (counts_tensor, edges_a_tensor, edges_b_tensor).
     m.def(
         "histogram2d",
         [](const TensorImplPtr& a, const TensorImplPtr& b, std::int64_t bins_a, std::int64_t bins_b,

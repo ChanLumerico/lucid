@@ -943,7 +943,11 @@ def empty_like(
         requires_grad,
     )
     impl = _unwrap(input)
-    out = _C_engine.empty(list(impl.shape), _dt, _dev)
+    out = (
+        _C_engine.empty_like(impl)
+        if _dt == impl.dtype and _dev == impl.device
+        else _C_engine.empty(list(impl.shape), _dt, _dev)
+    )
     return _wrap(_leaf(out, _rg))
 
 

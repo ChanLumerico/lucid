@@ -137,7 +137,6 @@ static TensorId first_param_off_loss_path(const TraceGraph& graph,
 inline bool result_is_a_host_constant(std::string_view name) {
     return name == "arange" || name == "empty" || name == "eye" || name == "full" ||
            name == "linspace" || name == "logspace" || name == "ones" || name == "zeros" ||
-           name == "einops_rearrange" || name == "einops_reduce" || name == "einops_repeat" ||
            name == "einsum" || name == "meshgrid" || name == "tri" || name == "tril" ||
            name == "triu";
 }

@@ -17,10 +17,6 @@
 //     dimension by angles derived from precomputed cos/sin tables;
 //     the tables are saved during forward and reused during backward
 //     to apply the conjugate rotation.
-//   * ``sinusoidal_pos_embedding_op`` — generates the fixed
-//     non-trainable sinusoidal position-encoding matrix from
-//     Vaswani et al. 2017.  No autograd node is wired because the
-//     output has no differentiable inputs.
 //   * ``embedding_bag_op`` — efficient lookup-and-reduce that fuses
 //     a row gather and a sum / mean / max reduction over
 //     variable-length bags, avoiding the intermediate ``(B, L, D)``
@@ -271,44 +267,6 @@ LUCID_API TensorImplPtr embedding_op(const TensorImplPtr& weight,
                                      const TensorImplPtr& indices,
                                      int padding_idx,
                                      bool scale_grad_by_freq = false);
-
-// Generate the fixed sinusoidal position-encoding matrix from
-// Vaswani et al. 2017, "Attention Is All You Need".
-//
-// Returns the non-trainable matrix
-//
-// $$\text{PE}(p, 2i) = \sin\!\left(\frac{p}{10000^{2i/D}}\right),
-//   \quad
-//   \text{PE}(p, 2i+1) = \cos\!\left(\frac{p}{10000^{2i/D}}\right),$$
-//
-// where $p \in [0, L)$ indexes positions and $i \in [0, D/2)$ indexes
-// frequency bands.  No autograd node is created — the result is a
-// constant tensor used as an additive bias on token embeddings.
-//
-// Parameters
-// ----------
-// seq_len : std::int64_t
-//     Sequence length ``L``.  Must be non-negative.
-// embed_dim : std::int64_t
-//     Embedding dimension ``D``.  Must be strictly positive.
-// dtype : Dtype
-//     Floating-point dtype of the output.
-// device : Device
-//     Device on which to allocate the output.
-//
-// Returns
-// -------
-// TensorImplPtr
-//     Output tensor of shape ``(seq_len, embed_dim)``.
-//
-// Raises
-// ------
-// LucidError
-//     If ``seq_len < 0`` or ``embed_dim <= 0``.
-LUCID_API TensorImplPtr sinusoidal_pos_embedding_op(std::int64_t seq_len,
-                                                    std::int64_t embed_dim,
-                                                    Dtype dtype,
-                                                    Device device);
 
 // Apply Rotary Position Embedding to ``input`` — free-function entry point.
 //

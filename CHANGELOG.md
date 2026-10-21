@@ -1239,6 +1239,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - cluster jscpd clones and extract owners (LCD-266)
 - switch shadow_alloc to engine thread-local phantom mode
 
+### Removed
+
+- delete dead C++ einops kernels and unbound engine bindings
+
 ---
 
 ## [3.15.5] — 2026-10-03

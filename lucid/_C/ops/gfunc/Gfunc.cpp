@@ -346,36 +346,6 @@ TensorImplPtr linspace_op(
                                       shape, dt, device, requires_grad));
 }
 
-// Extract a diagonal from a 2-D matrix, or construct a 2-D matrix from a
-// 1-D diagonal vector.
-//
-// Follows numpy.diag semantics:
-//   - 1-D input of length m: output is (m+|k|) × (m+|k|) matrix with v on
-//     diagonal k (zeros elsewhere).
-//   - 2-D input of shape (r, c): output is the k-th diagonal as a 1-D vector
-//     of length min(r, c, r-k, c+k) (clipped to the valid range).
-//
-// The actual shape computation and fill logic lives in IBackend::diag().
-// out_shape is passed by reference and filled by the backend so this wrapper
-// can create the TensorImpl with the correct shape without recomputing it.
-// requires_grad is always false because diag is not differentiable through
-// autograd in the current implementation.
-TensorImplPtr diag_op(const TensorImplPtr& v, std::int64_t k) {
-    if (!v)
-        ErrorBuilder("diag").fail("input is null");
-    const Dtype dt = v->dtype();
-    const Device device = v->device();
-    const auto& sh = v->shape();
-    if (sh.size() != 1 && sh.size() != 2) {
-        ErrorBuilder("diag").fail("input must be 1-D or 2-D");
-    }
-
-    Shape out_shape;
-    // The backend fills out_shape to reflect the actual output dimensions.
-    auto s = backend::Dispatcher::for_device(device).diag(v->storage(), sh, k, dt, out_shape);
-    return std::make_shared<TensorImpl>(std::move(s), std::move(out_shape), dt, device, false);
-}
-
 // Create a zero tensor with the same shape, dtype, and device as a.
 //
 // Delegates to zeros_op with the metadata extracted from a.

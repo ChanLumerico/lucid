@@ -91,9 +91,6 @@ void register_bfunc(py::module_& m) {
     m.def("pow_", &pow_inplace_op, py::arg("a"), py::arg("b"));
     m.def("maximum_", &maximum_inplace_op, py::arg("a"), py::arg("b"));
     m.def("minimum_", &minimum_inplace_op, py::arg("a"), py::arg("b"));
-
-    m.def("test_add", &add_op, py::arg("a"), py::arg("b"),
-          "Alias for `add`; kept for Phase 2 test scripts.");
 }
 
 }  // namespace lucid::bindings

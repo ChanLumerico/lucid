@@ -9,9 +9,6 @@
 // Embedding backward: IBackend::embedding_backward scatter-adds grad_out into
 //   a zero-initialized weight gradient, skipping positions at padding_idx.
 //
-// Sinusoidal encoding: IBackend::sinusoidal_pos_embedding fills the (L, D)
-//   matrix with sin/cos at geometrically spaced frequencies.  No grad node.
-//
 // RoPE forward: IBackend::rope_forward returns {rotated_input, cos, sin}.
 //   cos and sin are saved for the backward.
 // RoPE backward: IBackend::rope_backward applies the inverse rotation to
@@ -186,23 +183,6 @@ TensorImplPtr embedding_op(const TensorImplPtr& weight,
     return EmbeddingBackward::forward(weight, indices, padding_idx, scale_grad_by_freq);
 }
 LUCID_REGISTER_OP(EmbeddingBackward)
-
-TensorImplPtr sinusoidal_pos_embedding_op(std::int64_t seq_len,
-                                          std::int64_t embed_dim,
-                                          Dtype dtype,
-                                          Device device) {
-    if (seq_len < 0)
-        ErrorBuilder("sinusoidal_pos_embedding").fail("seq_len < 0");
-    if (embed_dim <= 0)
-        ErrorBuilder("sinusoidal_pos_embedding").invalid_argument("embed_dim must be > 0");
-
-    Shape out_shape{seq_len, embed_dim};
-    OpScopeFull scope{"sinusoidal_pos_embedding", device, dtype, out_shape};
-
-    auto& be = backend::Dispatcher::for_device(device);
-    Storage out_s = be.sinusoidal_pos_embedding(seq_len, embed_dim, dtype);
-    return std::make_shared<TensorImpl>(std::move(out_s), out_shape, dtype, device, false);
-}
 
 const OpSchema RotaryPosEmbeddingBackward::schema_v1{"rotary_pos_embedding", 1,
                                                      AmpPolicy::ForceFP32, true};

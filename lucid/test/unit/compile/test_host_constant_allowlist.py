@@ -63,6 +63,8 @@ PRODUCERS = [
     ("logspace", lambda t: t + lucid.logspace(0, 1, 4, device=_device_of(t))),
     ("tril", lambda t: lucid.tril(t[:, :2])),
     ("triu", lambda t: lucid.triu(t[:, :2])),
+    # rearrange/reduce/repeat lower in Python to reshape/permute/reduce/broadcast
+    # primitives that record their trace I/O (not via result_is_a_host_constant).
     ("einops_rearrange", lambda t: lucid.einops.rearrange(t, "a b -> b a")),
     ("einops_reduce", lambda t: lucid.einops.reduce(t, "a b -> a", "sum")),
     ("einops_repeat", lambda t: lucid.einops.repeat(t, "a b -> a b c", c=2)),

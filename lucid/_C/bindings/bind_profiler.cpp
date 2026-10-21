@@ -51,8 +51,6 @@ void register_profiler(py::module_& m) {
     // engine holds a raw pointer, so Python must not destroy the Profiler
     // object while it is installed (keep-alive is the caller's responsibility).
     m.def("set_current_profiler", &set_current_profiler, py::arg("profiler").none(true));
-    // current_profiler returns a borrowed reference; Python must not delete it.
-    m.def("current_profiler", &current_profiler, py::return_value_policy::reference);
 }
 
 }  // namespace lucid::bindings

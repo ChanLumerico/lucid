@@ -356,9 +356,6 @@ lucid_object_library(
     ops/composite/Layout.cpp
     ops/composite/Stats.cpp
     ops/composite/Search.cpp
-    ops/einops/Rearrange.cpp
-    ops/einops/Reduce.cpp
-    ops/einops/Repeat.cpp
     ops/einops/Einsum.cpp
     ops/linalg/Inv.cpp
     ops/linalg/Det.cpp
@@ -375,7 +372,6 @@ lucid_object_library(
     ops/ufunc/ToDevice.cpp
     ops/linalg/LUFactor.cpp
     ops/linalg/SolveTriangular.cpp
-    ops/linalg/Lstsq.cpp
     ops/linalg/LUSolve.cpp
     ops/linalg/HouseholderProduct.cpp
     ops/linalg/LDLFactor.cpp
