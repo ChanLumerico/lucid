@@ -20,9 +20,14 @@ TensorImplPtr conj_op(const TensorImplPtr& a) {
     Validator::input(a, "conj.a").non_null();
     OpScopeFull scope{"conj", a->device(), a->dtype(), a->shape()};
 
-    Storage out = backend::Dispatcher::for_device(a->device())
-                      .complex_conj(a->storage(), a->shape(), a->dtype());
-    auto result = complex_detail::fresh(std::move(out), a->shape(), a->dtype(), a->device());
+    TensorImplPtr result;
+    if (!is_complex(a->dtype()) && a->views_by_stride()) {
+        result = TensorImpl::make_view(a, a->shape(), a->stride());
+    } else {
+        Storage out = backend::Dispatcher::for_device(a->device())
+                          .complex_conj(a->storage(), a->shape(), a->dtype());
+        result = complex_detail::fresh(std::move(out), a->shape(), a->dtype(), a->device());
+    }
 
     // Wired for a real input too.
     //

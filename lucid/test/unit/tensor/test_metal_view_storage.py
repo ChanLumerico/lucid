@@ -44,9 +44,6 @@ pytestmark = pytest.mark.skipif(not metal_available(), reason="metal unavailable
 
 type _View = Callable[[Any], Any]
 
-_LCD_517 = pytest.mark.xfail(
-    strict=True, reason="LCD-517: a leading slice restarts the CPU's storage"
-)
 _LCD_535_WINDOW = pytest.mark.xfail(
     strict=True,
     reason="LCD-535: window write past a live view needs engine write propagation",
@@ -198,10 +195,9 @@ LAYOUTS: dict[str, tuple[_View, bool]] = {
 
 def _layout_cases() -> list[Any]:
     cases = []
-    for name, (_, restarts) in LAYOUTS.items():
+    for name in LAYOUTS:
         for device in ("cpu", "metal"):
-            marks = [_LCD_517] if device == "cpu" and restarts else []
-            cases.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
+            cases.append(pytest.param(name, device, id=f"{name}-{device}"))
     return cases
 
 
@@ -255,11 +251,7 @@ def _window_cases() -> list[Any]:
     cases = []
     for name, window in WINDOWS.items():
         for device in ("cpu", "metal"):
-            marks = []
-            if device == "cpu" and window.restarts:
-                marks.append(_LCD_517)
-            if device == "metal" and window.outside:
-                marks.append(_LCD_535_WINDOW)
+            marks = [_LCD_535_WINDOW] if device == "metal" and window.outside else []
             cases.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
     return cases
 

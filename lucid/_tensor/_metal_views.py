@@ -615,8 +615,7 @@ def _window(
     Python binds the arguments, so a missing, extra or unknown one is its own
     ``TypeError``; each is then checked as the reference checks it —
     integers only, so ``size=(2.0,)`` and ``size=(True,)`` are refused — on
-    every device, before anything is read.  A negative ``storage_offset``
-    stands for the input's own, as the engine reads it.
+    every device, before anything is read.
     """
     if storage_offset is not None and not _is_count(storage_offset):
         raise TypeError(
@@ -624,10 +623,12 @@ def _window(
             f"{type(storage_offset).__name__}"
         )
     at = None if storage_offset is None else operator.index(storage_offset)
+    if at is not None and at < 0:
+        raise _C_engine.LucidError(f"as_strided: invalid storage offset {at}")
     return (
         _integers("size", size),
         _integers("stride", stride),
-        None if at is None or at < 0 else at,
+        at,
     )
 
 
@@ -776,7 +777,8 @@ def _read_block(
     size, stride, offset = window
     order, start = held
     block = frame if order == sorted(order) else frame.permute(order)
-    out = original(block, size, stride, start)
+    base_offset = block._impl.storage_offset_bytes() // block.itemsize
+    out = original(block, size, stride, base_offset + start)
     _link(
         out,
         block,
@@ -922,6 +924,40 @@ def _constructor(original: Callable[..., object]) -> Callable[..., object]:
     return __init__
 
 
+def _contiguous(original: Callable[..., object]) -> Callable[..., object]:
+    """Return the input itself when it is already contiguous outside a trace."""
+
+    @functools.wraps(original)
+    def view(*args: object, **kwargs: object) -> object:
+        base = args[0] if args else kwargs.get("input")
+        if (
+            isinstance(base, _TENSOR)
+            and not args[1:]
+            and len(kwargs) <= (1 if "input" in kwargs else 0)
+            and base.is_contiguous()
+            and _C_engine.compile.current_tracer() is None
+            and (not base._impl.is_phantom or _C_engine.phantom_mode())
+        ):
+            return base
+        return original(*args, **kwargs)
+
+    return view
+
+
+def _conj(original: Callable[..., object]) -> Callable[..., object]:
+    """Link ``lucid.conj(x)`` to ``x`` when ``x`` is a real Metal tensor."""
+
+    @functools.wraps(original)
+    def view(*args: object, **kwargs: object) -> object:
+        out = original(*args, **kwargs)
+        base = _metal_input(args if args else (kwargs.get("input"),))
+        if base is not None and not base.is_complex():
+            _link(out, base, _RESHAPE, layout=_layout(base))
+        return out
+
+    return view
+
+
 def _makers() -> dict[str, Callable[[Callable[..., object]], Callable[..., object]]]:
     """Every view op by name, with the wrapper that links its result.
 
@@ -939,6 +975,7 @@ def _makers() -> dict[str, Callable[[Callable[..., object]], Callable[..., objec
     for name in _PIECES:
         makers[name] = functools.partial(_pieces, name=name)
     makers["as_strided"] = _as_strided
+    makers["contiguous"] = _contiguous
     makers["detach"] = functools.partial(_viewer, kind=_DETACHED, name="detach")
     return makers
 
@@ -971,6 +1008,15 @@ def _by_position(
     return call
 
 
+def _install_free_fn(ops: object, top: object, name: str, linked: object) -> None:
+    generated = ops.__dict__.get(name)
+    if generated is None:
+        return
+    setattr(ops, name, linked)
+    if top is not None and top.__dict__.get(name) is generated:
+        setattr(top, name, linked)
+
+
 def _install_free_functions(
     makers: dict[str, Callable[[Callable[..., object]], Callable[..., object]]],
 ) -> None:
@@ -987,36 +1033,28 @@ def _install_free_functions(
     import lucid._ops as ops
     from lucid._ops._registry import _REGISTRY
 
-    by_method: dict[str, OpEntry] = {}
+    by_method = {e.method_name: e for e in _REGISTRY if e.method_name is not None}
     by_free: dict[str, OpEntry] = {}
     for entry in _REGISTRY:
-        if entry.method_name is not None:
-            by_method[entry.method_name] = entry  # the last one is the method
         if entry.free_fn_name is not None:
             by_free.setdefault(entry.free_fn_name, entry)  # the first one is free
     top = sys.modules.get("lucid")
     for name, make in makers.items():
         shared = by_free.get(name)
         method = by_method.get(name)
-        if shared is None or method is None:
-            continue
         generated = ops.__dict__.get(name)
-        if generated is None:
+        if shared is None or method is None or generated is None:
             continue
         if method is shared:
             linked = make(generated)
         elif _same_positions(shared, method):
-            # The reference names a parameter of the method otherwise than
-            # the free function's (``split_size`` / ``split_size_or_sections``):
-            # the replay is recorded by position, which the two share.
             linked = _by_position(make(generated), inspect.signature(generated))
         else:
             continue
-        setattr(ops, name, linked)
-        # ``lucid.<name>`` is copied from ``lucid._ops`` the first time any op
-        # is looked up there; if that already happened, replace the copy.
-        if top is not None and top.__dict__.get(name) is generated:
-            setattr(top, name, linked)
+        _install_free_fn(ops, top, name, linked)
+    conj_fn = ops.__dict__.get("conj")
+    if conj_fn is not None:
+        _install_free_fn(ops, top, "conj", _conj(conj_fn))
 
 
 def _getitem(original: Callable[..., object]) -> Callable[..., object]:

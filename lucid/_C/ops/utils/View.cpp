@@ -130,6 +130,20 @@ bool squeezes_only(const TensorImpl& a, const Shape& out, Stride& stride) {
 // its chunk, and a size-1 axis takes the extent of the axes inside it.  A
 // tensor with no elements is viewable as any shape: it keeps its strides if
 // the shape does not change, and is packed otherwise.
+bool fill_chunk_axes(const Shape& out,
+                     std::int64_t in_numel,
+                     std::int64_t chunk_stride,
+                     std::ptrdiff_t& view_d,
+                     Stride& stride) {
+    std::int64_t view_numel = 1;
+    while (view_d >= 0 && (view_numel < in_numel || out[static_cast<std::size_t>(view_d)] == 1)) {
+        stride[static_cast<std::size_t>(view_d)] = view_numel * chunk_stride;
+        view_numel *= out[static_cast<std::size_t>(view_d)];
+        --view_d;
+    }
+    return view_numel == in_numel;
+}
+
 bool chunk_strides(const TensorImpl& a, const Shape& out, Stride& stride) {
     const Shape& in = a.shape();
     const Stride& in_stride = a.stride();
@@ -146,26 +160,22 @@ bool chunk_strides(const TensorImpl& a, const Shape& out, Stride& stride) {
     auto view_d = static_cast<std::ptrdiff_t>(out.size()) - 1;
     std::int64_t chunk_stride = in_stride.back();
     std::int64_t in_numel = 1;
-    std::int64_t view_numel = 1;
     for (auto d = static_cast<std::ptrdiff_t>(in.size()) - 1; d >= 0; --d) {
         const auto k = static_cast<std::size_t>(d);
+        if (in[k] == 1 && k > 0 && in_numel == 1) {
+            chunk_stride = in_stride[k - 1];
+            continue;
+        }
         in_numel *= in[k];
         if (k > 0 && (in[k - 1] == 1 || in_stride[k - 1] == in_numel * chunk_stride))
             continue;
         // The chunk ends at ``k``.  The view's axes that make up its
         // elements, and the size-1 axes just outside them, step through it.
-        while (view_d >= 0 &&
-               (view_numel < in_numel || out[static_cast<std::size_t>(view_d)] == 1)) {
-            stride[static_cast<std::size_t>(view_d)] = view_numel * chunk_stride;
-            view_numel *= out[static_cast<std::size_t>(view_d)];
-            --view_d;
-        }
-        if (view_numel != in_numel)
+        if (!fill_chunk_axes(out, in_numel, chunk_stride, view_d, stride))
             return false;
         if (k > 0) {
             chunk_stride = in_stride[k - 1];
             in_numel = 1;
-            view_numel = 1;
         }
     }
     return view_d == -1;
@@ -190,7 +200,9 @@ bool view_strides(const TensorImpl& a, const Shape& out_shape, Stride& stride, U
     if (a.is_dense()) {
         if (unit == UnitAxes::kSqueeze)
             return squeezes_only(a, out_shape, stride);
-        stride = contiguous_stride(out_shape, dtype_size(a.dtype()));
+        stride = (shape_numel(a.shape()) == 0 && a.shape() == out_shape)
+                     ? a.stride()
+                     : contiguous_stride(out_shape, dtype_size(a.dtype()));
         return true;
     }
     // A phantom on Metal views as a family member would: by its strides.
@@ -355,6 +367,30 @@ std::vector<TensorImplPtr> AsStridedBackward::apply_for_graph(const TensorImplPt
         summed, std::vector<std::int64_t>(input_shapes_[0].begin(), input_shapes_[0].end()))};
 }
 
+std::vector<std::int32_t> as_strided_positions(const Shape& size,
+                                               const std::vector<std::int64_t>& stride,
+                                               std::int64_t offset,
+                                               std::int64_t own,
+                                               std::int64_t capacity,
+                                               std::int64_t n_out) {
+    if (capacity > std::numeric_limits<std::int32_t>::max())
+        ErrorBuilder("as_strided").not_implemented("a storage past 2^31 elements");
+    std::vector<std::int32_t> positions(static_cast<std::size_t>(n_out));
+    std::vector<std::int64_t> idx(size.size(), 0);
+    for (std::int64_t i = 0; i < n_out; ++i) {
+        std::int64_t at = offset;
+        for (std::size_t d = 0; d < size.size(); ++d)
+            at += idx[d] * stride[d];
+        positions[static_cast<std::size_t>(i)] = static_cast<std::int32_t>(at - own);
+        for (std::size_t d = size.size(); d-- > 0;) {
+            if (++idx[d] < size[d])
+                break;
+            idx[d] = 0;
+        }
+    }
+    return positions;
+}
+
 TensorImplPtr as_strided_op(const TensorImplPtr& a,
                             const Shape& size,
                             const std::vector<std::int64_t>& stride,
@@ -367,15 +403,15 @@ TensorImplPtr as_strided_op(const TensorImplPtr& a,
     if (size.size() != stride.size())
         ErrorBuilder("as_strided").fail("size and stride need the same length");
 
-    // Positions count in elements of the storage.  A CPU tensor shares its
-    // buffer with its views, so the storage is that buffer and the tensor
-    // may start partway in; a metal tensor owns a packed buffer of its own.
+    // Positions count in elements of the allocation.  A CPU tensor or an
+    // engine view-family member shares its allocation with its views, so the
+    // storage is that allocation and the tensor may start partway in; a
+    // standalone Metal tensor owns a packed buffer of its own.
     const auto elem = static_cast<std::int64_t>(dtype_size(dt));
-    const bool view = a->views_by_stride();
-    const std::int64_t own = view ? static_cast<std::int64_t>(a->storage_offset()) / elem : 0;
-    const std::int64_t capacity =
-        view ? static_cast<std::int64_t>(storage_nbytes(a->raw_storage())) / elem
-             : static_cast<std::int64_t>(shape_numel(a->shape()));
+    const bool view = a->views_by_stride() || a->family_key() != nullptr;
+    const std::int64_t own = view ? static_cast<std::int64_t>(a->allocation_offset()) / elem : 0;
+    const std::int64_t capacity = view ? static_cast<std::int64_t>(a->allocation_nbytes()) / elem
+                                       : static_cast<std::int64_t>(shape_numel(a->shape()));
     const std::int64_t offset = storage_offset < 0 ? own : storage_offset;
 
     std::int64_t last = offset;
@@ -401,23 +437,8 @@ TensorImplPtr as_strided_op(const TensorImplPtr& a,
     // copy gathers by it and the gradient scatters by it.  A CPU view with no
     // gradient needs neither.
     std::vector<std::int32_t> positions;
-    if (!view || needs_grad) {
-        if (capacity > std::numeric_limits<std::int32_t>::max())
-            ErrorBuilder("as_strided").not_implemented("a storage past 2^31 elements");
-        positions.resize(static_cast<std::size_t>(n_out));
-        std::vector<std::int64_t> idx(size.size(), 0);
-        for (std::int64_t i = 0; i < n_out; ++i) {
-            std::int64_t at = offset;
-            for (std::size_t d = 0; d < size.size(); ++d)
-                at += idx[d] * stride[d];
-            positions[static_cast<std::size_t>(i)] = static_cast<std::int32_t>(at - own);
-            for (std::size_t d = size.size(); d-- > 0;) {
-                if (++idx[d] < size[d])
-                    break;
-                idx[d] = 0;
-            }
-        }
-    }
+    if (!view || needs_grad)
+        positions = as_strided_positions(size, stride, offset, own, capacity, n_out);
     auto& be = backend::Dispatcher::for_device(device);
     const auto upload = [&]() {
         auto cpu = helpers::allocate_cpu(Shape{n_out}, Dtype::I32);
@@ -432,9 +453,8 @@ TensorImplPtr as_strided_op(const TensorImplPtr& a,
         byte_stride.reserve(stride.size());
         for (const auto s : stride)
             byte_stride.push_back(s * elem);
-        // make_view's offset counts from ``a``'s own first byte.
-        out = TensorImpl::make_view(a, size, std::move(byte_stride),
-                                    static_cast<std::size_t>((offset - own) * elem));
+        out = TensorImpl::make_allocation_view(a, size, std::move(byte_stride),
+                                               static_cast<std::size_t>(offset * elem));
     } else if (n_out == 0) {
         out = std::make_shared<TensorImpl>(be.zeros(size, dt), size, dt, device, false);
     } else {

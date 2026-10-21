@@ -36,7 +36,6 @@ from lucid.test._fixtures.devices import metal_available
 
 type _View = Callable[[lucid.Tensor], lucid.Tensor]
 
-_XF_ENGINE = pytest.mark.xfail(strict=True, reason="LCD-517 engine")
 _XF_UNTYPED = pytest.mark.xfail(strict=True, reason="LCD-517 untyped_storage")
 
 _DEVICES: tuple[str, ...] = ("cpu", "metal") if metal_available() else ("cpu",)
@@ -122,12 +121,7 @@ GRID: dict[str, _Cell] = {
     "tensor_split-first": _Cell(lambda t: t.tensor_split([1, 3, 3], 0)[0], 0, True),
     "tensor_split-middle": _Cell(lambda t: t.tensor_split([1, 3, 3], 0)[1], 6, True),
     "tensor_split-last": _Cell(lambda t: t.tensor_split([1, 3, 3], 0)[3], 18, True),
-    "tensor_split-empty": _Cell(
-        lambda t: t.tensor_split([1, 3, 3], 0)[2],
-        18,
-        True,
-        empty_slice_zeroed=True,
-    ),
+    "tensor_split-empty": _Cell(lambda t: t.tensor_split([1, 3, 3], 0)[2], 18, True),
     "hsplit-first": _Cell(lambda t: t.hsplit([2, 4, 4])[0], 0, False),
     "hsplit-middle": _Cell(lambda t: t.hsplit([2, 4, 4])[1], 2, False),
     "hsplit-last": _Cell(lambda t: t.hsplit([2, 4, 4])[3], 4, False),
@@ -135,7 +129,7 @@ GRID: dict[str, _Cell] = {
     "vsplit-first": _Cell(lambda t: t.vsplit([1, 3, 3])[0], 0, True),
     "vsplit-middle": _Cell(lambda t: t.vsplit([1, 3, 3])[1], 6, True),
     "vsplit-last": _Cell(lambda t: t.vsplit([1, 3, 3])[3], 18, True),
-    "vsplit-empty": _Cell(lambda t: t.vsplit([1, 3, 3])[2], 18, True, empty_slice_zeroed=True),
+    "vsplit-empty": _Cell(lambda t: t.vsplit([1, 3, 3])[2], 18, True),
     # list(t)[k]
     "list-first": _Cell(lambda t: list(t)[0], 0, True),
     "list-middle": _Cell(lambda t: list(t)[1], 6, True),
@@ -214,13 +208,7 @@ def _offset_params() -> list[object]:
     params: list[object] = []
     for name, cell in GRID.items():
         for device in _DEVICES:
-            marks = []
-            if device == "cpu" and cell.empty_slice_zeroed:
-                marks.append(_XF_UNTYPED)
-            elif device == "cpu" and cell.cpu_narrowed and cell.expected_offset > 0:
-                marks.append(_XF_ENGINE)
-            elif device == "metal" and cell.metal_unlinked and cell.expected_offset > 0:
-                marks.append(_XF_ENGINE)
+            marks = [_XF_UNTYPED] if device == "cpu" and cell.empty_slice_zeroed else []
             params.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
     return params
 
@@ -246,14 +234,9 @@ def test_offset_counts_from_the_root(name: str, device: str) -> None:
 
 def _as_strided_params() -> list[object]:
     params: list[object] = []
-    for name, cell in GRID.items():
+    for name in GRID:
         for device in _DEVICES:
-            marks = []
-            if device == "cpu" and cell.cpu_narrowed:
-                marks.append(_XF_ENGINE)
-            elif device == "metal" and cell.metal_unlinked:
-                marks.append(_XF_ENGINE)
-            params.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
+            params.append(pytest.param(name, device, id=f"{name}-{device}"))
     return params
 
 
@@ -298,13 +281,7 @@ def _save_load_params() -> list[object]:
     params: list[object] = []
     for name, cell in GRID.items():
         for device in _DEVICES:
-            marks = []
-            if device == "cpu" and cell.empty_slice_zeroed:
-                marks.append(_XF_UNTYPED)
-            elif device == "cpu" and cell.cpu_narrowed and cell.expected_offset > 0:
-                marks.append(_XF_ENGINE)
-            elif device == "metal" and cell.metal_unlinked and cell.expected_offset > 0:
-                marks.append(_XF_ENGINE)
+            marks = [_XF_UNTYPED] if device == "cpu" and cell.empty_slice_zeroed else []
             params.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
     return params
 
@@ -438,13 +415,7 @@ def test_random_view_chains_match_across_cpu_and_metal(
 # ── Additions from LCD-512/513 findings (LCD-517 cards §Additions) ───────────
 
 
-@pytest.mark.parametrize(
-    "device",
-    [
-        pytest.param("cpu", marks=_XF_ENGINE),
-        *([pytest.param("metal", marks=_XF_ENGINE)] if metal_available() else []),
-    ],
-)
+@pytest.mark.parametrize("device", _DEVICES)
 def test_contiguous_returns_self_when_already_contiguous(device: str) -> None:
     x = lucid.arange(12.0, device=device).reshape(3, 4)
     v = x[1:]
@@ -454,26 +425,14 @@ def test_contiguous_returns_self_when_already_contiguous(device: str) -> None:
     assert x[1:].tolist() == [[14.0, 15.0, 16.0, 17.0], [18.0, 19.0, 20.0, 21.0]]
 
 
-@pytest.mark.parametrize(
-    "device",
-    [
-        pytest.param("cpu", marks=_XF_ENGINE),
-        *(["metal"] if metal_available() else []),
-    ],
-)
+@pytest.mark.parametrize("device", _DEVICES)
 def test_is_contiguous_ignores_size_one_axes(device: str) -> None:
     v = lucid.arange(48.0, device=device).reshape(1, 48).t()[:1]
     assert v.shape == (1, 1)
     assert v.is_contiguous() is True
 
 
-@pytest.mark.parametrize(
-    "device",
-    [
-        pytest.param("cpu", marks=_XF_ENGINE),
-        *([pytest.param("metal", marks=_XF_ENGINE)] if metal_available() else []),
-    ],
-)
+@pytest.mark.parametrize("device", _DEVICES)
 def test_as_strided_refuses_negative_storage_offset(device: str) -> None:
     x = lucid.arange(6.0, device=device)
     with pytest.raises(RuntimeError, match="invalid storage offset"):

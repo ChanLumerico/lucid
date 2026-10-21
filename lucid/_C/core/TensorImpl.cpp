@@ -521,7 +521,8 @@ bool TensorImpl::write_lands_in_buffer() const {
     // The rule take_storage_from follows once a graph is recorded.
     if (!storage_is_cpu(storage_))
         return false;
-    return is_aliased() || !is_dense() ||
+    return is_aliased() || !is_dense() || allocation_offset() != 0 ||
+           allocation_nbytes() != nbytes() ||
            gradient_slot_write(storage_, family_ ? family_.use_count() : 1) == SlotWrite::kInto;
 }
 
@@ -898,12 +899,55 @@ std::size_t TensorImpl::nbytes() const {
 }
 
 bool TensorImpl::is_contiguous() const {
-    Stride expected = contiguous_stride(meta_.shape, dtype_size(meta_.dtype));
-    return expected == meta_.stride;
+    for (const auto n : meta_.shape)
+        if (n == 0)
+            return true;
+    std::int64_t expected = static_cast<std::int64_t>(dtype_size(meta_.dtype));
+    for (std::size_t d = meta_.shape.size(); d-- > 0;) {
+        if (meta_.shape[d] != 1) {
+            if (meta_.stride[d] != expected)
+                return false;
+            expected *= meta_.shape[d];
+        }
+    }
+    return true;
 }
 
 bool TensorImpl::is_dense() const {
     return offset_ == 0 && is_contiguous() && storage_nbytes(raw_storage()) == nbytes();
+}
+
+std::size_t TensorImpl::allocation_offset() const noexcept {
+    if (const auto* cpu = std::get_if<CpuStorage>(&storage_))
+        return cpu->offset_in_allocation + offset_;
+    return offset_;
+}
+
+std::size_t TensorImpl::allocation_nbytes() const noexcept {
+    if (const auto* cpu = std::get_if<CpuStorage>(&storage_))
+        return cpu->allocation_nbytes != 0 ? cpu->allocation_nbytes : cpu->nbytes;
+    return storage_nbytes(raw_storage());
+}
+
+std::uintptr_t TensorImpl::allocation_base() const {
+    const Storage& s = raw_storage();
+    if (storage_is_phantom(s))
+        refuse_phantom_read("data_ptr");
+    if (storage_is_cpu(s)) {
+        const auto& cpu = storage_cpu(s);
+        if (!cpu.ptr)
+            return 0;
+        return reinterpret_cast<std::uintptr_t>(cpu.ptr.get() - cpu.offset_in_allocation);
+    }
+    if (storage_is_gpu(s)) {
+        const auto& g = storage_gpu(s);
+        if (!g.arr)
+            return 0;
+        g.arr->eval();
+        MemoryTracker::track_host_sync(g.nbytes);
+        return reinterpret_cast<std::uintptr_t>(g.arr->data<std::uint8_t>());
+    }
+    return reinterpret_cast<std::uintptr_t>(storage_metal_shared(s).cpu_ptr);
 }
 
 // Dispatches on the active Storage variant to produce a NumPy array.
@@ -1966,7 +2010,7 @@ void TensorImpl::add_to_family(const std::shared_ptr<TensorImpl>& base,
                                const std::shared_ptr<TensorImpl>& view) {
     if (!base->family_) {
         base->family_ = std::make_shared<ViewFamily>();
-        base->family_->nbytes = storage_nbytes(base->storage_);
+        base->family_->nbytes = base->allocation_nbytes();
         base->family_->members.push_back(base);
         // A Metal base's value becomes the family's root, which every
         // member — the base included — reads from now on.  The base keeps
@@ -2004,7 +2048,8 @@ std::shared_ptr<TensorImpl> TensorImpl::make_block_view(const std::shared_ptr<Te
                                                         Shape shape,
                                                         std::size_t byte_offset) {
     refuse_phantom_outside_mode(base->storage_, "a view of a phantom");
-    const std::size_t nbytes = shape_numel(shape) * dtype_size(base->meta_.dtype);
+    const std::size_t elem = dtype_size(base->meta_.dtype);
+    const std::size_t nbytes = shape_numel(shape) * elem;
     if (byte_offset + nbytes > storage_nbytes(base->storage_))
         ErrorBuilder("make_block_view").fail("the run reaches past the end of the buffer");
     // A run of a phantom is a phantom of the run's size.  It stays out of
@@ -2014,16 +2059,33 @@ std::shared_ptr<TensorImpl> TensorImpl::make_block_view(const std::shared_ptr<Te
         return std::make_shared<TensorImpl>(
             phantom_storage(shape, base->meta_.dtype, base->meta_.device), std::move(shape),
             base->meta_.dtype, base->meta_.device, false);
-    const auto& src = std::get<CpuStorage>(base->storage_);
-    // The aliasing constructor shares ``src.ptr``'s ownership but points at
-    // the run, so the buffer lives as long as any view of it and every
-    // holder is counted together.
-    CpuStorage block(std::shared_ptr<std::byte[]>(src.ptr, src.ptr.get() + byte_offset), nbytes,
-                     src.dtype);
-    block.version = src.version;
-    auto view = std::make_shared<TensorImpl>(Storage{std::move(block)}, std::move(shape),
-                                             base->meta_.dtype, base->meta_.device, false);
-    add_to_family(base, view);
+    Stride stride = contiguous_stride(shape, elem);
+    auto view = make_view(base, std::move(shape), std::move(stride), byte_offset);
+    auto& cpu = std::get<CpuStorage>(view->storage_);
+    const std::size_t alloc_nbytes =
+        cpu.allocation_nbytes != 0 ? cpu.allocation_nbytes : cpu.nbytes;
+    const std::size_t alloc_offset = cpu.offset_in_allocation + view->offset_;
+    cpu = CpuStorage(std::shared_ptr<std::byte[]>(cpu.ptr, cpu.ptr.get() + view->offset_), nbytes,
+                     cpu.dtype, cpu.version, alloc_offset, alloc_nbytes);
+    view->offset_ = 0;
+    return view;
+}
+
+std::shared_ptr<TensorImpl>
+TensorImpl::make_allocation_view(const std::shared_ptr<TensorImpl>& base,
+                                 Shape shape,
+                                 Stride stride,
+                                 std::size_t allocation_byte_offset) {
+    auto view = make_view(base, std::move(shape), std::move(stride), 0);
+    view->offset_ = allocation_byte_offset;
+    if (auto* ph = std::get_if<PhantomStorage>(&view->storage_)) {
+        ph->nbytes = base->allocation_nbytes();
+    } else if (auto* cpu = std::get_if<CpuStorage>(&view->storage_)) {
+        const std::size_t alloc_nbytes = base->allocation_nbytes();
+        *cpu = CpuStorage(
+            std::shared_ptr<std::byte[]>(cpu->ptr, cpu->ptr.get() - cpu->offset_in_allocation),
+            alloc_nbytes, cpu->dtype, cpu->version, 0, alloc_nbytes);
+    }
     return view;
 }
 

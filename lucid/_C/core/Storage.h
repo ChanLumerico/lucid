@@ -135,11 +135,17 @@ using StoragePtr = std::shared_ptr<DataBuffer>;
 // ptr : std::shared_ptr<std::byte[]>
 //     64-byte aligned heap allocation, shared with every aliasing view.
 // nbytes : std::size_t
-//     Allocated capacity in bytes.
+//     Allocated capacity in bytes (for a block view, the block's byte span).
 // dtype : Dtype
 //     Element type.  Default :attr:`Dtype::F32`.
 // version : std::shared_ptr<VersionCounter>
 //     Shared mutation counter; in-place ops call :func:`bump_version`.
+// offset_in_allocation : std::size_t
+//     Byte offset of ``ptr.get()`` from the start of the underlying physical
+//     allocation.  ``0`` when ``ptr`` points at the start of the allocation.
+// allocation_nbytes : std::size_t
+//     Total byte size of the underlying physical allocation.  ``0`` means the
+//     handle spans the full allocation (i.e. ``nbytes``).
 //
 // See Also
 // --------
@@ -151,6 +157,8 @@ struct CpuStorage {
     std::size_t nbytes = 0;
     Dtype dtype = Dtype::F32;
     std::shared_ptr<VersionCounter> version = std::make_shared<VersionCounter>(0);
+    std::size_t offset_in_allocation = 0;
+    std::size_t allocation_nbytes = 0;
 
     // Default-constructs an empty :class:`CpuStorage` (null pointer, zero
     // bytes, default F32 dtype, fresh version counter).
@@ -168,6 +176,20 @@ struct CpuStorage {
     //     Element type stored in the buffer.
     CpuStorage(std::shared_ptr<std::byte[]> p, std::size_t nb, Dtype dt)
         : ptr(std::move(p)), nbytes(nb), dtype(dt) {}
+
+    // Constructs a :class:`CpuStorage` window over an existing allocation.
+    CpuStorage(std::shared_ptr<std::byte[]> p,
+               std::size_t nb,
+               Dtype dt,
+               std::shared_ptr<VersionCounter> ver,
+               std::size_t alloc_off,
+               std::size_t alloc_nb)
+        : ptr(std::move(p)),
+          nbytes(nb),
+          dtype(dt),
+          version(std::move(ver)),
+          offset_in_allocation(alloc_off),
+          allocation_nbytes(alloc_nb) {}
 
     // Adopts the pointer, capacity, dtype, and version counter from an
     // existing :class:`DataBuffer`.

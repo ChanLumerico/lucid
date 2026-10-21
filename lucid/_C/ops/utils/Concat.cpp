@@ -354,8 +354,10 @@ TensorImplPtr attach_split_grad(const TensorImplPtr& a,
 
 // Along axis 0 a dense CPU tensor's pieces are runs of its buffer, so each
 // is a block view (TensorImpl::make_block_view) reading the same bytes
-// rather than a copy of them.  Any other axis, layout or device keeps
-// copying — an MLX array cannot see a write made through another.
+// rather than a copy of them: narrowed so the piece stays dense for kernel
+// dispatch, with its offset and size in the allocation recorded on the
+// storage handle.  Any other axis, layout or device uses strided_piece or
+// copies.
 bool pieces_are_views(const TensorImplPtr& a, int ax) {
     return ax == 0 && a->device() == Device::CPU && a->is_dense() && !a->shape().empty();
 }

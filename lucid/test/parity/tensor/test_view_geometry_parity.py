@@ -21,7 +21,6 @@ import lucid
 from lucid.test.unit.tensor.test_view_geometry_contract import (
     GRID,
     _DEVICES,
-    _XF_ENGINE,
     _XF_UNTYPED,
     _moving,
 )
@@ -44,15 +43,7 @@ def _layout_parity_params() -> list[object]:
     params: list[object] = []
     for name, cell in GRID.items():
         for device in _DEVICES:
-            marks = []
-            if device == "cpu" and cell.empty_slice_zeroed:
-                marks.append(_XF_UNTYPED)
-            elif device == "cpu" and (
-                (cell.cpu_narrowed and cell.expected_offset > 0) or cell.cpu_contig_size1
-            ):
-                marks.append(_XF_ENGINE)
-            elif device == "metal" and cell.metal_unlinked and cell.expected_offset > 0:
-                marks.append(_XF_ENGINE)
+            marks = [_XF_UNTYPED] if device == "cpu" and cell.empty_slice_zeroed else []
             params.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
     return params
 
@@ -94,34 +85,16 @@ def test_untyped_storage_and_data_ptr_match_the_reference_on_cpu(name: str, ref:
     assert ours_delta == ours.storage_offset() * ours.element_size()
 
 
-def _window_fails_on_cpu(name: str, offset_kind: str) -> bool:
-    cell = GRID[name]
-    if not cell.cpu_narrowed:
-        return False
-    if cell.expected_offset > 0:
-        return True
-    # Offset-0 narrowed block view: offset="zero" and offset="own" (0) read
-    # the first 2 elements of the block (which match the root's first 2
-    # elements), while offset="last" (22) reaches past the narrowed block.
-    return offset_kind == "last"
-
-
 def _window_parity_params() -> list[object]:
     params: list[object] = []
-    for name, cell in GRID.items():
+    for name in GRID:
         for offset_kind in ("zero", "own", "last"):
             for device in _DEVICES:
-                marks = []
-                if device == "cpu" and _window_fails_on_cpu(name, offset_kind):
-                    marks.append(_XF_ENGINE)
-                elif device == "metal" and cell.metal_unlinked:
-                    marks.append(_XF_ENGINE)
                 params.append(
                     pytest.param(
                         name,
                         offset_kind,
                         device,
-                        marks=marks,
                         id=f"{name}-{offset_kind}-{device}",
                     )
                 )

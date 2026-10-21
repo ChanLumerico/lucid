@@ -158,6 +158,34 @@ void set_gradient(lucid::TensorImpl& self, const std::shared_ptr<lucid::TensorIm
     else
         self.set_grad_storage(std::move(slot));
 }
+
+std::shared_ptr<lucid::TensorImpl>
+to_shared_storage_impl(const std::shared_ptr<lucid::TensorImpl>& t) {
+    if (!t)
+        throw std::invalid_argument("to_shared_storage: null tensor");
+    if (t->metal_shared())
+        return t;
+    auto& be = lucid::backend::Dispatcher::for_device(lucid::Device::GPU);
+    lucid::Storage shared = be.to_shared_storage(t->storage(), t->shape());
+    return traced_derive("to_shared_storage", t,
+                         std::make_shared<lucid::TensorImpl>(std::move(shared), t->shape(),
+                                                             t->dtype(), t->device(),
+                                                             t->requires_grad()));
+}
+
+std::shared_ptr<lucid::TensorImpl>
+transfer_storage_impl(const std::shared_ptr<lucid::TensorImpl>& t, lucid::Device target_device) {
+    if (!t)
+        throw std::invalid_argument("transfer_storage: null tensor");
+    const lucid::SharedStorage* sh = t->metal_shared();
+    if (!sh)
+        throw std::invalid_argument("transfer_storage: source tensor must be in SharedStorage "
+                                    "(call to_shared_storage() or make_shared_tensor() first)");
+    return traced_derive("transfer_storage", t,
+                         std::make_shared<lucid::TensorImpl>(lucid::Storage{*sh}, t->shape(),
+                                                             t->dtype(), target_device,
+                                                             t->requires_grad()));
+}
 }  // namespace
 
 namespace lucid::bindings {
@@ -282,8 +310,12 @@ void register_tensor_impl(py::module_& m) {
         .def("is_contiguous", &TensorImpl::is_contiguous)
         .def("is_dense", &TensorImpl::is_dense,
              "Contiguous, at the first byte of its storage, and covering all of it.")
-        .def("storage_offset_bytes", &TensorImpl::storage_offset,
+        .def("storage_offset_bytes", &TensorImpl::allocation_offset,
              "Byte offset of the first element from the start of the storage.")
+        .def("storage_nbytes", &TensorImpl::allocation_nbytes,
+             "Total byte size of the underlying storage allocation.")
+        .def("storage_data_ptr", &TensorImpl::allocation_base,
+             "Address of the first byte of the underlying storage allocation.")
         .def("data_ptr", &data_address,
              "Address of the first element: the storage base plus the byte offset.")
         .def_static(
@@ -504,62 +536,21 @@ void register_tensor_impl(py::module_& m) {
     // MTLResourceStorageModeShared allocation.  The resulting tensor occupies
     // the same physical DRAM page as the GPU — use it with _run_metal_kernel
     // for zero-copy custom kernel dispatch.
-    m.def(
-        "to_shared_storage",
-        [](const std::shared_ptr<TensorImpl>& t) -> std::shared_ptr<TensorImpl> {
-            if (!t)
-                throw std::invalid_argument("to_shared_storage: null tensor");
-            // Already the whole of a shared buffer: nothing to promote.  Its
-            // storage is a CPU view or GPU alias now, which the backend below
-            // would copy into a second buffer.
-            if (t->metal_shared())
-                return t;
-            // Metal allocation always goes through the GPU backend regardless
-            // of the source tensor's device — the GPU backend's
-            // to_shared_storage() handles both CpuStorage and GpuStorage
-            // sources and is the only backend that can allocate
-            // MTLResourceStorageModeShared buffers.
-            auto& be = backend::Dispatcher::for_device(Device::GPU);
-            Storage shared = be.to_shared_storage(t->storage(), t->shape());
-            // No emitter: a compiled call cannot hand out a shared buffer.
-            return traced_derive("to_shared_storage", t,
-                                 std::make_shared<TensorImpl>(std::move(shared), t->shape(),
-                                                              t->dtype(), t->device(),
-                                                              t->requires_grad()));
-        },
-        py::arg("tensor"),
-        "Convert a tensor's storage to MTLResourceStorageModeShared.\n"
-        "The returned tensor shares physical DRAM with the GPU — "
-        "pass it to _run_metal_kernel for zero-copy custom Metal kernels.");
+    m.def("to_shared_storage", &to_shared_storage_impl, py::arg("tensor"),
+          "Convert a tensor's storage to MTLResourceStorageModeShared.\n"
+          "The returned tensor shares physical DRAM with the GPU — "
+          "pass it to _run_metal_kernel for zero-copy custom Metal kernels.");
 
     // transfer_storage(tensor, device) — zero-copy device relabeling for
     // SharedStorage tensors.  Unlike to_shared_storage(), this never copies
     // data: it either wraps the Metal buffer as an MLX external array (GPU
     // target) or aliases cpu_ptr as a CpuStorage view (CPU target).
     // Raises if the source tensor is not already in SharedStorage.
-    m.def(
-        "transfer_storage",
-        [](const std::shared_ptr<TensorImpl>& t,
-           Device target_device) -> std::shared_ptr<TensorImpl> {
-            if (!t)
-                throw std::invalid_argument("transfer_storage: null tensor");
-            const SharedStorage* sh = t->metal_shared();
-            if (!sh)
-                throw std::invalid_argument(
-                    "transfer_storage: source tensor must be in SharedStorage "
-                    "(call to_shared_storage() or make_shared_tensor() first)");
-            // Zero-copy either way: the constructor adopts the buffer as a CPU
-            // view or as a copy of its pinned MLX alias, and the result keeps
-            // the descriptor, so relabelling it back is zero-copy too.
-            return traced_derive("transfer_storage", t,
-                                 std::make_shared<TensorImpl>(Storage{*sh}, t->shape(), t->dtype(),
-                                                              target_device, t->requires_grad()));
-        },
-        py::arg("tensor"), py::arg("device"),
-        "Zero-copy device relabeling for SharedStorage tensors.\n\n"
-        "GPU target: wraps the Metal buffer as an MLX external array — no memcpy.\n"
-        "CPU target: aliases cpu_ptr as a CpuStorage view — no memcpy.\n"
-        "Raises ValueError if the source is not in SharedStorage.");
+    m.def("transfer_storage", &transfer_storage_impl, py::arg("tensor"), py::arg("device"),
+          "Zero-copy device relabeling for SharedStorage tensors.\n\n"
+          "GPU target: wraps the Metal buffer as an MLX external array — no memcpy.\n"
+          "CPU target: aliases cpu_ptr as a CpuStorage view — no memcpy.\n"
+          "Raises ValueError if the source is not in SharedStorage.");
 
     // make_shared_tensor(shape, dtype, requires_grad) — allocate a
     // zero-filled tensor directly in MTLResourceStorageModeShared memory.

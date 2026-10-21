@@ -247,14 +247,31 @@ public:
     const void* family_key() const noexcept { return gpu_member() ? family_.get() : nullptr; }
 
     // Returns the byte offset of this tensor's first element from the start
-    // of :func:`storage`.
+    // of :func:`raw_storage` (the handle coordinate frame).
+    //
+    // Rule: anything that shows a position or size to the user, or takes one
+    // from the user (``storage_offset``, ``untyped_storage``, ``as_strided``),
+    // uses the allocation coordinate frame (:func:`allocation_offset`,
+    // :func:`allocation_nbytes`, :func:`allocation_base`).  :func:`storage_offset`
+    // and :func:`raw_storage` are the handle frame for code that walks bytes.
     //
     // Returns
     // -------
     // std::size_t
-    //     ``0`` for owning tensors; non-zero for views created with
-    //     :func:`make_view`.
+    //     ``0`` for owning tensors and block views; non-zero for strided views
+    //     created with :func:`make_view`.
     std::size_t storage_offset() const noexcept { return offset_; }
+
+    // Byte offset of this tensor's first element from the start of the
+    // underlying allocation (the user-facing storage coordinate frame).
+    std::size_t allocation_offset() const noexcept;
+
+    // Total byte size of the underlying allocation (the user-facing storage
+    // capacity).
+    std::size_t allocation_nbytes() const noexcept;
+
+    // Host/device base address of the start of the underlying allocation.
+    std::uintptr_t allocation_base() const;
 
     // Predicate: is this tensor's CPU storage aliased by another tensor?
     //
@@ -486,6 +503,17 @@ public:
     //     The view, with no autograd state of its own.
     static std::shared_ptr<TensorImpl>
     make_block_view(const std::shared_ptr<TensorImpl>& base, Shape shape, std::size_t byte_offset);
+
+    // Creates a view over ``base``'s full underlying allocation at
+    // ``allocation_byte_offset`` bytes from the allocation start.
+    //
+    // Used by ``as_strided_op`` so a window taken from a narrowed CPU block
+    // view (or a Metal engine view-family member) can address any element of
+    // the root allocation while remaining in ``base``'s :class:`ViewFamily`.
+    static std::shared_ptr<TensorImpl> make_allocation_view(const std::shared_ptr<TensorImpl>& base,
+                                                            Shape shape,
+                                                            Stride stride,
+                                                            std::size_t allocation_byte_offset);
 
     // ---------------------------------------------------------------------------
     // Metadata accessors
