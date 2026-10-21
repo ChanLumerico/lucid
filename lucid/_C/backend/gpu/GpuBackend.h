@@ -993,20 +993,16 @@ public:
                         const ReduceOpts& opts,
                         Dtype dt) override {
         return mlx_reduce(a, in_shape, opts, dt, [](auto& x, auto& axes, bool keepdims) {
-            return reduce_widened(x, [&](const ::mlx::core::array& w) {
-                return ::mlx::core::mean(w, axes, keepdims);
-            });
+            return mean_widened(x, axes, keepdims);
         });
     }
 
     // Population variance.  A half input is accumulated in float32 (see
-    // ``widen_half``): MLX's ``var`` takes a ``mean`` of its own, so a
+    // ``var_widened``): MLX's ``var`` takes a ``mean`` of its own, so a
     // float16 input overflowed the same way ``reduce_mean`` did.
     Storage variance(const Storage& a, const Shape&, const ReduceOpts& opts, Dtype dt) override {
         const auto& gs = std::get<GpuStorage>(a);
-        auto result = reduce_widened(*gs.arr, [&](const ::mlx::core::array& w) {
-            return ::mlx::core::var(w, opts.axes, opts.keepdims, 0);
-        });
+        auto result = var_widened(*gs.arr, opts.axes, opts.keepdims, 0);
         // PERF: var() produces contiguous output; drop defensive wrap.
         return Storage{gpu::wrap_mlx_array(std::move(result), dt)};
     }
@@ -2111,6 +2107,14 @@ public:
         // float32 internally; these accumulate in float32 for a half input
         // too (see ``widen_half``) — a float16 row of 4096 values of 16
         // summed to inf and saved an rstd of 0.
+        if (x_2d.size() > 0) {
+            auto stats =
+                omi_norm_stats(x_2d, 1, static_cast<int>(outer), static_cast<int>(normalized_size),
+                               eps, {static_cast<int>(outer), 1});
+            return {Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(y), dt)},
+                    Storage{gpu::wrap_mlx_array(std::move(stats[1]), dt)},
+                    Storage{gpu::wrap_mlx_array(std::move(stats[2]), dt)}};
+        }
         const auto acc_dt = accumulation_dtype(mlx_dt);
         auto mean_acc = ::mlx::core::mean(widen_half(x_2d), std::vector<int>{1}, true);
         auto var_acc =
@@ -2216,77 +2220,11 @@ public:
                                             double eps,
                                             const Shape& x_shape_param,
                                             Dtype dt) override {
-        const auto& gx = std::get<GpuStorage>(x);
         (void)x_shape_param;
+        const auto& gx = std::get<GpuStorage>(x);
         const auto& gg = std::get<GpuStorage>(gamma);
         const auto& gb = std::get<GpuStorage>(beta);
-        ::mlx::core::Shape br_c(static_cast<std::size_t>(ndim) + 2, 1);
-        br_c[1] = static_cast<::mlx::core::ShapeElem>(channels);
-        auto g_view = ::mlx::core::reshape(*gg.arr, br_c);
-        auto b_view = ::mlx::core::reshape(*gb.arr, br_c);
-        std::vector<int> axes;
-        axes.reserve(static_cast<std::size_t>(ndim) + 1);
-        axes.push_back(0);
-        for (int i = 0; i < ndim; ++i)
-            axes.push_back(2 + i);
-
-        // The statistics accumulate in float32 for a half input (see
-        // ``widen_half``) — a float16 channel of 64 x 32 x 32 ones summed to
-        // inf, and 1/N was subnormal — and go back to the input dtype only
-        // as the saved mean / rstd.  The squared deviations and the affine
-        // pass are each one fused kernel (``mlx_fused``) that widens as it
-        // reads, so only the mean pays for a widened copy of x; for float32
-        // the fusion makes the layer faster than the eager chain it replaced.
-        // Measured in HalfAccumulation.h.
-        //
-        // 3.4+ Phase A.3: sum(..., keepdims) × 1/N rather than mean(...).
-        std::int64_t N_reduced = static_cast<std::int64_t>(gx.arr->shape()[0]);
-        for (int i = 0; i < ndim; ++i)
-            N_reduced *= static_cast<std::int64_t>(gx.arr->shape()[2 + i]);
-        const auto x_dt = gx.arr->dtype();
-        const auto acc_dt = accumulation_dtype(x_dt);
-        const ::mlx::core::array inv_N(1.0 / static_cast<double>(N_reduced), acc_dt);
-
-        auto mean_acc =
-            ::mlx::core::multiply(::mlx::core::sum(widen_half(*gx.arr), axes, true), inv_N);
-        auto var_acc = ::mlx::core::multiply(
-            ::mlx::core::sum(squared_deviation(*gx.arr, mean_acc), axes, true), inv_N);
-        auto rstd_acc = ::mlx::core::rsqrt(::mlx::core::add(var_acc, gpu::mlx_scalar(eps, acc_dt)));
-        // xnorm = (x - mean) * rstd and y = xnorm * gamma + beta, both in
-        // the accumulation dtype and each rounded to x's dtype once.
-        auto affine =
-            mlx_fused({*gx.arr, mean_acc, rstd_acc, g_view, b_view},
-                      [](const std::vector<::mlx::core::array>& in) {
-                          const auto out_dt = in[0].dtype();
-                          auto xn = ::mlx::core::multiply(
-                              ::mlx::core::subtract(widen_half(in[0]), in[1]), in[2]);
-                          auto yv = ::mlx::core::add(::mlx::core::multiply(xn, widen_half(in[3])),
-                                                     widen_half(in[4]));
-                          return std::vector<::mlx::core::array>{narrow_to(yv, out_dt),
-                                                                 narrow_to(xn, out_dt)};
-                      });
-        auto y = std::move(affine[0]);
-        auto xnorm = std::move(affine[1]);
-        auto mean = narrow_to(mean_acc, x_dt);
-        auto rstd = narrow_to(rstd_acc, x_dt);
-        // 3.4+ Phase A.3: drop trailing contiguous(...) on y / mean / rstd.
-        // Mirrors the 3.1.0 forward + 3.4.0 norm-backward + Step 3.2 conv
-        // backward sweeps — MLX add / multiply / mean / rsqrt already
-        // produce contiguous tensors and downstream ops (ReLU forward,
-        // BN backward's reshape of saved_mean / saved_rstd, the Step 1
-        // fused EMA update) handle strided lazy views natively.  Forcing
-        // contiguous() here broke the lazy chain that ReLU / next BN
-        // would otherwise fuse with.
-        //
-        // 3.4+ Phase A.4: also expose xnorm as the 4th return so backward
-        // can skip recomputing centered + xnorm.  xnorm is already in the
-        // lazy chain (consumed by the y = xnorm * γ + β line above) so
-        // returning it here is zero extra forward compute — the autograd
-        // node just retains an extra reference to the existing intermediate.
-        return {Storage{gpu::wrap_mlx_array(std::move(y), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(mean), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(rstd), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(xnorm), dt)}};
+        return bn_forward_gpu(*gx.arr, *gg.arr, *gb.arr, channels, ndim, eps, dt);
     }
 
     // BatchNorm backward (training mode).
@@ -2308,88 +2246,15 @@ public:
                                              const Shape& x_shape_param,
                                              Dtype dt,
                                              double eps) override {
-        const auto& gx = std::get<GpuStorage>(x);
         (void)x_shape_param;
+        (void)eps;
+        const auto& gx = std::get<GpuStorage>(x);
         const auto& gg = std::get<GpuStorage>(gamma);
         const auto& gm = std::get<GpuStorage>(saved_mean);
         const auto& gr = std::get<GpuStorage>(saved_rstd);
         const auto& ggrad = std::get<GpuStorage>(grad);
-        ::mlx::core::Shape br_c(static_cast<std::size_t>(ndim) + 2, 1);
-        br_c[1] = static_cast<::mlx::core::ShapeElem>(channels);
-        auto gamma_view = ::mlx::core::reshape(*gg.arr, br_c);
-
-        // 3.4+ Phase A.4: prefer the forward-saved xnorm to skip the
-        // ``centered = x - mean`` + ``xnorm = centered * rstd`` recomputation.
-        // Falls back to the recompute path when saved_xnorm is an empty Storage.
-        ::mlx::core::array xnorm = [&]() -> ::mlx::core::array {
-            if (const auto* xn = std::get_if<GpuStorage>(&saved_xnorm)) {
-                if (xn->arr)
-                    return *xn->arr;
-            }
-            auto centered = ::mlx::core::subtract(*gx.arr, *gm.arr);
-            return ::mlx::core::multiply(centered, *gr.arr);
-        }();
-        std::vector<int> axes;
-        axes.reserve(static_cast<std::size_t>(ndim) + 1);
-        axes.push_back(0);
-        for (int i = 0; i < ndim; ++i)
-            axes.push_back(2 + i);
-
-        // 3.4+ Phase A.2: BN backward algorithmic restructure.
-        //
-        //   (a) CSE ``multiply(grad, xnorm)`` — the prior code emitted this
-        //       op twice (once inside the dgamma sum, once inside the
-        //       mean_g_xn mean).  MLX's lazy graph may CSE this, but
-        //       hoisting it makes the dedup explicit and saves the second
-        //       multiply when MLX doesn't.
-        //   (b) ``mean = sum / N`` — emit two sums with keepdims=true and
-        //       derive both ``mean_g`` (for dx) and ``dbeta`` (for output)
-        //       from the same ``sum_grad_kept``; same for ``mean_g_xn`` and
-        //       ``dgamma``.  Net: 2 reduction kernels instead of 4
-        //       (dbeta sum + dgamma sum + mean_g + mean_g_xn).
-        //
-        // Result: ~3 fewer MLX ops per BN backward call.  On ResNet-18
-        // with 20 BatchNorm2d layers the savings compound.  Targets the
-        // +1.31 ms BN bwd microbench gap vs the reference framework.
-        //
-        // Both sums accumulate in float32 for a half gradient (see
-        // ``widen_half``), and the dx chain runs as one fused kernel in the
-        // accumulation dtype, rounded to the gradient's dtype once.
-        const auto g_dt = ggrad.arr->dtype();
-        const auto acc_dt = accumulation_dtype(g_dt);
-        auto sum_grad_kept = ::mlx::core::sum(widen_half(*ggrad.arr), axes, true);
-        auto sum_grad_xn_kept = ::mlx::core::sum(product_widened(*ggrad.arr, xnorm), axes, true);
-
-        // N = product of the reduced dims (batch + spatial).  Used as a
-        // scalar broadcast divisor to convert sum → mean for the dx
-        // formula.  Built from x's shape so it picks up the live extent.
-        std::int64_t N_reduced = static_cast<std::int64_t>(gx.arr->shape()[0]);
-        for (int i = 0; i < ndim; ++i)
-            N_reduced *= static_cast<std::int64_t>(gx.arr->shape()[2 + i]);
-        const ::mlx::core::array inv_N(1.0 / static_cast<double>(N_reduced), acc_dt);
-        auto mean_g = ::mlx::core::multiply(sum_grad_kept, inv_N);
-        auto mean_g_xn = ::mlx::core::multiply(sum_grad_xn_kept, inv_N);
-
-        // dx = gamma * rstd * (g - mean_g - xnorm * mean_g_xn); the (1, C, 1..)
-        // scale is formed in the accumulation dtype.
-        auto scale = ::mlx::core::multiply(widen_half(gamma_view), widen_half(*gr.arr));
-        auto dx = normalized_input_grad(*ggrad.arr, xnorm, mean_g, mean_g_xn, scale);
-
-        // ``sum_*_kept`` has shape (1, C, 1, ..., 1); reshape to (C,) for
-        // the non-keepdims output expected by autograd.  Metadata-only on
-        // MLX, no kernel.
-        ::mlx::core::Shape c_only{static_cast<::mlx::core::ShapeElem>(channels)};
-        auto dgamma = narrow_to(::mlx::core::reshape(sum_grad_xn_kept, c_only), g_dt);
-        auto dbeta = narrow_to(::mlx::core::reshape(sum_grad_kept, c_only), g_dt);
-        // 3.4 perf: backward sweep — drop the trailing ``contiguous(...)``
-        // wraps that mirror the 3.1.0 forward-side sweep.  ``multiply`` and
-        // ``sum`` already return contiguous tensors from MLX, so the wrap
-        // is a redundant materialisation that breaks lazy fusion through
-        // the accumulate_into / next-edge boundary.  ResNet-18 / CIFAR-10
-        // hits this path 16 × per backward (one per BatchNorm2d).
-        return {Storage{gpu::wrap_mlx_array(std::move(dx), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(dgamma), dt)},
-                Storage{gpu::wrap_mlx_array(std::move(dbeta), dt)}};
+        return bn_backward_gpu(*gx.arr, *gg.arr, *gm.arr, *gr.arr, saved_xnorm, *ggrad.arr,
+                               channels, ndim, dt);
     }
 
     std::vector<Storage> group_norm_forward(const Storage& x,
@@ -5918,7 +5783,7 @@ private:
     ::mlx::core::array apply_loss_reduction(const ::mlx::core::array& values, int reduction) {
         if (reduction == 0)
             return values;
-        auto sum = ::mlx::core::sum(widen_half(values), false);
+        auto sum = sum_all_f32(values);
         if (reduction == 1)
             sum = ::mlx::core::divide(
                 sum, gpu::mlx_scalar(static_cast<double>(values.size()), sum.dtype()));
@@ -5997,7 +5862,7 @@ private:
                               int reduction) {
         if (reduction == 0)
             return Storage{gpu::wrap_mlx_array(::mlx::core::contiguous(values), dt)};
-        auto sum = ::mlx::core::sum(widen_half(values), false);
+        auto sum = sum_all_f32(values);
         if (reduction == 1)
             sum = ::mlx::core::divide(sum, ::mlx::core::astype(valid_count, sum.dtype()));
         return Storage{

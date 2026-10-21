@@ -98,7 +98,7 @@
     "frees": 79,
     "host_allocations": 0,
     "host_syncs": 1,
-    "peak_bytes": 179332
+    "peak_bytes": 146628
   },
   "compiled_mlp_adam/metal": {
     "allocations": 17,

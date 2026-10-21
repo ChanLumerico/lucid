@@ -161,3 +161,43 @@ def test_sum_shape_inference(shape: tuple[int, ...], dim: int, device: str) -> N
     expected_shape = list(shape)
     expected_shape.pop(dim if dim >= 0 else dim + len(shape))
     assert out.shape == tuple(expected_shape)
+
+
+@pytest.mark.parametrize("dtype", [lucid.float16, lucid.bfloat16])
+@pytest.mark.parametrize(
+    "shape,dim",
+    [
+        ((300, 16), 1),  # row_sum / row_var path (O == 1, M >= 256, I <= 4096)
+        ((16, 64), 0),  # krk_sum / krk_var path (O == 1, M == 16, I == 64)
+        ((4, 8, 16, 16), (0, 2, 3)),  # OMI channel reduction (O == 4, M == 8, I == 256)
+    ],
+)
+def test_half_reductions_accumulate_in_float32(
+    device: str, dtype: lucid.Dtype, shape: tuple[int, ...], dim: int | tuple[int, ...]
+) -> None:
+    rng = np.random.default_rng(7)
+    x_np = rng.uniform(0.5, 1.5, size=shape).astype(np.float32)
+    x = lucid.tensor(x_np, dtype=dtype, device=device)
+    x_f32 = x.to(lucid.float32)
+
+    for fn in (lucid.sum, lucid.mean):
+        got = fn(x, dim=dim)
+        want = fn(x_f32, dim=dim).to(dtype)
+        assert got.dtype == dtype
+        np.testing.assert_allclose(
+            got.to(lucid.float32).numpy(),
+            want.to(lucid.float32).numpy(),
+            rtol=2e-3 if dtype == lucid.float16 else 1.6e-2,
+            atol=1e-3,
+        )
+
+    got_var = lucid.var(x, dim=dim, correction=1)
+    want_var = lucid.var(x_f32, dim=dim, correction=1).to(dtype)
+    assert got_var.dtype == dtype
+    np.testing.assert_allclose(
+        got_var.to(lucid.float32).numpy(),
+        want_var.to(lucid.float32).numpy(),
+        rtol=4e-3 if dtype == lucid.float16 else 2.5e-2,
+        atol=1e-4,
+    )
+

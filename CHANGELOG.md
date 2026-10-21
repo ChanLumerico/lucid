@@ -186,6 +186,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - parallelise and vectorise CPU softmax and layer_norm
 
+- add custom Metal f32-accumulating half reduction kernels
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats
