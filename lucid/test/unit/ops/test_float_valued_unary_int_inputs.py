@@ -79,22 +79,10 @@ _FUNCTIONAL_OPS = {
     "tanhshrink": False,
 }
 
-_BLOCKED = "LCD-508 after LCD-500 E1: nn/functional/activations.py is claimed"
-
-
 def _attr(root: Any, path: str) -> Callable[..., Any]:
     for part in path.split("."):
         root = getattr(root, part)
     return root
-
-
-def _fails_today(spelling: str, name: str, device: str, default: str) -> bool:
-    """The cells left for after LCD-500 E1, which holds activations.py."""
-    if spelling != "nn.functional":
-        return False
-    if name == "tanhshrink":
-        return True  # refuses to mix the integer with its float tanh
-    return name in ("sigmoid", "tanh") and device == "cpu" and default == "float64"
 
 
 def _cases() -> Iterator[Any]:
@@ -110,8 +98,6 @@ def _cases() -> Iterator[Any]:
             for device in ("cpu", "metal"):
                 for default in _DEFAULTS:
                     marks = [_METAL] if device == "metal" else []
-                    if _fails_today(spelling, name, device, default):
-                        marks.append(pytest.mark.xfail(strict=True, reason=_BLOCKED))
                     yield pytest.param(
                         spelling,
                         name,

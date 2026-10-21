@@ -330,10 +330,8 @@ class GradScaler:
             # dtype: mixed-dtype multiply is not supported (BinaryKernel
             # validates same-dtype operands).
             work_dtype = _C_engine.F32 if grad_dtype == _C_engine.BF16 else grad_dtype
-            # ``mul`` is an AmpPolicy.Promote op: inside an autocast scope it
-            # would cast the gradient to the autocast dtype (float16, where
-            # ``1/65536`` is subnormal) — and a float32 scope would cast a
-            # float64 gradient down.  A guard on the work dtype pins it;
+            # Pin the autocast dtype to ``work_dtype`` while unscaling so any
+            # autocast-lowered op inside the block stays in ``work_dtype``;
             # dropping the guard restores the caller's state.
             amp_active = _C_engine.amp_is_active(g_impl.device)
             guard = (

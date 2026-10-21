@@ -18,6 +18,7 @@ import lucid as _lucid
 from lucid import _promotion
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._autocast import _autocast_entry
 from lucid._tensor.tensor import Tensor
 from lucid.nn.functional._spatial_args import (
     _PoolGeometry,
@@ -364,20 +365,22 @@ def _adaptive_pool(
     route through here, so they cannot drift apart on which sizes they take.
     """
     op = f"adaptive_{'avg' if reduce == 'mean' else 'max'}_pool{n}d"
-    xb, unbatched = _add_batch_axis(x, n)
-    if xb.ndim != n + 2:
-        raise ValueError(f"{op}: expected {n + 1}D or {n + 2}D input, got {x.ndim}D")
-    spatial = tuple(int(s) for s in xb.shape[-n:])
-    sizes = _adaptive_size(output_size, spatial, op)
-    if 0 in sizes:
-        # No windows: an empty result, still on ``x``'s graph.
-        empty = xb.narrow(xb.ndim - n + sizes.index(0), 0, 0)
-        out = empty.reshape(*xb.shape[: xb.ndim - n], *sizes)
-    elif all(i % o == 0 for i, o in zip(spatial, sizes, strict=True)):
-        out = _wrap(_ADAPTIVE_POOL[(reduce, n)](_unwrap(xb), *sizes))
-    else:
-        out = _adaptive_pool_python(xb, sizes, reduce)
-    return _drop_batch_axis(out, unbatched)
+    with _autocast_entry(op, _unwrap(x)) as (xi,):
+        x = _wrap(xi)
+        xb, unbatched = _add_batch_axis(x, n)
+        if xb.ndim != n + 2:
+            raise ValueError(f"{op}: expected {n + 1}D or {n + 2}D input, got {x.ndim}D")
+        spatial = tuple(int(s) for s in xb.shape[-n:])
+        sizes = _adaptive_size(output_size, spatial, op)
+        if 0 in sizes:
+            # No windows: an empty result, still on ``x``'s graph.
+            empty = xb.narrow(xb.ndim - n + sizes.index(0), 0, 0)
+            out = empty.reshape(*xb.shape[: xb.ndim - n], *sizes)
+        elif all(i % o == 0 for i, o in zip(spatial, sizes, strict=True)):
+            out = _wrap(_ADAPTIVE_POOL[(reduce, n)](_unwrap(xb), *sizes))
+        else:
+            out = _adaptive_pool_python(xb, sizes, reduce)
+        return _drop_batch_axis(out, unbatched)
 
 
 def _adaptive_max_pool(
@@ -511,57 +514,79 @@ def _fractional_max_pool(
 ) -> Tensor | tuple[Tensor, Tensor]:
     """The one body of ``fractional_max_pool{2,3}d`` and their modules."""
     op = f"fractional_max_pool{n}d"
-    xb, unbatched = _add_batch_axis(x, n)
-    if xb.ndim != n + 2:
-        raise ValueError(
-            f"{op}: expected a {n + 2}-D or unbatched {n + 1}-D input, "
-            f"got shape {tuple(x.shape)}"
+    with _autocast_entry(op, _unwrap(x)) as (xi,):
+        x = _wrap(xi)
+        xb, unbatched = _add_batch_axis(x, n)
+        if xb.ndim != n + 2:
+            raise ValueError(
+                f"{op}: expected a {n + 2}-D or unbatched {n + 1}-D input, "
+                f"got shape {tuple(x.shape)}"
+            )
+        kernel = _ntuple(kernel_size, n, op, "kernel_size")
+        _require_positive(kernel, op, "kernel_size")
+        spatial = tuple(int(v) for v in xb.shape[2:])
+        out = _fractional_output_size(output_size, output_ratio, spatial, kernel, op)
+        batch, channels = int(xb.shape[0]), int(xb.shape[1])
+        if samples is None:
+            samples = _lucid.rand(batch, channels, n, dtype=xb.dtype, device=xb.device)
+        if tuple(samples.shape) != (batch, channels, n):
+            raise ValueError(
+                f"{op}: _random_samples must have shape {(batch, channels, n)}, "
+                f"got {tuple(samples.shape)}"
+            )
+        if batch * channels == 0:
+            return _no_planes(xb, out, unbatched, return_indices)
+        # The reference reads a 2-D sample as (width, height) and a 3-D one as
+        # (depth, height, width).
+        axis_sample = (1, 0) if n == 2 else tuple(range(n))
+        single = xb.dtype != _lucid.float64
+        values: list[Tensor] = []
+        indices: list[Tensor] = []
+        # One host read for every sample, not one per plane.
+        flat = samples.reshape(-1).tolist()
+        assert isinstance(flat, list)
+        u: list[float] = []
+        for v in flat:
+            v_num = _promotion.as_number(v)
+            if not isinstance(v_num, (int, float)):
+                raise TypeError(f"{op}: _random_samples must be real, got {v!r}")
+            u.append(float(v_num))
+        for b in range(batch):
+            for c in range(channels):
+                at = (b * channels + c) * n
+                starts = [
+                    _frac_pool_starts(
+                        spatial[d], kernel[d], out[d], u[at + axis_sample[d]], single
+                    )
+                    for d in range(n)
+                ]
+                value, index = _fractional_plane(xb[b, c], starts, kernel)
+                values.append(value)
+                indices.append(index)
+        result = _drop_batch_axis(
+            _lucid.stack(values).reshape(batch, channels, *out), unbatched
         )
-    kernel = _ntuple(kernel_size, n, op, "kernel_size")
-    _require_positive(kernel, op, "kernel_size")
-    spatial = tuple(int(v) for v in xb.shape[2:])
-    out = _fractional_output_size(output_size, output_ratio, spatial, kernel, op)
-    batch, channels = int(xb.shape[0]), int(xb.shape[1])
-    if samples is None:
-        samples = _lucid.rand(batch, channels, n, dtype=xb.dtype, device=xb.device)
-    if tuple(samples.shape) != (batch, channels, n):
-        raise ValueError(
-            f"{op}: _random_samples must have shape {(batch, channels, n)}, "
-            f"got {tuple(samples.shape)}"
-        )
-    if batch * channels == 0:
-        return _no_planes(xb, out, unbatched, return_indices)
-    # The reference reads a 2-D sample as (width, height) and a 3-D one as
-    # (depth, height, width).
-    axis_sample = (1, 0) if n == 2 else tuple(range(n))
-    single = xb.dtype != _lucid.float64
-    values: list[Tensor] = []
-    indices: list[Tensor] = []
-    # One host read for every sample, not one per plane.
-    flat = samples.reshape(-1).tolist()
-    assert isinstance(flat, list)
-    u: list[float] = []
-    for v in flat:
-        v_num = _promotion.as_number(v)
-        if not isinstance(v_num, (int, float)):
-            raise TypeError(f"{op}: _random_samples must be real, got {v!r}")
-        u.append(float(v_num))
-    for b in range(batch):
-        for c in range(channels):
-            at = (b * channels + c) * n
-            starts = [
-                _frac_pool_starts(
-                    spatial[d], kernel[d], out[d], u[at + axis_sample[d]], single
-                )
-                for d in range(n)
-            ]
-            value, index = _fractional_plane(xb[b, c], starts, kernel)
-            values.append(value)
-            indices.append(index)
-    result = _drop_batch_axis(
-        _lucid.stack(values).reshape(batch, channels, *out), unbatched
-    )
-    if not return_indices:
-        return result
-    where = _lucid.stack(indices).reshape(batch, channels, *out)
-    return result, _drop_batch_axis(where, unbatched)
+        if not return_indices:
+            return result
+        where = _lucid.stack(indices).reshape(batch, channels, *out)
+        return result, _drop_batch_axis(where, unbatched)
+
+
+def _scatter_unpool(
+    x: Tensor,
+    checked: tuple[Tensor, int],
+    output_spatial: tuple[int, ...],
+    n_spatial: int,
+) -> Tensor:
+    """Shared body of ``max_unpool{1,2,3}d``."""
+    with _autocast_entry(f"max_unpool{n_spatial}d", _unwrap(x)) as (xi,):
+        x = _wrap(xi)
+        idx, spatial_numel = checked
+        leading = [int(s) for s in x.shape[:-n_spatial]]
+        zeros = _lucid.zeros(*leading, spatial_numel, dtype=x.dtype, device=x.device)
+        flat_count = math.prod(int(s) for s in x.shape[-n_spatial:])
+        x_flat = x.reshape(*leading, flat_count)
+        idx_flat = idx.reshape(*leading, flat_count)
+        summed = zeros.scatter_add(-1, idx_flat, x_flat)
+        count = zeros.scatter_add(-1, idx_flat, _lucid.ones_like(x_flat)).clamp(min=1.0)
+        return (summed / count).reshape(*leading, *output_spatial)

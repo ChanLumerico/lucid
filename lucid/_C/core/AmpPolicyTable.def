@@ -41,10 +41,6 @@
 //                    the mode as an argument, so a row cannot tell them
 //                    apart.  Reflect / replicate padding keeps a bfloat16
 //                    input under a CPU autocast (a strict xfail in the test).
-//   vdot             No row, as in the reference, but ``lucid.vdot`` is
-//                    built on ``dot`` and so takes ``dot_1d``'s WIDEST row:
-//                    on Metal it runs a float16 / float32 pair in float32
-//                    where the reference refuses the pair.
 //
 // ``lstm_cell`` is ``nn.LSTMCell``'s step, applied at its entry.
 //

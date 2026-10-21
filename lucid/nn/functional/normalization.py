@@ -10,7 +10,7 @@ from lucid._dispatch import _unwrap, _wrap
 from lucid._ops._autocast import _autocast_entry
 from lucid._ops._dims import _to_axes
 from lucid._ops._reduce import _require_normable
-from lucid._types import DimLike
+from lucid._types import DimLike, DTypeLike
 from lucid.linalg import vector_norm
 
 if TYPE_CHECKING:
@@ -475,6 +475,10 @@ def _check_instance_norm_input(
         )
 
 
+def _cast_if_amp(t: Tensor | None, dt: DTypeLike, active: bool) -> Tensor | None:
+    return t.to(dt) if active and t is not None and t.dtype != dt else t
+
+
 def instance_norm(
     input: Tensor,
     running_mean: Tensor | None = None,
@@ -550,37 +554,32 @@ def instance_norm(
     (4, 3, 64, 64)
     """
     _check_instance_norm_input(input, use_input_stats, running_mean, running_var)
-    spatial_dims: list[int] = list(range(2, input.ndim))
-    C: int = int(input.shape[1])
-    # Channel-broadcast shape (1, C, 1, 1, ...) for affine + running stats.
-    bcast_shape: list[int] = [1, C] + [1] * (input.ndim - 2)
+    amp_was_active = _C_engine.amp_is_active(_unwrap(input).device)
+    with _autocast_entry("instance_norm", _unwrap(input)) as (xi,):
+        input = _wrap(xi)
+        weight = _cast_if_amp(weight, input.dtype, amp_was_active)
+        bias = _cast_if_amp(bias, input.dtype, amp_was_active)
+        spatial_dims: list[int] = list(range(2, input.ndim))
+        bcast_shape: list[int] = [1, int(input.shape[1])] + [1] * (input.ndim - 2)
 
-    if use_input_stats or running_mean is None or running_var is None:
-        # Per-instance (per-(n,c)) statistics.
-        mean: Tensor = input.mean(spatial_dims, keepdim=True)
-        var: Tensor = input.var(spatial_dims, keepdim=True, correction=0)
-        if running_mean is not None and running_var is not None and momentum != 0.0:
-            _fold_instance_stats(input, running_mean, running_var, momentum)
-    else:
-        mean = running_mean.reshape(bcast_shape)
-        var = running_var.reshape(bcast_shape)
+        if use_input_stats or running_mean is None or running_var is None:
+            mean: Tensor = input.mean(spatial_dims, keepdim=True)
+            var: Tensor = input.var(spatial_dims, keepdim=True, correction=0)
+            if running_mean is not None and running_var is not None and momentum != 0.0:
+                _fold_instance_stats(input, running_mean, running_var, momentum)
+        else:
+            rm = _cast_if_amp(running_mean, input.dtype, amp_was_active)
+            rv = _cast_if_amp(running_var, input.dtype, amp_was_active)
+            assert rm is not None and rv is not None
+            mean, var = rm.reshape(bcast_shape), rv.reshape(bcast_shape)
 
-    # Materialise ``eps`` as a 0-D scalar tensor so MPSGraph's
-    # ``(x - mean) / sqrt(var + eps)`` fusion pattern recognises it
-    # as the canonical normalization epsilon.  Lucid's default
-    # python-scalar promotion creates a broadcast-shaped constant,
-    # which trips a runtime ``epsilon must be a scalar`` assertion in
-    # newer MPSGraph runtimes.  No-op for eager (broadcast equivalent).
-    from lucid._factories.creation import full as _full_factory
+        from lucid._factories.creation import full as _full_factory
 
-    eps_scalar: Tensor = _full_factory((), eps, device=input.device, dtype=var.dtype)
-    y: Tensor = (input - mean) / (var + eps_scalar).sqrt()
-
-    if weight is not None:
-        y = y * weight.reshape(bcast_shape)
-    if bias is not None:
-        y = y + bias.reshape(bcast_shape)
-    return y
+        eps_scalar: Tensor = _full_factory((), eps, device=input.device, dtype=var.dtype)
+        y: Tensor = (input - mean) / (var + eps_scalar).sqrt()
+        if weight is not None:
+            y = y * weight.reshape(bcast_shape)
+        return y + bias.reshape(bcast_shape) if bias is not None else y
 
 
 # ── P3 fill: local_response_norm (functional form of LocalResponseNorm) ────

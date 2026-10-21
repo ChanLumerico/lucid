@@ -97,8 +97,7 @@ def _zero_safe_root(s: _Impl, p: float) -> _Impl:
     passes through as itself.  The values are the plain root's, so a sum
     no gradient will reach takes the plain root.
     """
-    # ``pow_scalar`` and ``where`` are ``AmpPolicy::Promote`` ops; suspend
-    # autocast on ``s.device`` so the root keeps ``s``'s dtype (LCD-120).
+    # Suspend autocast on ``s.device`` so the root keeps ``s``'s dtype (LCD-120).
     guard = (
         _C_engine.AutocastGuard(_C_engine.F32, s.device, False)
         if _C_engine.amp_is_active(s.device)
@@ -241,9 +240,8 @@ def _bessel_correct(
     n = math.prod([shape[a] for a in axes_list] if axes_list else shape)
     if correction == 0 and n > 0:
         return result_impl
-    # ``mul``, ``sub``, and ``add`` are ``AmpPolicy::Promote`` ops; suspend
-    # autocast on ``result_impl.device`` so Bessel correction preserves the
-    # variance's dtype (LCD-120).
+    # Suspend autocast on ``result_impl.device`` so Bessel correction preserves
+    # the variance's dtype (LCD-120).
     guard = (
         _C_engine.AutocastGuard(_C_engine.F32, result_impl.device, False)
         if _C_engine.amp_is_active(result_impl.device)

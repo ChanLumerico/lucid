@@ -32,7 +32,7 @@ def autocast_dtype(dtype: _C_engine.Dtype = _C_engine.Dtype.F32) -> Iterator[Non
     Parameters
     ----------
     dtype : lucid._C.engine.Dtype, optional
-        Target engine dtype to install for ``AmpPolicy::Promote`` operations
+        Target engine dtype to install for ``LOWER`` autocast rows
         while autocast is enabled (defaults to ``_C_engine.Dtype.F32``).
     """
     if not _C_engine.amp_is_active():

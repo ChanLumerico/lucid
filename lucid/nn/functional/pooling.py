@@ -4,7 +4,6 @@ nn.functional pooling operations.
 
 from typing import Literal, TYPE_CHECKING, overload
 
-import lucid as _lucid
 from lucid.nn.functional._index_checks import _check_unpool
 from lucid.nn.functional._pool_core import (
     _adaptive_max_pool,
@@ -13,6 +12,7 @@ from lucid.nn.functional._pool_core import (
     _fractional_max_pool,
     _lp_pool,
     _max_pool,
+    _scatter_unpool,
 )
 from lucid.nn.functional._spatial_args import _ntuple, _pool_geometry, _spatial_extent
 
@@ -1099,47 +1099,6 @@ def lp_pool3d(
     """
     g = _pool_geometry(kernel_size, stride, 0, 1, 3, "lp_pool3d")
     return _lp_pool(input, norm_type, g, ceil_mode)
-
-
-def _scatter_unpool(
-    x: Tensor,
-    checked: tuple[Tensor, int],
-    output_spatial: tuple[int, ...],
-    n_spatial: int,
-) -> Tensor:
-    """Shared body of ``max_unpool{1,2,3}d``.
-
-    Scatters the values in ``x`` at the flat positions given by
-    ``indices`` (the per-window argmax indices saved by the matching
-    ``max_pool*d`` call) into a zero tensor whose spatial shape is
-    ``output_spatial``.  Leading batch + channel dims are preserved.
-    Implemented via ``scatter_add`` over a flattened spatial axis, which
-    carries the gradient back to ``x``; an index that overlapping windows
-    repeat is written once, not summed, as the reference does.
-    """
-    idx, spatial_numel = checked
-    leading = [int(s) for s in x.shape[:-n_spatial]]
-    zeros = _lucid.zeros(*leading, spatial_numel, dtype=x.dtype, device=x.device)
-    flat_count = 1
-    for s in x.shape[-n_spatial:]:
-        flat_count *= int(s)
-    x_flat = x.reshape(*leading, flat_count)
-    idx_flat = idx.reshape(*leading, flat_count)
-
-    summed = zeros.scatter_add(-1, idx_flat, x_flat)
-    # Overlapping windows can report the same element, so an index can
-    # repeat — and scatter_add adds the copies where the reference writes
-    # the value once.  Divide by how many copies landed: they are the same
-    # element, so this is exact for two and within an ulp for more.
-    #
-    # The division stays in the gradient, which makes it the derivative of
-    # what the forward computes: each copy gets 1 / count.  The reference
-    # hands every copy the whole gradient instead, and pooling then adds
-    # those back up, so a maximum two windows share is counted twice.  The
-    # symbol audit checks gradients against finite differences and caught
-    # exactly that when the division was detached.
-    count = zeros.scatter_add(-1, idx_flat, _lucid.ones_like(x_flat)).clamp(min=1.0)
-    return (summed / count).reshape(*leading, *output_spatial)
 
 
 def max_unpool1d(

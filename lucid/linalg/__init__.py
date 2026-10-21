@@ -2315,36 +2315,20 @@ def vector_norm(
     tensor(5.)
     """
     xi = _require_normable(_unwrap(input), "vector_norm")
-    if dtype is not None:
-        xi = _cast_for_norm(input, dtype, "vector_norm")
-    # Every order below is a function of the magnitudes |x_i| alone, and
-    # this is the one place in linalg where a norm takes them: a complex
-    # input is replaced by its (real) magnitudes before any order sees it.
-    # ``matrix_norm``'s entry-wise orders and ``norm``'s dispatch reduce
-    # through this function instead of repeating the step — repeating it
-    # is how ``matrix_norm(·, "fro")`` went on squaring complex entries
-    # (a complex "norm" on Metal, an error on the CPU) after this function
-    # had stopped (CHA-147, CHA-231).  ``r`` is real from here on.  A real
-    # input keeps its signs, which no order can see: each one goes
-    # through ``abs``, a square, or a comparison with zero.
-    r = _C_engine.abs(xi) if xi.dtype in (_C_engine.C64, _C_engine.C128) else xi
-    # Every axis, rather than a flatten, for ``dim=None``: flattening first
-    # threw away the rank, so ``keepdim`` had nothing left to keep and a
-    # (2, 3) input reduced to shape (1,) where it should hold its place as
-    # (1, 1).
-    axes = (
-        list(range(len(r.shape)))
-        if dim is None
-        else _reduction_axes(r, dim, "vector_norm")
-    )
-
-    if ord == 0:
-        # The count of non-zero entries, in r's (floating) dtype as every
-        # other order answers: a norm whose dtype follows its order is a trap.
-        nz = _C_engine.not_equal(r, _C_engine.zeros_like(r))
-        return _wrap(_C_engine.astype(_C_engine.sum(nz, axes, keepdim), r.dtype))
-
-    return _wrap(_p_norm(r, float(ord), axes, keepdim))
+    with _autocast_entry("vector_norm", xi) as (xi_cast,):
+        xi = _cast_for_norm(input, dtype, "vector_norm") if dtype is not None else xi_cast
+        # Every order below is a function of the magnitudes |x_i| alone, and
+        # this is the one place in linalg where a norm takes them: a complex
+        # input is replaced by its (real) magnitudes before any order sees it.
+        # ``matrix_norm``'s entry-wise orders and ``norm``'s dispatch reduce
+        # through this function instead of repeating the step (CHA-147, CHA-231).
+        r = _C_engine.abs(xi) if xi.dtype in (_C_engine.C64, _C_engine.C128) else xi
+        # Every axis, rather than a flatten, for ``dim=None`` so ``keepdim`` retains rank.
+        axes = list(range(len(r.shape))) if dim is None else _reduction_axes(r, dim, "vector_norm")
+        if ord == 0:
+            nz = _C_engine.not_equal(r, _C_engine.zeros_like(r))
+            return _wrap(_C_engine.astype(_C_engine.sum(nz, axes, keepdim), r.dtype))
+        return _wrap(_p_norm(r, float(ord), axes, keepdim))
 
 
 def cross(input: Tensor, other: Tensor, *, dim: int = -1) -> Tensor:
@@ -2463,11 +2447,11 @@ def vecdot(x: Tensor, y: Tensor, *, dim: int = -1) -> Tensor:
     >>> vecdot(lucid.tensor([1 + 2j, 3 - 1j]), lucid.tensor([2 - 1j, 1 + 1j]))
     tensor((2.-1.j), dtype=lucid.complex64)
     """
-    xi = _unwrap(x)
-    if xi.dtype in (_C_engine.C64, _C_engine.C128):
-        xi = _C_engine.conj(xi)
-    prod = _C_engine.mul(xi, _unwrap(y))
-    return _wrap(_C_engine.sum(prod, [dim], False))
+    with _autocast_entry("vecdot", _unwrap(x), _unwrap(y)) as (xi, yi):
+        if xi.dtype in (_C_engine.C64, _C_engine.C128):
+            xi = _C_engine.conj(xi)
+        prod = _C_engine.mul(xi, yi)
+        return _wrap(_C_engine.sum(prod, [dim], False))
 
 
 def dot(x: Tensor, y: Tensor) -> Tensor:
@@ -2586,6 +2570,21 @@ def outer(x: Tensor, y: Tensor) -> Tensor:
     return _wrap(_outer_adapter(_unwrap(x), _unwrap(y)))
 
 
+def _matrix_norm_induced1(
+    input: Tensor, ord: int | float, d0: int, d1: int, keepdim: bool, dtype: object
+) -> Tensor:
+    """Induced 1- and inf-norms (and their -1 / -inf counterparts)."""
+    along, across = (d0, d1) if ord in (1, -1) else (d1, d0)
+    sums = _unwrap(vector_norm(input, 1, along, True, dtype=dtype))
+    pick = _C_engine.max if ord in (1, float("inf")) else _C_engine.min
+    picked = pick(sums, [across], True)
+    if not keepdim:
+        picked = _C_engine.reshape(
+            picked, [n for i, n in enumerate(picked.shape) if i not in (d0, d1)]
+        )
+    return _wrap(picked)
+
+
 def matrix_norm(
     input: Tensor,
     ord: int | float | str = "fro",
@@ -2662,53 +2661,33 @@ def matrix_norm(
     tensor(5.)
     """
     xi = _require_normable(_unwrap(input), "matrix_norm")
-    if dtype is not None:
-        xi = _cast_for_norm(input, dtype, "matrix_norm")
-    d0, d1 = _check_matrix_norm_dims(len(xi.shape), dim)
+    with _autocast_entry("matrix_norm", xi) as (xi_cast,):
+        xi = _cast_for_norm(input, dtype, "matrix_norm") if dtype is not None else xi_cast
+        if dtype is None:
+            input = _wrap(xi)
+        d0, d1 = _check_matrix_norm_dims(len(xi.shape), dim)
 
-    def _drop(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
-        """Remove the two reduced axes unless the caller keeps them."""
-        if keepdim:
-            return impl
-        shape = list(impl.shape)
-        return _C_engine.reshape(
-            impl, [n for i, n in enumerate(shape) if i not in (d0, d1)]
-        )
+        # Entry-wise orders reduce through ``vector_norm``, which owns taking |x|.
+        if ord == "fro" or (
+            ord in (1, float("inf")) and (xi.shape[d0] == 0 or xi.shape[d1] == 0)
+        ):
+            return vector_norm(input, 2, [d0, d1], keepdim, dtype=dtype)
 
-    # The entry-wise orders are vector norms of the entries, and reduce
-    # through ``vector_norm``, which owns taking |x| — so a complex input
-    # is handled there, once, and not by a second copy of the step here.
-    # This branch used to square the entries itself, which for a complex
-    # input summed x·x instead of |x|²: ``(3.37-0.59j)`` on Metal where
-    # the answer is a real 4.123, and an error on the CPU (CHA-231).
-    if ord == "fro" or (
-        ord in (1, float("inf")) and (xi.shape[d0] == 0 or xi.shape[d1] == 0)
-    ):
-        return vector_norm(input, 2, [d0, d1], keepdim, dtype=dtype)
+        if ord in (1, -1, float("inf"), float("-inf")):
+            return _matrix_norm_induced1(input, ord, d0, d1, keepdim, dtype)
 
-    if ord in (1, -1, float("inf"), float("-inf")):
-        # Absolute column sums (ord ±1) are vector 1-norms down the rows
-        # (d0), and the extreme is taken across the columns (d1); the
-        # absolute row sums of ord ±inf exchange the two axes.
-        along, across = (d0, d1) if ord in (1, -1) else (d1, d0)
-        sums = _unwrap(vector_norm(input, 1, along, True, dtype=dtype))
-        pick = _C_engine.max if ord in (1, float("inf")) else _C_engine.min
-        return _wrap(_drop(pick(sums, [across], True)))
-
-    sv_reduce = {"nuc": _C_engine.sum, 2: _C_engine.max, -2: _C_engine.min}.get(ord)
-    if sv_reduce is None:
-        raise ValueError(f"matrix_norm: unsupported ord={ord!r}")
-    if xi.dtype in (_C_engine.C64, _C_engine.C128):
-        # Refused here rather than inside ``svd``, which would say only
-        # that it has no complex kernel and not which norms still work.
-        raise NotImplementedError(
-            f"matrix_norm: ord={ord!r} is read off the singular values, and "
-            "svd has no complex kernel yet; ord='fro', 1, -1, inf and -inf "
-            "reduce through |x| and accept a complex input"
-        )
-    if ord in ("nuc", 2) and (xi.shape[d0] == 0 or xi.shape[d1] == 0):
-        return vector_norm(input, 2, [d0, d1], keepdim, dtype=dtype)
-    return _matrix_norm_sv(xi, d0, d1, keepdim, sv_reduce)
+        sv_reduce = {"nuc": _C_engine.sum, 2: _C_engine.max, -2: _C_engine.min}.get(ord)
+        if sv_reduce is None:
+            raise ValueError(f"matrix_norm: unsupported ord={ord!r}")
+        if xi.dtype in (_C_engine.C64, _C_engine.C128):
+            raise NotImplementedError(
+                f"matrix_norm: ord={ord!r} is read off the singular values, and "
+                "svd has no complex kernel yet; ord='fro', 1, -1, inf and -inf "
+                "reduce through |x| and accept a complex input"
+            )
+        if ord in ("nuc", 2) and (xi.shape[d0] == 0 or xi.shape[d1] == 0):
+            return vector_norm(input, 2, [d0, d1], keepdim, dtype=dtype)
+        return _matrix_norm_sv(xi, d0, d1, keepdim, sv_reduce)
 
 
 def lstsq(
@@ -2782,11 +2761,11 @@ def lstsq(
     """
     unsupported_if(rcond is not None, "lstsq", "rcond", rcond)
     unsupported_if(driver is not None, "lstsq", "driver", driver)
-    sol = _lstsq_solution(input, b, _broadcast_batch)
-    dev = _unwrap(input).device
-    dt = _unwrap(input).dtype
-    empty = _wrap(_C_engine.zeros([0], dt, dev))
-    return _LstsqResult(sol, empty, empty, empty)
+    with _autocast_entry("lstsq", _unwrap(input), _unwrap(b)) as (ai, bi):
+        input, b = _wrap(ai), _wrap(bi)
+        sol = _lstsq_solution(input, b, _broadcast_batch)
+        empty = _wrap(_C_engine.zeros([0], ai.dtype, ai.device))
+        return _LstsqResult(sol, empty, empty, empty)
 
 
 def lu_solve(

@@ -3,6 +3,8 @@
 from typing import TYPE_CHECKING
 
 import lucid
+from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._autocast import _autocast_entry
 import lucid.linalg as _la
 
 if TYPE_CHECKING:
@@ -75,7 +77,13 @@ def addmm(
     >>> lucid.addmm(M, a, b, beta=0.0, alpha=1.0)
     tensor([[19., 22.], [43., 50.]])
     """
-    return _scaled_add(input, beta, lucid.matmul(mat1, mat2), alpha)
+    with _autocast_entry("addmm", _unwrap(input), _unwrap(mat1), _unwrap(mat2)) as (
+        inp,
+        m1,
+        m2,
+    ):
+        input, mat1, mat2 = _wrap(inp), _wrap(m1), _wrap(m2)
+        return _scaled_add(input, beta, lucid.matmul(mat1, mat2), alpha)
 
 
 def addbmm(
@@ -133,7 +141,11 @@ def addbmm(
     >>> lucid.addbmm(M, b1, b2)
     tensor([[12., 12.], [12., 12.]])
     """
-    return _scaled_add(input, beta, lucid.sum(lucid.bmm(batch1, batch2), 0), alpha)
+    with _autocast_entry(
+        "addbmm", _unwrap(input), _unwrap(batch1), _unwrap(batch2)
+    ) as (inp, b1, b2):
+        input, batch1, batch2 = _wrap(inp), _wrap(b1), _wrap(b2)
+        return _scaled_add(input, beta, lucid.sum(lucid.bmm(batch1, batch2), 0), alpha)
 
 
 def baddbmm(
@@ -190,7 +202,11 @@ def baddbmm(
     >>> lucid.baddbmm(M, b1, b2).shape
     (3, 2, 2)
     """
-    return _scaled_add(input, beta, lucid.bmm(batch1, batch2), alpha)
+    with _autocast_entry(
+        "baddbmm", _unwrap(input), _unwrap(batch1), _unwrap(batch2)
+    ) as (inp, b1, b2):
+        input, batch1, batch2 = _wrap(inp), _wrap(b1), _wrap(b2)
+        return _scaled_add(input, beta, lucid.bmm(batch1, batch2), alpha)
 
 
 def addmv(
@@ -246,8 +262,14 @@ def addmv(
     >>> lucid.addmv(M, A, v)
     tensor([17., 39.])
     """
-    mv_out = lucid.matmul(mat, vec.unsqueeze(-1)).squeeze(-1)
-    return _scaled_add(input, beta, mv_out, alpha)
+    with _autocast_entry("addmv", _unwrap(input), _unwrap(mat), _unwrap(vec)) as (
+        inp,
+        m,
+        v,
+    ):
+        input, mat, vec = _wrap(inp), _wrap(m), _wrap(v)
+        mv_out = lucid.matmul(mat, vec.unsqueeze(-1)).squeeze(-1)
+        return _scaled_add(input, beta, mv_out, alpha)
 
 
 def addr(
@@ -304,8 +326,14 @@ def addr(
     >>> lucid.addr(M, u, v)
     tensor([[3., 4., 5.], [6., 8., 10.]])
     """
-    out = lucid.matmul(vec1.unsqueeze(-1), vec2.unsqueeze(0))
-    return _scaled_add(input, beta, out, alpha)
+    with _autocast_entry("addr", _unwrap(input), _unwrap(vec1), _unwrap(vec2)) as (
+        inp,
+        v1,
+        v2,
+    ):
+        input, vec1, vec2 = _wrap(inp), _wrap(v1), _wrap(v2)
+        out = lucid.matmul(vec1.unsqueeze(-1), vec2.unsqueeze(0))
+        return _scaled_add(input, beta, out, alpha)
 
 
 def addcmul(
@@ -365,7 +393,11 @@ def addcmul(
     >>> lucid.addcmul(a, b, c, value=2.0)
     tensor([5., 7., 9.])
     """
-    return input + (tensor1 * tensor2) * value
+    with _autocast_entry(
+        "addcmul", _unwrap(input), _unwrap(tensor1), _unwrap(tensor2)
+    ) as (inp, t1, t2):
+        input, tensor1, tensor2 = _wrap(inp), _wrap(t1), _wrap(t2)
+        return input + (tensor1 * tensor2) * value
 
 
 def addcdiv(
@@ -419,7 +451,6 @@ def addcdiv(
     tensor([2., 3.5])
     """
     from lucid import _promotion
-    from lucid._dispatch import _unwrap
 
     if _promotion.is_integral(_unwrap(tensor1).dtype) and _promotion.is_integral(
         _unwrap(tensor2).dtype
@@ -428,7 +459,11 @@ def addcdiv(
             "Integer division with addcdiv is no longer supported; "
             "use floor_divide instead."
         )
-    return input + (tensor1 / tensor2) * value
+    with _autocast_entry(
+        "addcdiv", _unwrap(input), _unwrap(tensor1), _unwrap(tensor2)
+    ) as (inp, t1, t2):
+        input, tensor1, tensor2 = _wrap(inp), _wrap(t1), _wrap(t2)
+        return input + (tensor1 / tensor2) * value
 
 
 def mv(input: Tensor, vec: Tensor) -> Tensor:
@@ -470,7 +505,9 @@ def mv(input: Tensor, vec: Tensor) -> Tensor:
     >>> lucid.mv(M, v)
     tensor([17., 39.])
     """
-    return lucid.matmul(input, vec.unsqueeze(-1)).squeeze(-1)
+    with _autocast_entry("mv", _unwrap(input), _unwrap(vec)) as (inp, v):
+        input, vec = _wrap(inp), _wrap(v)
+        return lucid.matmul(input, vec.unsqueeze(-1)).squeeze(-1)
 
 
 def ger(input: Tensor, vec2: Tensor) -> Tensor:
@@ -551,16 +588,18 @@ def vdot(input: Tensor, other: Tensor) -> Tensor:
     >>> lucid.vdot(a, b)
     tensor(32.)
     """
-    if (
-        input.is_complex()
-        and input.ndim == 1
-        and other.ndim == 1
-        and input.shape == other.shape
-        and input.dtype == other.dtype
-        and input.device == other.device
-    ):
-        return _la.vecdot(input, other)
-    return _la.dot(input, other)
+    with _autocast_entry("vdot", _unwrap(input), _unwrap(other)) as (a, b):
+        input, other = _wrap(a), _wrap(b)
+        if (
+            input.is_complex()
+            and input.ndim == 1
+            and other.ndim == 1
+            and input.shape == other.shape
+            and input.dtype == other.dtype
+            and input.device == other.device
+        ):
+            return _la.vecdot(input, other)
+        return _la.dot(input, other)
 
 
 def block_diag(*tensors: Tensor) -> Tensor:

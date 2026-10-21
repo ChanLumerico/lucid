@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, final, override
 import lucid
 from lucid import _promotion
 from lucid._dispatch import _cannot_cast_inplace, _unwrap, _wrap
+from lucid._ops._autocast import _autocast_entry
 from lucid._ops._dims import _wrap_dim
 import lucid._C.engine as _C_engine
 from lucid._tensor._indexing import (
@@ -365,12 +366,15 @@ def index_copy(
         On the CPU, an ``index`` value outside ``[-size, size)`` of
         ``dim``; Metal drops such a write.
     """
-    _require_input_dtype("index_copy", input, source, "source")
-    dim = _wrap_dim(dim, input.ndim, "index_copy")
-    index_impl = _along(index, dim, list(source.shape))
-    return _wrap(
-        _C_engine.scatter_set(_unwrap(input), index_impl, _unwrap(source), dim)
-    )
+    with _autocast_entry("index_copy", _unwrap(input), _unwrap(source)) as (
+        in_impl,
+        src_impl,
+    ):
+        input, source = _wrap(in_impl), _wrap(src_impl)
+        _require_input_dtype("index_copy", input, source, "source")
+        dim = _wrap_dim(dim, input.ndim, "index_copy")
+        index_impl = _along(index, dim, list(source.shape))
+        return _wrap(_C_engine.scatter_set(in_impl, index_impl, src_impl, dim))
 
 
 def _scatter_into(
@@ -654,15 +658,19 @@ def index_put(
     """
     if not isinstance(indices, (list, tuple)) or len(indices) == 0:
         raise ValueError("index_put: `indices` must be a non-empty sequence of Tensors")
-    _require_input_dtype("index_put", input, values, "values")
-    impl = _unwrap(input)
-    shape = list(impl.shape)
-    key = _normalize_key(tuple(indices), shape, impl.device)
-    positions, target_shape = _written_positions(shape, key, impl.device)
-    flat_values = _C_engine.reshape(
-        _C_engine.contiguous(_normalize_value(values, impl, target_shape)), [-1]
-    )
-    return _put_flat(input, positions, flat_values, accumulate)
+    with _autocast_entry("index_put", _unwrap(input), _unwrap(values)) as (
+        impl,
+        val_impl,
+    ):
+        input, values = _wrap(impl), _wrap(val_impl)
+        _require_input_dtype("index_put", input, values, "values")
+        shape = list(impl.shape)
+        key = _normalize_key(tuple(indices), shape, impl.device)
+        positions, target_shape = _written_positions(shape, key, impl.device)
+        flat_values = _C_engine.reshape(
+            _C_engine.contiguous(_normalize_value(values, impl, target_shape)), [-1]
+        )
+        return _put_flat(input, positions, flat_values, accumulate)
 
 
 def _put_flat(

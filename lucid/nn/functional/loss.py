@@ -61,13 +61,13 @@ def _reduce(
     caller has checked ``reduction`` at its boundary; an unknown one raises
     here too rather than falling through to ``"none"``.
 
-    Under autocast a ``"mean"`` or ``"sum"`` runs, and answers, in float32,
-    the dtype the reference's autocast runs every loss in.  Autocast gives
-    ``sum`` and ``mean`` the autocast dtype even for a float32 operand, so a
-    float16 count of more than 65504 kept samples was inf: the class-index
-    mean came out ``inf / inf = NaN`` with a gradient of 0, and a float16
-    sum past 65504 was inf.  Outside autocast the scope is not entered and
-    nothing changes.
+    Under autocast on ``t``'s device a ``"mean"`` or ``"sum"`` runs, and
+    answers, in float32 — the dtype ``sum``'s FP32 row produces and the
+    reference's autocast gives every loss with a row.  For a loss without
+    a row on ``t``'s device (e.g. ``bce_loss`` on Metal, ``gaussian_nll_loss``
+    on CPU), its ``_autocast_entry`` has already suspended autocast on that
+    device, so ``amp_is_active(t._impl.device)`` is ``False`` and the result
+    is rounded back to ``out_dtype``.
 
     Three more reductions are part of a loss's own definition, and are
     built on this one rather than beside it:
@@ -84,12 +84,12 @@ def _reduce(
     if reduction == "none":
         return t if out_dtype is None or t.dtype == out_dtype else t.to(dtype=out_dtype)
     out_dtype = t.dtype if out_dtype is None else out_dtype
-    autocast = bool(_C_engine.amp_is_active())
+    autocast = bool(_C_engine.amp_is_active(t._impl.device))
     weighted = weight is not None and reduction == "mean"
     acc = _accumulation_dtype(t)
     # Half is widened under autocast (its answer is float32) and for a
     # weighted mean (its count of kept samples is a sum of its own); the
-    # float32 scope keeps autocast from casting the sums back down.
+    # float32 scope pins the autocast dtype while active.
     if (autocast or weighted) and acc != t.dtype:
         t = t.to(dtype=acc)
         if weighted and weight is not None:
@@ -122,11 +122,9 @@ def _float32_scope() -> contextlib.AbstractContextManager[object]:
     """A scope in which autocast resolves to float32, or a no-op outside
     autocast.
 
-    Lucid's autocast gives ``mul`` / ``add`` / ``div`` / ``sum`` the autocast
-    dtype, so a loss written with constants float16 cannot hold (an
-    ``eps`` of 1e-12) runs out of range inside one.  The engine guard is
-    RAII and restores the enclosing state on exit.  Outside autocast it is
-    not entered: an active float32 guard would cast float64 operands down.
+    The engine guard is RAII and restores the enclosing state on exit.
+    Outside autocast it is not entered: an active float32 guard would cast
+    float64 operands down on ``LOWER`` rows.
     """
     from lucid._engine_scope import autocast_dtype
 
@@ -395,8 +393,7 @@ def smooth_l1_loss(
         # The degenerate limit is plain L1, as the reference also answers.
         return l1_loss(x, target, reduction=reduction)
     loss: Tensor = huber_loss(x, target, reduction=reduction, delta=beta)
-    # In float32 under autocast, as the reduction was: autocast gives
-    # ``div`` its own dtype, and a float16 sum past 65504 came back inf.
+    # Rescale the Huber loss by 1 / beta in the loss's dtype.
     with _float32_scope():
         return loss / beta
 
@@ -880,34 +877,34 @@ def binary_cross_entropy(
     #
     # Half precision is computed in float32 and rounded back: ``eps`` is 0
     # in float16, and the floored gradient (1e12) is not a float16 number.
-    # Under autocast the arithmetic below would run in float16 regardless
-    # (``mul`` / ``div`` take the autocast dtype), the floor became
-    # ``1 / 0 = inf``, and the ``0 * inf`` its unselected branch sent back
-    # made every gradient NaN — so it runs in a float32 autocast scope,
-    # as BatchNorm's running-statistics update does.
-    out_dtype = x.dtype
-    acc = _accumulation_dtype(x)
-    with _float32_scope():
-        p: Tensor = x.to(dtype=acc)
-        y: Tensor = target.to(dtype=acc)
-        # The floor is 1e-12, or 1 / 65504 for a float16 input: the
-        # gradient goes back to the input's dtype, and a float16 gradient
-        # of 1e12 is inf — a saturated float16 sigmoid (which rounds to
-        # exactly 0 or 1 past |logit| ~ 8) then sent ``inf * 0 = NaN`` to
-        # its logits.  The reference's float16 floor rounds to 0 instead.
-        eps: float = max(1e-12, 1.0 / float(_finfo(out_dtype).max))
-        p_d: Tensor = p.detach()
-        inside: Tensor = p_d * (1.0 - p_d) >= eps
-        p_in: Tensor = _lucid.where(inside, p, _lucid.full_like(p_d, 0.5))
-        interior: Tensor = -(y * p_in.log() + (1.0 - y) * (1.0 - p_in).log())
-        log_p: Tensor = p_d.log().clamp(min=-100.0)
-        log_q: Tensor = (1.0 - p_d).log().clamp(min=-100.0)
-        grad_edge: Tensor = (p_d - y.detach()) / eps
-        edge: Tensor = -(y * log_p + (1.0 - y) * log_q) + (p - p_d) * grad_edge
-        bce: Tensor = _lucid.where(inside, interior, edge)
+    # ``bce_loss`` is ``KEEP`` on Metal and ``FP32`` on CPU, so ``_autocast_entry``
+    # casts CPU bfloat16 operands to float32 while leaving Metal float16
+    # operands at float16 (with autocast suspended inside so ``_reduce``
+    # rounds back to ``out_dtype``).
+    ops = [_unwrap(x), _unwrap(target)] + ([] if weight is None else [_unwrap(weight)])
+    with _autocast_entry("bce_loss", *ops) as cast_ops:
+        x, target = _wrap(cast_ops[0]), _wrap(cast_ops[1])
         if weight is not None:
-            bce = bce * weight
-        return _reduce(bce, reduction, out_dtype)
+            weight = _wrap(cast_ops[2])
+        out_dtype = x.dtype
+        acc = _accumulation_dtype(x)
+        with _float32_scope():
+            p, y = x.to(dtype=acc), target.to(dtype=acc)
+            # The floor is 1e-12, or 1 / 65504 for a float16 input: a float16
+            # gradient of 1e12 is inf and sends ``inf * 0 = NaN`` to saturated logits.
+            eps: float = max(1e-12, 1.0 / float(_finfo(out_dtype).max))
+            p_d: Tensor = p.detach()
+            inside: Tensor = p_d * (1.0 - p_d) >= eps
+            p_in: Tensor = _lucid.where(inside, p, _lucid.full_like(p_d, 0.5))
+            interior: Tensor = -(y * p_in.log() + (1.0 - y) * (1.0 - p_in).log())
+            log_p: Tensor = p_d.log().clamp(min=-100.0)
+            log_q: Tensor = (1.0 - p_d).log().clamp(min=-100.0)
+            grad_edge: Tensor = (p_d - y.detach()) / eps
+            edge: Tensor = -(y * log_p + (1.0 - y) * log_q) + (p - p_d) * grad_edge
+            bce: Tensor = _lucid.where(inside, interior, edge)
+            if weight is not None:
+                bce = bce * weight.to(dtype=acc)
+            return _reduce(bce, reduction, out_dtype)
 
 
 def binary_cross_entropy_with_logits(
@@ -1590,44 +1587,63 @@ def poisson_nll_loss(
     _check_reduction(reduction, "poisson_nll_loss")
     x, target = _operands("poisson_nll_loss", input, target)
     _check_target(x, target, "poisson_nll_loss")
-    xi = _unwrap(x)
-    ti = _unwrap(target)
-    if log_input:
-        # Formula — exp(x) - target * x
-        loss = _C_engine.sub(_C_engine.exp(xi), _C_engine.mul(ti, xi))
-    else:
-        # Formula — x - target * log(x + eps)
-        log_xeps = _C_engine.log(
-            _C_engine.add(xi, _C_engine.full(xi.shape, eps, xi.dtype, xi.device))
-        )
-        loss = _C_engine.sub(xi, _C_engine.mul(ti, log_xeps))
+    with _autocast_entry("poisson_nll_loss", _unwrap(x), _unwrap(target)) as (xi, ti):
+        if log_input:
+            # Formula — exp(x) - target * x
+            loss = _C_engine.sub(_C_engine.exp(xi), _C_engine.mul(ti, xi))
+        else:
+            # Formula — x - target * log(x + eps)
+            log_xeps = _C_engine.log(
+                _C_engine.add(xi, _C_engine.full(xi.shape, eps, xi.dtype, xi.device))
+            )
+            loss = _C_engine.sub(xi, _C_engine.mul(ti, log_xeps))
 
-    if full:
-        # ``full`` was accepted and did nothing: passing it changed the
-        # answer by exactly zero.  The term it names is Stirling's
-        # approximation to the ``log(target!)`` that the non-full form
-        # drops as constant in the parameters —
-        #
-        #     target·log(target) − target + ½·log(2π·target)
-        #
-        # applied only where ``target > 1``, since at 0 and 1 the true
-        # ``log(target!)`` is 0 and the approximation is not.
-        one = _C_engine.full(ti.shape, 1.0, ti.dtype, ti.device)
-        safe = _C_engine.maximum(ti, one)  # keeps log finite at target == 0
-        two_pi_safe = _C_engine.mul(
-            _C_engine.full(ti.shape, 2.0 * math.pi, ti.dtype, ti.device), safe
-        )
-        stirling = _C_engine.add(
-            _C_engine.sub(_C_engine.mul(safe, _C_engine.log(safe)), safe),
-            _C_engine.mul(
-                _C_engine.full(ti.shape, 0.5, ti.dtype, ti.device),
-                _C_engine.log(two_pi_safe),
-            ),
-        )
-        zero = _C_engine.zeros(ti.shape, ti.dtype, ti.device)
-        loss = _C_engine.add(loss, _C_engine.where(_C_engine.greater(ti, one), stirling, zero))
+        if full:
+            # ``full`` was accepted and did nothing: passing it changed the
+            # answer by exactly zero.  The term it names is Stirling's
+            # approximation to the ``log(target!)`` that the non-full form
+            # drops as constant in the parameters —
+            #
+            #     target·log(target) − target + ½·log(2π·target)
+            #
+            # applied only where ``target > 1``, since at 0 and 1 the true
+            # ``log(target!)`` is 0 and the approximation is not.
+            one = _C_engine.full(ti.shape, 1.0, ti.dtype, ti.device)
+            safe = _C_engine.maximum(ti, one)  # keeps log finite at target == 0
+            two_pi_safe = _C_engine.mul(
+                _C_engine.full(ti.shape, 2.0 * math.pi, ti.dtype, ti.device), safe
+            )
+            stirling = _C_engine.add(
+                _C_engine.sub(_C_engine.mul(safe, _C_engine.log(safe)), safe),
+                _C_engine.mul(
+                    _C_engine.full(ti.shape, 0.5, ti.dtype, ti.device),
+                    _C_engine.log(two_pi_safe),
+                ),
+            )
+            zero = _C_engine.zeros(ti.shape, ti.dtype, ti.device)
+            loss = _C_engine.add(
+                loss, _C_engine.where(_C_engine.greater(ti, one), stirling, zero)
+            )
 
-    return _reduce(_wrap(loss), reduction)
+        return _reduce(_wrap(loss), reduction)
+
+
+def _align_gaussian_var(x: Tensor, var: Tensor | float) -> Tensor:
+    """Materialise and broadcast-align ``var`` to ``x`` for :func:`gaussian_nll_loss`."""
+    if isinstance(var, (int, float)):
+        if var < 0:
+            raise ValueError("var has negative entry/entries")
+        var = _lucid.full_like(x, float(var))
+    if tuple(var.shape) != tuple(x.shape):
+        if tuple(x.shape[:-1]) == tuple(var.shape):
+            var = var.unsqueeze(-1)
+        elif x.ndim != var.ndim or (
+            sum(v for d, v in zip(x.shape, var.shape, strict=True) if d != v) != 1
+        ):
+            raise ValueError("var is of incorrect size")
+    if var.device == "cpu" and _host_read(lambda: bool((var < 0.0).any().item())):
+        raise ValueError("var has negative entry/entries")
+    return var
 
 
 def gaussian_nll_loss(
@@ -1717,48 +1733,25 @@ def gaussian_nll_loss(
     else:
         d = _loss_dtype(x, target)
     x, target = _cast(x, d), _cast(target, d)
-    if isinstance(var, (int, float)):
-        if var < 0:
-            raise ValueError("var has negative entry/entries")
-        var = _lucid.full_like(x, float(var))
-    # The reference's shape rules.  A per-sample variance ``(N,)`` against
-    # an ``(N, D)`` input used to broadcast along the *last* axis — one
-    # variance per feature — and ``(N,)`` against ``(N, D != N)`` failed.
-    if tuple(var.shape) != tuple(x.shape):
-        if tuple(x.shape[:-1]) == tuple(var.shape):
-            var = var.unsqueeze(-1)
-        elif x.ndim == var.ndim and (
-            sum(v for d, v in zip(x.shape, var.shape, strict=True) if d != v) == 1
-        ):
-            pass
-        else:
-            raise ValueError("var is of incorrect size")
-
-    if var.device == "cpu" and _host_read(lambda: bool((var < 0.0).any().item())):
-        raise ValueError("var has negative entry/entries")
-
-    # Clamped at ``eps`` in value, not in gradient: the reference clamps a
-    # copy under ``no_grad``, so the gradient flows to ``var`` unchanged.
-    # ``maximum(var, eps)`` gave every variance below ``eps`` a zero
-    # gradient, and a variance head that collapsed there stayed there.
-    # Written without a comparison: a compiled autocast step makes a bare
-    # scalar a float16 constant, and comparing a float32 tensor with one
-    # aborts the graph compiler.
-    var_d: Tensor = var.detach()
-    var_c: Tensor = var + (var_d.clamp(min=eps) - var_d)
-    loss: Tensor = 0.5 * (var_c.log() + (x - target) ** 2 / var_c)
-    if full:
-        # The omitted constant of the Gaussian log-density, 0.5 * log(2 pi)
-        # per element.  It does not change the gradient, but it is what makes
-        # the returned number an actual negative log-likelihood rather than
-        # one shifted by a constant — which matters the moment the value is
-        # compared against another model's or reported as a likelihood.
-        loss = loss + 0.5 * math.log(2.0 * math.pi)
-    if var.device != "cpu":
-        # A negative variance makes the loss NaN on Metal: sqrt(min(v, 0))
-        # is NaN exactly there and 0 elsewhere, off the graph.
-        loss = loss + var_d.clamp(max=0.0).sqrt() * 0.0
-    return _reduce(loss, reduction)
+    ops = [_unwrap(x), _unwrap(target)] + (
+        [_unwrap(var)] if isinstance(var, _lucid.Tensor) else []
+    )
+    with _autocast_entry("gaussian_nll_loss", *ops) as cast_ops:
+        x, target = _wrap(cast_ops[0]), _wrap(cast_ops[1])
+        var_t = _align_gaussian_var(
+            x, _wrap(cast_ops[2]) if isinstance(var, _lucid.Tensor) else var
+        )
+        # Clamped at ``eps`` in value, not in gradient: the reference clamps a
+        # copy under ``no_grad``, so the gradient flows to ``var`` unchanged.
+        var_d: Tensor = var_t.detach()
+        var_c: Tensor = var_t + (var_d.clamp(min=eps) - var_d)
+        loss: Tensor = 0.5 * (var_c.log() + (x - target) ** 2 / var_c)
+        if full:
+            loss = loss + 0.5 * math.log(2.0 * math.pi)
+        if var_t.device != "cpu":
+            # Negative variance makes the loss NaN on Metal off the graph.
+            loss = loss + var_d.clamp(max=0.0).sqrt() * 0.0
+        return _reduce(loss, reduction)
 
 
 def ctc_loss(
@@ -2207,7 +2200,12 @@ def soft_margin_loss(
     _check_reduction(reduction, "soft_margin_loss")
     input, target = _operands("soft_margin_loss", input, target, promote=False)
     _check_target(input, target, "soft_margin_loss")
-    return _reduce(_lucid.nn.functional.softplus(-target * input), reduction)
+    with _autocast_entry("soft_margin_loss", _unwrap(input), _unwrap(target)) as (
+        xi,
+        ti,
+    ):
+        input, target = _wrap(xi), _wrap(ti)
+        return _reduce(_lucid.nn.functional.softplus(-target * input), reduction)
 
 
 def multilabel_soft_margin_loss(

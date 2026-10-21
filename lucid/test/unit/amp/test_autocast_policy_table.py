@@ -453,6 +453,57 @@ _CASES: dict[str, _Case] = {
     "stack": _Case(lambda lib, F, m: lib.stack([m(4), m(4)])),
     # WIDEST on Metal, LOWER on the CPU.
     "tensordot": _Case(lambda lib, F, m: lib.tensordot(m(3, 4), m(4, 2), 1)),
+    # ── Python composites wired via _autocast_entry (A1) ─────────────
+    "adaptive_avg_pool3d": _cpu(
+        lambda lib, F, m: F.adaptive_avg_pool3d(m(1, 2, 5, 5, 5), 2)
+    ),
+    "adaptive_max_pool3d": _cpu(
+        lambda lib, F, m: F.adaptive_max_pool3d(m(1, 2, 5, 5, 5), 2)
+    ),
+    "addbmm": _Case(lambda lib, F, m: lib.addbmm(m(3, 2), m(1, 3, 4), m(1, 4, 2))),
+    "addmm": _Case(lambda lib, F, m: lib.addmm(m(3, 2), m(3, 4), m(4, 2))),
+    "addmv": _Case(lambda lib, F, m: lib.addmv(m(3), m(3, 4), m(4))),
+    "addr": _Case(lambda lib, F, m: lib.addr(m(3, 4), m(3), m(4))),
+    "baddbmm": _Case(lambda lib, F, m: lib.baddbmm(m(1, 3, 2), m(1, 3, 4), m(1, 4, 2))),
+    "bce_loss": _Case(lambda lib, F, m: F.binary_cross_entropy(m.unit(4), m.unit(4))),
+    "cdist": _Case(lambda lib, F, m: lib.cdist(m(3, 4), m(2, 4))),
+    "fractional_max_pool2d": _cpu(
+        lambda lib, F, m: F.fractional_max_pool2d(m(1, 1, 8, 8), 2, output_size=4)
+    ),
+    "fractional_max_pool3d": _cpu(
+        lambda lib, F, m: F.fractional_max_pool3d(m(1, 1, 8, 8, 8), 2, output_size=4)
+    ),
+    "gaussian_nll_loss": _Case(
+        lambda lib, F, m: F.gaussian_nll_loss(m(4), m(4), m(4, pos=True))
+    ),
+    "instance_norm": _Case(lambda lib, F, m: F.instance_norm(m(2, 3, 4))),
+    "lstsq": _cpu(lambda lib, F, m: lib.linalg.lstsq(m.spd(3), m(3, 1))[0]),
+    "matrix_norm": _Case(lambda lib, F, m: lib.linalg.matrix_norm(m(3, 3))),
+    "max_unpool2d": _cpu(
+        lambda lib, F, m: F.max_unpool2d(
+            *F.max_pool2d(m(1, 1, 4, 4), 2, return_indices=True), 2
+        )
+    ),
+    "max_unpool3d": _cpu(
+        lambda lib, F, m: F.max_unpool3d(
+            m(1, 1, 2, 2, 2),
+            m.ints([[[[[0, 1], [8, 9]], [[32, 33], [40, 41]]]]]),
+            2,
+        )
+    ),
+    "mv": _Case(lambda lib, F, m: lib.mv(m(3, 4), m(4))),
+    "nanquantile": _cpu(lambda lib, F, m: lib.nanquantile(m(4), 0.5)),
+    "poisson_nll_loss": _Case(
+        lambda lib, F, m: F.poisson_nll_loss(m(4), m(4, pos=True))
+    ),
+    "prelu": _Case(lambda lib, F, m: F.prelu(m(1, 2, 3), m(2))),
+    "quantile": _cpu(lambda lib, F, m: lib.quantile(m(4), 0.5)),
+    "soft_margin_loss": _Case(
+        lambda lib, F, m: F.soft_margin_loss(m(4), m.signs(4))
+    ),
+    "softplus": _Case(lambda lib, F, m: F.softplus(m(4))),
+    "vecdot": _Case(lambda lib, F, m: lib.linalg.vecdot(m(3, 4), m(3, 4))),
+    "vector_norm": _Case(lambda lib, F, m: lib.linalg.vector_norm(m(4))),
 }
 
 # Ops with no row keep their inputs' dtype — several of them were LOWER or
@@ -495,96 +546,6 @@ _KEEP_CASES: dict[str, _Case] = {
     "vdot": _Case(lambda lib, F, m: lib.vdot(m(4), m(4))),
 }
 
-# Rows the engine does not apply yet, with the card that wires each.  The
-# xfails are strict: wiring a row flips its test.
-_A1 = "LCD-500 A1: Python composite, wired by @amp_op"
-_NOT_WIRED: dict[str, tuple[str, _Case]] = {
-    "adaptive_avg_pool3d": (
-        _A1,
-        _cpu(lambda lib, F, m: F.adaptive_avg_pool3d(m(1, 2, 5, 5, 5), 2)),
-    ),
-    "adaptive_max_pool3d": (
-        _A1,
-        _cpu(lambda lib, F, m: F.adaptive_max_pool3d(m(1, 2, 5, 5, 5), 2)),
-    ),
-    "addbmm": (
-        _A1,
-        _Case(lambda lib, F, m: lib.addbmm(m(3, 2), m(1, 3, 4), m(1, 4, 2))),
-    ),
-    "addmm": (_A1, _Case(lambda lib, F, m: lib.addmm(m(3, 2), m(3, 4), m(4, 2)))),
-    "addmv": (_A1, _Case(lambda lib, F, m: lib.addmv(m(3), m(3, 4), m(4)))),
-    "addr": (_A1, _Case(lambda lib, F, m: lib.addr(m(3, 4), m(3), m(4)))),
-    "baddbmm": (
-        _A1,
-        _Case(lambda lib, F, m: lib.baddbmm(m(1, 3, 2), m(1, 3, 4), m(1, 4, 2))),
-    ),
-    "bce_loss": (
-        _A1,
-        _Case(lambda lib, F, m: F.binary_cross_entropy(m.unit(4), m.unit(4))),
-    ),
-    "cdist": (_A1, _Case(lambda lib, F, m: lib.cdist(m(3, 4), m(2, 4)))),
-    "fractional_max_pool2d": (
-        _A1,
-        _cpu(
-            lambda lib, F, m: F.fractional_max_pool2d(m(1, 1, 8, 8), 2, output_size=4)
-        ),
-    ),
-    "fractional_max_pool3d": (
-        _A1,
-        _cpu(
-            lambda lib, F, m: F.fractional_max_pool3d(
-                m(1, 1, 8, 8, 8), 2, output_size=4
-            )
-        ),
-    ),
-    "gaussian_nll_loss": (
-        _A1,
-        _Case(lambda lib, F, m: F.gaussian_nll_loss(m(4), m(4), m(4, pos=True))),
-    ),
-    "instance_norm": (_A1, _Case(lambda lib, F, m: F.instance_norm(m(2, 3, 4)))),
-    "lstsq": (_A1, _cpu(lambda lib, F, m: lib.linalg.lstsq(m.spd(3), m(3, 1))[0])),
-    "matrix_norm": (_A1, _Case(lambda lib, F, m: lib.linalg.matrix_norm(m(3, 3)))),
-    "max_unpool2d": (
-        _A1,
-        _cpu(
-            lambda lib, F, m: F.max_unpool2d(
-                *F.max_pool2d(m(1, 1, 4, 4), 2, return_indices=True), 2
-            )
-        ),
-    ),
-    "max_unpool3d": (
-        _A1,
-        _cpu(
-            lambda lib, F, m: F.max_unpool3d(
-                m(1, 1, 2, 2, 2),
-                m.ints([[[[[0, 1], [8, 9]], [[32, 33], [40, 41]]]]]),
-                2,
-            )
-        ),
-    ),
-    "mv": (_A1, _Case(lambda lib, F, m: lib.mv(m(3, 4), m(4)))),
-    "nanquantile": (_A1, _cpu(lambda lib, F, m: lib.nanquantile(m(4), 0.5))),
-    "poisson_nll_loss": (
-        _A1,
-        _Case(lambda lib, F, m: F.poisson_nll_loss(m(4), m(4, pos=True))),
-    ),
-    "prelu": (_A1, _Case(lambda lib, F, m: F.prelu(m(1, 2, 3), m(2)))),
-    "quantile": (_A1, _cpu(lambda lib, F, m: lib.quantile(m(4), 0.5))),
-    "soft_margin_loss": (
-        _A1,
-        _Case(lambda lib, F, m: F.soft_margin_loss(m(4), m.signs(4))),
-    ),
-    # The engine softplus follows its row; F.softplus below threshold 50
-    # composes it and multiplies its FP32 result by a KEEP 1 / beta.
-    "softplus": (
-        "LCD-500 A1: F.softplus's composite (threshold < 50) multiplies the FP32 "
-        "engine softplus by a half 1 / beta (activations.py, the `mul` after it)",
-        _Case(lambda lib, F, m: F.softplus(m(4))),
-    ),
-    "vecdot": (_A1, _Case(lambda lib, F, m: lib.linalg.vecdot(m(3, 4), m(3, 4)))),
-    "vector_norm": (_A1, _Case(lambda lib, F, m: lib.linalg.vector_norm(m(4)))),
-}
-
 _POLICY_DTYPE = {
     _P.Promote: lambda autocast_dt, input_dt: autocast_dt,
     _P.ForceFP32: lambda autocast_dt, input_dt: "float32",
@@ -624,13 +585,12 @@ def _check(
     assert got == _want(name, case, device, autocast_dt, input_dt)
 
 
-def test_every_row_has_a_case_or_a_strict_xfail() -> None:
-    covered = set(_CASES) | set(_NOT_WIRED) | _ENGINE_ONLY
+def test_every_row_has_a_case() -> None:
+    covered = set(_CASES) | _ENGINE_ONLY
     assert set(_rows()) == covered, {
         "rows without a case": set(_rows()) - covered,
         "cases without a row": covered - set(_rows()),
     }
-    assert not set(_CASES) & set(_NOT_WIRED)
     assert not set(_KEEP_CASES) & set(_rows())
 
 
@@ -650,24 +610,6 @@ def test_an_op_without_a_row_keeps_its_dtype(
     name: str, device: str, autocast_dt: str, input_dt: str
 ) -> None:
     _check(name, _KEEP_CASES[name], device, autocast_dt, input_dt)
-
-
-def _not_wired_params() -> list[Any]:
-    return [
-        pytest.param(name, marks=pytest.mark.xfail(strict=True, reason=reason))
-        for name, (reason, _) in sorted(_NOT_WIRED.items())
-    ]
-
-
-@pytest.mark.parametrize("name", _not_wired_params())
-def test_a_row_not_wired_yet(name: str) -> None:
-    case = _NOT_WIRED[name][1]
-    devices = [d for d in case.devices if d == "cpu" or metal_available()]
-    for device in devices:
-        for input_dt in _INPUTS:
-            got = _run_lucid(case, device, _AUTOCAST_DT[device], input_dt)
-            want = _want(name, case, device, _AUTOCAST_DT[device], input_dt)
-            assert got == want, (device, input_dt)
 
 
 @pytest.mark.parametrize(("device", "autocast_dt"), _SETTINGS)
@@ -714,12 +656,6 @@ _MIXED: dict[str, _MixedFn] = {
     "tensordot": lambda lib, F, h, f: lib.tensordot(h(3, 4), f(4, 2), 1),
 }
 
-_MIXED_NOT_WIRED = {
-    ("index_copy", "cpu"): "LCD-500 A1: index_copy checks one dtype before the engine",
-    ("index_put", "metal"): "LCD-500 A1: index_put checks one dtype before the engine",
-}
-
-
 def _widest_columns() -> list[Any]:
     params = []
     for name, (metal, cpu) in sorted(_rows().items()):
@@ -727,9 +663,6 @@ def _widest_columns() -> list[Any]:
             if policy != _P.PromoteWidest:
                 continue
             marks = [_METAL] if device == "metal" else []
-            reason = _MIXED_NOT_WIRED.get((name, device))
-            if reason is not None:
-                marks.append(pytest.mark.xfail(strict=True, reason=reason))
             params.append(
                 pytest.param(name, device, id=f"{name}-{device}", marks=marks)
             )
@@ -743,7 +676,6 @@ def test_every_widest_row_has_a_mixed_case() -> None:
         if _P.PromoteWidest in (metal, cpu)
     }
     assert widest == set(_MIXED)
-    assert {name for name, _ in _MIXED_NOT_WIRED} <= widest
 
 
 @pytest.mark.parametrize(("name", "device"), _widest_columns())
@@ -993,21 +925,7 @@ def _outcome(fn: Callable[[], Any]) -> str:
 
 
 @pytest.mark.parity
-@pytest.mark.parametrize(
-    "name",
-    [
-        "cross",
-        pytest.param(
-            "vdot",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="LCD-500 A1: lucid.vdot is built on dot, whose dot_1d row is "
-                "WIDEST on Metal; the reference's vdot has no MPS row and refuses the pair "
-                "(AmpPolicyTable.def header)",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("name", ["cross", "vdot"])
 @_METAL
 def test_dropped_metal_rows_meet_a_mixed_pair_as_the_reference_does(
     ref: ModuleType, name: str

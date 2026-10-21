@@ -7,6 +7,8 @@ from typing import Sequence, TYPE_CHECKING
 import lucid
 from lucid import _promotion
 from lucid._C import engine as _C_engine
+from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._autocast import _autocast_entry
 from lucid._types import DeviceLike, DTypeLike
 from lucid._ops.composite.indexing import _scatter_add
 from lucid._ops._dims import _wrap_dim
@@ -189,37 +191,46 @@ def quantile(
     if input.numel() == 0:
         raise _C_engine.InvalidArgument("quantile() input tensor must be non-empty")
     q_list, scalar_q = _parse_q(q)
+    with _autocast_entry("quantile", _unwrap(input)) as (xi,):
+        input = _wrap(xi)
 
-    # A NaN anywhere in the slice poisons its quantile — that is the whole
-    # difference from :func:`nanquantile`, and it has to be stated rather
-    # than left to fall out of the arithmetic.  Sorting puts NaN at the end,
-    # so it only reached the answer when the interpolation position happened
-    # to land beside one (``nan * 0.0`` is still ``NaN``).  Anywhere else it
-    # dropped out silently: 50 samples with three NaNs returned a perfectly
-    # ordinary median where the reference and NumPy both return NaN.
-    if dim is None:
-        flat = input.reshape(-1)
-        sorted_x = lucid.sort(flat)
-        n = flat.shape[0]
-        results = _quantile_sorted(sorted_x, q_list, None, keepdim, interpolation, n)
-        nans = lucid.isnan(flat).sum()
-    else:
-        if input.ndim == 0:
-            # A 0-d tensor's notional axis is the whole of it, with or
-            # without ``keepdim``: the quantile of its one-element view.
-            return quantile(input.reshape(1), q, 0, False, interpolation=interpolation)
-        sorted_x = lucid.sort(input, dim)
-        n = input.shape[dim]
-        results = _quantile_sorted(sorted_x, q_list, dim, keepdim, interpolation, n)
-        nans = lucid.isnan(input).sum(dim=dim, keepdim=keepdim)
-    # An integer input holds no NaN, and an ``interpolation="lower"`` result
-    # of one is an integer tensor that could not hold the NaN fill anyway.
-    if lucid.is_floating_point(input):
-        results = [
-            lucid.where(nans == 0, r, lucid.full_like(r, math.nan)) for r in results
-        ]
+        # A NaN anywhere in the slice poisons its quantile — that is the whole
+        # difference from :func:`nanquantile`, and it has to be stated rather
+        # than left to fall out of the arithmetic.  Sorting puts NaN at the end,
+        # so it only reached the answer when the interpolation position happened
+        # to land beside one (``nan * 0.0`` is still ``NaN``).  Anywhere else it
+        # dropped out silently: 50 samples with three NaNs returned a perfectly
+        # ordinary median where the reference and NumPy both return NaN.
+        if dim is None:
+            flat = input.reshape(-1)
+            sorted_x = lucid.sort(flat)
+            n = flat.shape[0]
+            results = _quantile_sorted(
+                sorted_x, q_list, None, keepdim, interpolation, n
+            )
+            nans = lucid.isnan(flat).sum()
+        else:
+            if input.ndim == 0:
+                # A 0-d tensor's notional axis is the whole of it, with or
+                # without ``keepdim``: the quantile of its one-element view.
+                return quantile(
+                    input.reshape(1), q, 0, False, interpolation=interpolation
+                )
+            sorted_x = lucid.sort(input, dim)
+            n = input.shape[dim]
+            results = _quantile_sorted(
+                sorted_x, q_list, dim, keepdim, interpolation, n
+            )
+            nans = lucid.isnan(input).sum(dim=dim, keepdim=keepdim)
+        # An integer input holds no NaN, and an ``interpolation="lower"`` result
+        # of one is an integer tensor that could not hold the NaN fill anyway.
+        if lucid.is_floating_point(input):
+            results = [
+                lucid.where(nans == 0, r, lucid.full_like(r, math.nan))
+                for r in results
+            ]
 
-    return _pack_quantile_results(results, scalar_q, input.ndim, dim, keepdim)
+        return _pack_quantile_results(results, scalar_q, input.ndim, dim, keepdim)
 
 
 def _pack_quantile_results(
@@ -286,25 +297,27 @@ def nanquantile(
         # No NaN to skip: the plain quantile is the answer.
         return quantile(input, q, dim, keepdim, interpolation=interpolation)
     q_list, scalar_q = _parse_q(q)
-    # The whole tensor is the one slice of its flattening, so it takes the
-    # per-slice path: the count stays a tensor on the device, and an all-NaN
-    # input reads its first NaN with the gradient attached.
-    x, along = (
-        (input.reshape(-1), 0) if dim is None or input.ndim == 0 else (input, dim)
-    )
-    # The engine's sort already puts every NaN after the numbers.
-    sorted_x = lucid.sort(x, along)
-    non_nan_count = (~lucid.isnan(x)).sum(dim=along, keepdim=True).to(x.dtype)
-    results = _nanquantile_along(
-        sorted_x,
-        non_nan_count,
-        q_list,
-        along,
-        keepdim and dim is not None and input.ndim > 0,
-        interpolation,
-    )
+    with _autocast_entry("nanquantile", _unwrap(input)) as (xi,):
+        input = _wrap(xi)
+        # The whole tensor is the one slice of its flattening, so it takes the
+        # per-slice path: the count stays a tensor on the device, and an all-NaN
+        # input reads its first NaN with the gradient attached.
+        x, along = (
+            (input.reshape(-1), 0) if dim is None or input.ndim == 0 else (input, dim)
+        )
+        # The engine's sort already puts every NaN after the numbers.
+        sorted_x = lucid.sort(x, along)
+        non_nan_count = (~lucid.isnan(x)).sum(dim=along, keepdim=True).to(x.dtype)
+        results = _nanquantile_along(
+            sorted_x,
+            non_nan_count,
+            q_list,
+            along,
+            keepdim and dim is not None and input.ndim > 0,
+            interpolation,
+        )
 
-    return _pack_quantile_results(results, scalar_q, input.ndim, dim, keepdim)
+        return _pack_quantile_results(results, scalar_q, input.ndim, dim, keepdim)
 
 
 # ── covariance & correlation ──────────────────────────────────────────────────
@@ -511,8 +524,6 @@ def cdist(
         reference refuses integer, bool and complex inputs — a ``TypeError``
         and a ``RuntimeError``.
     """
-    from lucid._dispatch import _unwrap, _wrap
-
     if compute_mode not in _CDIST_MODES:
         raise _C_engine.InvalidArgument(
             f"possiblemodes: 'use_mm_for_euclid_dist_if_necessary', "
@@ -521,31 +532,35 @@ def cdist(
         )
     for operand in (x1, x2):
         _require_floating(_unwrap(operand), "cdist")
-    if p == 2.0 and compute_mode != "donot_use_mm_for_euclid_dist":
-        # ||a - b||² = ||a||² + ||b||² − 2 a·bᵀ, which never materialises
-        # the (..., P, R, M) difference.
-        x1_sq = (x1 * x1).sum(dim=-1, keepdim=True)  # (..., P, 1)
-        x2_sq = (x2 * x2).sum(dim=-1, keepdim=True)  # (..., R, 1)
-        cross = lucid.matmul(x1, x2.swapaxes(-1, -2))  # (..., P, R)
-        sq = x1_sq + x2_sq.swapaxes(-1, -2) - 2.0 * cross
-        sq = lucid.clamp(sq, 0.0, float("inf"))  # clamp numerical noise
-        # Coincident points — every diagonal entry of cdist(x, x) — sit at
-        # the root's infinite slope; the shared zero-safe root gives them
-        # the 0 subgradient.
-        return _wrap(_zero_safe_root(_unwrap(sq), 2))
-    diff = _unwrap(x1.unsqueeze(-2) - x2.unsqueeze(-3))  # (..., P, R, M)
-    last = [len(diff.shape) - 1]
-    if p == 0.0:
-        # Count the non-zero differences; NaN is not one.
-        abs_diff = _C_engine.abs(diff)
-        counted = _C_engine.logical_and(
-            _C_engine.not_equal(abs_diff, _C_engine.zeros_like(abs_diff)),
-            _C_engine.logical_not(_C_engine.isnan(abs_diff)),
-        )
-        return _wrap(_C_engine.astype(_C_engine.sum(counted, last, False), diff.dtype))
-    # Every other order — 1, inf, and the general p whose root used to give
-    # coincident points a nan gradient — is the shared vector p-norm.
-    return _wrap(_p_norm(diff, float(p), last, False))
+    with _autocast_entry("cdist", _unwrap(x1), _unwrap(x2)) as (x1i, x2i):
+        x1, x2 = _wrap(x1i), _wrap(x2i)
+        if p == 2.0 and compute_mode != "donot_use_mm_for_euclid_dist":
+            # ||a - b||² = ||a||² + ||b||² − 2 a·bᵀ, which never materialises
+            # the (..., P, R, M) difference.
+            x1_sq = (x1 * x1).sum(dim=-1, keepdim=True)  # (..., P, 1)
+            x2_sq = (x2 * x2).sum(dim=-1, keepdim=True)  # (..., R, 1)
+            cross = lucid.matmul(x1, x2.swapaxes(-1, -2))  # (..., P, R)
+            sq = x1_sq + x2_sq.swapaxes(-1, -2) - 2.0 * cross
+            sq = lucid.clamp(sq, 0.0, float("inf"))  # clamp numerical noise
+            # Coincident points — every diagonal entry of cdist(x, x) — sit at
+            # the root's infinite slope; the shared zero-safe root gives them
+            # the 0 subgradient.
+            return _wrap(_zero_safe_root(_unwrap(sq), 2))
+        diff = _unwrap(x1.unsqueeze(-2) - x2.unsqueeze(-3))  # (..., P, R, M)
+        last = [len(diff.shape) - 1]
+        if p == 0.0:
+            # Count the non-zero differences; NaN is not one.
+            abs_diff = _C_engine.abs(diff)
+            counted = _C_engine.logical_and(
+                _C_engine.not_equal(abs_diff, _C_engine.zeros_like(abs_diff)),
+                _C_engine.logical_not(_C_engine.isnan(abs_diff)),
+            )
+            return _wrap(
+                _C_engine.astype(_C_engine.sum(counted, last, False), diff.dtype)
+            )
+        # Every other order — 1, inf, and the general p whose root used to give
+        # coincident points a nan gradient — is the shared vector p-norm.
+        return _wrap(_p_norm(diff, float(p), last, False))
 
 
 # ── bincount ──────────────────────────────────────────────────────────────────

@@ -4080,19 +4080,9 @@ class Tensor:
         >>> bias.addmm(a, b, alpha=2.0).tolist()
         [[2.0, 4.0], [6.0, 8.0]]
         """
-        mm_impl = _C_engine.matmul(mat1._impl, mat2._impl)
-        if alpha != 1.0:
-            a_impl = _C_engine.full(
-                list(mm_impl.shape), alpha, mm_impl.dtype, mm_impl.device
-            )
-            mm_impl = _C_engine.mul(a_impl, mm_impl)
-        self_impl = self._impl
-        if beta != 1.0:
-            b_impl = _C_engine.full(
-                list(self_impl.shape), beta, self_impl.dtype, self_impl.device
-            )
-            self_impl = _C_engine.mul(b_impl, self_impl)
-        return Tensor.__new_from_impl__(_C_engine.add(self_impl, mm_impl))
+        from lucid._ops.composite.blas import addmm as _addmm
+
+        return _addmm(self, mat1, mat2, beta=beta, alpha=alpha)
 
     def bmm(self, mat2: Tensor) -> Tensor:
         r"""Batched matrix multiplication.

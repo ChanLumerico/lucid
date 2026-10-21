@@ -8,7 +8,7 @@ import warnings
 
 import lucid as _l
 from lucid._C import engine as _C_engine
-from lucid._dispatch import _unwrap, _wrap
+from lucid._dispatch import _float_operand, _unwrap, _wrap
 from lucid._ops._autocast import _autocast_entry
 from lucid._ops._dims import _dim_size, _wrap_dim
 from lucid._ops._reduce import (
@@ -514,7 +514,7 @@ def sigmoid(input: Tensor) -> Tensor:
     >>> sigmoid(x)
     tensor([0.1192, 0.5, 0.8808])
     """
-    return _wrap(_C_engine.sigmoid(_unwrap(input)))
+    return _wrap(_C_engine.sigmoid(_float_operand(_unwrap(input))))
 
 
 def tanh(input: Tensor) -> Tensor:
@@ -556,7 +556,7 @@ def tanh(input: Tensor) -> Tensor:
     >>> tanh(x)
     tensor([-0.964, 0., 0.964])
     """
-    return _wrap(_C_engine.tanh(_unwrap(input)))
+    return _wrap(_C_engine.tanh(_float_operand(_unwrap(input))))
 
 
 def _get_softmax_dim(name: str, ndim: int, dim: int | None, stacklevel: int) -> int:
@@ -719,16 +719,14 @@ def softplus(input: Tensor, beta: float = 1.0, threshold: float = 20.0) -> Tenso
     if beta == 1.0 and threshold >= 50.0:
         # Hot-path: the bare engine kernel is already correct here.
         return _wrap(_C_engine.softplus(_unwrap(input)))
-    xi = _unwrap(input)
-    beta_t = _C_engine.full(list(xi.shape), float(beta), xi.dtype, xi.device)
-    threshold_t = _C_engine.full(list(xi.shape), float(threshold), xi.dtype, xi.device)
-    bx = _C_engine.mul(xi, beta_t)
-    # log1p(exp(bx)) / beta — composed because the engine's ``softplus`` is
-    # beta-agnostic.
-    inv_beta = _C_engine.full(list(xi.shape), 1.0 / float(beta), xi.dtype, xi.device)
-    softplus_full = _C_engine.mul(_C_engine.softplus(bx), inv_beta)
-    above = _C_engine.greater(bx, threshold_t)
-    return _wrap(_C_engine.where(above, xi, softplus_full))
+    with _autocast_entry("softplus", _unwrap(input)) as (xi,):
+        beta_t = _C_engine.full(list(xi.shape), float(beta), xi.dtype, xi.device)
+        threshold_t = _C_engine.full(list(xi.shape), float(threshold), xi.dtype, xi.device)
+        bx = _C_engine.mul(xi, beta_t)
+        # log1p(exp(bx)) / beta — composed because the engine's ``softplus`` is beta-agnostic.
+        inv_beta = _C_engine.full(list(xi.shape), 1.0 / float(beta), xi.dtype, xi.device)
+        softplus_full = _C_engine.mul(_C_engine.softplus(bx), inv_beta)
+        return _wrap(_C_engine.where(_C_engine.greater(bx, threshold_t), xi, softplus_full))
 
 
 def relu6(input: Tensor, inplace: bool = False) -> Tensor:
@@ -907,18 +905,17 @@ def prelu(input: Tensor, weight: Tensor) -> Tensor:
     >>> prelu(x, w)
     tensor([-0.5, -0.25, 0., 1.])
     """
-    xi = _unwrap(input)
-    wi = _unwrap(weight)
-    # A per-channel ``(C,)`` slope belongs to dim 1 of an ``(N, C, *)`` input.
-    # Left as a bare vector it would broadcast against the *last* dim instead,
-    # which fails on a feature map (or mixes up channels when that dim is C).
-    if len(wi.shape) == 1 and wi.shape[0] > 1 and len(xi.shape) > 2:
-        wi = _C_engine.reshape(wi, [wi.shape[0]] + [1] * (len(xi.shape) - 2))
-    pos = _C_engine.relu(xi)
-    neg_part = _C_engine.mul(
-        wi, _C_engine.minimum(_C_engine.zeros(xi.shape, xi.dtype, xi.device), xi)
-    )
-    return _wrap(_C_engine.add(pos, neg_part))
+    with _autocast_entry("prelu", _unwrap(input), _unwrap(weight)) as (xi, wi):
+        # A per-channel ``(C,)`` slope belongs to dim 1 of an ``(N, C, *)`` input.
+        # Left as a bare vector it would broadcast against the *last* dim instead,
+        # which fails on a feature map (or mixes up channels when that dim is C).
+        if len(wi.shape) == 1 and wi.shape[0] > 1 and len(xi.shape) > 2:
+            wi = _C_engine.reshape(wi, [wi.shape[0]] + [1] * (len(xi.shape) - 2))
+        pos = _C_engine.relu(xi)
+        neg_part = _C_engine.mul(
+            wi, _C_engine.minimum(_C_engine.zeros(xi.shape, xi.dtype, xi.device), xi)
+        )
+        return _wrap(_C_engine.add(pos, neg_part))
 
 
 def celu(input: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
@@ -1055,7 +1052,9 @@ def tanhshrink(input: Tensor) -> Tensor:
     >>> tanhshrink(x)
     tensor([-1.036, -0.03788, 0., 0.03788, 1.036])
     """
-    xi = _unwrap(input)
+    if input.dtype == _l.bool_:
+        raise TypeError("tanhshrink: bool input is not supported")
+    xi = _float_operand(_unwrap(input))
     return _wrap(_C_engine.sub(xi, _C_engine.tanh(xi)))
 
 
