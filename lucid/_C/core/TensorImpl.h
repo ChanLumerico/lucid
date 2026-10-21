@@ -97,6 +97,8 @@ struct ViewFamily {
     std::vector<std::weak_ptr<TensorImpl>> members;
     // Set for a Metal family only.
     std::optional<Storage> root;
+    // Set when the Metal family backs a leaf's ``.grad`` slot.
+    std::weak_ptr<const TensorImpl> grad_owner;
 };
 
 // Reference-counted tensor implementation owned by every Python-level
@@ -306,8 +308,8 @@ public:
     // root, or copies.  A phantom follows its device, so its views have the
     // strides, and a ``view`` the refusals, of the tensor it stands in for.
     bool views_by_stride() const noexcept {
-        return meta_.device == Device::CPU &&
-               (storage_is_cpu(storage_) || storage_is_phantom(storage_));
+        return storage_is_cpu(storage_) || storage_is_gpu(raw_storage()) ||
+               storage_is_phantom(storage_);
     }
 
     // Predicate: does another live tensor read this one's buffer as a view
@@ -1061,6 +1063,14 @@ public:
     //     been accumulated.
     std::shared_ptr<TensorImpl> grad_to_tensor() const;
 
+    // Updates a GPU gradient slot's array while preserving any live ``.grad``
+    // view-family handle attached to it.
+    static void sync_gpu_grad_slot(GpuStorage& slot, std::shared_ptr<::mlx::core::array> next_arr);
+
+    // Returns a GpuStorage whose array is a fresh shared_ptr without any
+    // GpuGradSlot deleter attached.
+    static Storage detach_gpu_grad_slot(Storage s);
+
     // ---------------------------------------------------------------------------
     // Data operations
     // ---------------------------------------------------------------------------
@@ -1183,6 +1193,7 @@ private:
     // write rather than an in-place op's: no autograd refusals, and with no
     // graph to protect it writes into a Metal shared buffer the root reads.
     void write_gpu_member(const TensorImpl& src, const char* name, bool raw);
+    std::shared_ptr<TensorImpl> gpu_grad_to_tensor(GpuStorage& gpu) const;
 
     // Drops every member's cached elements, and any value a member held
     // before the family formed: the root is being replaced.

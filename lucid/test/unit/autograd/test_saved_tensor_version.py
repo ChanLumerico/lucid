@@ -81,33 +81,17 @@ def test_a_write_through_an_alias_of_the_saved_tensor_is_refused(
             out.backward()
 
 
-def test_zeroing_a_gradient_another_op_saved_is_refused_on_the_cpu() -> None:
+def test_zeroing_a_gradient_another_op_saved_is_refused(device: str) -> None:
     # ``x.grad`` is one tensor while it lives, so the node that read it and
-    # the ``zero_`` that follows touch the same buffer; backward used to
+    # the ``zero_`` that follows touch the same buffer/family; backward used to
     # return ``w.grad == 0`` from the zeroed values.
-    x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True)
+    x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True, device=device)
     (x * 2.0).sum().backward()
-    w = lucid.ones(3, requires_grad=True)
+    w = lucid.ones(3, requires_grad=True, device=device)
     y = (w * x.grad).sum()
     x.grad.zero_()
     with pytest.raises(_C_engine.VersionMismatch):
         y.backward()
-
-
-def test_zeroing_a_gradient_another_op_saved_keeps_its_old_values_on_metal(
-    device_gpu_only: str,
-) -> None:
-    # A metal ``.grad`` hands out a fresh tensor each time and its array is
-    # never written in place, so the node still reads the values it saw:
-    # the gradient is the forward-time one, not the zeroed one.
-    x = lucid.tensor([1.0, 2.0, 3.0], requires_grad=True, device=device_gpu_only)
-    (x * 2.0).sum().backward()
-    w = lucid.ones(3, requires_grad=True, device=device_gpu_only)
-    y = (w * x.grad).sum()
-    x.grad.zero_()
-    y.backward()
-    assert w.grad is not None
-    assert w.grad.tolist() == [2.0, 2.0, 2.0]
 
 
 def test_the_count_moves_without_making_the_tensor_require_grad(device: str) -> None:

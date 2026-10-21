@@ -161,9 +161,7 @@ def test_a_strided_parameter_steps_as_a_dense_one(
     name, kw = case
     init = np.random.default_rng(1).standard_normal(_BASE_SHAPE).astype(np.float32)
     base = lucid.tensor(init.copy(), dtype=dtype).to(device)
-    strided = nn.Parameter(
-        base.t() if device == "cpu" else _view(base, (6, 4), (1, 6), 0)
-    )
+    strided = nn.Parameter(base.t())
     dense = nn.Parameter(lucid.tensor(init.T.copy(), dtype=dtype).to(device))
     opt_strided = getattr(optim, name)([strided], **kw)
     opt_dense = getattr(optim, name)([dense], **kw)
@@ -198,13 +196,12 @@ def _ref_natural_views(x: Any) -> dict[str, list[Any]]:
 @pytest.mark.parametrize("case", _OPTIMIZER_PARAMS)
 @pytest.mark.parametrize("layout_name", list(_LAYOUTS))
 def test_a_parameter_made_from_an_indexed_view_steps_into_its_base(
-    case: tuple[str, dict[str, Any]], layout_name: str, ref: Any
+    case: tuple[str, dict[str, Any]], layout_name: str, device: str, ref: Any
 ) -> None:
-    # What a user writes: the CPU view ops, as in the LCD-476 report.  On
-    # Metal an indexed view is still a copy a Parameter does not alias.
+    # What a user writes: view ops on either CPU or Metal, as in LCD-476/LCD-501.
     name, kw = case
     init = np.random.default_rng(2).standard_normal(_BASE_SHAPE).astype(np.float32)
-    x = lucid.tensor(init.copy())
+    x = lucid.tensor(init.copy()).to(device)
     params = [nn.Parameter(v) for v in _natural_views(x)[layout_name]]
     opt = getattr(optim, name)(params, **kw)
     ref_x = ref.from_numpy(init.copy())
@@ -213,7 +210,7 @@ def test_a_parameter_made_from_an_indexed_view_steps_into_its_base(
     for step in range(_STEPS):
         grads = _grads(step, [tuple(p.shape) for p in params])
         for p, rp, g in zip(params, ref_params, grads, strict=True):
-            p.grad = lucid.tensor(g.copy())
+            p.grad = lucid.tensor(g.copy()).to(device)
             rp.grad = _ref_grad(ref, g, name)
         opt.step()
         ref_opt.step()

@@ -14,9 +14,6 @@ from lucid._ops._dims import _dim_size, _wrap_dim
 from lucid._ops._reduce import (
     _log_softmax_adapter, _require_floating, _softmax_adapter, _softmin_adapter
 )
-from lucid._tensor._metal_views import (
-    _check as _metal_check, write_back as _metal_write_back
-)
 from lucid._types import DTypeLike, GeluApproximate
 from lucid.nn.functional._inplace import _dead_zone_zero, _in_place, _keep_in_graph
 from lucid.nn.functional.normalization import normalize
@@ -80,9 +77,7 @@ def relu(input: Tensor, inplace: bool = False) -> Tensor:
         return _in_place(input, "relu_", relu)
     # No graph to extend: the engine's fused kernel allocates nothing (0.44 ms
     # against 1.51 ms through the graph-preserving path on 64x3x128x128).
-    _metal_check(input)
     _C_engine.relu_(_unwrap(input))
-    _metal_write_back(input)
     return input
 
 

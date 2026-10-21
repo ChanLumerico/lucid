@@ -254,10 +254,11 @@ void check_grad_kind(const ErrorBuilder& err,
 }
 
 Storage grad_slot_buffer(const ErrorBuilder& err, const TensorImpl& g) {
-    if (!storage_is_cpu(g.raw_storage()) && (g.storage_offset() != 0 || !g.is_contiguous()))
+    if (!storage_is_cpu(g.raw_storage()) && g.family_key() == nullptr &&
+        (g.storage_offset() != 0 || !g.is_contiguous()))
         err.not_implemented("a Metal gradient that is a strided view of another tensor's array — "
                             "pass a contiguous copy");
-    return g.storage();
+    return TensorImpl::detach_gpu_grad_slot(g.storage());
 }
 
 // ── Shared ───────────────────────────────────────────────────────────────────

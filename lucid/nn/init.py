@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, ParamSpec, TypeVar
 import lucid as _lucid
 from lucid import _promotion
 from lucid._C import engine as _C_engine
-from lucid._tensor import _metal_views
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -81,12 +80,14 @@ def _fill_from_impl(tensor: Tensor, src_impl: _C_engine.TensorImpl) -> Tensor:
     if reshaped.dtype != tensor._impl.dtype:
         reshaped = _C_engine.astype(reshaped, tensor._impl.dtype)
     with _lucid.no_grad():
-        _metal_views._check(tensor)
-        if tensor._impl.is_aliased():
+        if (
+            tensor._impl.is_aliased()
+            or not tensor.is_contiguous()
+            or tensor._impl.storage_offset_bytes() != 0
+        ):
             _C_engine.assign_inplace(tensor._impl, reshaped, "nn.init")
         else:
             tensor._impl.assign_from(reshaped, "nn.init")
-        _metal_views.write_back(tensor)
     return tensor
 
 

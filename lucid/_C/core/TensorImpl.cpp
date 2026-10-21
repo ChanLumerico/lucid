@@ -385,6 +385,16 @@ struct GradSlotRef {
     void operator()(void*) noexcept { slot.reset(); }
 };
 
+struct GpuGradSlot {
+    std::shared_ptr<::mlx::core::array> arr;
+    std::weak_ptr<TensorImpl> handle;
+    std::shared_ptr<ViewFamily> family;
+    void operator()(void*) noexcept {
+        arr.reset();
+        family.reset();
+    }
+};
+
 // Whether ``a`` and ``b`` share ownership — one control block, whatever
 // address each points at.
 bool same_owner(const std::shared_ptr<std::byte[]>& a, const std::shared_ptr<std::byte[]>& b) {
@@ -458,30 +468,6 @@ void refuse_write_to_leaf_view(const TensorImpl& t, const char* name) {
                                 "the out-of-place form");
 }
 
-// After a write autograd re-derives the members of the written tensor's
-// family that take part in a graph (inplace::rebase_views).  A strided Metal
-// member meets the written one at scattered positions, which the CopySlices
-// node splices on the CPU only so far: refused, rather than left sending its
-// gradient to the values the write replaced.
-void refuse_strided_rederive(const TensorImpl& t,
-                             const std::vector<std::shared_ptr<TensorImpl>>& views,
-                             bool graph,
-                             const char* name) {
-    bool involved = graph || t.requires_grad() || t.grad_fn();
-    bool strided = !t.is_contiguous();
-    for (const auto& m : views) {
-        if (!m->rederived_by_family_writes())
-            continue;
-        involved = involved || m->requires_grad() || m->grad_fn();
-        strided = strided || !m->is_contiguous();
-    }
-    if (involved && strided)
-        ErrorBuilder(name).not_implemented(
-            "an in-place write that autograd records, into a Metal tensor that shares storage "
-            "with a strided view (transposed, or with steps), is not supported yet — clone() "
-            "first, or write under no_grad()");
-}
-
 // Whether a Metal family's root still is the shared buffer ``shared`` its
 // base was built over.
 bool root_is_shared_buffer(const std::optional<SharedStorage>& shared,
@@ -515,6 +501,123 @@ bool stale_gpu_pack(const std::optional<Storage>& packed,
            pg.arr->data_shared_ptr() != rg.arr->data_shared_ptr();
 }
 
+TensorImplPtr trace_gpu_op(compile::Tracer& trc,
+                           std::string_view op,
+                           const std::vector<TensorImplPtr>& inputs,
+                           ::mlx::core::array arr,
+                           const Shape& shape,
+                           Dtype dt) {
+    auto out = std::make_shared<TensorImpl>(Storage{gpu::wrap_mlx_array(std::move(arr), dt)}, shape,
+                                            dt, Device::GPU, false);
+    trc.on_op_enter(op, Device::GPU, dt, shape);
+    if (op == "scatter_set")
+        trc.on_op_attr("dim", static_cast<std::int64_t>(0));
+    trc.on_op_io(inputs, out);
+    return out;
+}
+
+void trace_gpu_member_write(const TensorImpl& dst,
+                            const TensorImpl& src,
+                            const ::mlx::core::array& root_arr,
+                            const ::mlx::core::array& val_arr,
+                            const ::mlx::core::array& next,
+                            const gpu_strided::Geometry& g) {
+    auto* trc = compile::current_tracer();
+    if (!trc)
+        return;
+    auto from = std::const_pointer_cast<TensorImpl>(src.weak_from_this().lock());
+    if (!from)
+        return;
+    const auto root_numel = static_cast<std::int64_t>(root_arr.size());
+    const Dtype dt = dst.dtype();
+    for (const auto& m : dst.live_views()) {
+        if (m->storage_offset() != 0 || !m->is_contiguous() || m->nbytes() != root_arr.nbytes())
+            continue;
+        if (g.covers(root_numel)) {
+            TensorImplPtr next_m =
+                m->shape() == from->shape()
+                    ? from
+                    : trace_gpu_op(*trc, "reshape", {from},
+                                   ::mlx::core::reshape(next, gpu_strided::to_mlx(m->shape())),
+                                   m->shape(), dt);
+            trc->on_inplace_write(m, next_m);
+        } else if (g.numel > 0) {
+            const Shape flat_shape{root_numel};
+            const Shape src_flat_shape{g.numel};
+            TensorImplPtr flat_m =
+                m->shape() == flat_shape
+                    ? m
+                    : trace_gpu_op(*trc, "reshape", {m}, ::mlx::core::flatten(root_arr), flat_shape,
+                                   dt);
+            TensorImplPtr flat_src =
+                from->is_contiguous()
+                    ? from
+                    : trace_gpu_op(*trc, "contiguous", {from}, ::mlx::core::contiguous(val_arr),
+                                   from->shape(), dt);
+            if (flat_src->shape() != src_flat_shape)
+                flat_src = trace_gpu_op(*trc, "reshape", {flat_src},
+                                        ::mlx::core::reshape(::mlx::core::contiguous(val_arr),
+                                                             {static_cast<int>(g.numel)}),
+                                        src_flat_shape, dt);
+            ::mlx::core::array pos_arr = gpu_strided::positions(g, root_numel);
+            const Dtype idx_dt = pos_arr.dtype() == ::mlx::core::int64 ? Dtype::I64 : Dtype::I32;
+            auto idx_impl = std::make_shared<TensorImpl>(
+                Storage{gpu::wrap_mlx_array(std::move(pos_arr), idx_dt)}, src_flat_shape, idx_dt,
+                Device::GPU, false);
+            TensorImplPtr flat_next = trace_gpu_op(
+                *trc, "scatter_set", {flat_m, idx_impl, flat_src},
+                ::mlx::core::reshape(next, {static_cast<int>(root_numel)}), flat_shape, dt);
+            TensorImplPtr next_m =
+                m->shape() == flat_shape
+                    ? flat_next
+                    : trace_gpu_op(*trc, "reshape", {flat_next},
+                                   ::mlx::core::reshape(next, gpu_strided::to_mlx(m->shape())),
+                                   m->shape(), dt);
+            trc->on_inplace_write(m, next_m);
+        }
+    }
+}
+
+void rebind_gpu_grad_slot(const std::shared_ptr<ViewFamily>& family,
+                          const std::shared_ptr<::mlx::core::array>& root_arr) {
+    auto owner = family->grad_owner.lock();
+    if (!owner || !owner->grad_storage().has_value())
+        return;
+    auto& slot = const_cast<std::optional<Storage>&>(owner->grad_storage());
+    auto* slot_gpu = std::get_if<GpuStorage>(&*slot);
+    if (!slot_gpu || !slot_gpu->arr)
+        return;
+    if (auto* owned = std::get_deleter<GpuGradSlot>(slot_gpu->arr);
+        owned && owned->family == family) {
+        const std::shared_ptr<void> record(nullptr, GpuGradSlot{root_arr, owned->handle, family});
+        slot_gpu->arr = std::shared_ptr<::mlx::core::array>(record, root_arr.get());
+    }
+}
+
+void check_write_through_target(const TensorImpl& dst, const TensorImpl& src, const char* name) {
+    if (src.shape() != dst.shape())
+        throw ShapeMismatch(dst.shape(), src.shape(),
+                            std::string(name) + " (in-place: shape changed)");
+    if (src.dtype() != dst.dtype())
+        ErrorBuilder(name).fail("an in-place write cannot change the dtype of a tensor that "
+                                "shares storage with a live view — cast first, or use the "
+                                "out-of-place form");
+}
+
+void check_cpu_write_through_target(const TensorImpl& dst,
+                                    const Storage& dst_storage,
+                                    const Storage& src_storage,
+                                    long members,
+                                    const char* name) {
+    if (!storage_is_cpu(dst_storage) || !storage_is_cpu(src_storage))
+        ErrorBuilder(name).not_implemented("writing through a view is only supported on the CPU");
+    refuse_ambiguous_write(dst, name);
+    if (gradient_slot_write(dst_storage, members) == SlotWrite::kRefused)
+        refuse_shared_gradient_write(name);
+    if (GradMode::is_enabled() && !dst.is_detached_alias())
+        refuse_write_to_leaf_view(dst, name);
+}
+
 }  // namespace
 
 bool TensorImpl::write_lands_in_buffer() const {
@@ -537,10 +640,12 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
     // real tensor refuses a phantom result here, before any change.
     if (absorbs_phantom_write(storage_, out.raw_storage(), name))
         return;
-    // The last Metal member left has no one to share the write with: it
-    // takes the result as its own storage below, as any Metal tensor does
-    // (a dtype-changing op included).
-    if (gpu_member() && !is_aliased())
+    // The last Metal member left has no one to share the write with: when it
+    // covers the whole root, it takes the result as its own storage below, as
+    // any Metal tensor does (a dtype-changing op included).  A strided or
+    // offset view whose base was collected keeps its family so its strides,
+    // storage_offset, and allocation capacity survive the write.
+    if (gpu_member() && !is_aliased() && covers_root())
         leave_family();
     // A tensor read from ``.grad`` writes into its gradient's buffer: a new
     // slot of its own would leave the gradient as it was.
@@ -569,14 +674,8 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
         write_through(out, name);
         return;
     }
-    if (family_ && !is_aliased()) {
-        if (const auto carried =
-                static_cast<std::int64_t>(family_->version.load(std::memory_order_relaxed));
-            carried > 0)
-            ensure_autograd()->version += carried;
-        family_.reset();
-        view_ancestors_.clear();
-    }
+    if (family_)
+        leave_family();
     if (out.gpu_member()) {
         // ``out`` reads a family's root: take its elements, laid out densely.
         storage_ = out.storage();
@@ -680,12 +779,7 @@ std::vector<std::shared_ptr<TensorImpl>> TensorImpl::live_views() const {
 }
 
 void TensorImpl::write_through(const TensorImpl& src, const char* name) {
-    if (src.shape() != shape())
-        throw ShapeMismatch(shape(), src.shape(), std::string(name) + " (in-place: shape changed)");
-    if (src.dtype() != dtype())
-        ErrorBuilder(name).fail("an in-place write cannot change the dtype of a tensor that "
-                                "shares storage with a live view — cast first, or use the "
-                                "out-of-place form");
+    check_write_through_target(*this, src, name);
     // Before the trace learns of the write: a refused one never happened.
     if (absorbs_phantom_write(storage_, src.raw_storage(), name))
         return bump_version();
@@ -694,14 +788,8 @@ void TensorImpl::write_through(const TensorImpl& src, const char* name) {
         write_gpu_member(src, name, /*raw=*/false);
         return;
     }
-    if (!storage_is_cpu(storage_) || !storage_is_cpu(src.storage_))
-        ErrorBuilder(name).not_implemented("writing through a view is only supported on the CPU");
-    refuse_ambiguous_write(*this, name);
     const long members = family_ ? family_.use_count() : 1;
-    if (gradient_slot_write(storage_, members) == SlotWrite::kRefused)
-        refuse_shared_gradient_write(name);
-    if (GradMode::is_enabled() && !is_detached_alias())
-        refuse_write_to_leaf_view(*this, name);
+    check_cpu_write_through_target(*this, storage_, src.storage_, members, name);
     auto& dst = std::get<CpuStorage>(storage_);
     const auto& from = std::get<CpuStorage>(src.storage_);
     // The op handed back this very buffer (a no-op for this dtype): the
@@ -744,9 +832,7 @@ void TensorImpl::write_gpu_member(const TensorImpl& src, const char* name, bool 
     refuse_ambiguous_write(*this, name);
     const bool graph = src.requires_grad() || src.grad_fn();
     if (!raw && GradMode::is_enabled() && !is_detached_alias()) {
-        const auto views = live_views();
         refuse_write_to_leaf_view(*this, name);
-        refuse_strided_rederive(*this, views, graph, name);
     }
     const auto& value = std::get<GpuStorage>(src.readable());
     auto& root = std::get<GpuStorage>(*family_->root);
@@ -754,6 +840,7 @@ void TensorImpl::write_gpu_member(const TensorImpl& src, const char* name, bool 
         ErrorBuilder(name).fail("a Metal tensor without an array");
     const gpu_strided::Geometry g(meta_.shape, meta_.stride, offset_, dtype_size(meta_.dtype));
     ::mlx::core::array next = gpu_strided::write(*root.arr, *value.arr, g);
+    trace_gpu_member_write(*this, src, *root.arr, *value.arr, next, g);
     // The family was built over a Metal shared buffer that the root still
     // reads.  With no graph to protect — a node's snapshot reads the same
     // bytes — the values go into that buffer, so its CPU alias sees them as
@@ -768,6 +855,7 @@ void TensorImpl::write_gpu_member(const TensorImpl& src, const char* name, bool 
     } else {
         root.arr = gpu::wrap_mlx_array(std::move(next), meta_.dtype).arr;
     }
+    rebind_gpu_grad_slot(family_, root.arr);
     drop_family_caches();
     bump_version();
 }
@@ -1678,15 +1766,9 @@ std::shared_ptr<TensorImpl> TensorImpl::grad_to_tensor() const {
         return autograd_->grad_impl;
     if (!autograd_->grad.has_value())
         return nullptr;
-    // Wrap the accumulated grad Storage as a leaf TensorImpl with the same
-    // shape/dtype/device as ``this``.  No data copy — the impl reads the
-    // slot's buffer.  On the CPU it reads it through a pointer of its own,
-    // and the same impl comes back while it lives (see GradSlot).
-    //
-    // The slot is const here only as the rest of ``this`` is: its buffer and
-    // values stay as they are, and what changes, once, is the pointer it
-    // holds them through — which gains a record of the impl handed out.
     auto& slot = const_cast<std::optional<Storage>&>(autograd_->grad);
+    if (auto* gpu = std::get_if<GpuStorage>(&*slot); gpu && gpu->arr)
+        return gpu_grad_to_tensor(*gpu);
     auto* cpu = std::get_if<CpuStorage>(&*slot);
     if (cpu == nullptr || !cpu->ptr)
         return std::make_shared<TensorImpl>(*slot, meta_.shape, meta_.dtype, meta_.device, false);
@@ -1712,6 +1794,67 @@ std::shared_ptr<TensorImpl> TensorImpl::grad_to_tensor() const {
                                           meta_.device, false);
     owned->handle = h;
     return h;
+}
+
+std::shared_ptr<TensorImpl> TensorImpl::gpu_grad_to_tensor(GpuStorage& gpu) const {
+    auto* owned = std::get_deleter<GpuGradSlot>(gpu.arr);
+    if (owned != nullptr && owned->family && owned->family->root.has_value()) {
+        std::get<GpuStorage>(*owned->family->root).arr = owned->arr;
+        if (auto h = owned->handle.lock()) {
+            if (h->family_ == owned->family && h->storage_offset() == 0 && h->is_contiguous() &&
+                h->shape() == meta_.shape && h->dtype() == meta_.dtype)
+                return h;
+        }
+    }
+    const std::shared_ptr<::mlx::core::array> raw_arr = owned != nullptr ? owned->arr : gpu.arr;
+    GpuStorage root_gpu = gpu;
+    root_gpu.arr = raw_arr;
+    auto fam = std::make_shared<ViewFamily>();
+    fam->nbytes = gpu.nbytes;
+    fam->root = Storage{std::move(root_gpu)};
+    fam->grad_owner = weak_from_this();
+    auto h = std::make_shared<TensorImpl>(gpu_placeholder(meta_.dtype), meta_.shape, meta_.dtype,
+                                          meta_.device, false);
+    h->family_ = fam;
+    fam->members.push_back(h);
+    const std::shared_ptr<void> record(nullptr, GpuGradSlot{raw_arr, h, fam});
+    gpu.arr = std::shared_ptr<::mlx::core::array>(record, raw_arr.get());
+    return h;
+}
+
+void TensorImpl::sync_gpu_grad_slot(GpuStorage& slot,
+                                    std::shared_ptr<::mlx::core::array> next_arr) {
+    if (auto* owned = slot.arr ? std::get_deleter<GpuGradSlot>(slot.arr) : nullptr) {
+        if (owned->family && owned->family->root.has_value()) {
+            std::get<GpuStorage>(*owned->family->root).arr = next_arr;
+            owned->family->version.fetch_add(1, std::memory_order_relaxed);
+            std::vector<std::shared_ptr<TensorImpl>> members;
+            {
+                std::lock_guard<std::mutex> lock(owned->family->mu);
+                for (const auto& w : owned->family->members)
+                    if (auto m = w.lock())
+                        members.push_back(std::move(m));
+            }
+            for (const auto& m : members) {
+                std::lock_guard<std::mutex> lock(m->packed_mu_);
+                m->packed_.reset();
+                m->packed_root_.reset();
+            }
+        }
+        const std::shared_ptr<void> record(nullptr,
+                                           GpuGradSlot{next_arr, owned->handle, owned->family});
+        slot.arr = std::shared_ptr<::mlx::core::array>(record, next_arr.get());
+    } else {
+        slot.arr = std::move(next_arr);
+    }
+}
+
+Storage TensorImpl::detach_gpu_grad_slot(Storage s) {
+    if (auto* gpu = std::get_if<GpuStorage>(&s); gpu && gpu->arr) {
+        if (auto* owned = std::get_deleter<GpuGradSlot>(gpu->arr))
+            gpu->arr = owned->arr;
+    }
+    return s;
 }
 
 std::string
@@ -2114,7 +2257,7 @@ void TensorImpl::accumulate_grad_impl(std::shared_ptr<TensorImpl> g) {
         return;
     ensure_autograd();
     if (!autograd_->grad_impl && autograd_->grad.has_value()) {
-        Storage prev = std::move(*autograd_->grad);
+        Storage prev = detach_gpu_grad_slot(std::move(*autograd_->grad));
         autograd_->grad.reset();
         if (auto* cpu = std::get_if<CpuStorage>(&prev); cpu && cpu->ptr) {
             if (auto* owned = std::get_deleter<GradSlot>(cpu->ptr))

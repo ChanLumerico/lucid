@@ -134,6 +134,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - expose view-family id for Metal storage sharing
 
+- strided Metal view families, grad slot, and _metal_views removal
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

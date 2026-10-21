@@ -51,8 +51,8 @@ TEST(StorageWindowTest, BlockViewPreservesDenseHandleAndAllocationFrame) {
     EXPECT_TRUE(nested->is_dense());
     EXPECT_TRUE(nested->is_aliased());
     root->bump_version();
-    EXPECT_EQ(row1->version(), root->version());
-    EXPECT_EQ(nested->version(), root->version());
+    EXPECT_EQ(row1->version(), 1);
+    EXPECT_EQ(nested->version(), 1);
 
     auto strided = TensorImpl::make_view(row1, {3}, {2 * static_cast<std::int64_t>(sizeof(float))},
                                          sizeof(float));
@@ -72,7 +72,7 @@ TEST(StorageWindowTest, MakeAllocationViewReachesRootFromNarrowedBlock) {
     EXPECT_EQ(win->allocation_base(), root->allocation_base());
     EXPECT_TRUE(win->is_aliased());
     win->bump_version();
-    EXPECT_EQ(root->version(), win->version());
+    EXPECT_EQ(root->version(), 1);
 
     const auto& cpu = std::get<CpuStorage>(win->raw_storage());
     const auto* vals = reinterpret_cast<const float*>(cpu.ptr.get() + win->storage_offset());

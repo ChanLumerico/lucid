@@ -58,7 +58,7 @@ class dtype:
         """
         self._name = name
         self._engine = engine_dtype
-        self.itemsize = itemsize
+        self.itemsize = itemsize if itemsize else _C_engine.dtype_size(engine_dtype)
 
     @override
     def __repr__(self) -> str:

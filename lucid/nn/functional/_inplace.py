@@ -12,8 +12,6 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from lucid._ops.composite.indexing import _write_inplace
-from lucid._tensor._metal_views import _check as _metal_check
-from lucid._tensor._metal_views import write_back as _metal_write_back
 
 if TYPE_CHECKING:
     from lucid._C import engine as _C_engine
@@ -30,8 +28,7 @@ def _in_place(x: Tensor, name: str, out_of_place: Callable[[Tensor], Tensor]) ->
     * ``x`` takes the result's place in the autograd graph, so the gradient
       that reaches whatever produced ``x`` is the op's own derivative.
     * The values land in ``x``'s buffer when a view shares it, so the view's
-      base sees them; on Metal, where a view is a value of its own, the
-      write is carried back to the base (``lucid._tensor._metal_views``).
+      base sees them on both CPU and Metal.
 
     Parameters
     ----------
@@ -53,9 +50,7 @@ def _in_place(x: Tensor, name: str, out_of_place: Callable[[Tensor], Tensor]) ->
         ``x`` is, or is a view of, a leaf that requires grad while autograd
         records; or ``x``'s elements overlap (an expanded view).
     """
-    _metal_check(x)
     _write_inplace(x, name, out_of_place)
-    _metal_write_back(x)
     return x
 
 

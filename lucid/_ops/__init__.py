@@ -339,6 +339,8 @@ def _make_free_fn(name: str) -> object:
         if e.returns_tensor:
             if isinstance(result, (list, tuple)):
                 return type(result)(_wrap(r) for r in result)
+            if proc and result is proc[0]:
+                return args[0]
             return _wrap(result)
         return result
 

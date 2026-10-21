@@ -28,7 +28,6 @@ from types import ModuleType
 import pytest
 
 import lucid
-from lucid.test._fixtures.devices import metal_available
 
 # The reference's in-place refusal, whichever op raises it.
 _CANNOT_CAST = re.compile(r"result type .+ can't be cast to the desired output type .+")
@@ -105,29 +104,14 @@ def test_the_operator_writes_into_self(device: str, dunder: str) -> None:
     assert alias.tolist() == expected
 
 
-@pytest.mark.parametrize(
-    "dev",
-    [
-        "cpu",
-        pytest.param(
-            "metal",
-            marks=[
-                pytest.mark.skipif(not metal_available(), reason="metal unavailable"),
-                pytest.mark.xfail(
-                    strict=True,
-                    reason="LCD-18: a Metal view taken before its base is written "
-                    "does not see the write (lucid/_tensor/_metal_views.py)",
-                ),
-            ],
-        ),
-    ],
-)
 @pytest.mark.parametrize("dunder", list(AUGMENTED))
-def test_a_view_of_self_sees_the_write(dev: str, dunder: str) -> None:
+def test_a_view_of_self_sees_the_write(device: str, dunder: str) -> None:
     symbol, dtype, operand = AUGMENTED[dunder]
-    a = _base(lucid, dtype).to(dev)
+    a = _base(lucid, dtype).to(device)
     view = a[:2]
-    expected = getattr(_base(lucid, dtype), "__" + dunder[3:])(operand).tolist()
+    expected = (
+        getattr(_base(lucid, dtype).to(device), "__" + dunder[3:])(operand).tolist()
+    )
     _augment(a, symbol, operand)
     assert view.tolist() == expected[:2]
 
@@ -501,11 +485,13 @@ def test_the_method_on_a_view_writes_through_to_its_base(
 
 
 @pytest.mark.parametrize("name", list(METHODS))
-def test_a_view_of_self_sees_the_methods_write_on_the_cpu(name: str) -> None:
+def test_a_view_of_self_sees_the_methods_write_on_the_cpu(
+    device: str, name: str
+) -> None:
     make, args = METHODS[name]
-    a = make(lucid)
+    a = make(lucid).to(device)
     view = a[:2]
-    getattr(a, name)(*args(lucid))
+    getattr(a, name)(*_on(device, args(lucid)))
     assert view.tolist() == a.tolist()[:2]
 
 

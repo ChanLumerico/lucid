@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <cstring>
 #include <limits>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -391,29 +392,48 @@ std::vector<std::int32_t> as_strided_positions(const Shape& size,
     return positions;
 }
 
-TensorImplPtr as_strided_op(const TensorImplPtr& a,
-                            const Shape& size,
-                            const std::vector<std::int64_t>& stride,
-                            std::int64_t storage_offset) {
-    Validator::input(a, "as_strided.a").non_null();
-    const Dtype dt = a->dtype();
-    const Device device = a->device();
-    OpScopeFull scope{"as_strided", device, dt, size};
-    const auto n_out = static_cast<std::int64_t>(shape_numel(size));
+void remap_as_strided_grad_positions(const TensorImpl& a,
+                                     std::int64_t elem,
+                                     std::int64_t own,
+                                     std::int64_t capacity,
+                                     std::int64_t n_in,
+                                     std::vector<std::int32_t>& positions) {
+    if (!a.is_contiguous()) {
+        std::vector<std::int64_t> elem_stride;
+        elem_stride.reserve(a.stride().size());
+        for (const auto s : a.stride())
+            elem_stride.push_back(s / elem);
+        const auto own_pos = as_strided_positions(a.shape(), elem_stride, own, own, capacity, n_in);
+        std::unordered_map<std::int32_t, std::int32_t> held;
+        held.reserve(static_cast<std::size_t>(n_in));
+        for (std::int64_t k = 0; k < n_in; ++k)
+            held.try_emplace(own_pos[static_cast<std::size_t>(k)], static_cast<std::int32_t>(k));
+        for (auto& p : positions) {
+            const auto it = held.find(p);
+            if (it == held.end())
+                ErrorBuilder("as_strided")
+                    .not_implemented("a gradient through a view that does not hold every "
+                                     "element of the window — call contiguous() first and "
+                                     "take the window of that");
+            p = it->second;
+        }
+        return;
+    }
+    for (const auto p : positions) {
+        if (p < 0 || p >= n_in)
+            ErrorBuilder("as_strided")
+                .not_implemented("a gradient through a view that does not hold every "
+                                 "element of the window — call contiguous() first and "
+                                 "take the window of that");
+    }
+}
+
+void validate_as_strided_window(const Shape& size,
+                                const std::vector<std::int64_t>& stride,
+                                std::int64_t offset,
+                                std::int64_t capacity) {
     if (size.size() != stride.size())
         ErrorBuilder("as_strided").fail("size and stride need the same length");
-
-    // Positions count in elements of the allocation.  A CPU tensor or an
-    // engine view-family member shares its allocation with its views, so the
-    // storage is that allocation and the tensor may start partway in; a
-    // standalone Metal tensor owns a packed buffer of its own.
-    const auto elem = static_cast<std::int64_t>(dtype_size(dt));
-    const bool view = a->views_by_stride() || a->family_key() != nullptr;
-    const std::int64_t own = view ? static_cast<std::int64_t>(a->allocation_offset()) / elem : 0;
-    const std::int64_t capacity = view ? static_cast<std::int64_t>(a->allocation_nbytes()) / elem
-                                       : static_cast<std::int64_t>(shape_numel(a->shape()));
-    const std::int64_t offset = storage_offset < 0 ? own : storage_offset;
-
     std::int64_t last = offset;
     bool empty = false;
     for (std::size_t d = 0; d < size.size(); ++d) {
@@ -426,6 +446,22 @@ TensorImplPtr as_strided_op(const TensorImplPtr& a,
     }
     if (!empty && last >= capacity)
         ErrorBuilder("as_strided").fail("the view reaches past the end of the storage");
+}
+
+TensorImplPtr as_strided_op(const TensorImplPtr& a,
+                            const Shape& size,
+                            const std::vector<std::int64_t>& stride,
+                            std::int64_t storage_offset) {
+    Validator::input(a, "as_strided.a").non_null();
+    const Dtype dt = a->dtype();
+    const Device device = a->device();
+    OpScopeFull scope{"as_strided", device, dt, size};
+    const auto n_out = static_cast<std::int64_t>(shape_numel(size));
+    const auto elem = static_cast<std::int64_t>(dtype_size(dt));
+    const std::int64_t own = static_cast<std::int64_t>(a->allocation_offset()) / elem;
+    const std::int64_t capacity = static_cast<std::int64_t>(a->allocation_nbytes()) / elem;
+    const std::int64_t offset = storage_offset < 0 ? own : storage_offset;
+    validate_as_strided_window(size, stride, offset, capacity);
     scope.set_attr("size", std::vector<std::int64_t>(size.begin(), size.end()));
     scope.set_attr("stride", stride);
     scope.set_attr("storage_offset", offset);
@@ -433,54 +469,28 @@ TensorImplPtr as_strided_op(const TensorImplPtr& a,
     const auto n_in = static_cast<std::int64_t>(shape_numel(a->shape()));
     const bool needs_grad = GradMode::is_enabled() && a->requires_grad();
 
-    // Each view element's position among ``a``'s own elements: the metal
-    // copy gathers by it and the gradient scatters by it.  A CPU view with no
-    // gradient needs neither.
-    std::vector<std::int32_t> positions;
-    if (!view || needs_grad)
-        positions = as_strided_positions(size, stride, offset, own, capacity, n_out);
-    auto& be = backend::Dispatcher::for_device(device);
-    const auto upload = [&]() {
-        auto cpu = helpers::allocate_cpu(Shape{n_out}, Dtype::I32);
-        if (n_out > 0)
-            std::memcpy(cpu.ptr.get(), positions.data(), positions.size() * sizeof(std::int32_t));
-        return be.from_cpu(std::move(cpu), Shape{n_out});
-    };
-
-    TensorImplPtr out;
-    if (view) {
-        Stride byte_stride;
-        byte_stride.reserve(stride.size());
-        for (const auto s : stride)
-            byte_stride.push_back(s * elem);
-        out = TensorImpl::make_allocation_view(a, size, std::move(byte_stride),
-                                               static_cast<std::size_t>(offset * elem));
-    } else if (n_out == 0) {
-        out = std::make_shared<TensorImpl>(be.zeros(size, dt), size, dt, device, false);
-    } else {
-        Storage flat = be.reshape(a->storage(), a->shape(), Shape{n_in}, dt);
-        Storage picked = be.gather(flat, upload(), Shape{n_in}, Shape{n_out}, 0, Dtype::I32, dt);
-        out = std::make_shared<TensorImpl>(be.reshape(picked, Shape{n_out}, size, dt), size, dt,
-                                           device, false);
-    }
+    Stride byte_stride;
+    byte_stride.reserve(stride.size());
+    for (const auto s : stride)
+        byte_stride.push_back(s * elem);
+    TensorImplPtr out = TensorImpl::make_allocation_view(a, size, std::move(byte_stride),
+                                                         static_cast<std::size_t>(offset * elem));
 
     auto bwd = std::make_shared<AsStridedBackward>();
     if (needs_grad) {
-        if (!a->is_contiguous())
-            ErrorBuilder("as_strided")
-                .not_implemented("a gradient through a tensor that is not contiguous — call "
-                                 "contiguous() first");
-        for (const auto p : positions)
-            if (p < 0 || p >= n_in)
-                ErrorBuilder("as_strided")
-                    .not_implemented("a gradient through elements outside the tensor");
+        auto positions = as_strided_positions(size, stride, offset, own, capacity, n_out);
+        remap_as_strided_grad_positions(*a, elem, own, capacity, n_in, positions);
+        auto& be = backend::Dispatcher::for_device(device);
+        auto cpu = helpers::allocate_cpu(Shape{n_out}, Dtype::I32);
+        if (n_out > 0)
+            std::memcpy(cpu.ptr.get(), positions.data(), positions.size() * sizeof(std::int32_t));
         bwd->input_shapes_ = {a->shape()};
         bwd->out_shape_ = size;
         bwd->dtype_ = dt;
         bwd->device_ = device;
         bwd->input_tensors_ = {a};
         bwd->numel_ = n_in;
-        bwd->indices_ = upload();
+        bwd->indices_ = be.from_cpu(std::move(cpu), Shape{n_out});
     }
     kernel::NaryKernel<AsStridedBackward, 1>::wire_autograd(std::move(bwd), {a}, out, false);
     return out;

@@ -37,22 +37,11 @@ from typing import Any, NamedTuple
 import pytest
 
 import lucid
-from lucid._tensor import _metal_views
 from lucid.test._fixtures.devices import metal_available
 
 pytestmark = pytest.mark.skipif(not metal_available(), reason="metal unavailable")
 
 type _View = Callable[[Any], Any]
-
-_LCD_535_WINDOW = pytest.mark.xfail(
-    strict=True,
-    reason="LCD-535: window write past a live view needs engine write propagation",
-)
-_LCD_535_RESHAPE = pytest.mark.xfail(
-    strict=True,
-    reason="LCD-535: Metal copying reshape aliases its view; needs an engine "
-    "family-detach op",
-)
 
 
 def _grid(module: Any, device: str) -> Any:
@@ -249,10 +238,9 @@ WINDOWS: dict[str, _Window] = {
 
 def _window_cases() -> list[Any]:
     cases = []
-    for name, window in WINDOWS.items():
+    for name in WINDOWS:
         for device in ("cpu", "metal"):
-            marks = [_LCD_535_WINDOW] if device == "metal" and window.outside else []
-            cases.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
+            cases.append(pytest.param(name, device, id=f"{name}-{device}"))
     return cases
 
 
@@ -290,16 +278,14 @@ def test_a_window_reads_and_writes_the_references_elements(
 
 
 @pytest.mark.parametrize("name", [n for n, w in WINDOWS.items() if w.outside])
-def test_a_write_into_a_window_past_a_live_view_is_refused(name: str) -> None:
-    # The write would land past ``view``, which would keep its old values and
-    # write them back later, over the window's: refused while it is alive,
-    # with nothing written (LCD-535).
+def test_a_write_into_a_window_past_a_live_view_reaches_the_storage(name: str) -> None:
     window = WINDOWS[name]
-    y = _grid(lucid, "metal")
-    view = window.view(y)
-    with pytest.raises(RuntimeError, match="outside the view it was taken from"):
-        view.as_strided(*window.args).add_(100.0)
-    assert y.tolist() == _grid(lucid, "cpu").tolist()
+    ours_m, ours_c = _grid(lucid, "metal"), _grid(lucid, "cpu")
+    view_m, view_c = window.view(ours_m), window.view(ours_c)
+    view_m.as_strided(*window.args).add_(100.0)
+    view_c.as_strided(*window.args).add_(100.0)
+    assert view_m.tolist() == view_c.tolist()
+    assert ours_m.tolist() == ours_c.tolist()
 
 
 def test_a_window_past_a_view_nothing_holds_writes_its_base() -> None:
@@ -419,7 +405,8 @@ def test_a_gradient_through_elements_outside_the_view_is_refused() -> None:
 
 
 def test_a_window_of_a_view_whose_base_is_gone() -> None:
-    # Nothing holds the ``arange``: what is left of its storage is the slice.
+    # The view's engine family root holds the whole allocation even after the
+    # temporary ``arange`` is gone, matching CPU and the reference.
     tail = lucid.arange(10.0, device="metal")[2:]
     assert tail.storage_offset() == 2
     assert tail.as_strided((3,), (2,)).tolist() == [2.0, 4.0, 6.0]
@@ -430,8 +417,7 @@ def test_a_window_of_a_view_whose_base_is_gone() -> None:
         [4.0, 6.0],
         [6.0, 8.0],
     ]
-    with pytest.raises(RuntimeError, match="freed"):
-        tail.as_strided((3,), (1,), 0)
+    assert tail.as_strided((3,), (1,), 0).tolist() == [0.0, 1.0, 2.0]
 
 
 def test_a_window_past_the_storage_is_refused_as_the_engine_refuses_it() -> None:
@@ -448,7 +434,7 @@ def test_a_view_of_a_reshape_of_a_temporary_holds_the_whole_storage() -> None:
     # The card's case: ``y`` holds every element of the freed ``arange``.
     y = lucid.arange(6.0, device="metal").reshape(2, 3)
     assert y.t().as_strided((2,), (1,)).tolist() == [0.0, 1.0]
-    assert _metal_views._ATTR in y.__dict__
+    assert y._impl.family_id() != 0
 
 
 # ── A reshape the CPU copies is a tensor of its own ──────────────────────────
@@ -472,7 +458,6 @@ THEN: dict[str, Callable[[Any, Any], object]] = {
 }
 
 
-@_LCD_535_RESHAPE
 @pytest.mark.parametrize("then", list(THEN), ids=list(THEN))
 @pytest.mark.parametrize("op", list(COPYING), ids=list(COPYING))
 def test_a_copying_reshape_of_a_view_is_a_tensor_of_its_own(op: str, then: str) -> None:

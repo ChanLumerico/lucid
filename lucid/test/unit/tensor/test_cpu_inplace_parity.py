@@ -27,7 +27,6 @@ import pytest
 
 import lucid
 import lucid.nn as nn
-from lucid.test._fixtures.devices import metal_available
 
 # ── expanded views ───────────────────────────────────────────────────────────
 
@@ -131,28 +130,10 @@ def test_data_detach_and_grad_write_through(device: str) -> None:
     assert g.grad.tolist() == [0.0, 0.0, 0.0]
 
 
-@pytest.mark.parametrize(
-    "dev",
-    [
-        "cpu",
-        pytest.param(
-            "metal",
-            marks=[
-                pytest.mark.skipif(not metal_available(), reason="metal unavailable"),
-                pytest.mark.xfail(
-                    strict=True,
-                    reason="Metal carries a write through .grad to the gradient but not "
-                    "back out to a tensor read from .grad before it, which then writes its "
-                    "old values back (lucid/_tensor/_metal_views.py)",
-                ),
-            ],
-        ),
-    ],
-)
-def test_a_gradient_read_earlier_does_not_stop_the_write(dev: str) -> None:
+def test_a_gradient_read_earlier_does_not_stop_the_write(device: str) -> None:
     # ``g = p.grad`` kept alive is the same gradient, not a second holder of
     # its buffer, so ``p.grad.mul_`` still writes — and ``g`` reads the result.
-    x = _with_grad(dev)
+    x = _with_grad(device)
     held = x.grad
     x.grad.mul_(2.0)
     assert x.grad.tolist() == [4.0, 8.0, 12.0]

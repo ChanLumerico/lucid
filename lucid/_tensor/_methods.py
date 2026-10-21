@@ -408,7 +408,6 @@ def _addcdiv(
 def _is_set_to(self: Tensor, tensor: Tensor) -> bool:
     """Return ``True`` when ``self`` and ``tensor`` share the same storage, offset, shape, and stride."""
     from lucid._ops.composite._shared import _is_tensor
-    from lucid._tensor._metal_views import _frames, _on_metal
 
     if not _is_tensor(tensor):
         raise TypeError(
@@ -422,8 +421,11 @@ def _is_set_to(self: Tensor, tensor: Tensor) -> bool:
         or self.storage_offset() != tensor.storage_offset()
     ):
         return False
-    if _on_metal(self):
-        return _frames(self)[0][-1]._impl is _frames(tensor)[0][-1]._impl
+    if self.is_metal:
+        return self._impl is tensor._impl or (
+            (fid := self._impl.family_id()) != 0
+            and fid == tensor._impl.family_id()
+        )
     ptr_a = self.data_ptr()
     ptr_b = tensor.data_ptr()
     if ptr_a == 0 or ptr_b == 0:

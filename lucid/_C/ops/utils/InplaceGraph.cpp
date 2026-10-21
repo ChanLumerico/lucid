@@ -44,14 +44,16 @@ CpuStorage zeroed_cpu(std::size_t nbytes, Dtype dtype) {
     return s;
 }
 
-// A 1-D int64 CPU tensor holding ``values``.
-TensorImplPtr index_tensor(const std::vector<std::int64_t>& values) {
+// A 1-D int64 tensor holding ``values`` on ``device``.
+TensorImplPtr index_tensor(const std::vector<std::int64_t>& values, Device device) {
+    const Shape shape{static_cast<std::int64_t>(values.size())};
     CpuStorage s = zeroed_cpu(values.size() * sizeof(std::int64_t), Dtype::I64);
     if (!values.empty())
         std::memcpy(s.ptr.get(), values.data(), s.nbytes);
-    return std::make_shared<TensorImpl>(Storage{std::move(s)},
-                                        Shape{static_cast<std::int64_t>(values.size())}, Dtype::I64,
-                                        Device::CPU, false);
+    Storage st = device == Device::CPU
+                     ? Storage{std::move(s)}
+                     : backend::Dispatcher::for_device(device).from_cpu(std::move(s), shape);
+    return std::make_shared<TensorImpl>(std::move(st), shape, Dtype::I64, device, false);
 }
 
 // ``out[src[k]] += g[dst[k]]`` for one floating element type.
@@ -130,33 +132,40 @@ public:
         auto& be = backend::Dispatcher::for_device(device_);
         const auto n = static_cast<std::int64_t>(shape_numel(out_shape_));
         const Shape flat{n};
+        const Storage flat_grad =
+            out_shape_ == flat ? grad_out : be.reshape(grad_out, out_shape_, flat, dtype_);
         std::vector<Storage> grads(2);
         if (next_edges_[0].node) {
             std::vector<Storage> pieces;
             std::vector<Shape> shapes;
             const std::int64_t tail = n - dst_begin_ - len_;
             if (dst_begin_ > 0) {
-                pieces.push_back(be.slice_axis(grad_out, flat, Shape{dst_begin_}, 0, 0, dtype_));
+                pieces.push_back(be.slice_axis(flat_grad, flat, Shape{dst_begin_}, 0, 0, dtype_));
                 shapes.push_back(Shape{dst_begin_});
             }
             pieces.push_back(make_zero_storage(Shape{len_}, dtype_, device_));
             shapes.push_back(Shape{len_});
             if (tail > 0) {
                 pieces.push_back(
-                    be.slice_axis(grad_out, flat, Shape{tail}, 0, dst_begin_ + len_, dtype_));
+                    be.slice_axis(flat_grad, flat, Shape{tail}, 0, dst_begin_ + len_, dtype_));
                 shapes.push_back(Shape{tail});
             }
-            grads[0] = pieces.size() == 1 ? std::move(pieces[0])
-                                          : be.concatenate(pieces, shapes, 0, dtype_);
+            Storage flat_g0 = pieces.size() == 1 ? std::move(pieces[0])
+                                                 : be.concatenate(pieces, shapes, 0, dtype_);
+            grads[0] = out_shape_ == flat ? std::move(flat_g0)
+                                          : be.reshape(flat_g0, flat, out_shape_, dtype_);
         }
         if (next_edges_[1].node) {
             const auto src_n = static_cast<std::int64_t>(shape_numel(src_shape_));
+            const Shape src_flat{src_n};
             Storage run = len_ == n
-                              ? grad_out
-                              : be.slice_axis(grad_out, flat, Shape{len_}, 0, dst_begin_, dtype_);
-            grads[1] = len_ == src_n ? std::move(run)
-                                     : be.insert_axis_slice(run, Shape{len_}, Shape{src_n}, 0,
-                                                            src_begin_, dtype_);
+                              ? flat_grad
+                              : be.slice_axis(flat_grad, flat, Shape{len_}, 0, dst_begin_, dtype_);
+            Storage flat_g1 = len_ == src_n ? std::move(run)
+                                            : be.insert_axis_slice(run, Shape{len_}, src_flat, 0,
+                                                                   src_begin_, dtype_);
+            grads[1] = src_shape_ == src_flat ? std::move(flat_g1)
+                                              : be.reshape(flat_g1, src_flat, src_shape_, dtype_);
         }
         return grads;
     }
@@ -202,11 +211,20 @@ public:
     std::string node_name() const override { return "CopySlices"; }
 
 private:
-    // View families live on the CPU, so their gradients do too.
     std::vector<Storage> apply_indexed(const Storage& grad_out) const {
         const auto* g = std::get_if<CpuStorage>(&grad_out);
-        if (!g)
-            ErrorBuilder("CopySlices").not_implemented("a gradient off the CPU");
+        if (!g ||
+            (!injective_ && dtype_ != Dtype::F32 && dtype_ != Dtype::F64 && dtype_ != Dtype::C64)) {
+            NoGradGuard no_grad;
+            const auto out = graph_indexed(
+                std::make_shared<TensorImpl>(grad_out, out_shape_, dtype_, device_, false));
+            std::vector<Storage> grads(2);
+            if (out[0])
+                grads[0] = out[0]->storage();
+            if (out[1])
+                grads[1] = out[1]->storage();
+            return grads;
+        }
         const std::size_t item = dtype_size(dtype_);
         std::vector<Storage> grads(2);
         if (next_edges_[0].node) {
@@ -218,31 +236,31 @@ private:
             grads[0] = Storage{std::move(base)};
         }
         if (next_edges_[1].node) {
-            CpuStorage src = zeroed_cpu(shape_numel(src_shape_) * item, dtype_);
-            if (injective_) {
-                for (std::size_t k = 0; k < dst_idx_.size(); ++k)
-                    std::memcpy(src.ptr.get() + src_idx_[k] * item,
-                                g->ptr.get() + dst_idx_[k] * item, item);
-            } else if (dtype_ == Dtype::F32) {
-                accumulate<float>(g->ptr.get(), src.ptr.get(), dst_idx_, src_idx_);
-            } else if (dtype_ == Dtype::F64) {
-                accumulate<double>(g->ptr.get(), src.ptr.get(), dst_idx_, src_idx_);
-            } else if (dtype_ == Dtype::C64) {
-                accumulate<std::complex<float>>(g->ptr.get(), src.ptr.get(), dst_idx_, src_idx_);
-            } else {
-                ErrorBuilder("CopySlices")
-                    .not_implemented("the gradient of a repeated element in " +
-                                     std::string(dtype_name(dtype_)));
-            }
-            grads[1] = Storage{std::move(src)};
+            grads[1] = Storage{scatter_src_grad(*g, item)};
         }
         return grads;
+    }
+
+    CpuStorage scatter_src_grad(const CpuStorage& g, std::size_t item) const {
+        CpuStorage src = zeroed_cpu(shape_numel(src_shape_) * item, dtype_);
+        if (injective_) {
+            for (std::size_t k = 0; k < dst_idx_.size(); ++k)
+                std::memcpy(src.ptr.get() + src_idx_[k] * item, g.ptr.get() + dst_idx_[k] * item,
+                            item);
+        } else if (dtype_ == Dtype::F32) {
+            accumulate<float>(g.ptr.get(), src.ptr.get(), dst_idx_, src_idx_);
+        } else if (dtype_ == Dtype::F64) {
+            accumulate<double>(g.ptr.get(), src.ptr.get(), dst_idx_, src_idx_);
+        } else {
+            accumulate<std::complex<float>>(g.ptr.get(), src.ptr.get(), dst_idx_, src_idx_);
+        }
+        return src;
     }
 
     std::vector<TensorImplPtr> graph_indexed(const TensorImplPtr& grad_out) const {
         const auto n = static_cast<std::int64_t>(shape_numel(out_shape_));
         const auto flat = reshape_op(grad_out, {n});
-        const auto dst = index_tensor(dst_idx_);
+        const auto dst = index_tensor(dst_idx_, grad_out->device());
         const auto k = static_cast<std::int64_t>(dst_idx_.size());
         std::vector<TensorImplPtr> grads(2);
         if (next_edges_[0].node)
@@ -253,8 +271,9 @@ private:
             const auto src_n = static_cast<std::int64_t>(shape_numel(src_shape_));
             const auto picked = gather_op(flat, dst, 0);
             const auto zeros = zeros_op(Shape{src_n}, grad_out->dtype(), grad_out->device());
-            grads[1] =
-                reshape_op(scatter_add_op(zeros, index_tensor(src_idx_), picked, 0), src_shape_);
+            grads[1] = reshape_op(
+                scatter_add_op(zeros, index_tensor(src_idx_, grad_out->device()), picked, 0),
+                src_shape_);
         }
         return grads;
     }

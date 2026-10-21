@@ -134,7 +134,7 @@
     "peak_bytes": 55060
   },
   "gru_adam/metal": {
-    "allocations": 477,
+    "allocations": 415,
     "forward_ops": {
       "add": 24,
       "full": 6,
@@ -150,7 +150,7 @@
       "tanh": 6,
       "zeros": 1
     },
-    "frees": 477,
+    "frees": 415,
     "host_allocations": 0,
     "host_syncs": 1,
     "peak_bytes": 53780
@@ -172,7 +172,7 @@
     "peak_bytes": 14340
   },
   "lstm_adam/metal": {
-    "allocations": 53,
+    "allocations": 50,
     "forward_ops": {
       "concatenate": 2,
       "linear": 1,
@@ -183,7 +183,7 @@
       "squeeze": 1,
       "zeros": 2
     },
-    "frees": 53,
+    "frees": 50,
     "host_allocations": 0,
     "host_syncs": 1,
     "peak_bytes": 18436
@@ -269,7 +269,7 @@
     "peak_bytes": 31876
   },
   "transformer_adamw/metal": {
-    "allocations": 133,
+    "allocations": 128,
     "forward_ops": {
       "add": 2,
       "dropout": 3,
@@ -282,9 +282,9 @@
       "scaled_dot_product_attention": 1,
       "split_at": 2
     },
-    "frees": 133,
+    "frees": 128,
     "host_allocations": 0,
     "host_syncs": 1,
-    "peak_bytes": 32900
+    "peak_bytes": 28676
   }
 }

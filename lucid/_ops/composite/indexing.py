@@ -201,8 +201,10 @@ def _write_inplace[T: Tensor](
             f"{name}: a leaf tensor that requires grad cannot be modified in place — "
             "wrap the call in lucid.no_grad(), or use the out-of-place form"
         )
-    aliased = input._impl.is_aliased() or (
-        input.device.type == "cpu" and not input.is_contiguous()
+    aliased = (
+        input._impl.is_aliased()
+        or not input.is_contiguous()
+        or input._impl.storage_offset_bytes() != 0
     )
     base: Tensor = input
     if records:

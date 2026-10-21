@@ -250,11 +250,6 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("TensorOrScalar", "lucid._types", "TensorOrScalar"),
         ("_IndexType", "lucid._types", "_IndexType"),
     ),
-    "lucid._tensor._metal_views": (
-        ("OpEntry", "lucid._ops._registry", "OpEntry"),
-        ("Tensor", "lucid._tensor.tensor", "Tensor"),
-        ("_IndexType", "lucid._types", "_IndexType"),
-    ),
     "lucid._tensor._methods": (
         ("DTypeLike", "lucid._types", "DTypeLike"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
@@ -523,9 +518,6 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("Sequence", "collections.abc", "Sequence"),
     ),
     "lucid.quantization.observer": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
-    "lucid.serialization._storage_plan": (
-        ("_Link", "lucid._tensor._metal_views", "_Link"),
-    ),
     "lucid.signal.windows": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.special": (("Tensor", "lucid._tensor.tensor", "Tensor"),),
     "lucid.utils.cache._base": (("Tensor", "lucid._tensor.tensor", "Tensor"),),

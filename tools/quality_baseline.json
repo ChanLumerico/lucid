@@ -1008,7 +1008,7 @@
     "lucid/_C/backend/gpu/GpuBackend.h": 4325,
     "lucid/_ops/composite/elementwise.py": 73,
     "lucid/_tensor/_dunders.py": 189,
-    "lucid/_tensor/tensor.py": 2753,
+    "lucid/_tensor/tensor.py": 2752,
     "lucid/compile/_optim/compiler.py": 773,
     "lucid/coreml/_build.py": 1726,
     "lucid/coreml/_emit.py": 1167,
@@ -1019,7 +1019,7 @@
     "lucid/models/generative/diamond/_model.py": 730,
     "lucid/models/generative/rectified_flow/_model.py": 280,
     "lucid/models/vision/mask2former/_model.py": 82,
-    "lucid/nn/functional/activations.py": 394,
+    "lucid/nn/functional/activations.py": 389,
     "lucid/nn/functional/loss.py": 766,
     "lucid/nn/modules/activation.py": 722,
     "lucid/nn/modules/loss.py": 1088,
@@ -1044,7 +1044,6 @@
     "lucid/__init__.py": 3,
     "lucid/_factories/creation.py": 1,
     "lucid/_ops/_adapters.py": 1,
-    "lucid/_tensor/_metal_views.py": 1,
     "lucid/_tensor/_methods.py": 1,
     "lucid/amp/grad_scaler.py": 2,
     "lucid/autograd/_anomaly.py": 1,
@@ -1619,7 +1618,7 @@
     "lucid/_C/compile/VjpEmitters/shape/Reshape.mm": 1,
     "lucid/_C/compile/VjpEmitters/shape/Stack.mm": 3,
     "lucid/_C/core/StridedCopy.h": 1,
-    "lucid/_C/core/TensorImpl.cpp": 5,
+    "lucid/_C/core/TensorImpl.cpp": 4,
     "lucid/_C/coreml/CoreMLRuntime.mm": 4,
     "lucid/_C/coreml/MilProgram.cpp": 2,
     "lucid/_C/interop/Dlpack.cpp": 1,
@@ -1637,7 +1636,6 @@
     "lucid/_C/ops/gfunc/Gfunc.cpp": 1,
     "lucid/_C/ops/utils/Histogram.cpp": 2,
     "lucid/_C/ops/utils/InplaceGraph.cpp": 1,
-    "lucid/_C/ops/utils/View.cpp": 1,
     "lucid/_C/utils/tokenizer/Unigram.cpp": 2,
     "lucid/_tensor/_indexing.py": 2,
     "lucid/benchmarks/run_all.py": 1,
@@ -1724,7 +1722,7 @@
     "lucid/_C/compile/VjpEmitters/shape/Reshape.mm": 7,
     "lucid/_C/compile/VjpEmitters/shape/Stack.mm": 6,
     "lucid/_C/core/StridedCopy.h": 5,
-    "lucid/_C/core/TensorImpl.cpp": 19,
+    "lucid/_C/core/TensorImpl.cpp": 18,
     "lucid/_C/coreml/CoreMLRuntime.mm": 16,
     "lucid/_C/coreml/MilProgram.cpp": 18,
     "lucid/_C/interop/Dlpack.cpp": 1,
@@ -1742,7 +1740,6 @@
     "lucid/_C/ops/gfunc/Gfunc.cpp": 2,
     "lucid/_C/ops/utils/Histogram.cpp": 7,
     "lucid/_C/ops/utils/InplaceGraph.cpp": 15,
-    "lucid/_C/ops/utils/View.cpp": 8,
     "lucid/_C/utils/tokenizer/Unigram.cpp": 28,
     "lucid/_tensor/_indexing.py": 40,
     "lucid/benchmarks/run_all.py": 1,
@@ -2091,11 +2088,7 @@
     "lucid/nn/module.py": 1
    },
    "B009": {
-    "lucid/_tensor/_metal_views.py": 2,
     "lucid/coreml/_optimize.py": 2
-   },
-   "B010": {
-    "lucid/_tensor/_metal_views.py": 2
    },
    "B024": {
     "lucid/models/_base.py": 1

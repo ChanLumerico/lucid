@@ -196,7 +196,7 @@ _REGISTRY: list[OpEntry] = [
     OpEntry("hard_sigmoid", _R.hard_sigmoid, 1, method_name="hard_sigmoid", free_fn_name="hard_sigmoid"),
     OpEntry("hard_swish",   _R.hard_swish,   1, method_name="hard_swish",   free_fn_name="hard_swish"),
     OpEntry("ravel",     _R.ravel,     1, method_name="ravel",     free_fn_name="ravel"),
-    OpEntry("contiguous",_R.contiguous,1, method_name="contiguous",free_fn_name="contiguous"),
+    OpEntry("contiguous",A._contiguous_adapter,1, method_name="contiguous",free_fn_name="contiguous"),
 
     # ── in-place unary ─────────────────────────────────────────────────────
     OpEntry("neg_",        _R.neg_,        1, inplace=True, method_name="neg_"),

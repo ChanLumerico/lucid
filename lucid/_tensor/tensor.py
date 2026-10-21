@@ -1902,7 +1902,15 @@ class Tensor:
         copy. After the call ``is_contiguous() == True`` and strides match
         the C-order recurrence shown above.
         """
-        return _wrap(_C_engine.contiguous(self._impl))
+        return (
+            self
+            if (
+                self.is_contiguous()
+                and _C_engine.compile.current_tracer() is None
+                and (not self._impl.is_phantom or _C_engine.phantom_mode())
+            )
+            else _wrap(_C_engine.contiguous(self._impl))
+        )
 
     def unfold(self, dimension: int, size: int, step: int) -> Tensor:
         r"""Return a view with an extra dimension containing sliding-window slices.
@@ -2928,29 +2936,20 @@ class Tensor:
         """Minimal storage object returned by :meth:`Tensor.untyped_storage`."""
 
         def __init__(self, tensor: Tensor) -> None:
-            """Store the owning ``Tensor`` so storage queries can forward to it."""
             self._tensor = tensor
-
-        def _owner_impl(self) -> _C_engine.TensorImpl:
-            """Return the ``TensorImpl`` that owns the underlying allocation."""
-            from lucid._tensor import _metal_views
-
-            return _metal_views._storage_owner(self._tensor)._impl
 
         def data_ptr(self) -> int:
             """Address of the first byte of the underlying allocation."""
-            return int(self._owner_impl().storage_data_ptr())
+            return int(self._tensor._impl.storage_data_ptr())
 
         def size(self) -> int:
             """Total allocation size in bytes."""
-            return int(self._owner_impl().storage_nbytes())
+            return int(self._tensor._impl.storage_nbytes())
 
         def nbytes(self) -> int:
-            """Alias for :meth:`size`."""
             return self.size()
 
         def __len__(self) -> int:
-            """Return the storage size in bytes (so ``len(storage) == storage.nbytes``)."""
             return self.size()
 
         def __repr__(self) -> str:

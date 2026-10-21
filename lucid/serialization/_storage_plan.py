@@ -11,15 +11,12 @@ sharing nor the values may be guessed:
   buffer to every value equal to it (``clone()``, ``contiguous()``, a leading
   slice, the weights ``load_state_dict`` copied in), and those tensors never
   see each other's writes.  A Metal tensor is therefore saved as sharing only
-  with members of its engine view family (``TensorImpl.family_id``) and the
-  views :mod:`lucid._tensor._metal_views` links back to it, while it is alive,
-  each placed where that layout puts it in the storage; a view whose base is
-  gone shares only its own elements with its views.
+  with members of its engine view family (``TensorImpl.family_id``), each
+  placed where its layout puts it in the storage.
 
 * **Values are each tensor's own.**  A shared storage is assembled from every
   member's ``to_bytes()``, laid out by its geometry, and each member is then
-  read back out of it.  A member whose bytes do not come back — a Metal view
-  taken before its base was written still holds the old values — is given a
+  read back out of it.  A member whose bytes do not come back is given a
   storage of its own.  Nothing is read from a raw address.
 
 A tensor that shares with no other saved tensor is saved dense: its values
@@ -27,30 +24,15 @@ round-trip, and the loaded tensor owns them instead of viewing a buffer that
 was mostly not saved.
 """
 
-from typing import TYPE_CHECKING, final
+from typing import final
 
 from lucid._C import engine as _C_engine
-from lucid._tensor import _metal_views
 from lucid._tensor.tensor import Tensor as _T
-
-if TYPE_CHECKING:
-    from lucid._tensor._metal_views import _Link
-
-#: The attribute :mod:`lucid._tensor._metal_views` keeps a Metal view's link in.
-_LINK_ATTR = _metal_views._ATTR
-#: Link kinds that view the base's elements.  ``.grad`` is its owner's
-#: gradient, not a view of the owner.
-_VIEW_KINDS = (
-    _metal_views._DETACHED,
-    _metal_views._KEY,
-    _metal_views._RESHAPE,
-    _metal_views._TRACED,
-)
 
 #: ``id(tensor) -> (shape, stride, offset, storage id)``, in elements.
 type _TensorMeta = dict[int, tuple[list[int], list[int], int, int]]
-#: Links from a tensor up to the tensor it views, with each view's shape.
-type _Chain = list[tuple[tuple[int, ...], _Link]]
+#: ``as_strided``'s window in the storage's elements: size, stride, offset.
+type _Window = tuple[tuple[int, ...], tuple[int, ...], int]
 
 
 def _collect_tensors(obj: object, seen: set[int], out: list[_T]) -> None:
@@ -127,76 +109,57 @@ def _own_geometry(t: _T) -> tuple[list[int], list[int], int]:
     )
 
 
-def _metal_chain(t: _T) -> tuple[_T, _Chain]:
-    """The live tensor whose elements ``t`` views through write-back links.
+def _window_positions(
+    size: tuple[int, ...], stride: tuple[int, ...], start: int
+) -> _T:
+    """``start + sum(i * stride)`` over the indices ``i`` of ``size``, on the CPU."""
+    import lucid
 
-    Returns that tensor and the links from ``t`` up to it.  The walk stops at
-    a tensor with no view link, at a link whose base is gone, and at a base
-    of another dtype or device.
+    at = lucid.full(size, start, dtype=lucid.int64)
+    for d, (n, s) in enumerate(zip(size, stride, strict=True)):
+        steps = lucid.arange(n, dtype=lucid.int64) * s
+        at = at + steps.reshape([n if e == d else 1 for e in range(len(size))])
+    return at.reshape(-1)
+
+
+def _picked(frame: _T, window: _Window) -> _T | None:
+    """Which of ``frame``'s elements each of the window's is, by flat index.
+
+    ``None`` when the window reads an element ``frame`` does not hold.
+    Found by sorting ``frame``'s positions in the storage: a strided view
+    (``y[:, ::2]``, a diagonal) is no dense block, though it may hold every
+    element of a window built from its own strides.
     """
-    chain: _Chain = []
-    root = t
-    while root.is_metal:
-        link: _Link | None = root.__dict__.get(_LINK_ATTR)
-        if link is None or link.kind not in _VIEW_KINDS:
-            break
-        base = link.base
-        if base is None or not base.is_metal or base.dtype != root.dtype:
-            break
-        chain.append((tuple(int(d) for d in root.shape), link))
-        root = base
-    return root, chain
+    import lucid
 
-
-def _owns_storage(root: _T) -> bool:
-    """Whether ``root``'s layout is in its own storage, not a gone base's."""
-    return _metal_views._layout(root) == _metal_views._own_layout(root)
-
-
-def _metal_geometry(t: _T, root: _T) -> tuple[list[int], list[int], int] | None:
-    """Where the Metal tensor ``t`` reads the storage it shares with ``root``.
-
-    The one owner of a Metal view's layout decides it,
-    :func:`lucid._tensor._metal_views._layout` — the reference's place in its
-    base's storage, which a ``stride()`` / ``storage_offset()`` reads too.
-    Replaying the links on a CPU probe placed a window by the CPU's rules
-    instead, which restart the storage at a leading slice (LCD-517), so a
-    view saved and loaded aliased another row than it did live.
-
-    When ``root`` owns its storage, that is the space.  When its own base is
-    gone, the space is ``root``'s elements alone, packed — the freed base's
-    span is no storage anyone can read — and each member is placed in it by
-    which of ``root``'s elements it reads; ``None`` when those are not a
-    strided run.
-    """
-    shape = [int(d) for d in t.shape]
-    layout = _metal_views._layout(t)
-    if _owns_storage(root):
-        return shape, list(layout.stride), layout.offset
-    picked = _metal_views._picked(root, (tuple(shape), layout.stride, layout.offset))
-    if picked is None:
+    if not frame.numel():
         return None
-    offset = int(picked[0].item())
-    step = _contiguous_stride(shape)
-    stride = [
-        int(picked[s].item()) - offset if n > 1 else 1
-        for n, s in zip(shape, step, strict=True)
-    ]
-    placed = _metal_views._window_positions(tuple(shape), tuple(stride), offset)
-    strided = bool((placed == picked).all().item())
-    return (shape, stride, offset) if strided else None
+    f_shape, f_stride, f_offset = _own_geometry(frame)
+    shape = tuple(f_shape)
+    stride_t = tuple(f_stride)
+    size, stride, offset = window
+    reach = sum((n - 1) * s for n, s in zip(shape, stride_t, strict=True))
+    span = sum((n - 1) * s for n, s in zip(size, stride, strict=True))
+    if offset < f_offset or offset + span > f_offset + reach:
+        return None
+    own = _window_positions(shape, stride_t, f_offset)
+    order = lucid.argsort(own)
+    ordered = own[order]
+    wanted = _window_positions(*window)
+    at = lucid.searchsorted(ordered, wanted).clamp(max=ordered.numel() - 1)
+    if not bool((ordered[at] == wanted).all().item()):
+        return None
+    return order[at]
 
 
 @final
 class _Member:
     """A saved tensor and the elements of its address space it reads."""
 
-    __slots__ = ("tensor", "root", "chain", "shape", "stride", "first", "raw")
+    __slots__ = ("tensor", "shape", "stride", "first", "raw")
 
-    def __init__(self, tensor: _T, root: _T, chain: _Chain) -> None:
+    def __init__(self, tensor: _T) -> None:
         self.tensor = tensor
-        self.root = root
-        self.chain = chain
         self.shape: list[int] = []
         self.stride: list[int] = []
         #: Byte position of the first element in the address space.
@@ -205,17 +168,14 @@ class _Member:
 
     def place(self) -> bool:
         """Fix where the member reads; ``False`` if it cannot be placed."""
-        geometry = (
-            _metal_geometry(self.tensor, self.root)
-            if self.tensor.is_metal
-            else _own_geometry(self.tensor)
-        )
-        if geometry is None or any(s < 0 for s in geometry[1]):
+        shape, stride, offset = _own_geometry(self.tensor)
+        if any(s < 0 for s in stride):
             return False
-        self.shape, self.stride, offset = geometry
+        self.shape = shape
+        self.stride = stride
         # A CPU member is placed by address, which a sub-buffer view (a dim-0
-        # slice) shares with its base though its storage offset restarts at
-        # zero; a Metal member by its offset in the space of its root.
+        # slice) shares with its base; a Metal member by its offset in the
+        # root allocation of its view family.
         if self.tensor.is_metal:
             self.first = offset * self.tensor.element_size()
         else:
@@ -228,21 +188,20 @@ class _Member:
         return self.first + _reach(self.shape, self.stride) * self.tensor.element_size()
 
 
-def _address_space(root: _T) -> tuple[str, int]:
+def _address_space(t: _T) -> tuple[str, int]:
     """The space a member's positions are measured in.
 
     CPU tensors share one space, the process's memory, measured by address.
-    A Metal tensor is a space of its own — its engine view family when it has
-    one, or its Python identity — measured from the first element of that
-    space, which the views linked to it share.  Two Metal tensors that read
-    one MLX buffer are not thereby one storage: the buffer of
-    ``ema.load_state_dict(model.state_dict())``'s weights is the model's, and
-    the two must not alias after a load.
+    A Metal tensor belongs to its engine view family when it has one, or its
+    own Python identity, measured from the first element of the family's root
+    allocation.  Two Metal tensors that read one MLX buffer are not thereby one
+    storage: the buffer of ``ema.load_state_dict(model.state_dict())``'s
+    weights is the model's, and the two must not alias after a load.
     """
-    if not root.is_metal:
+    if not t.is_metal:
         return ("memory", 0)
-    fid = root._impl.family_id()
-    return ("family", fid) if fid else ("value", id(root))
+    fid = t._impl.family_id()
+    return ("family", fid) if fid else ("value", id(t))
 
 
 @final
@@ -306,16 +265,60 @@ def _assemble(cluster: list[_Member], lo: int, n: int) -> _C_engine.TensorImpl:
         and _numel(m.shape) == n
     ]
     if covering:
-        top = min(covering, key=lambda m: len(m.chain))
-        return _C_engine.TensorImpl.from_bytes(top.raw, [n], dtype, cpu, False)
+        return _C_engine.TensorImpl.from_bytes(covering[0].raw, [n], dtype, cpu, False)
     buf = _C_engine.zeros([n], dtype, cpu)
-    for m in sorted(cluster, key=lambda m: -len(m.chain)):
+    for m in cluster:
         if _may_overlap(m.shape, m.stride):
             continue
         src = _C_engine.TensorImpl.from_bytes(m.raw, m.shape, dtype, cpu, False)
         offset = (m.first - lo) // itemsize
         _C_engine.TensorImpl._make_view(buf, m.shape, m.stride, offset).copy_from(src)
     return buf
+
+
+def _compact_strided_cluster(
+    plan: _StoragePlan, cluster: list[_Member], n: int
+) -> bool:
+    """Save ``cluster`` in its largest member's packed elements when the span exceeds it."""
+    top = max(cluster, key=lambda m: _numel(m.shape))
+    if _numel(top.shape) >= n or _may_overlap(top.shape, top.stride):
+        return False
+    itemsize = top.tensor.element_size()
+    remapped: list[tuple[_Member, list[int], int]] = []
+    for m in cluster:
+        if m is top:
+            remapped.append((m, _contiguous_stride(m.shape), 0))
+            continue
+        window = (tuple(m.shape), tuple(m.stride), m.first // itemsize)
+        picked = _picked(top.tensor, window)
+        if picked is None:
+            return False
+        offset = int(picked[0].item())
+        step = _contiguous_stride(m.shape)
+        stride = [
+            int(picked[s].item()) - offset if d > 1 else 1
+            for d, s in zip(m.shape, step, strict=True)
+        ]
+        placed = _window_positions(
+            tuple(m.shape), tuple(stride), offset
+        )
+        if not bool((placed == picked).all().item()):
+            return False
+        remapped.append((m, stride, offset))
+    buf = _C_engine.TensorImpl.from_bytes(
+        top.raw, [_numel(top.shape)], top.tensor._impl.dtype, _C_engine.Device.CPU, False
+    )
+    for m, stride, offset in remapped:
+        back = _C_engine.TensorImpl._make_view(buf, m.shape, stride, offset)
+        if bytes(back.to_bytes()) != m.raw:
+            return False
+    for m, stride, offset in remapped:
+        m.stride = stride
+        m.first = offset * itemsize
+    k_lo = min(m.first for m in cluster)
+    k_hi = max(m.end for m in cluster)
+    plan.add_shared(cluster, top.raw[k_lo:k_hi], k_lo)
+    return True
 
 
 def _plan_cluster(plan: _StoragePlan, cluster: list[_Member]) -> None:
@@ -325,6 +328,8 @@ def _plan_cluster(plan: _StoragePlan, cluster: list[_Member]) -> None:
     n = (max(m.end for m in cluster) - lo) // itemsize
     for m in cluster:
         m.raw = bytes(m.tensor._impl.to_bytes())
+    if _compact_strided_cluster(plan, cluster, n):
+        return
     buf = _assemble(cluster, lo, n)
     kept: list[_Member] = []
     for m in cluster:
@@ -376,11 +381,8 @@ def _build_storage_plan(container: object) -> tuple[list[_T], _StoragePlan]:
         if t.numel() == 0:
             plan.add_dense(t, b"")
             continue
-        root, chain = _metal_chain(t)
-        if root is not t:
-            keep_alive.append(root)
-        key = ("metal" if t.is_metal else "cpu", t.dtype._name, _address_space(root))
-        spaces.setdefault(key, []).append(_Member(t, root, chain))
+        key = ("metal" if t.is_metal else "cpu", t.dtype._name, _address_space(t))
+        spaces.setdefault(key, []).append(_Member(t))
     for members in spaces.values():
         if len(members) == 1:
             plan.add_dense(members[0].tensor)

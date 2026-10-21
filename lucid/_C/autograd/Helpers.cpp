@@ -208,7 +208,8 @@ void accumulate_into(Storage& dst, const Storage& src) {
                        // arr pointer in-place so callers holding a reference to
                        // d see the updated value.
                        auto next = ::mlx::core::add(*d.arr, *s.arr);
-                       d.arr = gpu::wrap_mlx_array(std::move(next), d.dtype).arr;
+                       TensorImpl::sync_gpu_grad_slot(
+                           d, gpu::wrap_mlx_array(std::move(next), d.dtype).arr);
                    },
 
                    [&](SharedStorage& d, const SharedStorage& s) {

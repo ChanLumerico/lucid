@@ -270,11 +270,34 @@ def test_gradients_through_free_function_view_writes_match_the_cpu() -> None:
     np.testing.assert_allclose(grads["metal"], grads["cpu"], rtol=1e-6, atol=1e-6)
 
 
+_VIEW_OPS = frozenset(
+    {
+        "as_strided",
+        "broadcast_to",
+        "chunk",
+        "contiguous",
+        "detach",
+        "diagonal",
+        "expand",
+        "flatten",
+        "movedim",
+        "narrow",
+        "permute",
+        "ravel",
+        "reshape",
+        "split",
+        "squeeze",
+        "transpose",
+        "unbind",
+        "unfold",
+        "unsqueeze",
+        "view",
+    }
+)
+
+
 def test_every_free_function_of_a_linked_view_op_is_covered_here() -> None:
-    # A view op added to the table and to the registry must get a case
-    # above, or a free function could slip past unlinked again.
     from lucid._ops._registry import _REGISTRY
-    from lucid._tensor._metal_views import _makers
 
     shared = {
         e.free_fn_name
@@ -282,16 +305,19 @@ def test_every_free_function_of_a_linked_view_op_is_covered_here() -> None:
         if e.free_fn_name is not None and e.free_fn_name == e.method_name
     }
     covered = {case.split(" ")[0] for case in (*FREE_VIEWS, *PIECES)}
-    missing = set(_makers()) & shared - covered
+    missing = _VIEW_OPS & shared - covered
     assert not missing, f"no case for lucid.{', lucid.'.join(sorted(missing))}"
 
 
 def test_a_cpu_view_is_not_linked() -> None:
-    x = lucid.zeros(1, 3, 4)
-    for v in (lucid.squeeze(x, 0), lucid.transpose(x, 1, 2), lucid.Tensor(x)):
-        assert "_metal_view" not in v.__dict__
-    for piece in lucid.split(x, 2, 2):
-        assert "_metal_view" not in piece.__dict__
+    for dev in ("cpu", "metal"):
+        x = lucid.zeros(1, 3, 4, device=dev)
+        for v in (lucid.squeeze(x, 0), lucid.transpose(x, 1, 2), lucid.Tensor(x)):
+            assert "_metal_view" not in v.__dict__
+            assert v._impl.family_id() == x._impl.family_id() != 0
+        for piece in lucid.split(x, 2, 2):
+            assert "_metal_view" not in piece.__dict__
+            assert piece._impl.family_id() == x._impl.family_id() != 0
 
 
 def test_the_free_functions_keep_their_signatures() -> None:

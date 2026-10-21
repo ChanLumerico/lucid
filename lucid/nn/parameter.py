@@ -101,10 +101,6 @@ class Parameter(Tensor):
             impl = _to_impl(data, requires_grad=requires_grad)
         obj = object.__new__(cls)
         obj._impl = impl
-        if isinstance(data, Tensor):
-            from lucid._tensor._metal_views import _rebind_view
-
-            _rebind_view(obj, data)
         return obj
 
     def __init__(
@@ -186,10 +182,7 @@ class UninitializedParameter(Parameter):
         instance's class is rewritten to :class:`Parameter` so nothing
         downstream keeps treating a fully-formed weight as pending.
         """
-        from lucid._tensor._metal_views import _rebind_view
-
         self._impl = _impl_with_grad(data._impl, True)
-        _rebind_view(self, data)
         # Rewriting the class is the point: nothing downstream should keep
         # treating a fully-formed weight as pending.  mypy cannot express
         # an instance narrowing its own type, hence the ignore.

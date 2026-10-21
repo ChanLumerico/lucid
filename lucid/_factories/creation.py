@@ -278,7 +278,7 @@ def empty_strided(
     >>> (t.shape, t.stride())
     ((2, 3), (3, 1))
     """
-    from lucid._tensor._metal_views import _ATTR, _integers
+    from lucid._ops._adapters import _integers
 
     sz = _integers("size", size)
     st = _integers("stride", stride)
@@ -303,9 +303,6 @@ def empty_strided(
     )
     base = empty((needed,), dtype=dtype, device=device, requires_grad=False)
     out = base.as_strided(sz, st, 0)
-    link = out.__dict__.get(_ATTR)
-    if link is not None:
-        link._base = base
     if requires_grad:
         out.requires_grad_(True)
     return out

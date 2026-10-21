@@ -351,15 +351,18 @@ def test_a_recorded_write_into_part_of_a_family_splices_the_base(device: str) ->
     assert _flat(w.grad) == [9.0, 16.0, 25.0]
 
 
-def test_a_recorded_write_next_to_a_strided_metal_view_is_refused() -> None:
-    x = lucid.arange(6.0).to("metal").requires_grad_()
-    y = x * 1.0
-    t = _view(y, [3, 2], [1, 3], 0)
-    with pytest.raises(NotImplementedError, match="strided view"):
+def test_a_recorded_write_next_to_a_strided_metal_view_splices_its_graph() -> None:
+    def run(dev: str) -> tuple[list[float], list[float]]:
+        x = lucid.arange(6.0, device=dev, requires_grad=True)
+        y = x * 1.0
+        t = _view(y, [3, 2], [1, 3], 0)
         y.mul_(2.0)
-    with lucid.no_grad():
-        y.mul_(2.0)
-    assert _flat(t) == [0.0, 6.0, 2.0, 8.0, 4.0, 10.0]
+        c = lucid.arange(1.0, 7.0, device=dev).reshape(3, 2)
+        (t * c).sum().backward()
+        assert x.grad is not None
+        return _flat(t), _flat(x.grad)
+
+    assert run("metal") == run("cpu")
 
 
 # ── any geometry under no_grad: runs, strided slices, scatters ──────────────

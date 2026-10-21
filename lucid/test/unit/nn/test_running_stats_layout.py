@@ -193,20 +193,20 @@ _NATURAL: dict[
 @pytest.mark.parametrize("norm", list(_NORMS))
 @pytest.mark.parametrize("layout", list(_NATURAL))
 def test_a_running_stat_made_by_indexing_is_updated_into_its_base(
-    norm: str, layout: str, ref: Any
+    norm: str, layout: str, device: str, ref: Any
 ) -> None:
     name, x_shape = _NORMS[norm]
     make, geometry = _NATURAL[layout]
     init = _base_init(0)
-    base = lucid.tensor(init.copy())
+    base = lucid.tensor(init.copy()).to(device)
     ref_base = ref.from_numpy(init.copy())
-    bn = getattr(nn, name)(_C, momentum=_MOMENTUM)
+    bn = getattr(nn, name)(_C, momentum=_MOMENTUM).to(device)
     ref_bn = getattr(ref.nn, name)(_C, momentum=_MOMENTUM)
     bn.running_mean = make(base)
     ref_bn.running_mean = make(ref_base)
     for step in range(_STEPS):
         x = _input(step, x_shape)
-        bn(lucid.tensor(x.copy()))
+        bn(lucid.tensor(x.copy()).to(device))
         ref_bn(ref.from_numpy(x.copy()))
     after = _flat(base)
     np.testing.assert_allclose(after, ref_base.numpy(), rtol=_TOL, atol=_TOL)
@@ -307,39 +307,18 @@ _PATHS: dict[str, tuple[str, dict[str, Any], tuple[int, ...]]] = {
     ),
 }
 
-# On Metal, a view made in Python (indexing, ``expand``) is a copy that writes
-# itself back into its base only when a Python in-place method writes it.  The
-# engine kernel that writes BatchNorm's statistics does not go through one.
-_LCD_501 = pytest.mark.xfail(
-    strict=True,
-    reason="LCD-501: an engine writer bypasses the Python link of a Metal "
-    "view made in Python, so BatchNorm's update never reaches the base",
-)
-
-
 def _make(framework_nn: Any, path: str) -> Any:
     name, kwargs, _ = _PATHS[path]
     return getattr(framework_nn, name)(_C, **kwargs)
 
 
 def _cases(*made_by: str) -> list[Any]:
-    """Each path on each device for each way of making the view.
-
-    Every way but ``"engine_view"`` makes it in Python, which BatchNorm on
-    Metal does not honour yet (LCD-501).
-    """
+    """Each path on each device for each way of making the view."""
     return [
         pytest.param(
             path,
             dev,
             kind,
-            marks=(
-                [_LCD_501]
-                if dev == "metal"
-                and path.startswith("batch_norm")
-                and kind != "engine_view"
-                else []
-            ),
             id=f"{path}-{dev}-{kind}",
         )
         for path in _PATHS

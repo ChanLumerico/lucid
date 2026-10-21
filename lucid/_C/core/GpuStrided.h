@@ -41,7 +41,18 @@ struct Geometry {
         stride.reserve(byte_stride.size());
         for (const auto s : byte_stride)
             stride.push_back(s / static_cast<std::int64_t>(elem));
-        contiguous = byte_stride == contiguous_stride(shp, elem);
+        bool is_contig = true;
+        if (numel > 0 && !shape.empty()) {
+            std::int64_t expected = 1;
+            for (std::size_t i = shape.size(); i-- > 0;) {
+                if (shape[i] != 1 && stride[i] != expected) {
+                    is_contig = false;
+                    break;
+                }
+                expected *= shape[i];
+            }
+        }
+        contiguous = is_contig;
     }
 
     // Whether the member reads every element of a root of ``root_numel``
@@ -209,7 +220,9 @@ write(const ::mlx::core::array& root, const ::mlx::core::array& value, const Geo
                                             plan.stop, plan.step),
                            root_shape);
     }
-    return mx::reshape(mx::put_along_axis(flat, positions(g, root_numel), run, 0), root_shape);
+    const mx::StreamOrDevice s =
+        flat.itemsize() >= 8 ? mx::StreamOrDevice(mx::Device::cpu) : mx::StreamOrDevice{};
+    return mx::reshape(mx::put_along_axis(flat, positions(g, root_numel), run, 0, s), root_shape);
 }
 
 }  // namespace lucid::gpu_strided

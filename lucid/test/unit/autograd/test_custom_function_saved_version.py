@@ -122,30 +122,14 @@ def test_a_write_into_a_saved_output_is_refused(device: str) -> None:
         y.backward(lucid.ones_like(y))
 
 
-def test_a_write_into_the_base_of_a_saved_view_is_refused_on_the_cpu() -> None:
-    # The view shares the base's buffer, and with it the base's count.
-    w = lucid.tensor([1.0, 2.0], requires_grad=True)
-    base = lucid.ones(4)
+def test_a_write_into_the_base_of_a_saved_view_is_refused(device: str) -> None:
+    # The view shares the base's buffer/family, and with it the base's count.
+    w = lucid.tensor([1.0, 2.0], requires_grad=True, device=device)
+    base = lucid.ones(4, device=device)
     out = _Mul.apply(w, base[0:2]).sum()
     base.fill_(5.0)
     with pytest.raises(RAISED, match=r"VersionMismatch \(_Mul input 1\)"):
         out.backward()
-
-
-def test_a_saved_view_keeps_its_values_when_its_base_is_written_on_metal(
-    device_gpu_only: str,
-) -> None:
-    # A Metal view taken before its base is written does not see the write
-    # (lucid/_tensor/_metal_views.py), so there is nothing to refuse: the
-    # gradient is the forward-time one, as for a built-in op.  The reference
-    # refuses, its view sharing the buffer.
-    w = lucid.tensor([1.0, 2.0], requires_grad=True, device=device_gpu_only)
-    base = lucid.ones(4, device=device_gpu_only)
-    out = _Mul.apply(w, base[0:2]).sum()
-    base.fill_(5.0)
-    out.backward()
-    assert w.grad is not None
-    assert w.grad.tolist() == [1.0, 1.0]
 
 
 def test_create_graph_reads_through_the_same_check(device: str) -> None:

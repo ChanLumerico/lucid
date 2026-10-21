@@ -122,17 +122,16 @@ def _select_slice(
     if step > 0 and stop <= start:
         return _narrow(impl, dim, start, start, length)
     if step < 0 and stop >= start:
-        return _narrow(impl, dim, 0, 0, length)
+        return _C_engine.contiguous(_narrow(impl, dim, 0, 0, length))
 
     if step == 1:
         return _narrow(impl, dim, start, stop, length)
-    if step > 0 and impl.device == _C_engine.Device.CPU:
-        # A positive step on the CPU is a view, as the reference's is: the run
-        # the slice covers, one-element windows every ``step`` along ``dim``,
-        # and the window axis squeezed away.  split_at, unfold_dim and squeeze
-        # each make a view, and each already has an emitter on every path.
-        # Metal copies below, and so does a negative step, which the
-        # reference does not have.
+    if step > 0:
+        # A positive step is a view, as the reference's is: the run the slice
+        # covers, one-element windows every ``step`` along ``dim``, and the
+        # window axis squeezed away.  split_at, unfold_dim and squeeze each
+        # make a view, and each already has an emitter on every path.  A
+        # negative step copies below, as the reference does not have one.
         windows = _C_engine.unfold_dim(
             _narrow(impl, dim, start, stop, length), dim, 1, step
         )
@@ -962,8 +961,10 @@ def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
     if old.is_metal_shared and not old.requires_grad and not records:
         old.copy_from(impl)
         return
-    if old.is_aliased() or (
-        old.device == _C_engine.Device.CPU and not old.is_contiguous()
+    if (
+        old.is_aliased()
+        or not old.is_contiguous()
+        or old.storage_offset_bytes() != 0
     ):
         _C_engine.assign_inplace(old, impl, "__setitem__")
         return
@@ -1007,8 +1008,10 @@ def _adopt_inplace(t: Tensor, impl: _C_engine.TensorImpl, name: str) -> Tensor:
     if impl is not t._impl:
         if impl.dtype != t._impl.dtype:
             impl = _C_engine.astype(impl, t._impl.dtype)
-        if t._impl.is_aliased() or (
-            t._impl.device == _C_engine.Device.CPU and not t._impl.is_contiguous()
+        if (
+            t._impl.is_aliased()
+            or not t._impl.is_contiguous()
+            or t._impl.storage_offset_bytes() != 0
         ):
             _C_engine.assign_inplace(t._impl, impl, name)
         else:

@@ -7,25 +7,13 @@ expects.  ``_registry.py`` references these adapters as ``engine_fn`` on the
 relevant ``OpEntry``; ``_make_method`` and ``_make_free_fn`` then forward
 both ``*args`` and ``**kwargs`` through, so the adapter sees exactly what
 the user wrote at the call site.
-
-Adapters fall into a few buckets:
-
-* ``_*_adapter``           — translate Python signatures over an existing
-                              engine kernel (sum/mean/squeeze/etc.).
-* composite shim adapters  — pre/post-process around a ``composite/`` op
-                              (scatter, take, index_select, ...).
-* sub-module forwarders    — route into ``lucid.linalg`` / ``lucid.einops``
-                              for top-level aliases (cross, norm, einsum).
-
-The reduction adapters take their axes from :mod:`lucid._ops._reduce`, which
-also holds ``var`` / ``std`` and the numerics they share with the norms.
 """
 
 import inspect
 import itertools
 import math
 import operator
-from typing import Callable, Sequence, TYPE_CHECKING, cast
+from typing import Callable, Sequence, SupportsIndex, TYPE_CHECKING, TypeIs, cast
 
 from lucid._C import engine as _C_engine
 from lucid import _promotion
@@ -519,6 +507,25 @@ def _narrow_adapter(a_impl: _Impl, dim: int, start: int, length: int) -> _Impl:
     return _own_impl(_C_engine.narrow(a_impl, d, s, int(length)), a_impl)
 
 
+def _is_count(value: object) -> TypeIs[SupportsIndex]:
+    return isinstance(value, SupportsIndex) and not isinstance(value, bool)
+
+
+def _integers(name: str, value: object) -> tuple[int, ...]:
+    if not isinstance(value, Sequence):
+        raise TypeError(
+            f"as_strided(): argument {name!r} must be a sequence of ints, not "
+            f"{type(value).__name__}"
+        )
+    for at, item in enumerate(value):
+        if not _is_count(item):
+            raise TypeError(
+                f"as_strided(): argument {name!r} must be a sequence of ints, but "
+                f"found an element of type {type(item).__name__} at position {at}"
+            )
+    return tuple(operator.index(item) for item in value)
+
+
 def _as_strided_adapter(
     x_impl: _Impl,
     size: Sequence[int],
@@ -526,12 +533,31 @@ def _as_strided_adapter(
     storage_offset: int | None = None,
 ) -> _Impl:
     """as_strided(x, size, stride, storage_offset=None), all in elements."""
-    return _C_engine.as_strided(
-        x_impl,
-        [int(s) for s in size],
-        [int(s) for s in stride],
-        None if storage_offset is None else int(storage_offset),
-    )
+    if storage_offset is not None and not _is_count(storage_offset):
+        raise TypeError(
+            "as_strided(): argument 'storage_offset' must be int or None, not "
+            f"{type(storage_offset).__name__}"
+        )
+    at = None if storage_offset is None else operator.index(storage_offset)
+    if at is not None and at < 0:
+        raise _C_engine.LucidError(f"as_strided: invalid storage offset {at}")
+    sz = _integers("size", size)
+    st = _integers("stride", stride)
+    return _C_engine.as_strided(x_impl, list(sz), list(st), at)
+
+
+_as_strided_adapter.__name__ = _as_strided_adapter.__qualname__ = "as_strided"
+
+
+def _contiguous_adapter(a_impl: _Impl) -> _Impl:
+    """contiguous(a) — return the input itself when already contiguous outside a trace."""
+    if (
+        a_impl.is_contiguous()
+        and _C_engine.compile.current_tracer() is None
+        and (not a_impl.is_phantom or _C_engine.phantom_mode())
+    ):
+        return a_impl
+    return _C_engine.contiguous(a_impl)
 
 
 # ── Layout / shape adapters ──────────────────────────────────────────────────
