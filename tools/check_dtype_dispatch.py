@@ -97,6 +97,17 @@ DEFINING_FILE = "lucid/_C/core/Dtype.h"
 
 _CPU = "lucid/_C/backend/cpu/CpuBackend.h"
 _GPU = "lucid/_C/backend/gpu/GpuBackend.h"
+_CPU_METHODS = "lucid/_C/backend/cpu/methods/"
+_GPU_METHODS = "lucid/_C/backend/gpu/methods/"
+
+
+def _known_unit(rel: str) -> str:
+    """Backend header and its out-of-line method TUs share one ``_KNOWN`` unit."""
+    if rel == _CPU or (rel.startswith(_CPU_METHODS) and rel.endswith(".cpp")):
+        return _CPU
+    if rel == _GPU or (rel.startswith(_GPU_METHODS) and rel.endswith(".cpp")):
+        return _GPU
+    return rel
 
 #: Sites that predate the rule: ``(file, function, rule) -> (hits, reason)``.
 #: Each reason says why the site is not the defect today and what retires
@@ -747,9 +758,16 @@ def main(argv: list[str] | None = None) -> int:
     by_key: dict[tuple[str, str, str], list[Hit]] = {}
     for f in files:
         for h in scan(f, root):
-            by_key.setdefault((h.path, h.function, h.rule), []).append(h)
+            by_key.setdefault((_known_unit(h.path), h.function, h.rule), []).append(h)
 
     checked = {f.relative_to(root).as_posix() for f in files}
+    unit_files: dict[str, set[str]] = {}
+    for f in _files([], root):
+        rel = f.relative_to(root).as_posix()
+        unit_files.setdefault(_known_unit(rel), set()).add(rel)
+    checked_units = {
+        unit for unit, members in unit_files.items() if members and members <= checked
+    }
     new: list[Hit] = []
     for key, hits in sorted(by_key.items()):
         allowed = _KNOWN.get(key, (0, ""))[0]
@@ -761,7 +779,7 @@ def main(argv: list[str] | None = None) -> int:
     stale = [
         f"  {path} {func} [{rule}]: listed {count}, found {len(by_key.get((path, func, rule), []))}"
         for (path, func, rule), (count, _) in sorted(_KNOWN.items())
-        if path in checked and len(by_key.get((path, func, rule), [])) < count
+        if path in checked_units and len(by_key.get((path, func, rule), [])) < count
     ]
 
     for h in new:

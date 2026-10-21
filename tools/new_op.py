@@ -346,73 +346,197 @@ def _mod_ibackend_binary(name: str, dry_run: bool) -> None:
     write(path, insert_after(text, anchor, insertion), dry_run)
 
 
-def _mod_cpu_unary(name: str, dry_run: bool) -> None:
-    path = BE / "cpu" / "CpuBackend.h"
+def _write_target(path: Path, text: str, dry_run: bool, root: Path = ROOT) -> None:
+    if dry_run:
+        rel = path.relative_to(root) if path.is_relative_to(root) else path
+        print(f"\n{'─'*60}")
+        print(f"Would write: {rel}")
+        print(f"{'─'*60}")
+        print(text[:800] + ("..." if len(text) > 800 else ""))
+    else:
+        rel = path.relative_to(root) if path.is_relative_to(root) else path
+        path.write_text(text, encoding="utf-8")
+        print(f"  ✅  {rel}")
+
+
+def _mod_cpu_unary(
+    name: str, dry_run: bool, be_dir: Path = BE, root: Path = ROOT
+) -> None:
+    path = be_dir / "cpu" / "CpuBackend.h"
     text = read(path)
-    # Insert before the reciprocal implementation (comes right after erfinv)
-    anchor = "    Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) override {"
-    stub = (
-        f"    // TODO: implement {name} on CPU (vDSP/vForce/Accelerate).\n"
-        f"    Storage {name}(const Storage& a, const Shape& shape, Dtype dt) override {{\n"
-        f"        (void)a; (void)shape; (void)dt;\n"
-        f'        ErrorBuilder("cpu_backend::{name}").not_implemented("fill in implementation");\n'
-        f"        return a;\n"
-        f"    }}\n\n"
-    )
-    write(path, insert_before(text, anchor, stub), dry_run)
+    inline_anchor = "    Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) override {"
+    decl_anchor = "    Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) override;"
+    if inline_anchor in text:
+        stub = (
+            f"    // TODO: implement {name} on CPU (vDSP/vForce/Accelerate).\n"
+            f"    Storage {name}(const Storage& a, const Shape& shape, Dtype dt) override {{\n"
+            f"        (void)a; (void)shape; (void)dt;\n"
+            f'        ErrorBuilder("cpu_backend::{name}").not_implemented("fill in implementation");\n'
+            f"        return a;\n"
+            f"    }}\n\n"
+        )
+        _write_target(path, insert_before(text, inline_anchor, stub), dry_run, root)
+        return
+    if decl_anchor in text:
+        decl = f"    Storage {name}(const Storage& a, const Shape& shape, Dtype dt) override;\n\n"
+        _write_target(path, insert_before(text, decl_anchor, decl), dry_run, root)
+        cpp_path = be_dir / "cpu" / "methods" / "Unary.cpp"
+        cpp_text = read(cpp_path)
+        cpp_anchor = "Storage CpuBackend::reciprocal(const Storage& a, const Shape& shape, Dtype dt) {"
+        cpp_stub = (
+            f"// TODO: implement {name} on CPU (vDSP/vForce/Accelerate).\n"
+            f"Storage CpuBackend::{name}(const Storage& a, const Shape& shape, Dtype dt) {{\n"
+            f"    (void)a; (void)shape; (void)dt;\n"
+            f'    ErrorBuilder("cpu_backend::{name}").not_implemented("fill in implementation");\n'
+            f"    return a;\n"
+            f"}}\n\n"
+        )
+        _write_target(
+            cpp_path, insert_before(cpp_text, cpp_anchor, cpp_stub), dry_run, root
+        )
+        return
+    raise ValueError(f"Anchor not found in {path}: expected reciprocal declaration or inline body")
 
 
-def _mod_cpu_binary(name: str, dry_run: bool) -> None:
-    path = BE / "cpu" / "CpuBackend.h"
+def _mod_cpu_binary(
+    name: str, dry_run: bool, be_dir: Path = BE, root: Path = ROOT
+) -> None:
+    path = be_dir / "cpu" / "CpuBackend.h"
     text = read(path)
-    anchor = "    Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {"
-    stub = (
-        f"    // TODO: implement {name} on CPU.\n"
-        f"    Storage {name}(const Storage& a, const Storage& b,\n"
-        f"                   const Shape& shape, Dtype dt) override {{\n"
-        f"        (void)a; (void)b; (void)shape; (void)dt;\n"
-        f'        ErrorBuilder("cpu_backend::{name}").not_implemented("fill in implementation");\n'
-        f"        return a;\n"
-        f"    }}\n\n"
-    )
-    write(path, insert_before(text, anchor, stub), dry_run)
+    inline_anchor = "    Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {"
+    decl_anchor = "    Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;"
+    if inline_anchor in text:
+        stub = (
+            f"    // TODO: implement {name} on CPU.\n"
+            f"    Storage {name}(const Storage& a, const Storage& b,\n"
+            f"                   const Shape& shape, Dtype dt) override {{\n"
+            f"        (void)a; (void)b; (void)shape; (void)dt;\n"
+            f'        ErrorBuilder("cpu_backend::{name}").not_implemented("fill in implementation");\n'
+            f"        return a;\n"
+            f"    }}\n\n"
+        )
+        _write_target(path, insert_before(text, inline_anchor, stub), dry_run, root)
+        return
+    if decl_anchor in text:
+        decl = f"    Storage {name}(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;\n\n"
+        _write_target(path, insert_before(text, decl_anchor, decl), dry_run, root)
+        cpp_path = be_dir / "cpu" / "methods" / "Binary.cpp"
+        cpp_text = read(cpp_path)
+        cpp_anchor = "Storage CpuBackend::add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) {"
+        cpp_stub = (
+            f"// TODO: implement {name} on CPU.\n"
+            f"Storage CpuBackend::{name}(const Storage& a, const Storage& b,\n"
+            f"                        const Shape& shape, Dtype dt) {{\n"
+            f"    (void)a; (void)b; (void)shape; (void)dt;\n"
+            f'    ErrorBuilder("cpu_backend::{name}").not_implemented("fill in implementation");\n'
+            f"    return a;\n"
+            f"}}\n\n"
+        )
+        _write_target(
+            cpp_path, insert_before(cpp_text, cpp_anchor, cpp_stub), dry_run, root
+        )
+        return
+    raise ValueError(f"Anchor not found in {path}: expected add declaration or inline body")
 
 
-def _mod_gpu_unary(name: str, dry_run: bool) -> None:
-    path = BE / "gpu" / "GpuBackend.h"
+def _mod_gpu_unary(
+    name: str, dry_run: bool, be_dir: Path = BE, root: Path = ROOT
+) -> None:
+    path = be_dir / "gpu" / "GpuBackend.h"
     text = read(path)
-    anchor = "    Storage erfinv(const Storage& a, const Shape& shape, Dtype dt) override {\n        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::erfinv(x); });\n    }"
-    stub = (
-        f"\n\n"
-        f"    // TODO: replace with the correct MLX op for {name}.\n"
-        f"    Storage {name}(const Storage& a, const Shape& shape, Dtype dt) override {{\n"
-        f"        return mlx_unary(a, shape, dt, [dt](auto& x) {{\n"
-        f"            // TODO: return ::mlx::core::{name}(x);\n"
-        f"            (void)dt;\n"
-        f'            throw std::runtime_error("{name}: GPU kernel not yet implemented");\n'
-        f"            return x;\n"
-        f"        }});\n"
-        f"    }}"
+    inline_anchor = (
+        "    Storage erfinv(const Storage& a, const Shape& shape, Dtype dt) override {\n"
+        "        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::erfinv(x); });\n"
+        "    }"
     )
-    write(path, insert_after(text, anchor, stub), dry_run)
+    decl_anchor = "    Storage erfinv(const Storage& a, const Shape& shape, Dtype dt) override;"
+    if inline_anchor in text:
+        stub = (
+            f"\n\n"
+            f"    // TODO: replace with the correct MLX op for {name}.\n"
+            f"    Storage {name}(const Storage& a, const Shape& shape, Dtype dt) override {{\n"
+            f"        return mlx_unary(a, shape, dt, [dt](auto& x) {{\n"
+            f"            // TODO: return ::mlx::core::{name}(x);\n"
+            f"            (void)dt;\n"
+            f'            throw std::runtime_error("{name}: GPU kernel not yet implemented");\n'
+            f"            return x;\n"
+            f"        }});\n"
+            f"    }}"
+        )
+        _write_target(path, insert_after(text, inline_anchor, stub), dry_run, root)
+        return
+    if decl_anchor in text:
+        decl = f"\n    Storage {name}(const Storage& a, const Shape& shape, Dtype dt) override;"
+        _write_target(path, insert_after(text, decl_anchor, decl), dry_run, root)
+        cpp_path = be_dir / "gpu" / "methods" / "Unary.cpp"
+        cpp_text = read(cpp_path)
+        cpp_anchor = (
+            "Storage GpuBackend::erfinv(const Storage& a, const Shape& shape, Dtype dt) {\n"
+            "    return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::erfinv(x); });\n"
+            "}"
+        )
+        cpp_stub = (
+            f"\n\n"
+            f"// TODO: replace with the correct MLX op for {name}.\n"
+            f"Storage GpuBackend::{name}(const Storage& a, const Shape& shape, Dtype dt) {{\n"
+            f"    return mlx_unary(a, shape, dt, [dt](auto& x) {{\n"
+            f"        // TODO: return ::mlx::core::{name}(x);\n"
+            f"        (void)dt;\n"
+            f'        throw std::runtime_error("{name}: GPU kernel not yet implemented");\n'
+            f"        return x;\n"
+            f"    }});\n"
+            f"}}"
+        )
+        _write_target(
+            cpp_path, insert_after(cpp_text, cpp_anchor, cpp_stub), dry_run, root
+        )
+        return
+    raise ValueError(f"Anchor not found in {path}: expected erfinv declaration or inline body")
 
 
-def _mod_gpu_binary(name: str, dry_run: bool) -> None:
-    path = BE / "gpu" / "GpuBackend.h"
+def _mod_gpu_binary(
+    name: str, dry_run: bool, be_dir: Path = BE, root: Path = ROOT
+) -> None:
+    path = be_dir / "gpu" / "GpuBackend.h"
     text = read(path)
-    anchor = "    Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {"
-    stub = (
-        f"    // TODO: replace with the correct MLX op for {name}.\n"
-        f"    Storage {name}(const Storage& a, const Storage& b,\n"
-        f"                   const Shape& shape, Dtype dt) override {{\n"
-        f"        return mlx_binary(a, b, shape, dt, [](auto& x, auto& y) {{\n"
-        f"            // TODO: return ::mlx::core::{name}(x, y);\n"
-        f'            throw std::runtime_error("{name}: GPU kernel not yet implemented");\n'
-        f"            return x;\n"
-        f"        }});\n"
-        f"    }}\n\n"
-    )
-    write(path, insert_before(text, anchor, stub), dry_run)
+    inline_anchor = "    Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {"
+    decl_anchor = "    Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;"
+    if inline_anchor in text:
+        stub = (
+            f"    // TODO: replace with the correct MLX op for {name}.\n"
+            f"    Storage {name}(const Storage& a, const Storage& b,\n"
+            f"                   const Shape& shape, Dtype dt) override {{\n"
+            f"        return mlx_binary(a, b, shape, dt, [](auto& x, auto& y) {{\n"
+            f"            // TODO: return ::mlx::core::{name}(x, y);\n"
+            f'            throw std::runtime_error("{name}: GPU kernel not yet implemented");\n'
+            f"            return x;\n"
+            f"        }});\n"
+            f"    }}\n\n"
+        )
+        _write_target(path, insert_before(text, inline_anchor, stub), dry_run, root)
+        return
+    if decl_anchor in text:
+        decl = f"    Storage {name}(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;\n\n"
+        _write_target(path, insert_before(text, decl_anchor, decl), dry_run, root)
+        cpp_path = be_dir / "gpu" / "methods" / "Binary.cpp"
+        cpp_text = read(cpp_path)
+        cpp_anchor = "Storage GpuBackend::add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) {"
+        cpp_stub = (
+            f"// TODO: replace with the correct MLX op for {name}.\n"
+            f"Storage GpuBackend::{name}(const Storage& a, const Storage& b,\n"
+            f"                        const Shape& shape, Dtype dt) {{\n"
+            f"    return mlx_binary(a, b, shape, dt, [](auto& x, auto& y) {{\n"
+            f"        // TODO: return ::mlx::core::{name}(x, y);\n"
+            f'        throw std::runtime_error("{name}: GPU kernel not yet implemented");\n'
+            f"        return x;\n"
+            f"    }});\n"
+            f"}}\n\n"
+        )
+        _write_target(
+            cpp_path, insert_before(cpp_text, cpp_anchor, cpp_stub), dry_run, root
+        )
+        return
+    raise ValueError(f"Anchor not found in {path}: expected add declaration or inline body")
 
 
 def _mod_bind_unary(name: str, camel: str, dry_run: bool) -> None:

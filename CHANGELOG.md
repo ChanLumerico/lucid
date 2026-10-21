@@ -138,6 +138,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - make real, imag, view_as_real, and view_as_complex views
 
+- add backend split codemod, symdiff, and golden digest
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster
