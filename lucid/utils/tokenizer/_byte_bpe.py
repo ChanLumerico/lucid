@@ -23,24 +23,21 @@ request, no new C++ class — just a subclass that swaps in the right
 pre-tokenizer + post-decode.
 """
 
-import os
-from typing import Iterable, override
+from typing import Callable, Iterable, Self, override
 
 from lucid.utils.tokenizer._base import SpecialTokens
 from lucid.utils.tokenizer._bpe import (
     BPETokenizer,
     BPETokenizerFast,
-    _load_merges_txt,
-    _load_unified_tokenizer_json,
-    _load_vocab_json,
-    _special_tokens_from_map,
+    _BPECommonMixin,
+    _load_bpe_checkpoint,
 )
 from lucid.utils.tokenizer._normalizers import NFC, Normalizer
 from lucid.utils.tokenizer._pre_tokenizers import ByteLevel
 
 
-class _ByteLevelDecodeMixin:
-    """Shared decode override for both BBPE flavours.
+class _ByteLevelDecodeMixin(_BPECommonMixin):
+    """Shared decode and persistence override for both BBPE flavours.
 
     Joins token surface forms, runs them through
     :meth:`ByteLevel.decode_bytes` to undo the GPT-2 byte-to-unicode
@@ -49,8 +46,9 @@ class _ByteLevelDecodeMixin:
     ``"Ġworld"`` instead of ``" world"``.
     """
 
-    _id_to_token: dict[int, str]
+    _add_prefix_space: bool
 
+    @override
     def _decode_one(self, ids: list[int]) -> str:
         """Reverse the byte-mapping and UTF-8 decode joined tokens."""
         # 1. Join the byte-mapped tokens.
@@ -66,6 +64,46 @@ class _ByteLevelDecodeMixin:
             return text
         # 3. UTF-8 decode (errors=replace so we never raise).
         return raw.decode("utf-8", errors="replace")
+
+    @override
+    @property
+    def algo(self) -> str:
+        """Algorithm identifier (always ``"byte_bpe"``)."""
+        return "byte_bpe"
+
+    @override
+    def _save_extras(self) -> dict[str, object]:
+        """Emit the ByteLevelBPE ``model`` block for ``tokenizer.json``."""
+        return {
+            "model": {
+                "type": "ByteLevelBPE",
+                "vocab": self._vocab,
+                "merges": [list(m) for m in self._merges],
+                "add_prefix_space": self._add_prefix_space,
+            }
+        }
+
+
+def _load_byte_bpe_from_file[T](
+    cls: Callable[..., T],
+    directory: str,
+    *,
+    add_prefix_space: bool = False,
+    normalizer: Normalizer | None = None,
+    special_tokens: SpecialTokens | None = None,
+) -> T:
+    """Shared checkpoint loader for :class:`ByteLevelBPETokenizer` and :class:`ByteLevelBPETokenizerFast`."""
+    vocab, merges, st, model_data = _load_bpe_checkpoint(
+        directory, special_tokens, getattr(cls, "__name__", "ByteLevelBPETokenizer")
+    )
+    resolved_prefix = bool(model_data.get("add_prefix_space", add_prefix_space))
+    return cls(
+        vocab,
+        merges,
+        add_prefix_space=resolved_prefix,
+        normalizer=normalizer,
+        special_tokens=st,
+    )
 
 
 # ── Pure-Python BBPE ────────────────────────────────────────────────
@@ -178,110 +216,6 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
         )
 
     @override
-    @property
-    def algo(self) -> str:
-        r"""Algorithm identifier (always ``"byte_bpe"``).
-
-        Returns
-        -------
-        str
-            Constant string ``"byte_bpe"`` — distinguishes byte-level
-            BPE from classical BPE in the unified ``tokenizer.json``.
-        """
-        return "byte_bpe"
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        r"""Emit the ByteLevelBPE ``model`` block for ``tokenizer.json``."""
-        return {
-            "model": {
-                "type": "ByteLevelBPE",
-                "vocab": self._vocab,
-                "merges": [list(m) for m in self._merges],
-                "add_prefix_space": self._add_prefix_space,
-            }
-        }
-
-    @override
-    @classmethod
-    def from_file(  # type: ignore[override]
-        cls,
-        directory: str,
-        *,
-        add_prefix_space: bool = False,
-        normalizer: Normalizer | None = None,
-        special_tokens: SpecialTokens | None = None,
-    ) -> ByteLevelBPETokenizer:
-        """Load from a Hugging Face-compatible directory.
-
-        Same on-disk format as :class:`BPETokenizer`: either the
-        legacy ``vocab.json`` + ``merges.txt`` pair OR the unified
-        ``tokenizer.json``.  When the unified file is present, it
-        wins and its ``model.add_prefix_space`` overrides the
-        ``add_prefix_space`` argument.
-
-        Parameters
-        ----------
-        directory : str
-            Path to the tokenizer directory.
-        add_prefix_space : bool, default False
-            Fallback value when not specified in the on-disk config.
-        normalizer : Normalizer or None, optional, keyword-only
-            See class docstring.
-        special_tokens : SpecialTokens or None, optional, keyword-only
-            See class docstring.  Falls back to the on-disk
-            ``special_tokens_map.json`` when omitted.
-
-        Returns
-        -------
-        ByteLevelBPETokenizer
-            A new tokenizer populated from disk.
-
-        Raises
-        ------
-        FileNotFoundError
-            If neither ``tokenizer.json`` nor the legacy pair exists
-            in ``directory``.
-        """
-        import json
-
-        unified = os.path.join(directory, "tokenizer.json")
-        if os.path.isfile(unified):
-            vocab, merges = _load_unified_tokenizer_json(unified)
-            # Check the unified file for add_prefix_space override.
-            with open(unified, encoding="utf-8") as f:
-                data = json.load(f)
-            model = data.get("model", {})
-            add_prefix_space = bool(model.get("add_prefix_space", add_prefix_space))
-        else:
-            vj = os.path.join(directory, "vocab.json")
-            mt = os.path.join(directory, "merges.txt")
-            if not (os.path.isfile(vj) and os.path.isfile(mt)):
-                raise FileNotFoundError(
-                    f"ByteLevelBPETokenizer.from_file: neither "
-                    f"tokenizer.json nor (vocab.json + merges.txt) found "
-                    f"in {directory}"
-                )
-            vocab = _load_vocab_json(vj)
-            merges = _load_merges_txt(mt)
-        st = special_tokens
-        if st is None:
-            sp_path = os.path.join(directory, "special_tokens_map.json")
-            if os.path.isfile(sp_path):
-                with open(sp_path, encoding="utf-8") as f:
-                    sp = json.load(f)
-                st = _special_tokens_from_map(sp)
-        return cls(
-            vocab,
-            merges,
-            add_prefix_space=add_prefix_space,
-            normalizer=normalizer,
-            special_tokens=st,
-        )
-
-    from_pretrained = from_file  # type: ignore[assignment]
-
-    @override
     def train(
         self,
         corpus: Iterable[str],
@@ -306,6 +240,27 @@ class ByteLevelBPETokenizer(_ByteLevelDecodeMixin, BPETokenizer):
             50 257; RoBERTa's is 50 265.
         """
         super().train(corpus, vocab_size=vocab_size)
+
+    @override
+    @classmethod
+    def from_file(  # type: ignore[override]
+        cls,
+        directory: str,
+        *,
+        add_prefix_space: bool = False,
+        normalizer: Normalizer | None = None,
+        special_tokens: SpecialTokens | None = None,
+    ) -> Self:
+        """Load from a Hugging Face-compatible directory."""
+        return _load_byte_bpe_from_file(
+            cls,
+            directory,
+            add_prefix_space=add_prefix_space,
+            normalizer=normalizer,
+            special_tokens=special_tokens,
+        )
+
+    from_pretrained = from_file  # type: ignore[assignment]
 
 
 # ── Fast (C++-backed) BBPE ──────────────────────────────────────────
@@ -380,102 +335,6 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
         )
 
     @override
-    @property
-    def algo(self) -> str:
-        r"""Algorithm identifier (always ``"byte_bpe"``).
-
-        Returns
-        -------
-        str
-            Constant string ``"byte_bpe"``.
-        """
-        return "byte_bpe"
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        r"""Emit the ByteLevelBPE ``model`` block for ``tokenizer.json``."""
-        return {
-            "model": {
-                "type": "ByteLevelBPE",
-                "vocab": self._vocab,
-                "merges": [list(m) for m in self._merges],
-                "add_prefix_space": self._add_prefix_space,
-            }
-        }
-
-    @override
-    @classmethod
-    def from_file(  # type: ignore[override]
-        cls,
-        directory: str,
-        *,
-        add_prefix_space: bool = False,
-        normalizer: Normalizer | None = None,
-        special_tokens: SpecialTokens | None = None,
-    ) -> ByteLevelBPETokenizerFast:
-        """Identical loader to :meth:`ByteLevelBPETokenizer.from_file`;
-        the only difference is the returned class (and hence the
-        encode backend).
-
-        Parameters
-        ----------
-        directory : str
-            Path to the tokenizer directory.
-        add_prefix_space : bool, default False
-            Fallback value when not specified in the on-disk config.
-        normalizer : Normalizer or None, optional, keyword-only
-            See :meth:`ByteLevelBPETokenizer.from_file`.
-        special_tokens : SpecialTokens or None, optional, keyword-only
-            See :meth:`ByteLevelBPETokenizer.from_file`.
-
-        Returns
-        -------
-        ByteLevelBPETokenizerFast
-            A new C++-backed tokenizer populated from disk.
-
-        Raises
-        ------
-        FileNotFoundError
-            If neither ``tokenizer.json`` nor the legacy pair exists.
-        """
-        import json
-
-        unified = os.path.join(directory, "tokenizer.json")
-        if os.path.isfile(unified):
-            vocab, merges = _load_unified_tokenizer_json(unified)
-            with open(unified, encoding="utf-8") as f:
-                data = json.load(f)
-            model = data.get("model", {})
-            add_prefix_space = bool(model.get("add_prefix_space", add_prefix_space))
-        else:
-            vj = os.path.join(directory, "vocab.json")
-            mt = os.path.join(directory, "merges.txt")
-            if not (os.path.isfile(vj) and os.path.isfile(mt)):
-                raise FileNotFoundError(
-                    f"ByteLevelBPETokenizerFast.from_file: neither "
-                    f"tokenizer.json nor (vocab.json + merges.txt) found "
-                    f"in {directory}"
-                )
-            vocab = _load_vocab_json(vj)
-            merges = _load_merges_txt(mt)
-        st = special_tokens
-        if st is None:
-            sp_path = os.path.join(directory, "special_tokens_map.json")
-            if os.path.isfile(sp_path):
-                with open(sp_path, encoding="utf-8") as f:
-                    sp = json.load(f)
-                st = _special_tokens_from_map(sp)
-        return cls(
-            vocab,
-            merges,
-            add_prefix_space=add_prefix_space,
-            normalizer=normalizer,
-            special_tokens=st,
-        )
-
-    from_pretrained = from_file  # type: ignore[assignment]
-
-    @override
     def train(
         self,
         corpus: Iterable[str],
@@ -515,3 +374,24 @@ class ByteLevelBPETokenizerFast(_ByteLevelDecodeMixin, BPETokenizerFast):
         self._id_to_token = {v: k for k, v in self._vocab.items()}
         self._refresh_special_ids()
         self._sync_special_tokens_to_cpp()
+
+    @override
+    @classmethod
+    def from_file(  # type: ignore[override]
+        cls,
+        directory: str,
+        *,
+        add_prefix_space: bool = False,
+        normalizer: Normalizer | None = None,
+        special_tokens: SpecialTokens | None = None,
+    ) -> Self:
+        """Load from a Hugging Face-compatible directory."""
+        return _load_byte_bpe_from_file(
+            cls,
+            directory,
+            add_prefix_space=add_prefix_space,
+            normalizer=normalizer,
+            special_tokens=special_tokens,
+        )
+
+    from_pretrained = from_file  # type: ignore[assignment]

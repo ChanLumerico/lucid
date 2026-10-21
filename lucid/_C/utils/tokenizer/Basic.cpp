@@ -29,21 +29,11 @@ LookupTokenizer::LookupTokenizer(std::unordered_map<std::string, TokenId> vocab)
 // Invariant: must be called after any mutation of ``vocab_`` so that
 // ``decode`` / ``id_to_token`` see consistent state.
 void LookupTokenizer::rebuild_id_to_token_() {
-    TokenId max_id = -1;
-    for (const auto& [tok, id] : vocab_)
-        if (id > max_id)
-            max_id = id;
-    id_to_token_.assign(static_cast<std::size_t>(max_id + 1), std::string{});
-    for (const auto& [tok, id] : vocab_) {
-        if (id >= 0 && static_cast<std::size_t>(id) < id_to_token_.size())
-            id_to_token_[static_cast<std::size_t>(id)] = tok;
-    }
+    detail::rebuild_id_to_token(vocab_, id_to_token_);
 }
 
 std::string LookupTokenizer::id_to_token(TokenId id) const {
-    if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
-        return "";
-    return id_to_token_[static_cast<std::size_t>(id)];
+    return detail::lookup_id_to_token(id_to_token_, id);
 }
 
 // Shared encode hot path — pre-tokenize via the subclass's
@@ -70,13 +60,7 @@ IdSequence LookupTokenizer::encode(const std::string& text) const {
 // that need delimiter insertion (Whitespace / Word / Regex) override
 // to emit spaces between tokens.
 std::string LookupTokenizer::decode(const IdSequence& ids) const {
-    std::string out;
-    for (TokenId id : ids) {
-        if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
-            continue;
-        out += id_to_token_[static_cast<std::size_t>(id)];
-    }
-    return out;
+    return detail::decode_joined_tokens(ids, id_to_token_, /*space_separated=*/false);
 }
 
 // Shared training — walk the corpus through the subclass's
@@ -163,20 +147,7 @@ std::vector<std::string> CharTokenizer::split_to_chunks_(const std::string& text
     std::vector<std::string> out;
     std::size_t i = 0;
     while (i < text.size()) {
-        unsigned char c0 = static_cast<unsigned char>(text[i]);
-        std::size_t cp_len;
-        if (c0 < 0x80)
-            cp_len = 1;
-        else if ((c0 >> 5) == 0b110)
-            cp_len = 2;
-        else if ((c0 >> 4) == 0b1110)
-            cp_len = 3;
-        else if ((c0 >> 3) == 0b11110)
-            cp_len = 4;
-        else
-            cp_len = 1;  // invalid lead — fall through as single byte
-        if (i + cp_len > text.size())
-            cp_len = text.size() - i;
+        const std::size_t cp_len = detail::utf8_codepoint_len(text, i);
         out.emplace_back(text.substr(i, cp_len));
         i += cp_len;
     }
@@ -193,38 +164,14 @@ WhitespaceTokenizer::WhitespaceTokenizer(std::unordered_map<std::string, TokenId
 // Split rule: emit each whitespace-delimited run as a chunk; the
 // whitespace itself is discarded (decode rebuilds it as single spaces).
 std::vector<std::string> WhitespaceTokenizer::split_to_chunks_(const std::string& text) const {
-    std::vector<std::string> out;
-    std::size_t i = 0;
-    while (i < text.size()) {
-        while (i < text.size() &&
-               (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
-            ++i;
-        if (i >= text.size())
-            break;
-        std::size_t start = i;
-        while (i < text.size() &&
-               !(text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
-            ++i;
-        out.emplace_back(text.substr(start, i - start));
-    }
-    return out;
+    return detail::split_ascii_whitespace(text);
 }
 
 std::string WhitespaceTokenizer::decode(const IdSequence& ids) const {
     // Whitespace tokenizer joins tokens with a single space — the
     // original whitespace was destroyed during encode, so " " is the
     // canonical reconstruction.
-    std::string out;
-    bool first = true;
-    for (TokenId id : ids) {
-        if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
-            continue;
-        if (!first)
-            out += ' ';
-        out += id_to_token_[static_cast<std::size_t>(id)];
-        first = false;
-    }
-    return out;
+    return detail::decode_joined_tokens(ids, id_to_token_, /*space_separated=*/true);
 }
 
 // ── WordTokenizer ───────────────────────────────────────────────────
@@ -241,35 +188,11 @@ std::vector<std::string> WordTokenizer::split_to_chunks_(const std::string& text
     // Same split rule as Whitespace.  The semantic difference (UNK
     // fallback on OOV instead of drop) is enforced by the base
     // ``encode`` plus a configured ``special_.unk``.
-    std::vector<std::string> out;
-    std::size_t i = 0;
-    while (i < text.size()) {
-        while (i < text.size() &&
-               (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
-            ++i;
-        if (i >= text.size())
-            break;
-        std::size_t start = i;
-        while (i < text.size() &&
-               !(text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
-            ++i;
-        out.emplace_back(text.substr(start, i - start));
-    }
-    return out;
+    return detail::split_ascii_whitespace(text);
 }
 
 std::string WordTokenizer::decode(const IdSequence& ids) const {
-    std::string out;
-    bool first = true;
-    for (TokenId id : ids) {
-        if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
-            continue;
-        if (!first)
-            out += ' ';
-        out += id_to_token_[static_cast<std::size_t>(id)];
-        first = false;
-    }
-    return out;
+    return detail::decode_joined_tokens(ids, id_to_token_, /*space_separated=*/true);
 }
 
 // ── RegexTokenizer ──────────────────────────────────────────────────
@@ -294,17 +217,7 @@ std::string RegexTokenizer::decode(const IdSequence& ids) const {
     // Regex tokenizer has no canonical reconstruction (the unmatched
     // delimiters were dropped during encode).  Join with single
     // space as a reasonable default — same as Whitespace/Word.
-    std::string out;
-    bool first = true;
-    for (TokenId id : ids) {
-        if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
-            continue;
-        if (!first)
-            out += ' ';
-        out += id_to_token_[static_cast<std::size_t>(id)];
-        first = false;
-    }
-    return out;
+    return detail::decode_joined_tokens(ids, id_to_token_, /*space_separated=*/true);
 }
 
 }  // namespace lucid::utils::tokenizer

@@ -29,14 +29,13 @@ configure via the constructor if you need a different one.
 """
 
 import os
-from typing import Iterable, override
+from typing import TYPE_CHECKING, Iterable, Self, override
 
 from lucid._C import engine as _C_engine
 
 from lucid.utils.tokenizer._base import SpecialTokens, Tokenizer
 from lucid.utils.tokenizer._lookup_common import (
-    _load_special_tokens_map,
-    _load_vocab_txt,
+    _load_vocab_txt_and_specials,
     _save_vocab_txt,
 )
 from lucid.utils.tokenizer._normalizers import BERTNormalizer, Normalizer
@@ -46,7 +45,7 @@ from lucid.utils.tokenizer._pre_tokenizers import (
 )
 
 
-class _WordPieceCommonMixin:
+class _WordPieceCommonMixin(Tokenizer):
     """Shared algorithm + post-processing for both WordPiece flavours.
 
     Holds the normalizer + pre-tokenizer chain and the BERT-style
@@ -56,9 +55,27 @@ class _WordPieceCommonMixin:
     text preparation + token-to-string rendering are identical.
     """
 
+    _vocab: dict[str, int]
+    _id_to_token: dict[int, str]
+    _unk_token: str
+    _continuing_prefix: str
+    _max_chars_per_word: int
     _normalizer: Normalizer | None
     _pre_tokenizer: PreTokenizer
-    _continuing_prefix: str
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            vocab: dict[str, int] | None = None,
+            *,
+            unk_token: str = "[UNK]",
+            continuing_prefix: str = "##",
+            max_chars_per_word: int = 100,
+            normalizer: Normalizer | None = None,
+            pre_tokenizer: PreTokenizer | None = None,
+            special_tokens: SpecialTokens | None = None,
+        ) -> None: ...
 
     def _prepare_words(self, text: str) -> list[str]:
         """Apply normalizer + pre-tokenizer; return word strings."""
@@ -82,6 +99,79 @@ class _WordPieceCommonMixin:
                 out.append(tok)
             first = False
         return "".join(out)
+
+    @override
+    @property
+    def algo(self) -> str:
+        """Algorithm identifier (always ``"wordpiece"``)."""
+        return "wordpiece"
+
+    @override
+    def get_vocab(self) -> dict[str, int]:
+        """Return a shallow copy of the token → id map."""
+        return dict(self._vocab)
+
+    @override
+    def id_to_token(self, token_id: int) -> str | None:
+        """Look up the surface string for a token id."""
+        return self._id_to_token.get(token_id)
+
+    @override
+    def _decode_one(self, ids: list[int]) -> str:
+        """BERT-style decode join — strips ``##`` continuations and
+        re-inserts spaces between whole-word starts.
+        """
+        return self._decode_join(ids, self._id_to_token)
+
+    @override
+    def save(self, directory: str) -> None:
+        """Persist as a BERT-style directory (``vocab.txt`` +
+        unified ``tokenizer.json`` + ``special_tokens_map.json``).
+        """
+        os.makedirs(directory, exist_ok=True)
+        _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
+        super().save(directory)
+
+    @override
+    def _save_extras(self) -> dict[str, object]:
+        """Emit the WordPiece ``model`` block for ``tokenizer.json``."""
+        return {
+            "model": {
+                "type": "WordPiece",
+                "vocab": self._vocab,
+                "unk_token": self._unk_token,
+                "continuing_prefix": self._continuing_prefix,
+                "max_chars_per_word": self._max_chars_per_word,
+            }
+        }
+
+    @classmethod
+    def from_file(
+        cls,
+        directory: str,
+        *,
+        unk_token: str = "[UNK]",
+        continuing_prefix: str = "##",
+        max_chars_per_word: int = 100,
+        normalizer: Normalizer | None = None,
+        pre_tokenizer: PreTokenizer | None = None,
+        special_tokens: SpecialTokens | None = None,
+    ) -> Self:
+        """Load from a BERT-style directory containing ``vocab.txt``."""
+        vocab, st = _load_vocab_txt_and_specials(
+            directory, special_tokens, cls.__name__
+        )
+        return cls(
+            vocab,
+            unk_token=unk_token,
+            continuing_prefix=continuing_prefix,
+            max_chars_per_word=max_chars_per_word,
+            normalizer=normalizer,
+            pre_tokenizer=pre_tokenizer,
+            special_tokens=st,
+        )
+
+    from_pretrained = from_file
 
 
 # ── Pure-Python WordPiece ───────────────────────────────────────────
@@ -215,47 +305,6 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         """
         return len(self._vocab)
 
-    @override
-    @property
-    def algo(self) -> str:
-        r"""Algorithm identifier (always ``"wordpiece"``).
-
-        Returns
-        -------
-        str
-            Constant string ``"wordpiece"``.
-        """
-        return "wordpiece"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        r"""Return a shallow copy of the token → id map.
-
-        Returns
-        -------
-        dict[str, int]
-            Copy of the internal vocab.
-        """
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        r"""Look up the surface string for a token id.
-
-        Parameters
-        ----------
-        token_id : int
-            Vocab id.
-
-        Returns
-        -------
-        str or None
-            The token string, or ``None`` if unknown.  Continuation
-            pieces retain their ``continuing_prefix`` (typically
-            ``##``).
-        """
-        return self._id_to_token.get(token_id)
-
     def _encode_word(self, word: str) -> list[int]:
         """Greedy longest-match split of one pre-tokenized word into ids."""
         # Whole-word shortcut.
@@ -294,13 +343,6 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         for word in self._prepare_words(text):
             out.extend(self._encode_word(word))
         return out
-
-    @override
-    def _decode_one(self, ids: list[int]) -> str:
-        r"""BERT-style decode join — strips ``##`` continuations and
-        re-inserts spaces between whole-word starts.
-        """
-        return self._decode_join(ids, self._id_to_token)
 
     def train(
         self,
@@ -394,99 +436,6 @@ class WordPieceTokenizer(_WordPieceCommonMixin, Tokenizer):
         self._vocab = new_vocab
         self._id_to_token = {v: k for k, v in new_vocab.items()}
         self._refresh_special_ids()
-
-    @override
-    def save(self, directory: str) -> None:
-        """Persist as a BERT-style directory (``vocab.txt`` +
-        unified ``tokenizer.json`` + ``special_tokens_map.json``).
-
-        Writing both legacy and unified formats means the resulting
-        directory loads back via :meth:`from_pretrained` regardless
-        of which format the caller looks for first.
-
-        Parameters
-        ----------
-        directory : str
-            Output directory; created if missing.
-        """
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Emit the WordPiece ``model`` block for ``tokenizer.json``."""
-        return {
-            "model": {
-                "type": "WordPiece",
-                "vocab": self._vocab,
-                "unk_token": self._unk_token,
-                "continuing_prefix": self._continuing_prefix,
-                "max_chars_per_word": self._max_chars_per_word,
-            }
-        }
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        unk_token: str = "[UNK]",
-        continuing_prefix: str = "##",
-        max_chars_per_word: int = 100,
-        normalizer: Normalizer | None = None,
-        pre_tokenizer: PreTokenizer | None = None,
-        special_tokens: SpecialTokens | None = None,
-    ) -> WordPieceTokenizer:
-        """Load from a BERT-style directory containing ``vocab.txt``.
-
-        Parameters
-        ----------
-        directory : str
-            Directory containing ``vocab.txt`` and optionally
-            ``special_tokens_map.json``.
-        unk_token : str, optional, keyword-only, default="[UNK]"
-            See class docstring.  Default matches BERT.
-        continuing_prefix : str, optional, keyword-only, default="##"
-            See class docstring.  Default matches BERT.
-        max_chars_per_word : int, optional, keyword-only, default=100
-            See class docstring.  Default matches BERT.
-        normalizer : Normalizer or None, optional, keyword-only
-            See class docstring.
-        pre_tokenizer : PreTokenizer or None, optional, keyword-only
-            See class docstring.
-        special_tokens : SpecialTokens or None, optional, keyword-only
-            See class docstring.  Falls back to the on-disk
-            ``special_tokens_map.json`` when omitted.
-
-        Returns
-        -------
-        WordPieceTokenizer
-            A new tokenizer populated from disk.
-
-        Raises
-        ------
-        FileNotFoundError
-            If ``vocab.txt`` is missing.
-        """
-        vocab_path = os.path.join(directory, "vocab.txt")
-        if not os.path.isfile(vocab_path):
-            raise FileNotFoundError(
-                f"WordPieceTokenizer.from_file: vocab.txt not found in " f"{directory}"
-            )
-        vocab = _load_vocab_txt(vocab_path)
-        st = special_tokens or _load_special_tokens_map(directory)
-        return cls(
-            vocab,
-            unk_token=unk_token,
-            continuing_prefix=continuing_prefix,
-            max_chars_per_word=max_chars_per_word,
-            normalizer=normalizer,
-            pre_tokenizer=pre_tokenizer,
-            special_tokens=st,
-        )
-
-    from_pretrained = from_file
 
 
 # ── Fast (C++-backed) WordPiece ─────────────────────────────────────
@@ -592,59 +541,12 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         return self._cpp.vocab_size()
 
     @override
-    @property
-    def algo(self) -> str:
-        r"""Algorithm identifier (always ``"wordpiece"``).
-
-        Returns
-        -------
-        str
-            Constant string ``"wordpiece"``.
-        """
-        return "wordpiece"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        r"""Return a copy of the token → id map from the Python cache.
-
-        Returns
-        -------
-        dict[str, int]
-            Shallow copy; kept in sync with the C++ backend by
-            ``__init__`` and :meth:`train`.
-        """
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        r"""Look up the surface string for a token id.
-
-        Parameters
-        ----------
-        token_id : int
-            Vocab id.
-
-        Returns
-        -------
-        str or None
-            The token string, or ``None`` if unknown.
-        """
-        return self._id_to_token.get(token_id)
-
-    @override
     def _encode_one(self, text: str) -> list[int]:
         """Normalize + pre-tokenize in Python; encode each word in C++."""
         out: list[int] = []
         for word in self._prepare_words(text):
             out.extend(self._cpp.encode(word))
         return out
-
-    @override
-    def _decode_one(self, ids: list[int]) -> str:
-        r"""BERT-style decode join — same surface form as the Python
-        flavour for parity.
-        """
-        return self._decode_join(ids, self._id_to_token)
 
     def train(
         self,
@@ -677,86 +579,3 @@ class WordPieceTokenizerFast(_WordPieceCommonMixin, Tokenizer):
         self._vocab = dict(self._cpp.get_vocab())
         self._id_to_token = {v: k for k, v in self._vocab.items()}
         self._refresh_special_ids()
-
-    @override
-    def save(self, directory: str) -> None:
-        """Same format as :meth:`WordPieceTokenizer.save`."""
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Emit the WordPiece ``model`` block for ``tokenizer.json``."""
-        return {
-            "model": {
-                "type": "WordPiece",
-                "vocab": self._vocab,
-                "unk_token": self._unk_token,
-                "continuing_prefix": self._continuing_prefix,
-                "max_chars_per_word": self._max_chars_per_word,
-            }
-        }
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        unk_token: str = "[UNK]",
-        continuing_prefix: str = "##",
-        max_chars_per_word: int = 100,
-        normalizer: Normalizer | None = None,
-        pre_tokenizer: PreTokenizer | None = None,
-        special_tokens: SpecialTokens | None = None,
-    ) -> WordPieceTokenizerFast:
-        """Identical loader to :meth:`WordPieceTokenizer.from_file`;
-        the only difference is the returned class (and hence the
-        encode backend).
-
-        Parameters
-        ----------
-        directory : str
-            Directory containing ``vocab.txt``.
-        unk_token : str, optional, keyword-only, default="[UNK]"
-            See :meth:`WordPieceTokenizer.from_file`.
-        continuing_prefix : str, optional, keyword-only, default="##"
-            See :meth:`WordPieceTokenizer.from_file`.
-        max_chars_per_word : int, optional, keyword-only, default=100
-            See :meth:`WordPieceTokenizer.from_file`.
-        normalizer : Normalizer or None, optional, keyword-only
-            See :meth:`WordPieceTokenizer.from_file`.
-        pre_tokenizer : PreTokenizer or None, optional, keyword-only
-            See :meth:`WordPieceTokenizer.from_file`.
-        special_tokens : SpecialTokens or None, optional, keyword-only
-            See :meth:`WordPieceTokenizer.from_file`.
-
-        Returns
-        -------
-        WordPieceTokenizerFast
-            A new C++-backed tokenizer populated from disk.
-
-        Raises
-        ------
-        FileNotFoundError
-            If ``vocab.txt`` is missing.
-        """
-        vocab_path = os.path.join(directory, "vocab.txt")
-        if not os.path.isfile(vocab_path):
-            raise FileNotFoundError(
-                f"WordPieceTokenizerFast.from_file: vocab.txt not found "
-                f"in {directory}"
-            )
-        vocab = _load_vocab_txt(vocab_path)
-        st = special_tokens or _load_special_tokens_map(directory)
-        return cls(
-            vocab,
-            unk_token=unk_token,
-            continuing_prefix=continuing_prefix,
-            max_chars_per_word=max_chars_per_word,
-            normalizer=normalizer,
-            pre_tokenizer=pre_tokenizer,
-            special_tokens=st,
-        )
-
-    from_pretrained = from_file

@@ -499,9 +499,11 @@ inline const ::mlx::core::fast::CustomKernelFunction& omi_norm_stats_s2_kernel()
         "if(sg==0u){s1=(lane<8u)?sh1[lane]:0.0f;s2=(lane<8u)?sh2[lane]:0.0f;"
         "s1=simd_sum(s1);s2=simd_sum(s2);"
         "if(lane==0u){float anchor=float(x[m*I]);if(!isfinite(anchor))anchor=0.0f;"
-        "float inv_n=1.0f/(float(O)*float(I)),md=s1*inv_n,mean=anchor+md;"
+        "float n=float(O)*float(I),md=metal::precise::divide(s1,n),mean=anchor+md;"
         "float m2=isfinite(s1)?(isinf(s2)?INFINITY:(s2-s1*md)):NAN;if(m2<0.0f)m2=0.0f;"
-        "float rstd=metal::rsqrt(m2*inv_n+eps[0]);"
+        "float "
+        "rstd=metal::precise::divide(1.0f,metal::precise::sqrt(metal::precise::divide(m2,n)+eps[0])"
+        ");"
         "stats_f32[m]=mean;stats_f32[M+m]=rstd;"
         "saved_mean[m]=OutT(mean);saved_rstd[m]=OutT(rstd);}}",
         "", true, false, mx::CompileOptions{});

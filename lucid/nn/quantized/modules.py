@@ -17,9 +17,8 @@ from typing import TYPE_CHECKING, cast, override
 
 import lucid
 import lucid.nn as nn
+from lucid.nn.quantized._utils import _QuantizedGridModule
 from lucid.quantization._fake_quantize import FakeQuantize
-from lucid.quantization._functional import fake_quantize
-from lucid.quantization._qscheme import QDtype, quint8
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -183,7 +182,7 @@ class DeQuantStub(nn.Module):
         return x
 
 
-class Quantize(nn.Module):
+class Quantize(_QuantizedGridModule):
     r"""Runtime entry into the quantized region — fake-quantizes the input.
 
     The converted, inference-time form of a calibrated :class:`QuantStub`,
@@ -260,17 +259,6 @@ class Quantize(nn.Module):
     lucid.quantization.convert : Installs this layer from a calibrated model.
     """
 
-    scale: Tensor
-    zero_point: Tensor
-
-    def __init__(
-        self, scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8
-    ) -> None:
-        super().__init__()
-        self.register_buffer("scale", scale)
-        self.register_buffer("zero_point", zero_point)
-        self.qdtype = qdtype
-
     @override
     def forward(self, X: Tensor) -> Tensor:
         """Quantize ``X`` to the calibrated activation grid (float-carried).
@@ -280,9 +268,7 @@ class Quantize(nn.Module):
         """
         if not lucid.is_floating_point(X):
             return X
-        return fake_quantize(
-            X, self.scale, self.zero_point, self.qdtype.quant_min, self.qdtype.quant_max
-        )
+        return self._fake_quant(X)
 
     @classmethod
     def from_float(cls, stub: nn.Module) -> Quantize:

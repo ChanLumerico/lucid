@@ -33,21 +33,19 @@ explicit OOV signal in the id sequence is preferable to silent
 information loss.
 """
 
-import os
 from typing import Iterable, override
 
 from lucid._C import engine as _C_engine
 
-from lucid.utils.tokenizer._base import SpecialTokens, Tokenizer
+from lucid.utils.tokenizer._base import SpecialTokens
 from lucid.utils.tokenizer._lookup_common import (
-    _load_special_tokens_map,
-    _load_vocab_txt,
-    _save_vocab_txt,
+    _FastVocabTokenizer,
+    _VocabTokenizer,
 )
 from lucid.utils.tokenizer._whitespace import _whitespace_split
 
 
-class WordTokenizer(Tokenizer):
+class WordTokenizer(_VocabTokenizer):
     r"""Reference (pure-Python) word-level tokenizer with UNK fallback.
 
     Splits the input on ASCII whitespace runs, looks each word up
@@ -87,6 +85,9 @@ class WordTokenizer(Tokenizer):
     WordTokenizerFast : C++-backed sibling with the same surface API.
     """
 
+    _algo_name = "word"
+    _model_type = "Word"
+
     def __init__(
         self,
         vocab: dict[str, int] | None = None,
@@ -104,31 +105,7 @@ class WordTokenizer(Tokenizer):
             Special-token registry; configure ``unk`` for OOV
             fallback at encode time.
         """
-        self._vocab: dict[str, int] = dict(vocab) if vocab else {}
-        self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
-        super().__init__(special_tokens=special_tokens)
-
-    @override
-    @property
-    def vocab_size(self) -> int:
-        """Total number of tokens in the vocab."""
-        return len(self._vocab)
-
-    @override
-    @property
-    def algo(self) -> str:
-        """Algorithm identifier — always ``"word"``."""
-        return "word"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        """Return a copy of the token-string → id map."""
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        """Reverse lookup; returns ``None`` if ``token_id`` is unknown."""
-        return self._id_to_token.get(token_id)
+        self._init_vocab_tokenizer(vocab, special_tokens=special_tokens)
 
     @override
     def _encode_one(self, text: str) -> list[int]:
@@ -183,76 +160,10 @@ class WordTokenizer(Tokenizer):
         vocab_size : int, default 30 000
             Hard cap on the number of distinct tokens kept.
         """
-        v: dict[str, int] = {}
-        next_id = 0
-        for doc in corpus:
-            for w in _whitespace_split(doc):
-                if w not in v:
-                    v[w] = next_id
-                    next_id += 1
-                    if next_id >= vocab_size:
-                        break
-            if next_id >= vocab_size:
-                break
-        self._vocab = v
-        self._id_to_token = {i: t for t, i in v.items()}
-        self._refresh_special_ids()
-
-    @override
-    def save(self, directory: str) -> None:
-        """Persist vocab + unified ``tokenizer.json``.
-
-        Parameters
-        ----------
-        directory : str
-            Output directory.  Created if it does not exist.  Files
-            written: ``vocab.txt``, ``tokenizer.json`` (via the
-            base class), and optionally ``special_tokens_map.json``.
-        """
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Add ``model`` block (type / vocab) to ``tokenizer.json``."""
-        return {"model": {"type": "Word", "vocab": self._vocab}}
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        special_tokens: SpecialTokens | None = None,
-    ) -> WordTokenizer:
-        """Load from a directory previously written by :meth:`save`.
-
-        Parameters
-        ----------
-        directory : str
-            Directory containing ``vocab.txt`` (mandatory) and
-            optionally ``special_tokens_map.json``.
-        special_tokens : SpecialTokens, optional
-            Overrides any on-disk ``special_tokens_map.json``.
-
-        Returns
-        -------
-        WordTokenizer
-            Reconstructed tokenizer.
-        """
-        vocab_path = os.path.join(directory, "vocab.txt")
-        if not os.path.isfile(vocab_path):
-            raise FileNotFoundError(
-                f"WordTokenizer.from_file: vocab.txt not found in {directory}"
-            )
-        vocab = _load_vocab_txt(vocab_path)
-        st = special_tokens or _load_special_tokens_map(directory)
-        return cls(vocab=vocab, special_tokens=st)
-
-    from_pretrained = from_file  # alias matching HF naming
+        self._train_insertion_vocab(corpus, _whitespace_split, vocab_size)
 
 
-class WordTokenizerFast(Tokenizer):
+class WordTokenizerFast(_FastVocabTokenizer):
     r"""C++-backed word tokenizer with UNK fallback.
 
     Identical surface API and OOV-error semantics to
@@ -293,6 +204,10 @@ class WordTokenizerFast(Tokenizer):
     'the quick dog'
     """
 
+    _algo_name = "word"
+    _model_type = "Word"
+    _sync_cpp_specials = True
+
     def __init__(
         self,
         vocab: dict[str, int] | None = None,
@@ -311,50 +226,13 @@ class WordTokenizerFast(Tokenizer):
             via :meth:`_sync_specials_to_cpp` so the C++ encode
             fall-back path sees the same UNK id.
         """
-        self._vocab: dict[str, int] = dict(vocab) if vocab else {}
-        if self._vocab:
-            self._cpp = _C_engine.utils.tokenizer.WordTokenizer(self._vocab)
-        else:
-            self._cpp = _C_engine.utils.tokenizer.WordTokenizer()
-        self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
-        super().__init__(special_tokens=special_tokens)
-        self._sync_specials_to_cpp()
-
-    def _sync_specials_to_cpp(self) -> None:
-        """Mirror :attr:`_special_ids` into the C++ tokenizer registry.
-
-        The C++ ``LookupTokenizer.encode`` consults ``special_.unk``
-        for OOV fallback — keeping the two sides in sync is what
-        makes the slow/fast OOV behaviour match.
-        """
-        st = _C_engine.utils.tokenizer.SpecialTokens()
-        for name in ("pad", "unk", "bos", "eos", "mask", "sep", "cls"):
-            tid = self._special_ids.get(name)
-            if tid is not None:
-                setattr(st, name, tid)
-        self._cpp.special_tokens = st
-
-    @override
-    @property
-    def vocab_size(self) -> int:
-        """Total number of tokens in the vocab (queried via C++)."""
-        return self._cpp.vocab_size()
-
-    @override
-    @property
-    def algo(self) -> str:
-        """Algorithm identifier — always ``"word"``."""
-        return "word"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        """Return a copy of the cached token-string → id map."""
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        """Reverse lookup; returns ``None`` if ``token_id`` is unknown."""
-        return self._id_to_token.get(token_id)
+        v = dict(vocab) if vocab else {}
+        cpp = (
+            _C_engine.utils.tokenizer.WordTokenizer(v)
+            if v
+            else _C_engine.utils.tokenizer.WordTokenizer()
+        )
+        self._init_fast_vocab_tokenizer(cpp, v, special_tokens=special_tokens)
 
     @override
     def _encode_one(self, text: str) -> list[int]:
@@ -378,11 +256,6 @@ class WordTokenizerFast(Tokenizer):
                     )
         return list(self._cpp.encode(text))
 
-    @override
-    def _decode_one(self, ids: list[int]) -> str:
-        """C++ decode path — returns the joined surface form."""
-        return self._cpp.decode(list(ids))
-
     def train(
         self,
         corpus: Iterable[str],
@@ -399,61 +272,4 @@ class WordTokenizerFast(Tokenizer):
         vocab_size : int, default 30 000
             Hard cap on the number of distinct tokens kept.
         """
-        self._cpp.train(list(corpus), vocab_size)
-        self._vocab = dict(self._cpp.get_vocab())
-        self._id_to_token = {v: k for k, v in self._vocab.items()}
-        self._refresh_special_ids()
-        self._sync_specials_to_cpp()
-
-    @override
-    def save(self, directory: str) -> None:
-        """Same on-disk format as :meth:`WordTokenizer.save`.
-
-        Parameters
-        ----------
-        directory : str
-            Output directory.  Created if it does not exist.
-        """
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Add ``model`` block (type / vocab) to ``tokenizer.json``."""
-        return {"model": {"type": "Word", "vocab": self._vocab}}
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        special_tokens: SpecialTokens | None = None,
-    ) -> WordTokenizerFast:
-        """Identical loader to :meth:`WordTokenizer.from_file`.
-
-        The only difference is the returned class (and hence the
-        encode backend).
-
-        Parameters
-        ----------
-        directory : str
-            Directory containing ``vocab.txt``.
-        special_tokens : SpecialTokens, optional
-            Overrides any on-disk ``special_tokens_map.json``.
-
-        Returns
-        -------
-        WordTokenizerFast
-            Reconstructed tokenizer.
-        """
-        vocab_path = os.path.join(directory, "vocab.txt")
-        if not os.path.isfile(vocab_path):
-            raise FileNotFoundError(
-                f"WordTokenizerFast.from_file: vocab.txt not found in " f"{directory}"
-            )
-        vocab = _load_vocab_txt(vocab_path)
-        st = special_tokens or _load_special_tokens_map(directory)
-        return cls(vocab=vocab, special_tokens=st)
-
-    from_pretrained = from_file
+        self._train_cpp(corpus, vocab_size)

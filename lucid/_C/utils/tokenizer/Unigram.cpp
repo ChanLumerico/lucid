@@ -20,19 +20,6 @@ namespace {
 // Pieces with this score are treated as "impossible" by Viterbi.
 constexpr double kNegInf = -std::numeric_limits<double>::infinity();
 
-// UTF-8 codepoint length given a lead byte.
-inline std::size_t utf8_cp_len(unsigned char c0) noexcept {
-    if (c0 < 0x80)
-        return 1;
-    if ((c0 >> 5) == 0b110)
-        return 2;
-    if ((c0 >> 4) == 0b1110)
-        return 3;
-    if ((c0 >> 3) == 0b11110)
-        return 4;
-    return 1;  // invalid lead — treat as single byte
-}
-
 // Build the per-byte "is codepoint start" mask used by both Viterbi
 // and forward-backward to constrain piece boundaries to legitimate
 // UTF-8 boundaries.  Without this constraint we'd carve pieces in
@@ -42,7 +29,7 @@ std::vector<bool> build_is_cp_start_(const std::string& s) {
     std::size_t i = 0;
     while (i < s.size()) {
         mask[i] = true;
-        i += utf8_cp_len(static_cast<unsigned char>(s[i]));
+        i += detail::utf8_lead_len(static_cast<unsigned char>(s[i]));
     }
     mask[s.size()] = true;
     return mask;
@@ -145,7 +132,7 @@ IdSequence Unigram::viterbi_encode_(const std::string& chunk) const {
             if (it != piece_to_id_.end()) {
                 score = dp[j] + pieces_[static_cast<std::size_t>(it->second)].second;
                 pid = it->second;
-            } else if (i - j == utf8_cp_len(static_cast<unsigned char>(chunk[j]))) {
+            } else if (i - j == detail::utf8_lead_len(static_cast<unsigned char>(chunk[j]))) {
                 // Single-codepoint fallback to UNK.
                 score = dp[j] + unk_log_prob_;
                 pid = unk_id_;
@@ -320,21 +307,7 @@ void Unigram::train_with_options(const std::vector<std::string>& corpus,
 
     // 1. Word frequency dict (whitespace split — the Python wrapper
     //    is responsible for the heavy normalisation chain).
-    std::unordered_map<std::string, std::uint64_t> word_freq;
-    for (const auto& doc : corpus) {
-        std::size_t i = 0;
-        while (i < doc.size()) {
-            while (i < doc.size() &&
-                   (doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' || doc[i] == '\r'))
-                ++i;
-            std::size_t start = i;
-            while (i < doc.size() &&
-                   !(doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' || doc[i] == '\r'))
-                ++i;
-            if (i > start)
-                ++word_freq[doc.substr(start, i - start)];
-        }
-    }
+    auto word_freq = detail::count_whitespace_words(corpus);
 
     // 2. Seed vocab: every distinct substring of length up to
     //    ``max_piece_length`` bytes that lies on UTF-8 codepoint
@@ -363,7 +336,7 @@ void Unigram::train_with_options(const std::vector<std::string>& corpus,
     auto is_single_cp = [](const std::string& s) {
         if (s.empty())
             return false;
-        return s.size() == utf8_cp_len(static_cast<unsigned char>(s[0]));
+        return s.size() == detail::utf8_lead_len(static_cast<unsigned char>(s[0]));
     };
     std::size_t initial_size = std::min(seeds.size(), initial_vocab_multiplier * target_vocab_size);
     std::partial_sort(seeds.begin(), seeds.begin() + initial_size, seeds.end(),

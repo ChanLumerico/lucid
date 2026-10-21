@@ -11,7 +11,9 @@ import warnings
 from typing import TYPE_CHECKING, cast
 
 import lucid
-from lucid.quantization._functional import quantize
+from lucid.nn.module import Module
+from lucid.quantization._functional import fake_quantize, quantize
+from lucid.quantization._qscheme import quint8
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -22,6 +24,27 @@ if TYPE_CHECKING:
     from lucid.quantization._qscheme import QDtype
     from lucid.quantization.observer import ObserverBase
     from lucid.quantization.qconfig import QConfig
+
+
+class _QuantizedGridModule(Module):
+    """Shared base for modules carrying an output quantization grid ``(scale, zero_point, qdtype)``."""
+
+    scale: Tensor
+    zero_point: Tensor
+
+    def __init__(
+        self, scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8
+    ) -> None:
+        super().__init__()
+        self.register_buffer("scale", scale)
+        self.register_buffer("zero_point", zero_point)
+        self.qdtype = qdtype
+
+    def _fake_quant(self, x: Tensor) -> Tensor:
+        """Fake-quantize ``x`` onto ``(scale, zero_point, qdtype)``."""
+        return fake_quantize(
+            x, self.scale, self.zero_point, self.qdtype.quant_min, self.qdtype.quant_max
+        )
 
 
 def quantize_weight(mod: nn.Module) -> tuple[Tensor, Tensor, Tensor, int]:

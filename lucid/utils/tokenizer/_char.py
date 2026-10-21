@@ -14,16 +14,14 @@ Use Char when you want a closed vocab tied to the training corpus
 when you need an open-vocab universal fallback.
 """
 
-import os
 from typing import Iterable, override
 
 from lucid._C import engine as _C_engine
 
-from lucid.utils.tokenizer._base import SpecialTokens, Tokenizer
+from lucid.utils.tokenizer._base import SpecialTokens
 from lucid.utils.tokenizer._lookup_common import (
-    _load_special_tokens_map,
-    _load_vocab_txt,
-    _save_vocab_txt,
+    _FastVocabTokenizer,
+    _VocabTokenizer,
 )
 
 
@@ -37,7 +35,7 @@ def _split_codepoints(text: str) -> list[str]:
     return list(text)
 
 
-class CharTokenizer(Tokenizer):
+class CharTokenizer(_VocabTokenizer):
     """Reference (pure-Python) character-level tokenizer.
 
     Parameters
@@ -61,6 +59,9 @@ class CharTokenizer(Tokenizer):
     'the quick dog'
     """
 
+    _algo_name = "char"
+    _model_type = "Char"
+
     def __init__(
         self,
         vocab: dict[str, int] | None = None,
@@ -78,31 +79,7 @@ class CharTokenizer(Tokenizer):
             Special-token registry; configure ``unk`` for OOV
             fallback during encode.
         """
-        self._vocab: dict[str, int] = dict(vocab) if vocab else {}
-        self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
-        super().__init__(special_tokens=special_tokens)
-
-    @override
-    @property
-    def vocab_size(self) -> int:
-        """Number of distinct codepoint ids currently registered."""
-        return len(self._vocab)
-
-    @override
-    @property
-    def algo(self) -> str:
-        """Algorithm identifier (always ``"char"``)."""
-        return "char"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        """Return a copy of the codepoint → id map."""
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        """Return the codepoint string for ``token_id`` or ``None``."""
-        return self._id_to_token.get(token_id)
+        self._init_vocab_tokenizer(vocab, special_tokens=special_tokens)
 
     @override
     def _encode_one(self, text: str) -> list[int]:
@@ -140,73 +117,10 @@ class CharTokenizer(Tokenizer):
         vocab_size : int, default 1000
             Maximum number of distinct codepoints to retain.
         """
-        v: dict[str, int] = {}
-        next_id = 0
-        for doc in corpus:
-            for ch in _split_codepoints(doc):
-                if ch not in v:
-                    v[ch] = next_id
-                    next_id += 1
-                    if next_id >= vocab_size:
-                        break
-            if next_id >= vocab_size:
-                break
-        self._vocab = v
-        self._id_to_token = {i: c for c, i in v.items()}
-        self._refresh_special_ids()
-
-    @override
-    def save(self, directory: str) -> None:
-        """Persist the vocab as ``vocab.txt`` + unified ``tokenizer.json``.
-
-        Parameters
-        ----------
-        directory : str
-            Output directory (created if missing).
-        """
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Emit the unified-format ``model`` block for the char algo."""
-        return {"model": {"type": "Char", "vocab": self._vocab}}
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        special_tokens: SpecialTokens | None = None,
-    ) -> CharTokenizer:
-        """Load from a directory containing ``vocab.txt``.
-
-        Parameters
-        ----------
-        directory : str
-            Directory previously written by :meth:`save`.
-        special_tokens : SpecialTokens, optional
-            Override for the on-disk special tokens.
-
-        Returns
-        -------
-        CharTokenizer
-            New instance configured with the loaded vocab + specials.
-        """
-        vocab_path = os.path.join(directory, "vocab.txt")
-        if not os.path.isfile(vocab_path):
-            raise FileNotFoundError(
-                f"CharTokenizer.from_file: vocab.txt not found in {directory}"
-            )
-        vocab = _load_vocab_txt(vocab_path)
-        st = special_tokens or _load_special_tokens_map(directory)
-        return cls(vocab=vocab, special_tokens=st)
-
-    from_pretrained = from_file
+        self._train_insertion_vocab(corpus, _split_codepoints, vocab_size)
 
 
-class CharTokenizerFast(Tokenizer):
+class CharTokenizerFast(_FastVocabTokenizer):
     """C++-backed character tokenizer; bit-identical to :class:`CharTokenizer`.
 
     Same vocab format + semantics as :class:`CharTokenizer`; the
@@ -229,6 +143,9 @@ class CharTokenizerFast(Tokenizer):
     >>> tok.decode(tok.encode("the quick"))
     'the quick'
     """
+
+    _algo_name = "char"
+    _model_type = "Char"
 
     def __init__(
         self,
@@ -253,45 +170,13 @@ class CharTokenizerFast(Tokenizer):
         :meth:`id_to_token` avoid a binding round-trip; both halves
         are kept in sync by :meth:`train`.
         """
-        self._vocab: dict[str, int] = dict(vocab) if vocab else {}
-        if self._vocab:
-            self._cpp = _C_engine.utils.tokenizer.CharTokenizer(self._vocab)
-        else:
-            self._cpp = _C_engine.utils.tokenizer.CharTokenizer()
-        self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
-        super().__init__(special_tokens=special_tokens)
-
-    @override
-    @property
-    def vocab_size(self) -> int:
-        """Number of distinct codepoint ids (queried from C++)."""
-        return self._cpp.vocab_size()
-
-    @override
-    @property
-    def algo(self) -> str:
-        """Algorithm identifier (always ``"char"``)."""
-        return "char"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        """Return a copy of the codepoint → id map."""
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        """Return the codepoint string for ``token_id`` or ``None``."""
-        return self._id_to_token.get(token_id)
-
-    @override
-    def _encode_one(self, text: str) -> list[int]:
-        """Delegate to the C++ char tokenizer for the codepoint loop."""
-        return list(self._cpp.encode(text))
-
-    @override
-    def _decode_one(self, ids: list[int]) -> str:
-        """Delegate to the C++ char tokenizer for surface concatenation."""
-        return self._cpp.decode(list(ids))
+        v = dict(vocab) if vocab else {}
+        cpp = (
+            _C_engine.utils.tokenizer.CharTokenizer(v)
+            if v
+            else _C_engine.utils.tokenizer.CharTokenizer()
+        )
+        self._init_fast_vocab_tokenizer(cpp, v, special_tokens=special_tokens)
 
     def train(
         self,
@@ -308,51 +193,4 @@ class CharTokenizerFast(Tokenizer):
         vocab_size : int, default 1000
             Maximum number of distinct codepoints to retain.
         """
-        self._cpp.train(list(corpus), vocab_size)
-        self._vocab = dict(self._cpp.get_vocab())
-        self._id_to_token = {v: k for k, v in self._vocab.items()}
-        self._refresh_special_ids()
-
-    @override
-    def save(self, directory: str) -> None:
-        """Persist as ``vocab.txt`` + unified ``tokenizer.json``."""
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Emit the unified-format ``model`` block for the char algo."""
-        return {"model": {"type": "Char", "vocab": self._vocab}}
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        special_tokens: SpecialTokens | None = None,
-    ) -> CharTokenizerFast:
-        """Load from a directory containing ``vocab.txt``.
-
-        Parameters
-        ----------
-        directory : str
-            Directory previously written by :meth:`save`.
-        special_tokens : SpecialTokens, optional
-            Override for the on-disk special tokens.
-
-        Returns
-        -------
-        CharTokenizerFast
-            New instance configured with the loaded vocab + specials.
-        """
-        vocab_path = os.path.join(directory, "vocab.txt")
-        if not os.path.isfile(vocab_path):
-            raise FileNotFoundError(
-                f"CharTokenizerFast.from_file: vocab.txt not found in " f"{directory}"
-            )
-        vocab = _load_vocab_txt(vocab_path)
-        st = special_tokens or _load_special_tokens_map(directory)
-        return cls(vocab=vocab, special_tokens=st)
-
-    from_pretrained = from_file
+        self._train_cpp(corpus, vocab_size)

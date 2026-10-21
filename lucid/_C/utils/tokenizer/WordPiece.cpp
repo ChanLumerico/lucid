@@ -54,15 +54,7 @@ WordPiece::WordPiece(std::unordered_map<std::string, TokenId> vocab,
 // mutation of ``vocab_`` — encode/decode read the cached tables
 // directly and would otherwise see stale data.
 void WordPiece::rebuild_tables_() {
-    TokenId max_id = -1;
-    for (const auto& [tok, id] : vocab_)
-        if (id > max_id)
-            max_id = id;
-    id_to_token_.assign(static_cast<std::size_t>(max_id + 1), std::string{});
-    for (const auto& [tok, id] : vocab_) {
-        if (id >= 0 && static_cast<std::size_t>(id) < id_to_token_.size())
-            id_to_token_[static_cast<std::size_t>(id)] = tok;
-    }
+    detail::rebuild_id_to_token(vocab_, id_to_token_);
     auto it = vocab_.find(unk_token_);
     unk_id_ = (it == vocab_.end()) ? -1 : it->second;
 }
@@ -71,9 +63,7 @@ void WordPiece::rebuild_tables_() {
 // string for out-of-range ids (matches the BERT-tokenizers convention
 // rather than throwing).
 std::string WordPiece::id_to_token(TokenId id) const {
-    if (id < 0 || static_cast<std::size_t>(id) >= id_to_token_.size())
-        return "";
-    return id_to_token_[static_cast<std::size_t>(id)];
+    return detail::lookup_id_to_token(id_to_token_, id);
 }
 
 // Greedy longest-match WordPiece for ONE pre-tokenized word.  Three
@@ -102,21 +92,7 @@ IdSequence WordPiece::encode_word_(const std::string& word) const {
     std::size_t i = 0;
     while (i < word.size()) {
         cp_offsets.push_back(i);
-        unsigned char c0 = static_cast<unsigned char>(word[i]);
-        std::size_t cp_len;
-        if (c0 < 0x80)
-            cp_len = 1;
-        else if ((c0 >> 5) == 0b110)
-            cp_len = 2;
-        else if ((c0 >> 4) == 0b1110)
-            cp_len = 3;
-        else if ((c0 >> 3) == 0b11110)
-            cp_len = 4;
-        else
-            cp_len = 1;
-        if (i + cp_len > word.size())
-            cp_len = word.size() - i;
-        i += cp_len;
+        i += detail::utf8_codepoint_len(word, i);
     }
     cp_offsets.push_back(word.size());
 
@@ -160,20 +136,10 @@ IdSequence WordPiece::encode(const std::string& text) const {
     // directly on a multi-word string, we fall back to a simple
     // whitespace split here.
     IdSequence out;
-    std::size_t i = 0;
-    while (i < text.size()) {
-        while (i < text.size() &&
-               (text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
-            ++i;
-        if (i >= text.size())
-            break;
-        std::size_t start = i;
-        while (i < text.size() &&
-               !(text[i] == ' ' || text[i] == '\t' || text[i] == '\n' || text[i] == '\r'))
-            ++i;
-        auto word_ids = encode_word_(text.substr(start, i - start));
+    detail::for_each_ascii_word(text, [&](const std::string& word) {
+        auto word_ids = encode_word_(word);
         out.insert(out.end(), word_ids.begin(), word_ids.end());
-    }
+    });
     return out;
 }
 
@@ -222,15 +188,6 @@ std::string WordPiece::decode(const IdSequence& ids) const {
 // continuation suffix machinery; for our purposes that's sufficient
 // to produce a BERT-compatible vocab.
 
-namespace {
-
-struct WordState {
-    std::vector<std::string> symbols;
-    std::uint64_t count;
-};
-
-}  // namespace
-
 // Public training entry point.  Three-phase pipeline — (1) tally
 // word frequencies via whitespace pre-tokenization, (2) seed vocab
 // with every codepoint (plain + ``##`` continuation) and the UNK,
@@ -241,21 +198,7 @@ struct WordState {
 // NOT thread-safe — mutates ``vocab_`` / cached tables in place.
 void WordPiece::train(const std::vector<std::string>& corpus, std::size_t target_vocab_size) {
     // 1. Word frequencies.
-    std::unordered_map<std::string, std::uint64_t> word_freq;
-    for (const auto& doc : corpus) {
-        std::size_t i = 0;
-        while (i < doc.size()) {
-            while (i < doc.size() &&
-                   (doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' || doc[i] == '\r'))
-                ++i;
-            std::size_t start = i;
-            while (i < doc.size() &&
-                   !(doc[i] == ' ' || doc[i] == '\t' || doc[i] == '\n' || doc[i] == '\r'))
-                ++i;
-            if (i > start)
-                ++word_freq[doc.substr(start, i - start)];
-        }
-    }
+    auto word_freq = detail::count_whitespace_words(corpus);
     // 2. Seed vocab with chars + continuation chars + the UNK token.
     vocab_.clear();
     TokenId next_id = 0;
@@ -268,28 +211,15 @@ void WordPiece::train(const std::vector<std::string>& corpus, std::size_t target
             ++next_id;
         return it->second;
     };
-    std::vector<WordState> words;
+    std::vector<detail::WordRunState> words;
     words.reserve(word_freq.size());
     for (const auto& [w, freq] : word_freq) {
-        WordState ws;
+        detail::WordRunState ws;
         ws.count = freq;
         std::size_t pos = 0;
         bool first = true;
         while (pos < w.size()) {
-            unsigned char c0 = static_cast<unsigned char>(w[pos]);
-            std::size_t cp_len;
-            if (c0 < 0x80)
-                cp_len = 1;
-            else if ((c0 >> 5) == 0b110)
-                cp_len = 2;
-            else if ((c0 >> 4) == 0b1110)
-                cp_len = 3;
-            else if ((c0 >> 3) == 0b11110)
-                cp_len = 4;
-            else
-                cp_len = 1;
-            if (pos + cp_len > w.size())
-                cp_len = w.size() - pos;
+            const std::size_t cp_len = detail::utf8_codepoint_len(w, pos);
             std::string ch = w.substr(pos, cp_len);
             std::string tok = first ? ch : continuing_prefix_ + ch;
             add_token(tok);
@@ -301,28 +231,10 @@ void WordPiece::train(const std::vector<std::string>& corpus, std::size_t target
     }
     // 3. Greedy pair merging.
     while (vocab_.size() < target_vocab_size) {
-        std::unordered_map<std::string, std::uint64_t> pair_freq;
-        for (const auto& ws : words) {
-            for (std::size_t k = 0; k + 1 < ws.symbols.size(); ++k) {
-                std::string key = ws.symbols[k] + '\x01' + ws.symbols[k + 1];
-                pair_freq[key] += ws.count;
-            }
-        }
-        if (pair_freq.empty())
+        auto best_pair = detail::pick_best_adjacent_pair(words);
+        if (!best_pair.has_value())
             break;
-        auto best_it = pair_freq.begin();
-        for (auto it = pair_freq.begin(); it != pair_freq.end(); ++it) {
-            if (it->second > best_it->second ||
-                (it->second == best_it->second && it->first < best_it->first)) {
-                best_it = it;
-            }
-        }
-        if (best_it->second < 2)
-            break;
-        std::string key = best_it->first;
-        auto sep = key.find('\x01');
-        std::string left = key.substr(0, sep);
-        std::string right = key.substr(sep + 1);
+        const auto& [left, right] = *best_pair;
         // Form the merged surface.  Strip the right half's "##"
         // before concatenation (the merged token keeps "##" iff the
         // LEFT half had one).
@@ -333,23 +245,7 @@ void WordPiece::train(const std::vector<std::string>& corpus, std::size_t target
         }
         std::string merged = left + right_core;
         add_token(merged);
-        // Rewrite words to apply the merge.
-        for (auto& ws : words) {
-            std::vector<std::string> next;
-            next.reserve(ws.symbols.size());
-            std::size_t k = 0;
-            while (k < ws.symbols.size()) {
-                if (k + 1 < ws.symbols.size() && ws.symbols[k] == left &&
-                    ws.symbols[k + 1] == right) {
-                    next.push_back(merged);
-                    k += 2;
-                } else {
-                    next.push_back(ws.symbols[k]);
-                    ++k;
-                }
-            }
-            ws.symbols = std::move(next);
-        }
+        detail::apply_symbol_merge(words, left, right, merged);
     }
     rebuild_tables_();
 }

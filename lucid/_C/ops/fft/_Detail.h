@@ -38,15 +38,19 @@
 
 #include "../../autograd/Helpers.h"
 #include "../../backend/gpu/MlxBridge.h"
+#include "../../compile/Tracer.h"
 #include "../../core/Allocator.h"
 #include "../../core/Dtype.h"
 #include "../../core/Error.h"
 #include "../../core/ErrorBuilder.h"
 #include "../../core/Helpers.h"
 #include "../../core/PhantomMode.h"
+#include "../../core/Profiler.h"
+#include "../../core/Scope.h"
 #include "../../core/Shape.h"
 #include "../../core/Storage.h"
 #include "../../core/TensorImpl.h"
+#include "../../core/Validate.h"
 #include "../../core/fwd.h"
 
 namespace lucid::fft_detail {
@@ -81,7 +85,6 @@ inline Dtype dtype_for_complex_fft(Dtype in, Device dev) {
     case Dtype::C64:
     case Dtype::F32:
     case Dtype::F16:
-    case Dtype::BF16:
         return Dtype::C64;
     case Dtype::C128:
     case Dtype::F64:
@@ -89,6 +92,7 @@ inline Dtype dtype_for_complex_fft(Dtype in, Device dev) {
             ErrorBuilder("fft").not_implemented(
                 "fftn/ifftn does not support F64/C128 on Metal (GPU)");
         return Dtype::C128;
+    case Dtype::BF16:
     default:
         ErrorBuilder("fft").not_implemented(
             "fftn/ifftn requires a floating-point or complex input, got " +
@@ -114,12 +118,12 @@ inline Dtype dtype_for_rfft(Dtype in, Device dev) {
     switch (in) {
     case Dtype::F32:
     case Dtype::F16:
-    case Dtype::BF16:
         return Dtype::C64;
     case Dtype::F64:
         if (dev == Device::GPU)
             ErrorBuilder("rfftn").not_implemented("rfftn does not support F64 on Metal (GPU)");
         return Dtype::C128;
+    case Dtype::BF16:
     default:
         ErrorBuilder("rfftn").not_implemented("rfftn requires a real floating-point input, got " +
                                               std::string(dtype_name(in)));
@@ -229,7 +233,7 @@ inline std::vector<std::int64_t> resolve_fft_lengths(const Shape& in_shape,
         std::int64_t len = n.empty() ? in_shape[ax] : n[i];
         if (n.empty() && is_irfft && i + 1 == axes.size())
             len = (in_shape[ax] - 1) * 2;
-        if (len <= 0) {
+        if ((!n.empty() || is_irfft) && len <= 0) {
             ErrorBuilder(op).invalid_argument("Invalid number of data points (" +
                                               std::to_string(len) + ") specified");
         }
@@ -526,6 +530,12 @@ inline Storage cpu_complex_fftn_f64(const TensorImplPtr& a,
                                     bool inverse) {
     const char* op = inverse ? "ifftn" : "fftn";
     const auto lengths = resolve_fft_lengths(a->shape(), n, axes, false, op);
+    for (std::int64_t len : lengths) {
+        if (len <= 0) {
+            ErrorBuilder(op).invalid_argument("Invalid number of data points (" +
+                                              std::to_string(len) + ") specified");
+        }
+    }
     auto buf_a = copy_f64_or_c128_input(a, op);
     Shape cur_shape = a->shape();
     run_fft_axes_c128(buf_a, cur_shape, lengths, axes, axes.size(), inverse);
@@ -689,6 +699,54 @@ inline ::mlx::core::array as_mlx_input(const TensorImplPtr& a) {
     const auto& cs = std::get<::lucid::CpuStorage>(a->storage());
     auto gs = ::lucid::gpu::upload_cpu_to_gpu(cs, a->shape());
     return *gs.arr;
+}
+
+template <typename DtypeFn, typename ShapeFn, typename DoubleFn, typename MlxFn>
+inline TensorImplPtr run_nd_fft(const char* op_name,
+                                const char* input_label,
+                                const TensorImplPtr& a,
+                                const std::vector<std::int64_t>& n,
+                                const std::vector<int>& axes_in,
+                                Dtype double_out_dtype,
+                                DtypeFn&& resolve_dtype,
+                                ShapeFn&& resolve_shape,
+                                DoubleFn&& run_double_cpu,
+                                MlxFn&& run_mlx) {
+    Validator::input(a, input_label).non_null();
+    OpScopeFull scope{op_name, a->device(), a->dtype(), a->shape()};
+
+    const Dtype out_dtype = resolve_dtype(a->dtype(), a->device());
+    const int rank = static_cast<int>(a->shape().size());
+    if (rank == 0)
+        ErrorBuilder(op_name).invalid_argument("input must be at least 1-D");
+
+    std::vector<int> axes = axes_in;
+    default_axes_all(axes, rank);
+    normalise_axes(axes, rank, op_name);
+
+    const Shape out_shape = resolve_shape(a->shape(), n, axes, op_name);
+
+    Storage out;
+    if (PhantomMode::is_enabled()) {
+        out = Storage{
+            PhantomStorage{shape_numel(out_shape) * dtype_size(out_dtype), out_dtype, a->device()}};
+    } else if (out_dtype == double_out_dtype) {
+        out = run_double_cpu(axes, out_shape);
+    } else {
+        auto in_arr = as_mlx_input(a);
+        ::mlx::core::array out_arr = run_mlx(in_arr, axes);
+        out = finalise_result(std::move(out_arr), out_dtype, out_shape, a->device());
+    }
+    auto result = fresh(std::move(out), out_shape, out_dtype, a->device());
+    // Record the trace I/O explicitly.  Without it the node keeps the
+    // empty input list ``on_op_enter`` seeded and its result never
+    // becomes a traced tensor, so the builder drops the node as dead and
+    // the *consumer* sees the result as a fresh external feed — bound
+    // once, at trace time.  The compiled model then reported success and
+    // returned that first answer for every later input.
+    if (auto* trc = ::lucid::compile::current_tracer())
+        trc->on_op_io({a}, result);
+    return result;
 }
 
 }  // namespace lucid::fft_detail

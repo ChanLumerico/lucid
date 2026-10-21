@@ -47,7 +47,7 @@ import json
 import os
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Iterable, override
+from typing import TYPE_CHECKING, Iterable, Self, override
 
 from lucid._C import engine as _C_engine
 
@@ -543,6 +543,87 @@ class _UnigramCommonMixin(Tokenizer):
             extras["added_tokens"] = [t.to_config() for t in self._added.tokens]
         return extras
 
+    @override
+    @property
+    def algo(self) -> str:
+        """Algorithm identifier (always ``"unigram"``)."""
+        return "unigram"
+
+    @override
+    def id_to_token(self, token_id: int) -> str | None:
+        """Look up the piece string for a token id."""
+        return self._token_for_id(token_id)
+
+    @property
+    def pieces(self) -> list[tuple[str, float]]:
+        """Raw ``(piece, log_prob)`` list."""
+        return list(self._pieces)
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            pieces: list[tuple[str, float]] | None = None,
+            *,
+            unk_token: str = "<unk>",
+            unk_log_prob: float = -10.0,
+            normalizer: Normalizer | None = None,
+            pre_tokenizer: PreTokenizer | None = None,
+            special_tokens: SpecialTokens | None = None,
+        ) -> None: ...
+
+    @override
+    def _encode_one(self, text: str) -> list[int]:
+        """Split added tokens, normalize, pre-tokenize, Viterbi-encode."""
+        return self._encode_text(text)
+
+    @override
+    def save(self, directory: str) -> None:
+        """Persist as unified ``tokenizer.json`` + ``special_tokens_map.json``."""
+        os.makedirs(directory, exist_ok=True)
+        _save_unigram_pieces_json(
+            self._pieces,
+            os.path.join(directory, "tokenizer.json"),
+            self._unk_token,
+            self._unk_log_prob,
+        )
+        super().save(directory)
+
+    @override
+    def _save_extras(self) -> dict[str, object]:
+        """Add the ``model`` block and any loaded pipeline blocks."""
+        return self._unigram_extras()
+
+    @classmethod
+    def from_file(
+        cls,
+        directory: str,
+        *,
+        normalizer: Normalizer | None = None,
+        pre_tokenizer: PreTokenizer | None = None,
+        special_tokens: SpecialTokens | None = None,
+    ) -> Self:
+        """Load from a directory containing ``tokenizer.json``."""
+        config = _read_unigram_config(directory, cls.__name__)
+        tok = cls(
+            config.pieces,
+            unk_token=config.unk_token,
+            unk_log_prob=config.unk_log_prob,
+            normalizer=normalizer,
+            pre_tokenizer=pre_tokenizer,
+            special_tokens=(
+                special_tokens if special_tokens is not None else config.special_tokens
+            ),
+        )
+        tok._apply_file_config(
+            config,
+            normalizer_given=normalizer is not None,
+            pre_tokenizer_given=pre_tokenizer is not None,
+        )
+        return tok
+
+    from_pretrained = from_file
+
 
 # ── Pure-Python Unigram ────────────────────────────────────────────
 
@@ -692,18 +773,6 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         return len(self._pieces)
 
     @override
-    @property
-    def algo(self) -> str:
-        r"""Algorithm identifier (always ``"unigram"``).
-
-        Returns
-        -------
-        str
-            Constant string ``"unigram"``.
-        """
-        return "unigram"
-
-    @override
     def get_vocab(self) -> dict[str, int]:
         r"""Return a copy of the piece → id map.
 
@@ -715,34 +784,6 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
             list are included.
         """
         return self._with_added(dict(self._piece_to_id))
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        r"""Look up the piece string for a token id.
-
-        Parameters
-        ----------
-        token_id : int
-            Vocab id.
-
-        Returns
-        -------
-        str or None
-            The piece string, or ``None`` if ``token_id`` is unknown.
-        """
-        return self._token_for_id(token_id)
-
-    @property
-    def pieces(self) -> list[tuple[str, float]]:
-        r"""Raw ``(piece, log_prob)`` list — useful for inspection
-        and for handing off to :class:`UnigramTokenizerFast`.
-
-        Returns
-        -------
-        list of (str, float)
-            Shallow copy of the internal pieces list.
-        """
-        return list(self._pieces)
 
     def _viterbi_encode_chunk(self, chunk: str) -> list[int]:
         """Reference Viterbi DP — operates on bytes for parity with
@@ -832,11 +873,6 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         return self._viterbi_encode_chunk(chunk)
 
     @override
-    def _encode_one(self, text: str) -> list[int]:
-        """Split added tokens, normalize, pre-tokenize, Viterbi-encode."""
-        return self._encode_text(text)
-
-    @override
     def _decode_one(self, ids: list[int]) -> str:
         """Concatenate pieces and convert ``▁`` markers back to spaces."""
         decoded = self._decode_with_pipeline(ids)
@@ -853,33 +889,7 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         *,
         vocab_size: int = 30_000,
     ) -> None:
-        """Re-train this tokenizer from scratch on ``corpus``.
-
-        Implements the Kudo-2018 EM-with-pruning training loop:
-
-        1. Pre-tokenize each document (using the configured
-           pre-tokenizer chain) into chunks.
-        2. Seed a large candidate vocab from all sub-strings, then
-           iteratively run EM to estimate per-piece probabilities
-           and prune the lowest-contribution pieces until the target
-           vocab size is reached.
-        3. Re-load the resulting ``(piece, log_prob)`` list into
-           Python state.
-
-        Even this "pure-Python" flavour delegates the inner loop to
-        C++ — EM is a tight numerical loop and a Python rewrite
-        would be 100-1000x slower for any non-trivial corpus.
-
-        Parameters
-        ----------
-        corpus : iterable of str
-            Each item is one document (or chunk thereof).  Generators
-            are consumed exactly once and materialised into a list
-            before handing off to the C++ trainer.
-        vocab_size : int, default 30 000
-            Target total vocab size (pieces).  The trainer stops
-            pruning when this is reached.
-        """
+        """Re-train this tokenizer from scratch on ``corpus``."""
         prepared: list[str] = []
         for doc in corpus:
             chunks = self._prepare_chunks(doc)
@@ -889,96 +899,6 @@ class UnigramTokenizer(_UnigramCommonMixin, Tokenizer):
         self._pieces = [(p, lp) for p, lp in cpp.pieces()]
         self._rebuild_tables()
         self._refresh_special_ids()
-
-    @override
-    def save(self, directory: str) -> None:
-        """Persist as unified ``tokenizer.json`` + ``special_tokens_map.json``.
-
-        Parameters
-        ----------
-        directory : str
-            Output directory (created if missing).  Contents are
-            HF-compatible: any other library that reads the unified
-            Fast-tokenizers format will load them back unchanged.
-        """
-        os.makedirs(directory, exist_ok=True)
-        _save_unigram_pieces_json(
-            self._pieces,
-            os.path.join(directory, "tokenizer.json"),
-            self._unk_token,
-            self._unk_log_prob,
-        )
-        # Also write the special_tokens_map.json via the base.
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Add the ``model`` block and any loaded pipeline blocks."""
-        return self._unigram_extras()
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        normalizer: Normalizer | None = None,
-        pre_tokenizer: PreTokenizer | None = None,
-        special_tokens: SpecialTokens | None = None,
-    ) -> UnigramTokenizer:
-        """Load from a directory containing ``tokenizer.json``.
-
-        Parameters
-        ----------
-        directory : str
-            Directory holding the unified ``tokenizer.json`` (and
-            optionally ``special_tokens_map.json``).
-        normalizer : Normalizer, optional, keyword-only
-            Override the encode-time normalisation chain.  When omitted,
-            the file's ``normalizer`` block is used; a file without one
-            (an older Lucid save) gets
-            :class:`~lucid.utils.tokenizer._normalizers.NFKC`.
-        pre_tokenizer : PreTokenizer, optional, keyword-only
-            Override the chunk splitter applied after normalisation.
-            When omitted, the file's ``pre_tokenizer`` block is used, or
-            :class:`SentencePiecePreTokenizer` if it has none.
-        special_tokens : SpecialTokens, optional, keyword-only
-            Override the special-token registry.  When ``None`` (the
-            default), it is read from ``special_tokens_map.json`` (or
-            ``tokenizer_config.json``), completed with the model's
-            unknown piece and every special ``added_tokens`` entry.
-
-        Returns
-        -------
-        UnigramTokenizer
-            Freshly-constructed instance ready for encode / decode.
-
-        Notes
-        -----
-        The file's ``post_processor`` decides framing: T5's appends
-        ``</s>`` and adds no BOS even when ``special_tokens_map.json`` names
-        one.  Without that block the registry's BOS/EOS frame the sequence,
-        as they always have.  The ``decoder`` block and ``added_tokens`` are
-        honoured too; :meth:`save` writes all of them back.
-        """
-        config = _read_unigram_config(directory, cls.__name__)
-        tok = cls(
-            config.pieces,
-            unk_token=config.unk_token,
-            unk_log_prob=config.unk_log_prob,
-            normalizer=normalizer,
-            pre_tokenizer=pre_tokenizer,
-            special_tokens=(
-                special_tokens if special_tokens is not None else config.special_tokens
-            ),
-        )
-        tok._apply_file_config(
-            config,
-            normalizer_given=normalizer is not None,
-            pre_tokenizer_given=pre_tokenizer is not None,
-        )
-        return tok
-
-    from_pretrained = from_file
 
 
 # ── Fast (C++-backed) Unigram ──────────────────────────────────────
@@ -1083,18 +1003,6 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         return self._cpp.vocab_size()
 
     @override
-    @property
-    def algo(self) -> str:
-        r"""Algorithm identifier (always ``"unigram"``).
-
-        Returns
-        -------
-        str
-            Constant string ``"unigram"``.
-        """
-        return "unigram"
-
-    @override
     def get_vocab(self) -> dict[str, int]:
         r"""Return a piece → id map from the C++ backend.
 
@@ -1107,42 +1015,9 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         return self._with_added(dict(self._cpp.get_vocab()))
 
     @override
-    def id_to_token(self, token_id: int) -> str | None:
-        r"""Look up the piece string for a token id.
-
-        Parameters
-        ----------
-        token_id : int
-            Vocab id.
-
-        Returns
-        -------
-        str or None
-            The piece string, or ``None`` if unknown.
-        """
-        return self._token_for_id(token_id)
-
-    @property
-    def pieces(self) -> list[tuple[str, float]]:
-        r"""Raw ``(piece, log_prob)`` list cached on the Python side.
-
-        Returns
-        -------
-        list of (str, float)
-            Shallow copy of the cached pieces list (kept in sync with
-            C++ by :meth:`train` and ``__init__``).
-        """
-        return list(self._pieces)
-
-    @override
     def _encode_chunk_ids(self, chunk: str) -> list[int]:
         """C++ Viterbi over one chunk."""
         return list(self._cpp.encode(chunk))
-
-    @override
-    def _encode_one(self, text: str) -> list[int]:
-        """Pipeline in Python, per-chunk Viterbi in C++."""
-        return self._encode_text(text)
 
     @override
     def _decode_one(self, ids: list[int]) -> str:
@@ -1159,21 +1034,7 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         *,
         vocab_size: int = 30_000,
     ) -> None:
-        """Re-train in C++ (EM with vocab pruning, Kudo 2018).
-
-        Materialises ``corpus`` into a list before handing off (the
-        C++ binding takes ``std::vector<std::string>``); for very
-        large corpora the caller is responsible for chunking.  After
-        training, the Python-side pieces cache is refreshed from the
-        C++ side so subsequent encodes see the new state.
-
-        Parameters
-        ----------
-        corpus : iterable of str
-            Documents to train on.
-        vocab_size : int, default 30 000
-            Target piece count after EM pruning.
-        """
+        """Re-train in C++ (EM with vocab pruning, Kudo 2018)."""
         prepared: list[str] = []
         for doc in corpus:
             chunks = self._prepare_chunks(doc)
@@ -1183,77 +1044,3 @@ class UnigramTokenizerFast(_UnigramCommonMixin, Tokenizer):
         self._id_to_piece = {i: p for i, (p, _) in enumerate(self._pieces)}
         self._index_unk()
         self._refresh_special_ids()
-
-    @override
-    def save(self, directory: str) -> None:
-        """Same format as :meth:`UnigramTokenizer.save`."""
-        os.makedirs(directory, exist_ok=True)
-        _save_unigram_pieces_json(
-            self._pieces,
-            os.path.join(directory, "tokenizer.json"),
-            self._unk_token,
-            self._unk_log_prob,
-        )
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Add the ``model`` block and any loaded pipeline blocks."""
-        return self._unigram_extras()
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        normalizer: Normalizer | None = None,
-        pre_tokenizer: PreTokenizer | None = None,
-        special_tokens: SpecialTokens | None = None,
-    ) -> UnigramTokenizerFast:
-        """Identical loader to :meth:`UnigramTokenizer.from_file`.
-
-        The only difference is the returned class (and hence the
-        encode backend — C++ instead of Python Viterbi).
-
-        Parameters
-        ----------
-        directory : str
-            Directory holding the unified ``tokenizer.json`` (and
-            optionally ``special_tokens_map.json``).
-        normalizer : Normalizer, optional, keyword-only
-            Override the encode-time normalisation chain; the file's
-            ``normalizer`` block otherwise, or
-            :class:`~lucid.utils.tokenizer._normalizers.NFKC` without one.
-        pre_tokenizer : PreTokenizer, optional, keyword-only
-            Override the chunk splitter applied after normalisation; the
-            file's ``pre_tokenizer`` block otherwise, or
-            :class:`SentencePiecePreTokenizer` without one.
-        special_tokens : SpecialTokens, optional, keyword-only
-            Override the special-token registry.  When ``None`` (the
-            default), read as :meth:`UnigramTokenizer.from_file` reads it.
-
-        Returns
-        -------
-        UnigramTokenizerFast
-            Freshly-constructed C++-backed instance ready for
-            encode / decode.
-        """
-        config = _read_unigram_config(directory, cls.__name__)
-        tok = cls(
-            config.pieces,
-            unk_token=config.unk_token,
-            unk_log_prob=config.unk_log_prob,
-            normalizer=normalizer,
-            pre_tokenizer=pre_tokenizer,
-            special_tokens=(
-                special_tokens if special_tokens is not None else config.special_tokens
-            ),
-        )
-        tok._apply_file_config(
-            config,
-            normalizer_given=normalizer is not None,
-            pre_tokenizer_given=pre_tokenizer is not None,
-        )
-        return tok
-
-    from_pretrained = from_file

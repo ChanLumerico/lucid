@@ -34,33 +34,13 @@ from lucid.models._output import (
 )
 from lucid.models._utils._text import (
     extended_attention_mask,
+    init_text_module_weights,
     last_kept_token,
     text_activation,
 )
 from lucid.nn.functional import apply_rotary_emb
 from lucid.nn.module import Module
 from lucid.models.text.roformer._config import RoFormerConfig
-
-
-def _init_roformer_weights(module: nn.Module, std: float) -> None:
-    """Initialise Linear, Embedding, and LayerNorm modules using ``N(0, std^2)``."""
-    if isinstance(module, nn.Linear):
-        nn.init.normal_(module.weight, mean=0.0, std=std)
-        if module.bias is not None:
-            nn.init.zeros_(module.bias)
-    elif isinstance(module, nn.Embedding):
-        nn.init.normal_(module.weight, mean=0.0, std=std)
-        if module.padding_idx is not None:
-            with lucid.no_grad():
-                module.weight[module.padding_idx] = lucid.zeros(
-                    (int(module.weight.shape[1]),),
-                    device=module.weight.device.type,
-                )
-    elif isinstance(module, nn.LayerNorm):
-        if module.weight is not None:
-            nn.init.ones_(module.weight)
-        if module.bias is not None:
-            nn.init.zeros_(module.bias)
 
 
 class _RoFormerInitMixin:
@@ -72,7 +52,7 @@ class _RoFormerInitMixin:
             if isinstance(self.config, RoFormerConfig)
             else 0.02
         )
-        _init_roformer_weights(module, std)
+        init_text_module_weights(module, std, reset_layer_norm=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

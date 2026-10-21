@@ -37,31 +37,12 @@ from lucid.models._output import (
 )
 from lucid.models._utils._text import (
     extended_attention_mask,
+    init_text_weights as _init_weights,
     last_kept_token,
     text_activation,
     token_at,
 )
 from lucid.models.text.gpt._config import GPTConfig
-
-
-def _init_weights(model: nn.Module, std: float) -> None:
-    """Initialise every Linear and Embedding from ``N(0, std²)``.
-
-    GPT-1 §4.1 uses ``N(0, 0.02)`` throughout.  ``config.initializer_range``
-    was declared and documented but never reached a single parameter, so the
-    embedding tables came out at the framework's fan-in default (std ≈ 1,
-    fifty times too wide) and — with the LM head tied to the token table —
-    the initial logits with them.
-    """
-    for module in model.modules():
-        if isinstance(module, nn.Linear):
-            nn.init.normal_(module.weight, mean=0.0, std=std)
-            if module.bias is not None:
-                nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            nn.init.normal_(module.weight, mean=0.0, std=std)
-
-
 from lucid.utils.cache import Cache, DynamicCache, StaticCache
 
 # ─────────────────────────────────────────────────────────────────────────────

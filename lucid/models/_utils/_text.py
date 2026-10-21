@@ -16,6 +16,7 @@ file and gives future text models a single canonical implementation.
 """
 
 import lucid
+import lucid.nn as nn
 import lucid.nn.functional as F
 from lucid._tensor.tensor import Tensor
 
@@ -24,6 +25,8 @@ __all__ = [
     "extended_attention_mask",
     "token_at",
     "last_kept_token",
+    "init_text_module_weights",
+    "init_text_weights",
 ]
 
 
@@ -199,3 +202,48 @@ def last_kept_token(hidden: Tensor, attention_mask: Tensor | None) -> Tensor:
     positions = lucid.arange(T, device=attention_mask.device)
     # Unkept slots score 0, so an all-pad row lands on position 0.
     return token_at(hidden, (kept * positions).max(dim=-1))
+
+
+def init_text_module_weights(
+    module: nn.Module,
+    std: float,
+    *,
+    reset_layer_norm: bool = False,
+) -> None:
+    """Initialise a single Linear, Embedding, or LayerNorm module in place.
+
+    Args:
+        module: Submodule to initialise (`nn.Linear`, `nn.Embedding`, or
+            `nn.LayerNorm`).
+        std: Standard deviation for the Gaussian weight initialisation.
+        reset_layer_norm: When ``True``, also reset `nn.LayerNorm` scale and
+            bias parameters to ones and zeros.
+    """
+    if isinstance(module, nn.Linear):
+        nn.init.normal_(module.weight, mean=0.0, std=std)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+    elif isinstance(module, nn.Embedding):
+        nn.init.normal_(module.weight, mean=0.0, std=std)
+        if module.padding_idx is not None:
+            with lucid.no_grad():
+                module.weight[module.padding_idx] = lucid.zeros(
+                    (int(module.weight.shape[1]),),
+                    device=module.weight.device.type,
+                )
+    elif reset_layer_norm and isinstance(module, nn.LayerNorm):
+        if module.weight is not None:
+            nn.init.ones_(module.weight)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+
+
+def init_text_weights(model: nn.Module, std: float) -> None:
+    """Initialise every Linear and Embedding layer in ``model`` from ``N(0, std^2)``.
+
+    Args:
+        model: Root transformer module whose submodules are traversed.
+        std: Standard deviation for the Gaussian weight initialisation.
+    """
+    for module in model.modules():
+        init_text_module_weights(module, std)

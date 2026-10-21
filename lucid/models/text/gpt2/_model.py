@@ -43,6 +43,7 @@ from lucid.models._output import (
 )
 from lucid.models._utils._text import (
     extended_attention_mask,
+    init_text_weights as _init_weights,
     last_kept_token,
     text_activation,
     token_at,
@@ -227,25 +228,6 @@ class _GPT2Block(nn.Module):
 # ─────────────────────────────────────────────────────────────────────────────
 # Bare GPT-2 trunk
 # ─────────────────────────────────────────────────────────────────────────────
-
-
-def _init_weights(model: nn.Module, std: float) -> None:
-    """Initialise every Linear and Embedding from ``N(0, std²)``.
-
-    GPT-2 initialises *all* weights at ``initializer_range = 0.02``, including
-    both embedding tables.  Leaving them at the framework's fan-in defaults
-    puts ``wte`` / ``wpe`` at std ≈ 1 — fifty times too wide — and because the
-    LM head is tied to ``wte`` the initial logits are fifty times too large,
-    so a from-scratch run starts from an enormous cross-entropy.  LayerNorm
-    keeps its unit-weight / zero-bias default.
-    """
-    for module in model.modules():
-        if isinstance(module, nn.Linear):
-            nn.init.normal_(module.weight, mean=0.0, std=std)
-            if module.bias is not None:
-                nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            nn.init.normal_(module.weight, mean=0.0, std=std)
 
 
 def _scale_residual_init(model: nn.Module, num_layers: int, std: float = 0.02) -> None:

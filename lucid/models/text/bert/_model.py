@@ -39,38 +39,12 @@ from lucid.models._output import (
     TokenClassificationOutput,
     ModelOutput,
 )
-from lucid.models._utils._text import extended_attention_mask, text_activation
+from lucid.models._utils._text import (
+    extended_attention_mask,
+    init_text_weights as _init_weights,
+    text_activation,
+)
 from lucid.models.text.bert._config import BERTConfig
-
-
-def _init_weights(model: nn.Module, std: float) -> None:
-    """Initialise every Linear and Embedding from a ``N(0, std²)`` draw.
-
-    BERT's reference initialiser is a truncated normal at
-    ``initializer_range = 0.02`` applied to every dense and embedding kernel,
-    with biases zeroed, LayerNorm left at unit weight / zero bias, and any
-    ``padding_idx`` row re-zeroed after the draw.  Without
-    this pass ``config.initializer_range`` was dead config: embeddings came out
-    at the framework's fan-in default (std ≈ 1, fifty times too wide), which
-    degrades and can destabilise any from-scratch pre-training run.
-    """
-    for module in model.modules():
-        if isinstance(module, nn.Linear):
-            nn.init.normal_(module.weight, mean=0.0, std=std)
-            if module.bias is not None:
-                nn.init.zeros_(module.bias)
-        elif isinstance(module, nn.Embedding):
-            nn.init.normal_(module.weight, mean=0.0, std=std)
-            # The reference re-zeroes the padding row after the draw.  Leaving
-            # it random gives the pad token a real embedding, which the
-            # ``padding_idx`` contract says it must not have.
-            if module.padding_idx is not None:
-                with lucid.no_grad():
-                    module.weight[module.padding_idx] = lucid.zeros(
-                        (int(module.weight.shape[1]),),
-                        device=module.weight.device.type,
-                    )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Embeddings

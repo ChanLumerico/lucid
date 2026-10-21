@@ -11,27 +11,14 @@ from typing import TYPE_CHECKING, Self, cast, override
 
 import lucid.nn as nn
 import lucid.nn.functional as F
-from lucid.nn.quantized._utils import activation_qparams
-from lucid.quantization._functional import fake_quantize
-from lucid.quantization._qscheme import QDtype, quint8
+from lucid.nn.quantized._utils import _QuantizedGridModule, activation_qparams
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
 
 
-class _QuantizedActivation(nn.Module):
+class _QuantizedActivation(_QuantizedGridModule):
     """Float activation then fake-quant to the calibrated ``(scale, zero_point)``."""
-
-    scale: Tensor
-    zero_point: Tensor
-
-    def __init__(
-        self, scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8
-    ) -> None:
-        super().__init__()
-        self.register_buffer("scale", scale)
-        self.register_buffer("zero_point", zero_point)
-        self.qdtype = qdtype
 
     def _act(self, x: Tensor) -> Tensor:
         """Apply the float activation — overridden per subclass."""
@@ -43,13 +30,7 @@ class _QuantizedActivation(nn.Module):
     @override
     def forward(self, input: Tensor) -> Tensor:
         """Activate, then fake-quantize to the calibrated grid."""
-        return fake_quantize(
-            self._act(input),
-            self.scale,
-            self.zero_point,
-            self.qdtype.quant_min,
-            self.qdtype.quant_max,
-        )
+        return self._fake_quant(self._act(input))
 
     @classmethod
     def from_float(cls, mod: nn.Module) -> Self:

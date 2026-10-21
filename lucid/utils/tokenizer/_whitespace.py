@@ -13,16 +13,14 @@ always use a subword tokenizer (BPE / WordPiece / Unigram) for OOV
 robustness + better compression.
 """
 
-import os
 from typing import Iterable, override
 
 from lucid._C import engine as _C_engine
 
-from lucid.utils.tokenizer._base import SpecialTokens, Tokenizer
+from lucid.utils.tokenizer._base import SpecialTokens
 from lucid.utils.tokenizer._lookup_common import (
-    _load_special_tokens_map,
-    _load_vocab_txt,
-    _save_vocab_txt,
+    _FastVocabTokenizer,
+    _VocabTokenizer,
 )
 
 
@@ -35,7 +33,7 @@ def _whitespace_split(text: str) -> list[str]:
     return text.split()
 
 
-class WhitespaceTokenizer(Tokenizer):
+class WhitespaceTokenizer(_VocabTokenizer):
     """Reference (pure-Python) whitespace-split tokenizer.
 
     Parameters
@@ -58,6 +56,9 @@ class WhitespaceTokenizer(Tokenizer):
     'the quick dog'
     """
 
+    _algo_name = "whitespace"
+    _model_type = "Whitespace"
+
     def __init__(
         self,
         vocab: dict[str, int] | None = None,
@@ -74,31 +75,7 @@ class WhitespaceTokenizer(Tokenizer):
         special_tokens : SpecialTokens or None, optional, keyword-only
             Special-token registry.
         """
-        self._vocab: dict[str, int] = dict(vocab) if vocab else {}
-        self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
-        super().__init__(special_tokens=special_tokens)
-
-    @override
-    @property
-    def vocab_size(self) -> int:
-        r"""Number of distinct whitespace-split tokens currently registered."""
-        return len(self._vocab)
-
-    @override
-    @property
-    def algo(self) -> str:
-        """Algorithm identifier (always ``"whitespace"``)."""
-        return "whitespace"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        """Return a copy of the word → id map."""
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        """Return the word for ``token_id`` or ``None`` if unknown."""
-        return self._id_to_token.get(token_id)
+        self._init_vocab_tokenizer(vocab, special_tokens=special_tokens)
 
     @override
     def _encode_one(self, text: str) -> list[int]:
@@ -133,72 +110,10 @@ class WhitespaceTokenizer(Tokenizer):
             Maximum number of distinct words to retain; training stops
             as soon as the cap is hit.
         """
-        v: dict[str, int] = {}
-        next_id = 0
-        for doc in corpus:
-            for w in _whitespace_split(doc):
-                if w not in v:
-                    v[w] = next_id
-                    next_id += 1
-                    if next_id >= vocab_size:
-                        break
-            if next_id >= vocab_size:
-                break
-        self._vocab = v
-        self._id_to_token = {i: t for t, i in v.items()}
-        self._refresh_special_ids()
-
-    @override
-    def save(self, directory: str) -> None:
-        """Persist as ``vocab.txt`` + unified ``tokenizer.json``.
-
-        Parameters
-        ----------
-        directory : str
-            Output directory (created if missing).
-        """
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Emit the unified-format ``model`` block for the whitespace algo."""
-        return {"model": {"type": "Whitespace", "vocab": self._vocab}}
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        special_tokens: SpecialTokens | None = None,
-    ) -> WhitespaceTokenizer:
-        """Load from a directory containing ``vocab.txt``.
-
-        Parameters
-        ----------
-        directory : str
-            Directory previously written by :meth:`save`.
-        special_tokens : SpecialTokens, optional
-            Override for the on-disk special-token map.
-
-        Returns
-        -------
-        WhitespaceTokenizer
-        """
-        vocab_path = os.path.join(directory, "vocab.txt")
-        if not os.path.isfile(vocab_path):
-            raise FileNotFoundError(
-                f"WhitespaceTokenizer.from_file: vocab.txt not found in " f"{directory}"
-            )
-        vocab = _load_vocab_txt(vocab_path)
-        st = special_tokens or _load_special_tokens_map(directory)
-        return cls(vocab=vocab, special_tokens=st)
-
-    from_pretrained = from_file
+        self._train_insertion_vocab(corpus, _whitespace_split, vocab_size)
 
 
-class WhitespaceTokenizerFast(Tokenizer):
+class WhitespaceTokenizerFast(_FastVocabTokenizer):
     """C++-backed whitespace tokenizer; bit-identical to
     :class:`WhitespaceTokenizer`.
 
@@ -223,6 +138,9 @@ class WhitespaceTokenizerFast(Tokenizer):
     [0, 1, 5]
     """
 
+    _algo_name = "whitespace"
+    _model_type = "Whitespace"
+
     def __init__(
         self,
         vocab: dict[str, int] | None = None,
@@ -239,74 +157,13 @@ class WhitespaceTokenizerFast(Tokenizer):
         special_tokens : SpecialTokens or None, optional, keyword-only
             Special-token registry.
         """
-        self._vocab: dict[str, int] = dict(vocab) if vocab else {}
-        if self._vocab:
-            self._cpp = _C_engine.utils.tokenizer.WhitespaceTokenizer(self._vocab)
-        else:
-            self._cpp = _C_engine.utils.tokenizer.WhitespaceTokenizer()
-        self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
-        super().__init__(special_tokens=special_tokens)
-
-    @override
-    @property
-    def vocab_size(self) -> int:
-        r"""Number of words in the live C++ vocab.
-
-        Returns
-        -------
-        int
-            ``self._cpp.vocab_size()``.
-        """
-        return self._cpp.vocab_size()
-
-    @override
-    @property
-    def algo(self) -> str:
-        r"""Algorithm identifier (always ``"whitespace"``).
-
-        Returns
-        -------
-        str
-            Constant string ``"whitespace"``.
-        """
-        return "whitespace"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        r"""Return a copy of the word → id map.
-
-        Returns
-        -------
-        dict[str, int]
-            Shallow copy of the Python-side cache.
-        """
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        r"""Look up the word for ``token_id``.
-
-        Parameters
-        ----------
-        token_id : int
-            Vocab id.
-
-        Returns
-        -------
-        str or None
-            Word string, or ``None`` if unknown.
-        """
-        return self._id_to_token.get(token_id)
-
-    @override
-    def _encode_one(self, text: str) -> list[int]:
-        r"""Delegate to the C++ encode hot path; OOV silently dropped."""
-        return list(self._cpp.encode(text))
-
-    @override
-    def _decode_one(self, ids: list[int]) -> str:
-        r"""C++ decode — joins known surface forms with single spaces."""
-        return self._cpp.decode(list(ids))
+        v = dict(vocab) if vocab else {}
+        cpp = (
+            _C_engine.utils.tokenizer.WhitespaceTokenizer(v)
+            if v
+            else _C_engine.utils.tokenizer.WhitespaceTokenizer()
+        )
+        self._init_fast_vocab_tokenizer(cpp, v, special_tokens=special_tokens)
 
     def train(
         self,
@@ -330,63 +187,4 @@ class WhitespaceTokenizerFast(Tokenizer):
         side finishes; re-resolves special-token ids against the
         new vocab.
         """
-        self._cpp.train(list(corpus), vocab_size)
-        self._vocab = dict(self._cpp.get_vocab())
-        self._id_to_token = {v: k for k, v in self._vocab.items()}
-        self._refresh_special_ids()
-
-    @override
-    def save(self, directory: str) -> None:
-        r"""Persist as ``vocab.txt`` + unified ``tokenizer.json``.
-
-        Parameters
-        ----------
-        directory : str
-            Output directory; created if missing.
-        """
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        r"""Emit the unified-format ``model`` block for the whitespace algo."""
-        return {"model": {"type": "Whitespace", "vocab": self._vocab}}
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        special_tokens: SpecialTokens | None = None,
-    ) -> WhitespaceTokenizerFast:
-        r"""Load from a directory containing ``vocab.txt``.
-
-        Parameters
-        ----------
-        directory : str
-            Directory previously written by :meth:`save`.
-        special_tokens : SpecialTokens or None, optional, keyword-only
-            Override for the on-disk special-token map.
-
-        Returns
-        -------
-        WhitespaceTokenizerFast
-            A new C++-backed tokenizer populated from disk.
-
-        Raises
-        ------
-        FileNotFoundError
-            If ``vocab.txt`` is missing.
-        """
-        vocab_path = os.path.join(directory, "vocab.txt")
-        if not os.path.isfile(vocab_path):
-            raise FileNotFoundError(
-                f"WhitespaceTokenizerFast.from_file: vocab.txt not found "
-                f"in {directory}"
-            )
-        vocab = _load_vocab_txt(vocab_path)
-        st = special_tokens or _load_special_tokens_map(directory)
-        return cls(vocab=vocab, special_tokens=st)
-
-    from_pretrained = from_file
+        self._train_cpp(corpus, vocab_size)

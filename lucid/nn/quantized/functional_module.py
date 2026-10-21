@@ -14,9 +14,7 @@ from typing import TYPE_CHECKING, cast
 import lucid
 import lucid.nn as nn
 import lucid.nn.functional as F
-from lucid.nn.quantized._utils import activation_qparams
-from lucid.quantization._functional import fake_quantize
-from lucid.quantization._qscheme import QDtype, quint8
+from lucid.nn.quantized._utils import _QuantizedGridModule, activation_qparams
 
 if TYPE_CHECKING:
     from lucid._tensor.tensor import Tensor
@@ -124,7 +122,7 @@ class FloatFunctional(nn.Module):
         return self._obs(x * scalar)
 
 
-class QFunctional(nn.Module):
+class QFunctional(_QuantizedGridModule):
     r"""Quantized element-wise merges — each result fake-quantized to one grid.
 
     The converted, inference-time form of :class:`FloatFunctional`, installed by
@@ -202,22 +200,9 @@ class QFunctional(nn.Module):
     lucid.quantization.convert : Installs this module from a calibrated model.
     """
 
-    scale: Tensor
-    zero_point: Tensor
-
-    def __init__(
-        self, scale: Tensor, zero_point: Tensor, qdtype: QDtype = quint8
-    ) -> None:
-        super().__init__()
-        self.register_buffer("scale", scale)
-        self.register_buffer("zero_point", zero_point)
-        self.qdtype = qdtype
-
     def _q(self, x: Tensor) -> Tensor:
         """Fake-quantize ``x`` to the calibrated output grid."""
-        return fake_quantize(
-            x, self.scale, self.zero_point, self.qdtype.quant_min, self.qdtype.quant_max
-        )
+        return self._fake_quant(x)
 
     def add(self, x: Tensor, y: Tensor) -> Tensor:
         """Quantized ``x + y``."""

@@ -29,7 +29,7 @@ RoBERTa, BART, distilGPT, ...) load without modification.
 
 import json
 import os
-from typing import TYPE_CHECKING, Iterable, override
+from typing import Callable, Iterable, override
 
 from lucid._C import engine as _C_engine
 
@@ -39,9 +39,6 @@ from lucid.utils.tokenizer._pre_tokenizers import (
     PreTokenizer,
     WhitespaceSplit,
 )
-
-if TYPE_CHECKING:
-    pass
 
 
 # ── Vocab loader helpers (shared between BPE + BPEFast) ─────────────
@@ -152,15 +149,18 @@ def _save_merges_txt(
 # ── Shared mixin: normalizer + pre-tokenizer chain ──────────────────
 
 
-class _BPECommonMixin:
-    """Holds the normalizer + pre-tokenizer chain that both
+class _BPECommonMixin(Tokenizer):
+    """Holds the normalizer + pre-tokenizer chain and persistence that both
     :class:`BPETokenizer` and :class:`BPETokenizerFast` use.
 
     Subclasses still implement their own ``_encode_one`` (because
     the algorithm itself lives in different places — Python loop vs
-    C++ call) but the surface preprocessing is shared.
+    C++ call) but the surface preprocessing and persistence are shared.
     """
 
+    _vocab: dict[str, int]
+    _merges: list[tuple[str, str]]
+    _id_to_token: dict[int, str]
     _normalizer: Normalizer | None
     _pre_tokenizer: PreTokenizer
 
@@ -169,6 +169,104 @@ class _BPECommonMixin:
         if self._normalizer is not None:
             text = self._normalizer(text)
         return [chunk for chunk, _ in self._pre_tokenizer(text)]
+
+    @override
+    @property
+    def algo(self) -> str:
+        """Algorithm identifier (``"bpe"``)."""
+        return "bpe"
+
+    @override
+    def get_vocab(self) -> dict[str, int]:
+        """Return a shallow copy of the token → id map."""
+        return dict(self._vocab)
+
+    @override
+    def id_to_token(self, token_id: int) -> str | None:
+        """Look up the surface string for a token id."""
+        return self._id_to_token.get(token_id)
+
+    @override
+    def save(self, directory: str) -> None:
+        """Persist as both legacy (``vocab.json`` + ``merges.txt``)
+        AND unified (``tokenizer.json``) formats.
+        """
+        os.makedirs(directory, exist_ok=True)
+        _save_vocab_json(self._vocab, os.path.join(directory, "vocab.json"))
+        _save_merges_txt(self._merges, os.path.join(directory, "merges.txt"))
+        super().save(directory)
+
+    @override
+    def _save_extras(self) -> dict[str, object]:
+        """Add ``model`` block to the unified ``tokenizer.json``."""
+        return {
+            "model": {
+                "type": "BPE",
+                "vocab": self._vocab,
+                "merges": [list(m) for m in self._merges],
+            }
+        }
+
+
+def _load_bpe_checkpoint(
+    directory: str,
+    special_tokens: SpecialTokens | None,
+    caller: str,
+) -> tuple[
+    dict[str, int],
+    list[tuple[str, str]],
+    SpecialTokens | None,
+    dict[str, object],
+]:
+    """Load vocab, merges, special tokens, and optional model dict from ``directory``."""
+    unified = os.path.join(directory, "tokenizer.json")
+    model_data: dict[str, object] = {}
+    if os.path.isfile(unified):
+        vocab, merges = _load_unified_tokenizer_json(unified)
+        with open(unified, encoding="utf-8") as f:
+            data = json.load(f)
+        raw_model = data.get("model", {})
+        if isinstance(raw_model, dict):
+            model_data = raw_model
+    else:
+        vj = os.path.join(directory, "vocab.json")
+        mt = os.path.join(directory, "merges.txt")
+        if not (os.path.isfile(vj) and os.path.isfile(mt)):
+            raise FileNotFoundError(
+                f"{caller}.from_file: neither tokenizer.json "
+                f"nor (vocab.json + merges.txt) found in {directory}"
+            )
+        vocab = _load_vocab_json(vj)
+        merges = _load_merges_txt(mt)
+    st = special_tokens
+    if st is None:
+        sp_path = os.path.join(directory, "special_tokens_map.json")
+        if os.path.isfile(sp_path):
+            with open(sp_path, encoding="utf-8") as f:
+                sp = json.load(f)
+            st = _special_tokens_from_map(sp)
+    return vocab, merges, st, model_data
+
+
+def _load_bpe_from_file[T](
+    cls: Callable[..., T],
+    directory: str,
+    *,
+    normalizer: Normalizer | None = None,
+    pre_tokenizer: PreTokenizer | None = None,
+    special_tokens: SpecialTokens | None = None,
+) -> T:
+    """Instantiate a BPE tokenizer subclass from ``directory``."""
+    vocab, merges, st, _ = _load_bpe_checkpoint(
+        directory, special_tokens, getattr(cls, "__name__", "BPETokenizer")
+    )
+    return cls(
+        vocab,
+        merges,
+        normalizer=normalizer,
+        pre_tokenizer=pre_tokenizer,
+        special_tokens=st,
+    )
 
 
 # ── Pure-Python reference impl ──────────────────────────────────────
@@ -301,48 +399,6 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
             registered into the main vocab.
         """
         return len(self._vocab)
-
-    @override
-    @property
-    def algo(self) -> str:
-        r"""Algorithm identifier (always ``"bpe"``).
-
-        Returns
-        -------
-        str
-            Constant string ``"bpe"`` — used by the unified
-            ``tokenizer.json`` writer to label the algorithm.
-        """
-        return "bpe"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        r"""Return a shallow copy of the token → id map.
-
-        Returns
-        -------
-        dict[str, int]
-            Copy of the internal vocab; mutating it does not affect
-            the tokenizer.
-        """
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        r"""Look up the surface string for a token id.
-
-        Parameters
-        ----------
-        token_id : int
-            Vocab id.
-
-        Returns
-        -------
-        str or None
-            The token string for ``token_id``, or ``None`` if the id
-            is not in the reverse table.
-        """
-        return self._id_to_token.get(token_id)
 
     @override
     def _encode_one(self, text: str) -> list[int]:
@@ -514,35 +570,6 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         self._rebuild_tables()
         self._refresh_special_ids()
 
-    # ── Persistence ─────────────────────────────────────────────────
-
-    @override
-    def save(self, directory: str) -> None:
-        """Persist as both legacy (``vocab.json`` + ``merges.txt``)
-        AND unified (``tokenizer.json``) formats.
-
-        Writing both means the resulting directory loads back via
-        :meth:`from_pretrained` regardless of which format the caller
-        looks for first — and matches how HF distributes BPE
-        checkpoints on the Hub.
-        """
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_json(self._vocab, os.path.join(directory, "vocab.json"))
-        _save_merges_txt(self._merges, os.path.join(directory, "merges.txt"))
-        # Delegate to base for tokenizer.json + special_tokens_map.json.
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Add ``model`` block to the unified ``tokenizer.json``."""
-        return {
-            "model": {
-                "type": "BPE",
-                "vocab": self._vocab,
-                "merges": [list(m) for m in self._merges],
-            }
-        }
-
     @classmethod
     def from_file(
         cls,
@@ -552,64 +579,20 @@ class BPETokenizer(_BPECommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> BPETokenizer:
-        """Load from a directory containing either
-        ``tokenizer.json`` or the legacy
-        ``vocab.json`` + ``merges.txt`` pair.
+        """Load a pure-Python BPE tokenizer from ``directory``.
 
-        Unified format wins when present.
-
-        Parameters
-        ----------
-        directory : str
-            Path containing the on-disk BPE checkpoint — either the
-            unified HF ``tokenizer.json`` or the legacy pair
-            (``vocab.json`` + ``merges.txt``).  Optionally also
-            ``special_tokens_map.json`` for the special-token registry.
-        normalizer : Normalizer, optional, keyword-only
-            Override the encode-time normalisation chain.  Defaults
-            to :class:`~lucid.utils.tokenizer._normalizers.NFC` when
-            not supplied.
-        pre_tokenizer : PreTokenizer, optional, keyword-only
-            Override the chunk splitter applied after normalisation.
-            Defaults to
-            :class:`~lucid.utils.tokenizer._pre_tokenizers.WhitespaceSplit`.
-        special_tokens : SpecialTokens, optional, keyword-only
-            Override the special-token registry.  When ``None`` (the
-            default), parsed from ``special_tokens_map.json`` if
-            present.
-
-        Returns
-        -------
-        BPETokenizer
-            Freshly-constructed instance ready for encode / decode.
+        Args:
+            directory: Folder with ``tokenizer.json`` or ``vocab.json`` + ``merges.txt``.
+            normalizer: Optional pre-encode normaliser override.
+            pre_tokenizer: Optional pre-tokenizer splitter override.
+            special_tokens: Optional special-token registry override.
         """
-        unified = os.path.join(directory, "tokenizer.json")
-        if os.path.isfile(unified):
-            vocab, merges = _load_unified_tokenizer_json(unified)
-        else:
-            vj = os.path.join(directory, "vocab.json")
-            mt = os.path.join(directory, "merges.txt")
-            if not (os.path.isfile(vj) and os.path.isfile(mt)):
-                raise FileNotFoundError(
-                    f"BPETokenizer.from_file: neither tokenizer.json "
-                    f"nor (vocab.json + merges.txt) found in {directory}"
-                )
-            vocab = _load_vocab_json(vj)
-            merges = _load_merges_txt(mt)
-        # Special-tokens map.
-        st = special_tokens
-        if st is None:
-            sp_path = os.path.join(directory, "special_tokens_map.json")
-            if os.path.isfile(sp_path):
-                with open(sp_path, encoding="utf-8") as f:
-                    sp = json.load(f)
-                st = _special_tokens_from_map(sp)
-        return cls(
-            vocab,
-            merges,
+        return _load_bpe_from_file(
+            cls,
+            directory,
             normalizer=normalizer,
             pre_tokenizer=pre_tokenizer,
-            special_tokens=st,
+            special_tokens=special_tokens,
         )
 
     from_pretrained = from_file  # alias matching HF naming
@@ -776,54 +759,6 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         return self._cpp.vocab_size()
 
     @override
-    @property
-    def algo(self) -> str:
-        r"""Algorithm identifier (always ``"bpe"``).
-
-        Returns
-        -------
-        str
-            Constant string ``"bpe"``.
-        """
-        return "bpe"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        r"""Return a shallow copy of the token → id map.
-
-        Returns
-        -------
-        dict[str, int]
-            Copy of the Python-side cache, kept in sync with the C++
-            side by `__init__` and :meth:`train`.
-
-        Notes
-        -----
-        Reads from the Python cache to avoid a binding round-trip;
-        both halves are updated atomically.
-        """
-        # Pull from Python-side cache for speed; both are kept in
-        # sync by ``train`` + ``__init__``.
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        r"""Look up the surface string for a token id.
-
-        Parameters
-        ----------
-        token_id : int
-            Vocab id.
-
-        Returns
-        -------
-        str or None
-            The token string for ``token_id``, or ``None`` if the id
-            is not in the reverse table.
-        """
-        return self._id_to_token.get(token_id)
-
-    @override
     def _encode_one(self, text: str) -> list[int]:
         r"""C++ encode path: normalize + pre-tokenize in Python,
         per-chunk merge in C++.
@@ -877,27 +812,6 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         self._refresh_special_ids()
         self._sync_special_tokens_to_cpp()
 
-    # ── Persistence ─────────────────────────────────────────────────
-
-    @override
-    def save(self, directory: str) -> None:
-        """Same format as :meth:`BPETokenizer.save`."""
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_json(self._vocab, os.path.join(directory, "vocab.json"))
-        _save_merges_txt(self._merges, os.path.join(directory, "merges.txt"))
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        r"""Emit the BPE ``model`` block for the unified ``tokenizer.json``."""
-        return {
-            "model": {
-                "type": "BPE",
-                "vocab": self._vocab,
-                "merges": [list(m) for m in self._merges],
-            }
-        }
-
     @classmethod
     def from_file(
         cls,
@@ -907,61 +821,20 @@ class BPETokenizerFast(_BPECommonMixin, Tokenizer):
         pre_tokenizer: PreTokenizer | None = None,
         special_tokens: SpecialTokens | None = None,
     ) -> BPETokenizerFast:
-        """Identical loader to :meth:`BPETokenizer.from_file`; the
-        only difference is the returned class (and hence the encode
-        backend — C++ instead of pure-Python merge loop).
+        """Load a C++-backed BPE tokenizer from ``directory``.
 
-        Parameters
-        ----------
-        directory : str
-            Path containing the on-disk BPE checkpoint — either the
-            unified HF ``tokenizer.json`` or the legacy pair
-            (``vocab.json`` + ``merges.txt``).  Optionally also
-            ``special_tokens_map.json`` for the special-token registry.
-        normalizer : Normalizer, optional, keyword-only
-            Override the encode-time normalisation chain.  Defaults to
-            :class:`~lucid.utils.tokenizer._normalizers.NFC`.
-        pre_tokenizer : PreTokenizer, optional, keyword-only
-            Override the chunk splitter applied after normalisation.
-            Defaults to
-            :class:`~lucid.utils.tokenizer._pre_tokenizers.WhitespaceSplit`.
-        special_tokens : SpecialTokens, optional, keyword-only
-            Override the special-token registry.  When ``None`` (the
-            default), parsed from ``special_tokens_map.json`` if
-            present in ``directory``.
-
-        Returns
-        -------
-        BPETokenizerFast
-            Freshly-constructed C++-backed instance ready for
-            encode / decode.
+        Args:
+            directory: Checkpoint directory path on disk.
+            normalizer: Custom text normaliser to apply before splitting.
+            pre_tokenizer: Custom chunk splitter for the C++ merge loop.
+            special_tokens: Custom special-token configuration.
         """
-        unified = os.path.join(directory, "tokenizer.json")
-        if os.path.isfile(unified):
-            vocab, merges = _load_unified_tokenizer_json(unified)
-        else:
-            vj = os.path.join(directory, "vocab.json")
-            mt = os.path.join(directory, "merges.txt")
-            if not (os.path.isfile(vj) and os.path.isfile(mt)):
-                raise FileNotFoundError(
-                    f"BPETokenizerFast.from_file: neither tokenizer.json "
-                    f"nor (vocab.json + merges.txt) found in {directory}"
-                )
-            vocab = _load_vocab_json(vj)
-            merges = _load_merges_txt(mt)
-        st = special_tokens
-        if st is None:
-            sp_path = os.path.join(directory, "special_tokens_map.json")
-            if os.path.isfile(sp_path):
-                with open(sp_path, encoding="utf-8") as f:
-                    sp = json.load(f)
-                st = _special_tokens_from_map(sp)
-        return cls(
-            vocab,
-            merges,
+        return _load_bpe_from_file(
+            cls,
+            directory,
             normalizer=normalizer,
             pre_tokenizer=pre_tokenizer,
-            special_tokens=st,
+            special_tokens=special_tokens,
         )
 
     from_pretrained = from_file

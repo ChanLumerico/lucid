@@ -45,19 +45,88 @@ re-use the compiled matcher across encode calls.
 
 import os
 import re
-from typing import Iterable, override
+from typing import TYPE_CHECKING, Iterable, Self, override
 
 from lucid._C import engine as _C_engine
 
-from lucid.utils.tokenizer._base import SpecialTokens, Tokenizer
+from lucid.utils.tokenizer._base import SpecialTokens
 from lucid.utils.tokenizer._lookup_common import (
+    _FastVocabTokenizer,
     _load_special_tokens_map,
     _load_vocab_txt,
-    _save_vocab_txt,
+    _VocabTokenizer,
 )
 
 
-class RegexTokenizer(Tokenizer):
+class _RegexPersistenceMixin(_VocabTokenizer):
+    """Shared regex pattern persistence across slow and fast RegexTokenizer."""
+
+    _algo_name = "regex"
+    _model_type = "Regex"
+    _pattern_str: str
+
+    if TYPE_CHECKING:
+
+        def __init__(
+            self,
+            pattern: str = ...,
+            vocab: dict[str, int] | None = None,
+            *,
+            special_tokens: SpecialTokens | None = None,
+        ) -> None: ...
+
+    @property
+    def pattern(self) -> str:
+        """The original regex source — useful for serialisation."""
+        return self._pattern_str
+
+    @override
+    def save(self, directory: str) -> None:
+        """Persist vocab + regex pattern + unified ``tokenizer.json``."""
+        os.makedirs(directory, exist_ok=True)
+        with open(
+            os.path.join(directory, "regex_pattern.txt"), "w", encoding="utf-8"
+        ) as f:
+            f.write(self._pattern_str)
+        super().save(directory)
+
+    @override
+    def _save_extras(self) -> dict[str, object]:
+        """Add ``model`` block (type / pattern / vocab) to ``tokenizer.json``."""
+        return {
+            "model": {
+                "type": "Regex",
+                "pattern": self._pattern_str,
+                "vocab": self._vocab,
+            }
+        }
+
+    @classmethod
+    @override
+    def from_file(
+        cls,
+        directory: str,
+        *,
+        special_tokens: SpecialTokens | None = None,
+    ) -> Self:
+        """Load from a directory previously written by :meth:`save`."""
+        pat_path = os.path.join(directory, "regex_pattern.txt")
+        if not os.path.isfile(pat_path):
+            raise FileNotFoundError(
+                f"{cls.__name__}.from_file: regex_pattern.txt not found "
+                f"in {directory}"
+            )
+        with open(pat_path, encoding="utf-8") as f:
+            pattern = f.read()
+        vocab_path = os.path.join(directory, "vocab.txt")
+        vocab = _load_vocab_txt(vocab_path) if os.path.isfile(vocab_path) else {}
+        st = special_tokens or _load_special_tokens_map(directory)
+        return cls(pattern=pattern, vocab=vocab, special_tokens=st)
+
+    from_pretrained = from_file
+
+
+class RegexTokenizer(_RegexPersistenceMixin, _VocabTokenizer):
     r"""Reference (pure-Python) regex tokenizer.
 
     Splits the input by repeatedly applying a compiled regular
@@ -125,36 +194,7 @@ class RegexTokenizer(Tokenizer):
         """
         self._pattern_str = pattern
         self._pattern = re.compile(pattern)
-        self._vocab: dict[str, int] = dict(vocab) if vocab else {}
-        self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
-        super().__init__(special_tokens=special_tokens)
-
-    @property
-    def pattern(self) -> str:
-        """The original regex source — useful for serialisation."""
-        return self._pattern_str
-
-    @override
-    @property
-    def vocab_size(self) -> int:
-        """Total number of tokens in the vocab."""
-        return len(self._vocab)
-
-    @override
-    @property
-    def algo(self) -> str:
-        """Algorithm identifier — always ``"regex"``."""
-        return "regex"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        """Return a copy of the token-string → id map."""
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        """Reverse lookup; returns ``None`` if ``token_id`` is unknown."""
-        return self._id_to_token.get(token_id)
+        self._init_vocab_tokenizer(vocab, special_tokens=special_tokens)
 
     @override
     def _encode_one(self, text: str) -> list[int]:
@@ -173,9 +213,6 @@ class RegexTokenizer(Tokenizer):
     @override
     def _decode_one(self, ids: list[int]) -> str:
         """Algorithm-specific decode: join known ids with a single space."""
-        # Regex tokenizer has no canonical reconstruction — the
-        # unmatched delimiter chars were dropped.  Join with single
-        # space (matches the C++ side's decode).
         return " ".join(self._id_to_token[i] for i in ids if i in self._id_to_token)
 
     def train(
@@ -200,96 +237,14 @@ class RegexTokenizer(Tokenizer):
         vocab_size : int, default 30 000
             Hard cap on the number of distinct tokens kept.
         """
-        v: dict[str, int] = {}
-        next_id = 0
-        for doc in corpus:
-            for m in self._pattern.finditer(doc):
-                tok = m.group(0)
-                if tok not in v:
-                    v[tok] = next_id
-                    next_id += 1
-                    if next_id >= vocab_size:
-                        break
-            if next_id >= vocab_size:
-                break
-        self._vocab = v
-        self._id_to_token = {i: t for t, i in v.items()}
-        self._refresh_special_ids()
-
-    @override
-    def save(self, directory: str) -> None:
-        """Persist vocab + regex pattern + unified ``tokenizer.json``.
-
-        Parameters
-        ----------
-        directory : str
-            Output directory.  Created if it does not exist.  Files
-            written: ``vocab.txt``, ``regex_pattern.txt``,
-            ``tokenizer.json`` (via the base class) and optionally
-            ``special_tokens_map.json``.
-        """
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
-        # Also persist the pattern so from_file() can reconstruct.
-        with open(
-            os.path.join(directory, "regex_pattern.txt"), "w", encoding="utf-8"
-        ) as f:
-            f.write(self._pattern_str)
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Add ``model`` block (type / pattern / vocab) to ``tokenizer.json``."""
-        return {
-            "model": {
-                "type": "Regex",
-                "pattern": self._pattern_str,
-                "vocab": self._vocab,
-            }
-        }
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        special_tokens: SpecialTokens | None = None,
-    ) -> RegexTokenizer:
-        """Load from a directory previously written by :meth:`save`.
-
-        Parameters
-        ----------
-        directory : str
-            Directory containing at minimum ``regex_pattern.txt``.
-            ``vocab.txt`` is optional (an empty vocab is used if
-            absent — call :meth:`train` afterwards).
-            ``special_tokens_map.json`` is consulted if
-            ``special_tokens`` is not provided.
-        special_tokens : SpecialTokens, optional
-            Overrides any on-disk ``special_tokens_map.json``.
-
-        Returns
-        -------
-        RegexTokenizer
-            Reconstructed tokenizer.
-        """
-        pat_path = os.path.join(directory, "regex_pattern.txt")
-        if not os.path.isfile(pat_path):
-            raise FileNotFoundError(
-                f"RegexTokenizer.from_file: regex_pattern.txt not found "
-                f"in {directory}"
-            )
-        with open(pat_path, encoding="utf-8") as f:
-            pattern = f.read()
-        vocab_path = os.path.join(directory, "vocab.txt")
-        vocab = _load_vocab_txt(vocab_path) if os.path.isfile(vocab_path) else {}
-        st = special_tokens or _load_special_tokens_map(directory)
-        return cls(pattern=pattern, vocab=vocab, special_tokens=st)
-
-    from_pretrained = from_file  # alias matching HF naming
+        self._train_insertion_vocab(
+            corpus,
+            lambda doc: (m.group(0) for m in self._pattern.finditer(doc)),
+            vocab_size,
+        )
 
 
-class RegexTokenizerFast(Tokenizer):
+class RegexTokenizerFast(_RegexPersistenceMixin, _FastVocabTokenizer):
     r"""C++-backed regex tokenizer.
 
     Identical surface API to :class:`RegexTokenizer`; the per-chunk
@@ -333,6 +288,8 @@ class RegexTokenizerFast(Tokenizer):
     'the quick dog'
     """
 
+    _sync_cpp_specials = True
+
     def __init__(
         self,
         pattern: str,
@@ -353,57 +310,9 @@ class RegexTokenizerFast(Tokenizer):
             Special-token registry; mirrored into the C++ backend.
         """
         self._pattern_str = pattern
-        self._vocab: dict[str, int] = dict(vocab) if vocab else {}
-        self._cpp = _C_engine.utils.tokenizer.RegexTokenizer(pattern, self._vocab)
-        self._id_to_token: dict[int, str] = {v: k for k, v in self._vocab.items()}
-        super().__init__(special_tokens=special_tokens)
-        self._sync_specials_to_cpp()
-
-    def _sync_specials_to_cpp(self) -> None:
-        """Mirror :attr:`_special_ids` into the C++ tokenizer registry."""
-        st = _C_engine.utils.tokenizer.SpecialTokens()
-        for name in ("pad", "unk", "bos", "eos", "mask", "sep", "cls"):
-            tid = self._special_ids.get(name)
-            if tid is not None:
-                setattr(st, name, tid)
-        self._cpp.special_tokens = st
-
-    @property
-    def pattern(self) -> str:
-        """The original regex source — useful for serialisation."""
-        return self._pattern_str
-
-    @override
-    @property
-    def vocab_size(self) -> int:
-        """Total number of tokens in the vocab (queried via C++)."""
-        return self._cpp.vocab_size()
-
-    @override
-    @property
-    def algo(self) -> str:
-        """Algorithm identifier — always ``"regex"``."""
-        return "regex"
-
-    @override
-    def get_vocab(self) -> dict[str, int]:
-        """Return a copy of the cached token-string → id map."""
-        return dict(self._vocab)
-
-    @override
-    def id_to_token(self, token_id: int) -> str | None:
-        """Reverse lookup; returns ``None`` if ``token_id`` is unknown."""
-        return self._id_to_token.get(token_id)
-
-    @override
-    def _encode_one(self, text: str) -> list[int]:
-        """C++ encode path — single binding call per text."""
-        return list(self._cpp.encode(text))
-
-    @override
-    def _decode_one(self, ids: list[int]) -> str:
-        """C++ decode path — returns the joined surface form."""
-        return self._cpp.decode(list(ids))
+        v = dict(vocab) if vocab else {}
+        cpp = _C_engine.utils.tokenizer.RegexTokenizer(pattern, v)
+        self._init_fast_vocab_tokenizer(cpp, v, special_tokens=special_tokens)
 
     def train(
         self,
@@ -421,75 +330,4 @@ class RegexTokenizerFast(Tokenizer):
         vocab_size : int, default 30 000
             Hard cap on the number of distinct tokens kept.
         """
-        self._cpp.train(list(corpus), vocab_size)
-        self._vocab = dict(self._cpp.get_vocab())
-        self._id_to_token = {v: k for k, v in self._vocab.items()}
-        self._refresh_special_ids()
-        self._sync_specials_to_cpp()
-
-    @override
-    def save(self, directory: str) -> None:
-        """Same on-disk format as :meth:`RegexTokenizer.save`.
-
-        Parameters
-        ----------
-        directory : str
-            Output directory.  Created if it does not exist.
-        """
-        os.makedirs(directory, exist_ok=True)
-        _save_vocab_txt(self._vocab, os.path.join(directory, "vocab.txt"))
-        with open(
-            os.path.join(directory, "regex_pattern.txt"), "w", encoding="utf-8"
-        ) as f:
-            f.write(self._pattern_str)
-        super().save(directory)
-
-    @override
-    def _save_extras(self) -> dict[str, object]:
-        """Add ``model`` block (type / pattern / vocab) to ``tokenizer.json``."""
-        return {
-            "model": {
-                "type": "Regex",
-                "pattern": self._pattern_str,
-                "vocab": self._vocab,
-            }
-        }
-
-    @classmethod
-    def from_file(
-        cls,
-        directory: str,
-        *,
-        special_tokens: SpecialTokens | None = None,
-    ) -> RegexTokenizerFast:
-        """Identical loader to :meth:`RegexTokenizer.from_file`.
-
-        The only difference is the returned class (and hence the
-        encode backend).
-
-        Parameters
-        ----------
-        directory : str
-            Directory containing at minimum ``regex_pattern.txt``.
-        special_tokens : SpecialTokens, optional
-            Overrides any on-disk ``special_tokens_map.json``.
-
-        Returns
-        -------
-        RegexTokenizerFast
-            Reconstructed tokenizer.
-        """
-        pat_path = os.path.join(directory, "regex_pattern.txt")
-        if not os.path.isfile(pat_path):
-            raise FileNotFoundError(
-                f"RegexTokenizerFast.from_file: regex_pattern.txt not "
-                f"found in {directory}"
-            )
-        with open(pat_path, encoding="utf-8") as f:
-            pattern = f.read()
-        vocab_path = os.path.join(directory, "vocab.txt")
-        vocab = _load_vocab_txt(vocab_path) if os.path.isfile(vocab_path) else {}
-        st = special_tokens or _load_special_tokens_map(directory)
-        return cls(pattern=pattern, vocab=vocab, special_tokens=st)
-
-    from_pretrained = from_file
+        self._train_cpp(corpus, vocab_size)
