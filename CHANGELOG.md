@@ -130,6 +130,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add CPU vDSP double-precision float64/complex128 FFT
 
+- close LCD-149 distributions parity gaps
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

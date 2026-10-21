@@ -8,7 +8,8 @@ multivariate distribution with diagonal covariance, e.g.
     Independent(base, 1)  # event_shape == (D,), batch_shape == (B,)
 """
 
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _sum_rightmost
@@ -307,3 +308,23 @@ class Independent(Distribution):
                 "Enumeration over cartesian product is not implemented"
             )
         return self.base_dist.enumerate_support(expand=expand)
+
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`Independent` instance with parameters expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Independent, _instance)
+        batch_shape = tuple(batch_shape)
+        base_batch = batch_shape + self.event_shape[: self.reinterpreted_batch_ndims]
+        new.base_dist = self.base_dist.expand(base_batch)
+        new.reinterpreted_batch_ndims = self.reinterpreted_batch_ndims
+        super(Independent, new).__init__(
+            batch_shape=batch_shape,
+            event_shape=self.event_shape,
+            validate_args=False,
+        )
+        new._validate_args = self._validate_args
+        return new

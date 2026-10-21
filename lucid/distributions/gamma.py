@@ -6,10 +6,12 @@ expected reject rate is well under 5 % per sample, so 8 rounds drives
 the residual probability of any unsampled cell below ``2 ** −60``.
 """
 
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
+from lucid.autograd.function import Function, FunctionCtx
 from lucid.distributions.constraints import (
     Constraint,
     independent,
@@ -74,6 +76,137 @@ def _sample_standard_gamma(
         1.0 - boost
     )  # No-op factor when α ≥ 1.
     return accepted * boost_factor
+
+
+_GAMMA_GRAD_COEF_UV: tuple[tuple[float, ...], ...] = (
+    (
+        0.16009398,
+        -0.094634809,
+        0.025146376,
+        -0.0030648343,
+        1.0,
+        0.32668115,
+        0.10406089,
+        0.0014179084,
+    ),
+    (
+        0.53487893,
+        0.1298071,
+        0.065735949,
+        -0.0015649758,
+        0.16639465,
+        0.020070113,
+        -0.0035938915,
+        -0.00058392623,
+    ),
+    (
+        0.040121004,
+        -0.0065914022,
+        -0.0026286047,
+        -0.0013441777,
+        0.017050642,
+        -0.0021309326,
+        0.00085092367,
+        -1.5247877e-07,
+    ),
+)
+
+
+def _standard_gamma_grad(alpha: Tensor, z: Tensor) -> Tensor:
+    r"""Implicit-reparameterisation derivative :math:`\partial z / \partial \alpha = -(\partial P(\alpha, z) / \partial \alpha) / p(z; \alpha)`.
+
+    Matches the three-regime approximation in ``standard_gamma_grad_one``
+    (Jankowiak & Obermeyer, 2018):
+      1. ``z < 0.8``: 6-term Taylor series with :math:`z^\alpha / z^{\alpha-1} = z`
+         cancelled analytically.
+      2. ``alpha > 8.0``: Rice saddle-point expansion (with Taylor series near
+         :math:`0.9\alpha \le z \le 1.1\alpha`).
+      3. Otherwise: bivariate rational approximation in
+         :math:`u = \ln(z / \alpha)` and :math:`v = \ln \alpha`.
+    """
+    x = z.clamp(min=1e-30)
+    log_x = x.log()
+
+    # 1. Small-x Taylor series (x < 0.8).
+    numer = lucid.ones_like(x)
+    denom = alpha
+    series1 = numer / denom
+    series2 = numer / (denom * denom)
+    for i in range(1, 6):
+        numer = numer * (-x / float(i))
+        denom = denom + 1.0
+        series1 = series1 + numer / denom
+        series2 = series2 + numer / (denom * denom)
+    small_x_res = (
+        -x
+        * x.clamp(max=20.0).exp()
+        * ((log_x - lucid.digamma(alpha)) * series1 - series2)
+    )
+
+    # 2. Rice saddle-point expansion (alpha > 8.0).
+    near_mode = (x >= 0.9 * alpha) & (x <= 1.1 * alpha)
+    numer_1 = 1.0 + 24.0 * alpha * (1.0 + 12.0 * alpha)
+    numer_2 = (
+        1440.0 * (alpha * alpha)
+        + 6.0 * x * (53.0 - 120.0 * x)
+        - 65.0 * x * x / alpha
+        + alpha * (107.0 + 3600.0 * x)
+    )
+    a2 = alpha * alpha
+    rice_near = numer_1 * numer_2 / (1244160.0 * a2 * a2)
+
+    denom_r = (8.0 * alpha).sqrt()
+    diff = alpha - x
+    diff_safe = lucid.where(diff.abs() < 1e-6, lucid.full_like(diff, 1e-6), diff)
+    term2 = denom_r / diff_safe
+    u_ratio = log_x - alpha.log()
+    rad = (x - alpha - alpha * u_ratio).clamp(min=1e-12)
+    term3 = rad.pow(-1.5)
+    term23 = lucid.where(x < alpha, term2 - term3, term2 + term3)
+    term1 = u_ratio * term23 - (2.0 / alpha).sqrt() * (alpha + x) / (
+        diff_safe * diff_safe
+    )
+    stirling = 1.0 + (1.0 / (12.0 * alpha)) * (1.0 + 1.0 / (24.0 * alpha))
+    rice_far = -stirling * (x * term1) / denom_r
+    rice_res = lucid.where(near_mode, rice_near, rice_far)
+
+    # 3. Bivariate rational approximation (x >= 0.8 and alpha <= 8.0).
+    u = u_ratio
+    v = alpha.log()
+    c0, c1, c2 = _GAMMA_GRAD_COEF_UV
+    cv = [c0[i] + u * (c1[i] + u * c2[i]) for i in range(8)]
+    p = cv[0] + v * (cv[1] + v * (cv[2] + v * cv[3]))
+    q = cv[4] + v * (cv[5] + v * (cv[6] + v * cv[7]))
+    rat_res = (p / q).exp()
+
+    out = lucid.where(alpha > 8.0, rice_res, rat_res)
+    out = lucid.where(x < 0.8, small_x_res, out)
+    return lucid.where(lucid.isnan(out), lucid.zeros_like(out), out)
+
+
+class _StandardGamma(Function):
+    """Differentiable standard Gamma sampler with implicit-reparameterisation backward."""
+
+    @staticmethod
+    @override
+    def forward(ctx: FunctionCtx, concentration: Tensor) -> Tensor:
+        with lucid.no_grad():
+            sample = _sample_standard_gamma(concentration, ())
+        ctx.save_for_backward(concentration, sample)
+        return sample
+
+    @staticmethod
+    @override
+    def backward(ctx: FunctionCtx, grad_output: Tensor) -> Tensor:
+        concentration, sample = ctx.saved_tensors
+        return grad_output * _standard_gamma_grad(concentration, sample)
+
+
+def _standard_gamma(concentration: Tensor) -> Tensor:
+    """Draw reparameterised samples from ``Gamma(concentration, 1)``."""
+    out = _StandardGamma.apply(concentration)
+    assert isinstance(out, Tensor)
+    return out
 
 
 class Gamma(ExponentialFamily):
@@ -159,7 +292,7 @@ class Gamma(ExponentialFamily):
     # finite (``α = 1``), infinite (``α < 1``) or 0 (``α > 1``), and
     # :meth:`log_prob` scores all three.  ``Chi2`` inherits it.
     support: Constraint | None = nonnegative
-    has_rsample = False  # rejection-based; gradients don't flow.
+    has_rsample = True
 
     def __init__(
         self,
@@ -212,6 +345,13 @@ class Gamma(ExponentialFamily):
             batch_shape=tuple(self.concentration.shape),
             event_shape=(),
             validate_args=validate_args,
+        )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Gamma` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_attributes(
+            Gamma, batch_shape, _instance, "concentration", "rate"
         )
 
     @override
@@ -282,23 +422,16 @@ class Gamma(ExponentialFamily):
         return self.concentration / (self.rate * self.rate)
 
     @override
+    def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        r"""Draw reparameterised samples from the Gamma distribution via implicit reparameterisation."""
+        shape = self._extended_shape(sample_shape)
+        return _standard_gamma(self.concentration.expand(shape)) / self.rate.expand(
+            shape
+        )
+
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
-        r"""Draw samples from the Gamma distribution.
-
-        Delegates to ``_sample_standard_gamma`` (Marsaglia–Tsang algorithm)
-        and scales by :math:`1/\beta` to obtain :math:`\text{Gamma}(\alpha, \beta)`
-        samples.  The result is **detached** since the rejection-based
-        sampler does not support reparameterisation.
-
-        Parameters
-        ----------
-        sample_shape : tuple[int, ...], optional
-            Leading shape dimensions for the sample batch.  Default is ``()``.
-
-        Returns
-        -------
-        Tensor
-            Non-negative samples of shape ``sample_shape + batch_shape``.
+        r"""Draw non-reparameterised samples from the Gamma distribution via ``_sample_standard_gamma``.
 
         Examples
         --------
@@ -310,8 +443,9 @@ class Gamma(ExponentialFamily):
         >>> bool((x.mean() - 2.0).abs() < 0.2)  # the sample mean approaches α/β
         True
         """
-        std = _sample_standard_gamma(self.concentration, sample_shape)
-        return (std / self.rate).detach()
+        with lucid.no_grad():
+            std = _sample_standard_gamma(self.concentration, sample_shape)
+            return (std / self.rate).detach()
 
     @override
     def log_prob(self, value: Tensor) -> Tensor:
@@ -519,6 +653,14 @@ class Chi2(Gamma):
             validate_args=validate_args,
         )
 
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Chi2` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Chi2, _instance)
+        batch_shape_t = tuple(batch_shape)
+        new.df = self.df.expand(batch_shape_t)
+        return super().expand(batch_shape_t, _instance=new)
+
 
 class Beta(ExponentialFamily):
     r"""Beta distribution on the open interval :math:`(0, 1)`.
@@ -592,6 +734,7 @@ class Beta(ExponentialFamily):
 
     arg_constraints = {"concentration1": positive, "concentration0": positive}
     support: Constraint | None = unit_interval
+    has_rsample = True
 
     def __init__(
         self,
@@ -643,6 +786,13 @@ class Beta(ExponentialFamily):
             batch_shape=tuple(self.concentration1.shape),
             event_shape=(),
             validate_args=validate_args,
+        )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Beta` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_attributes(
+            Beta, batch_shape, _instance, "concentration1", "concentration0"
         )
 
     @override
@@ -713,6 +863,20 @@ class Beta(ExponentialFamily):
         return (a * b) / (ab * ab * (ab + 1.0))
 
     @override
+    def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        r"""Draw reparameterised samples from the Beta distribution.
+
+        Uses :math:`X = G_\alpha / (G_\alpha + G_\beta)` where
+        :math:`G_\alpha \sim \text{Gamma}(\alpha, 1)` and
+        :math:`G_\beta \sim \text{Gamma}(\beta, 1)` carry implicit-reparameterisation
+        gradients.
+        """
+        shape = self._extended_shape(sample_shape)
+        x = _standard_gamma(self.concentration1.expand(shape))
+        y = _standard_gamma(self.concentration0.expand(shape))
+        return x / (x + y)
+
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         r"""Draw samples from the Beta distribution.
 
@@ -723,9 +887,6 @@ class Beta(ExponentialFamily):
             X = \frac{G_\alpha}{G_\alpha + G_\beta},
             \quad G_\alpha \sim \text{Gamma}(\alpha, 1),\;
             G_\beta \sim \text{Gamma}(\beta, 1)
-
-        The result is **detached** since the underlying Gamma sampler is
-        rejection-based and does not support reparameterisation.
 
         Parameters
         ----------
@@ -747,10 +908,10 @@ class Beta(ExponentialFamily):
         >>> bool((x.mean() - 2 / 7).abs() < 0.03)  # the sample mean approaches 2/7
         True
         """
-        # Beta(α, β) = X / (X + Y) with X ~ Gamma(α, 1), Y ~ Gamma(β, 1).
-        x = _sample_standard_gamma(self.concentration1, sample_shape)
-        y = _sample_standard_gamma(self.concentration0, sample_shape)
-        return (x / (x + y)).detach()
+        with lucid.no_grad():
+            x = _sample_standard_gamma(self.concentration1, sample_shape)
+            y = _sample_standard_gamma(self.concentration0, sample_shape)
+            return (x / (x + y)).detach()
 
     @override
     def log_prob(self, value: Tensor) -> Tensor:
@@ -910,6 +1071,7 @@ class Dirichlet(ExponentialFamily):
 
     arg_constraints = {"concentration": independent(positive, 1)}
     support: Constraint | None = simplex
+    has_rsample = True
 
     def __init__(
         self,
@@ -961,6 +1123,14 @@ class Dirichlet(ExponentialFamily):
             event_shape=shape[-1:],
             validate_args=validate_args,
         )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Dirichlet` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Dirichlet, _instance)
+        batch_shape_t = tuple(batch_shape)
+        new.concentration = self.concentration.expand(batch_shape_t + self._event_shape)
+        return self._finish_expand(new, batch_shape_t, self._event_shape)
 
     @override
     @property
@@ -1033,28 +1203,19 @@ class Dirichlet(ExponentialFamily):
         return m * (1.0 - m) / (s + 1.0)
 
     @override
+    def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        r"""Draw reparameterised samples from the Dirichlet distribution.
+
+        Uses :math:`X_i = G_i / \sum_j G_j` where :math:`G_i \sim \text{Gamma}(\alpha_i, 1)`
+        carry implicit-reparameterisation gradients.
+        """
+        shape = self._extended_shape(sample_shape)
+        gammas = _standard_gamma(self.concentration.expand(shape))
+        return gammas / gammas.sum(dim=-1, keepdim=True)
+
+    @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
-        r"""Draw samples from the Dirichlet distribution.
-
-        Uses the normalised-Gamma method:
-
-        .. math::
-
-            \mathbf{x} = \frac{\mathbf{g}}{\sum_i g_i},
-            \quad g_i \sim \text{Gamma}(\alpha_i, 1)
-
-        The result lies on the probability simplex and is **detached**.
-
-        Parameters
-        ----------
-        sample_shape : tuple[int, ...], optional
-            Leading shape dimensions for the sample batch.  Default is ``()``.
-
-        Returns
-        -------
-        Tensor
-            Simplex-valued samples of shape
-            ``sample_shape + batch_shape + event_shape``.
+        r"""Draw non-reparameterised simplex samples from the Dirichlet distribution.
 
         Examples
         --------
@@ -1065,8 +1226,9 @@ class Dirichlet(ExponentialFamily):
         >>> bool(((x.sum(dim=-1) - 1.0).abs() < 1e-5).all())  # every row sums to one
         True
         """
-        gammas = _sample_standard_gamma(self.concentration, sample_shape)
-        return (gammas / gammas.sum(dim=-1, keepdim=True)).detach()
+        with lucid.no_grad():
+            gammas = _sample_standard_gamma(self.concentration, sample_shape)
+            return (gammas / gammas.sum(dim=-1, keepdim=True)).detach()
 
     @override
     def log_prob(self, value: Tensor) -> Tensor:

@@ -1,7 +1,8 @@
 """``Exponential``, ``Laplace``, and ``Cauchy`` — icdf-sampled families."""
 
 import math
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -124,6 +125,16 @@ class Exponential(ExponentialFamily):
             event_shape=(),
             validate_args=validate_args,
         )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Exponential` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Exponential, _instance)
+        batch_shape_t = tuple(batch_shape)
+        new.rate = self.rate.expand(batch_shape_t)
+        super(Exponential, new).__init__(batch_shape_t, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
     @override
     @property
@@ -479,6 +490,17 @@ class Laplace(Distribution):
         )
 
     @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Laplace` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Laplace, _instance)
+        batch_shape_t = tuple(batch_shape)
+        new.loc = self.loc.expand(batch_shape_t)
+        new.scale = self.scale.expand(batch_shape_t)
+        super(Laplace, new).__init__(batch_shape_t, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
+
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Expected value of the Laplace distribution.
@@ -770,6 +792,17 @@ class Cauchy(Distribution):
             event_shape=(),
             validate_args=validate_args,
         )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Cauchy` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Cauchy, _instance)
+        batch_shape_t = tuple(batch_shape)
+        new.loc = self.loc.expand(batch_shape_t)
+        new.scale = self.scale.expand(batch_shape_t)
+        super(Cauchy, new).__init__(batch_shape_t, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
     @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:

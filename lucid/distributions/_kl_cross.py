@@ -26,6 +26,12 @@ from lucid.distributions.kl import (
     register_kl,
 )
 from lucid.distributions.matrix import Wishart
+from lucid.distributions.multivariate import (
+    LowRankMultivariateNormal,
+    MultivariateNormal,
+    _batch_lowrank_logdet,
+    _batch_lowrank_mahalanobis,
+)
 from lucid.distributions.normal import LogNormal, Normal
 from lucid.distributions.transformed_distribution import (
     Transform,
@@ -533,3 +539,87 @@ def _kl_uniform_pareto(p: Uniform, q: Pareto) -> Tensor:
         q.alpha * (q.scale**q.alpha) * su
     ).log()
     return lucid.where(p.low < q.scale, float("inf"), res)
+
+
+def _check_mvn_event_shapes(
+    p: LowRankMultivariateNormal | MultivariateNormal,
+    q: LowRankMultivariateNormal | MultivariateNormal,
+    label: str,
+) -> None:
+    if p.event_shape != q.event_shape:
+        raise ValueError(
+            f"KL-divergence between {label} with different event shapes cannot be computed"
+        )
+
+
+def _lowrank_whitened_factor(q: LowRankMultivariateNormal) -> Tensor:
+    q_Wt_Dinv = q._unbroadcasted_cov_factor.mT / q._unbroadcasted_cov_diag.unsqueeze(-2)
+    return lucid.linalg.solve_triangular(q._capacitance_tril, q_Wt_Dinv, upper=False)
+
+
+@register_kl(LowRankMultivariateNormal, LowRankMultivariateNormal)
+def _kl_lowrank_lowrank(
+    p: LowRankMultivariateNormal, q: LowRankMultivariateNormal
+) -> Tensor:
+    _check_mvn_event_shapes(p, q, "two LowRankMultivariateNormals")
+    term1 = _batch_lowrank_logdet(
+        q._unbroadcasted_cov_diag, q._capacitance_tril
+    ) - _batch_lowrank_logdet(p._unbroadcasted_cov_diag, p._capacitance_tril)
+    term3 = _batch_lowrank_mahalanobis(
+        q._unbroadcasted_cov_factor,
+        q._unbroadcasted_cov_diag,
+        q.loc - p.loc,
+        q._capacitance_tril,
+    )
+    A = _lowrank_whitened_factor(q)
+    term21 = (p._unbroadcasted_cov_diag / q._unbroadcasted_cov_diag).sum(dim=-1)
+    S1 = p._unbroadcasted_cov_factor * (
+        1.0 / q._unbroadcasted_cov_diag.sqrt().unsqueeze(-1)
+    )
+    term22 = (S1 * S1).sum(dim=(-2, -1))
+    S2 = A * p._unbroadcasted_cov_diag.sqrt().unsqueeze(-2)
+    term23 = (S2 * S2).sum(dim=(-2, -1))
+    S3 = A @ p._unbroadcasted_cov_factor
+    term24 = (S3 * S3).sum(dim=(-2, -1))
+    term2 = term21 + term22 - term23 - term24
+    return 0.5 * (term1 + term2 + term3 - float(p.event_shape[0]))
+
+
+@register_kl(LowRankMultivariateNormal, MultivariateNormal)
+def _kl_lowrank_mvn(p: LowRankMultivariateNormal, q: MultivariateNormal) -> Tensor:
+    _check_mvn_event_shapes(p, q, "LowRankMultivariateNormal and MultivariateNormal")
+    term1 = 2.0 * q.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(
+        dim=-1
+    ) - _batch_lowrank_logdet(p._unbroadcasted_cov_diag, p._capacitance_tril)
+    diff = (q.loc - p.loc).unsqueeze(-1)
+    z = lucid.linalg.solve_triangular(q.scale_tril, diff, upper=False)
+    term3 = (z * z).sum(dim=(-2, -1))
+    L1 = lucid.linalg.solve_triangular(
+        q.scale_tril,
+        lucid.diag_embed(p._unbroadcasted_cov_diag.sqrt()),
+        upper=False,
+    )
+    L2 = lucid.linalg.solve_triangular(
+        q.scale_tril, p._unbroadcasted_cov_factor, upper=False
+    )
+    term2 = (L1 * L1).sum(dim=(-2, -1)) + (L2 * L2).sum(dim=(-2, -1))
+    return 0.5 * (term1 + term2 + term3 - float(p.event_shape[0]))
+
+
+@register_kl(MultivariateNormal, LowRankMultivariateNormal)
+def _kl_mvn_lowrank(p: MultivariateNormal, q: LowRankMultivariateNormal) -> Tensor:
+    _check_mvn_event_shapes(p, q, "MultivariateNormal and LowRankMultivariateNormal")
+    term1 = _batch_lowrank_logdet(
+        q._unbroadcasted_cov_diag, q._capacitance_tril
+    ) - 2.0 * p.scale_tril.diagonal(dim1=-2, dim2=-1).log().sum(dim=-1)
+    term3 = _batch_lowrank_mahalanobis(
+        q._unbroadcasted_cov_factor,
+        q._unbroadcasted_cov_diag,
+        q.loc - p.loc,
+        q._capacitance_tril,
+    )
+    A = _lowrank_whitened_factor(q)
+    S1 = p.scale_tril / q._unbroadcasted_cov_diag.sqrt().unsqueeze(-1)
+    S2 = A @ p.scale_tril
+    term2 = (S1 * S1).sum(dim=(-2, -1)) - (S2 * S2).sum(dim=(-2, -1))
+    return 0.5 * (term1 + term2 + term3 - float(p.event_shape[0]))

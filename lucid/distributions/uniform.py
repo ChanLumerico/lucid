@@ -1,7 +1,8 @@
 """Continuous ``Uniform(low, high)``."""
 
 import math
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -136,6 +137,17 @@ class Uniform(Distribution):
             event_shape=(),
             validate_args=validate_args,
         )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Uniform` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Uniform, _instance)
+        batch_shape_t = tuple(batch_shape)
+        new.low = self.low.expand(batch_shape_t)
+        new.high = self.high.expand(batch_shape_t)
+        super(Uniform, new).__init__(batch_shape_t, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
     @override
     @property

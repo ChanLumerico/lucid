@@ -7,7 +7,8 @@ small and built on top of the existing ``Normal`` / ``Cauchy`` /
 """
 
 import math
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -137,6 +138,13 @@ class Pareto(Distribution):
             so each batch member is held to its own :math:`x_m`.
         """
         return greater_than_eq(self.scale)
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Pareto` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_attributes(
+            Pareto, batch_shape, _instance, "scale", "alpha", "_base"
+        )
 
     @override
     @property
@@ -414,6 +422,13 @@ class Weibull(Distribution):
         return positive
 
     @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Weibull` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_attributes(
+            Weibull, batch_shape, _instance, "scale", "concentration", "_base"
+        )
+
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Mean of the Weibull distribution: :math:`E[X] = \lambda \Gamma(1 + 1/k)`.
@@ -679,6 +694,13 @@ class HalfNormal(Distribution):
         return self.scale * math.sqrt(2.0 / math.pi)
 
     @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`HalfNormal` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_attributes(
+            HalfNormal, batch_shape, _instance, "scale", "_base"
+        )
+
+    @override
     @property
     def mode(self) -> Tensor:
         """Mode of the half-Normal distribution: ``0``, where the density peaks."""
@@ -903,6 +925,13 @@ class HalfCauchy(Distribution):
         return self._base.rsample(sample_shape).abs()
 
     @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`HalfCauchy` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_attributes(
+            HalfCauchy, batch_shape, _instance, "scale", "_base"
+        )
+
+    @override
     def log_prob(self, value: Tensor) -> Tensor:
         r"""Log-probability density of the HalfCauchy distribution.
 
@@ -1097,6 +1126,7 @@ class FisherSnedecor(Distribution):
 
     arg_constraints = {"df1": positive, "df2": positive}
     support: Constraint | None = positive
+    has_rsample = True
 
     def __init__(
         self,
@@ -1126,6 +1156,13 @@ class FisherSnedecor(Distribution):
             batch_shape=tuple(self.df1.shape),
             event_shape=(),
             validate_args=validate_args,
+        )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`FisherSnedecor` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_attributes(
+            FisherSnedecor, batch_shape, _instance, "df1", "df2", "_chi1", "_chi2"
         )
 
     @override
@@ -1176,6 +1213,18 @@ class FisherSnedecor(Distribution):
         # Defined for d2 > 4.
         d1, d2 = self.df1, self.df2
         return 2.0 * d2 * d2 * (d1 + d2 - 2.0) / (d1 * (d2 - 2.0) ** 2 * (d2 - 4.0))
+
+    @override
+    def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        r"""Draw reparameterised samples from the F-distribution.
+
+        Forms the ratio :math:`F = (X/d_1) / (Y/d_2)` where
+        :math:`X \sim \chi^2(d_1)` and :math:`Y \sim \chi^2(d_2)` carry
+        implicit-reparameterisation gradients.
+        """
+        x = self._chi1.rsample(sample_shape)
+        y = self._chi2.rsample(sample_shape)
+        return (x / self.df1) / (y / self.df2)
 
     @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:

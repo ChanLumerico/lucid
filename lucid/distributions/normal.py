@@ -1,7 +1,8 @@
 """Univariate ``Normal`` and ``LogNormal``."""
 
 import math
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -136,6 +137,17 @@ class Normal(ExponentialFamily):
             event_shape=(),
             validate_args=validate_args,
         )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Normal` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Normal, _instance)
+        batch_shape_t = tuple(batch_shape)
+        new.loc = self.loc.expand(batch_shape_t)
+        new.scale = self.scale.expand(batch_shape_t)
+        super(Normal, new).__init__(batch_shape_t, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
     @override
     @property
@@ -440,6 +452,18 @@ class LogNormal(Distribution):
             event_shape=(),
             validate_args=validate_args,
         )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`LogNormal` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(LogNormal, _instance)
+        batch_shape_t = tuple(batch_shape)
+        new._base = self._base.expand(batch_shape_t)
+        new.loc = new._base.loc
+        new.scale = new._base.scale
+        super(LogNormal, new).__init__(batch_shape_t, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
     @override
     @property

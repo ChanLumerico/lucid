@@ -1,15 +1,19 @@
 """``MultivariateNormal`` parameterised by a Cholesky factor."""
 
 import math
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.distributions._util import _lazy_param
 from lucid.distributions.constraints import (
     Constraint,
+    independent,
     lower_cholesky,
+    positive,
     positive_definite,
+    real,
     real_vector,
 )
 from lucid.distributions.distribution import Distribution
@@ -374,3 +378,282 @@ class MultivariateNormal(Distribution):
         diag = self.scale_tril.diagonal(dim1=-2, dim2=-1)
         log_det = diag.log().sum(dim=-1)
         return 0.5 * self._D * (1.0 + math.log(2.0 * math.pi)) + log_det
+
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`MultivariateNormal` instance with parameters expanded to ``batch_shape``."""
+        new = self._get_checked_instance(MultivariateNormal, _instance)
+        batch_shape = tuple(batch_shape)
+        loc_shape = batch_shape + self.event_shape
+        cov_shape = batch_shape + self.event_shape + self.event_shape
+        new.loc = self.loc.expand(loc_shape)
+        new._D = self._D
+        new.scale_tril = self.scale_tril.expand(cov_shape)
+        if "covariance_matrix" in self.__dict__:
+            new.covariance_matrix = self.covariance_matrix.expand(cov_shape)
+        if "precision_matrix" in self.__dict__:
+            new.precision_matrix = self.precision_matrix.expand(cov_shape)
+        super(MultivariateNormal, new).__init__(
+            batch_shape=batch_shape,
+            event_shape=self.event_shape,
+            validate_args=False,
+        )
+        new._validate_args = self._validate_args
+        return new
+
+
+def _batch_mv(bmat: Tensor, bvec: Tensor) -> Tensor:
+    r"""Batch matrix-vector product :math:`\mathbf{A} \mathbf{x}`."""
+    return (bmat @ bvec.unsqueeze(-1)).squeeze(-1)
+
+
+def _batch_capacitance_tril(W: Tensor, D: Tensor) -> Tensor:
+    r"""Lower Cholesky factor :math:`L_C` of the capacitance matrix
+    :math:`I_m + W^\top D^{-1} W`."""
+    m = int(W.shape[-1])
+    Wt_Dinv = W.mT / D.unsqueeze(-2)
+    K = Wt_Dinv @ W + lucid.eye(m, dtype=W.dtype, device=W.device)
+    return lucid.linalg.cholesky(K)
+
+
+def _batch_lowrank_logdet(D: Tensor, capacitance_tril: Tensor) -> Tensor:
+    r"""Matrix determinant lemma:
+    :math:`\log|W W^\top + D| = \log|C| + \log|D| = 2 \sum_i \log L_{C,ii} + \sum_j \log D_j`.
+    """
+    diag_c = capacitance_tril.diagonal(dim1=-2, dim2=-1)
+    return 2.0 * diag_c.log().sum(dim=-1) + D.log().sum(dim=-1)
+
+
+def _batch_lowrank_mahalanobis(
+    W: Tensor, D: Tensor, x: Tensor, capacitance_tril: Tensor
+) -> Tensor:
+    r"""Woodbury matrix identity for the squared Mahalanobis distance
+    :math:`\mathbf{x}^\top (W W^\top + D)^{-1} \mathbf{x}`:
+
+    .. math::
+
+        (W W^\top + D)^{-1}
+        = D^{-1} - D^{-1} W L_C^{-\top} L_C^{-1} W^\top D^{-1}
+    """
+    Wt_Dinv = W.mT / D.unsqueeze(-2)
+    Wt_Dinv_x = _batch_mv(Wt_Dinv, x)
+    sol = lucid.linalg.solve_triangular(
+        capacitance_tril, Wt_Dinv_x.unsqueeze(-1), upper=False
+    )
+    mahalanobis_term1 = (x * x / D).sum(dim=-1)
+    mahalanobis_term2 = (sol * sol).sum(dim=(-2, -1))
+    return mahalanobis_term1 - mahalanobis_term2
+
+
+class LowRankMultivariateNormal(Distribution):
+    r"""Multivariate Normal distribution with low-rank plus diagonal covariance.
+
+    Parameterises a :math:`D`-dimensional Gaussian whose covariance matrix has
+    the structured form
+
+    .. math::
+
+        \Sigma = W W^\top + \operatorname{diag}(d)
+
+    where :math:`W \in \mathbb{R}^{D \times m}` is the low-rank factor
+    (``cov_factor``) and :math:`d \in \mathbb{R}_+^D` is the positive diagonal
+    vector (``cov_diag``).  Applying the Woodbury matrix identity and matrix
+    determinant lemma reduces log-density evaluation and Cholesky solves on
+    the :math:`m \times m` capacitance matrix
+    :math:`C = I_m + W^\top \operatorname{diag}(d)^{-1} W` from
+    :math:`\mathcal{O}(D^3)` to :math:`\mathcal{O}(D m^2 + m^3)`.
+
+    Parameters
+    ----------
+    loc : Tensor
+        Mean vector :math:`\mu \in \mathbb{R}^D` of shape ``(..., D)``.
+    cov_factor : Tensor
+        Low-rank factor :math:`W` of shape ``(..., D, m)``.
+    cov_diag : Tensor
+        Positive diagonal vector :math:`d` of shape ``(..., D)``.
+    validate_args : bool | None, optional
+        If ``True``, validate parameter constraints at construction time.
+    """
+
+    arg_constraints = {
+        "loc": real_vector,
+        "cov_factor": independent(real, 2),
+        "cov_diag": independent(positive, 1),
+    }
+    support: Constraint | None = real_vector
+    has_rsample = True
+
+    def __init__(
+        self,
+        loc: Tensor,
+        cov_factor: Tensor,
+        cov_diag: Tensor,
+        validate_args: bool | None = None,
+    ) -> None:
+        """Initialise a :class:`LowRankMultivariateNormal` distribution."""
+        if loc.ndim < 1:
+            raise ValueError("loc must be at least one-dimensional.")
+        event_shape = (int(loc.shape[-1]),)
+        if cov_factor.ndim < 2:
+            raise ValueError(
+                "cov_factor must be at least two-dimensional, "
+                "with optional leading batch dimensions"
+            )
+        if int(cov_factor.shape[-2]) != event_shape[0]:
+            raise ValueError(
+                f"cov_factor must be a batch of matrices with shape "
+                f"{event_shape[0]} x m"
+            )
+        if int(cov_diag.shape[-1]) != event_shape[0]:
+            raise ValueError(
+                f"cov_diag must be a batch of vectors with shape {event_shape}"
+            )
+
+        loc_dummy = loc.unsqueeze(-1)
+        cov_diag_dummy = cov_diag.unsqueeze(-1)
+        b_loc, self.cov_factor, b_diag = lucid.broadcast_tensors(
+            loc_dummy, cov_factor, cov_diag_dummy
+        )
+        self.loc = b_loc[..., 0]
+        self.cov_diag = b_diag[..., 0]
+        batch_shape = tuple(self.loc.shape[:-1])
+        self._unbroadcasted_cov_factor = cov_factor
+        self._unbroadcasted_cov_diag = cov_diag
+        self._capacitance_tril = _batch_capacitance_tril(
+            self._unbroadcasted_cov_factor, self._unbroadcasted_cov_diag
+        )
+        super().__init__(
+            batch_shape=batch_shape,
+            event_shape=event_shape,
+            validate_args=validate_args,
+        )
+
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`LowRankMultivariateNormal` instance expanded to ``batch_shape``."""
+        new = self._get_checked_instance(LowRankMultivariateNormal, _instance)
+        batch_shape = tuple(batch_shape)
+        loc_shape = batch_shape + self.event_shape
+        new.loc = self.loc.expand(loc_shape)
+        new.cov_diag = self.cov_diag.expand(loc_shape)
+        new.cov_factor = self.cov_factor.expand(
+            loc_shape + (int(self.cov_factor.shape[-1]),)
+        )
+        new._unbroadcasted_cov_factor = self._unbroadcasted_cov_factor
+        new._unbroadcasted_cov_diag = self._unbroadcasted_cov_diag
+        new._capacitance_tril = self._capacitance_tril
+        super(LowRankMultivariateNormal, new).__init__(
+            batch_shape=batch_shape,
+            event_shape=self.event_shape,
+            validate_args=False,
+        )
+        new._validate_args = self._validate_args
+        return new
+
+    @override
+    @property
+    def mean(self) -> Tensor:
+        r"""Mean vector :math:`\mu` of shape ``(*batch_shape, D)``."""
+        return self.loc
+
+    @override
+    @property
+    def mode(self) -> Tensor:
+        r"""Mode vector :math:`\mu` of shape ``(*batch_shape, D)``."""
+        return self.loc
+
+    @override
+    @_lazy_param
+    def variance(self) -> Tensor:
+        r"""Marginal variances :math:`\operatorname{diag}(W W^\top) + d`."""
+        return (
+            (self._unbroadcasted_cov_factor * self._unbroadcasted_cov_factor).sum(
+                dim=-1
+            )
+            + self._unbroadcasted_cov_diag
+        ).expand(self._batch_shape + self._event_shape)
+
+    @_lazy_param
+    def scale_tril(self) -> Tensor:
+        r"""Lower-triangular Cholesky factor :math:`L` of :math:`\Sigma = W W^\top + \operatorname{diag}(d)`."""
+        n = self._event_shape[0]
+        cov_diag_sqrt_unsqueeze = self._unbroadcasted_cov_diag.sqrt().unsqueeze(-1)
+        Dinvsqrt_W = self._unbroadcasted_cov_factor / cov_diag_sqrt_unsqueeze
+        K = Dinvsqrt_W @ Dinvsqrt_W.mT + lucid.eye(
+            n, dtype=Dinvsqrt_W.dtype, device=Dinvsqrt_W.device
+        )
+        scale_sqrt = cov_diag_sqrt_unsqueeze * lucid.linalg.cholesky(K)
+        return scale_sqrt.expand(
+            self._batch_shape + self._event_shape + self._event_shape
+        )
+
+    @_lazy_param
+    def covariance_matrix(self) -> Tensor:
+        r"""Full covariance matrix :math:`\Sigma = W W^\top + \operatorname{diag}(d)`."""
+        covariance_matrix = (
+            self._unbroadcasted_cov_factor @ self._unbroadcasted_cov_factor.mT
+            + lucid.diag_embed(self._unbroadcasted_cov_diag)
+        )
+        return covariance_matrix.expand(
+            self._batch_shape + self._event_shape + self._event_shape
+        )
+
+    @_lazy_param
+    def precision_matrix(self) -> Tensor:
+        r"""Precision matrix :math:`\Sigma^{-1}` computed via the Woodbury identity."""
+        Wt_Dinv = (
+            self._unbroadcasted_cov_factor.mT
+            / self._unbroadcasted_cov_diag.unsqueeze(-2)
+        )
+        A = lucid.linalg.solve_triangular(self._capacitance_tril, Wt_Dinv, upper=False)
+        precision_matrix = (
+            lucid.diag_embed(1.0 / self._unbroadcasted_cov_diag) - A.mT @ A
+        )
+        return precision_matrix.expand(
+            self._batch_shape + self._event_shape + self._event_shape
+        )
+
+    @override
+    def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        r"""Draw reparameterised samples :math:`\mu + W \varepsilon_W + \sqrt{d} \odot \varepsilon_D`."""
+        shape = self._extended_shape(sample_shape)
+        w_shape = shape[:-1] + (int(self.cov_factor.shape[-1]),)
+        eps_W = lucid.randn(*w_shape, dtype=self.loc.dtype, device=self.loc.device)
+        eps_D = lucid.randn(*shape, dtype=self.loc.dtype, device=self.loc.device)
+        factor_term = _batch_mv(self._unbroadcasted_cov_factor, eps_W)
+        diag_term = self._unbroadcasted_cov_diag.sqrt() * eps_D
+        return self.loc + factor_term + diag_term
+
+    @override
+    def log_prob(self, value: Tensor) -> Tensor:
+        """Log-probability density evaluated via the Woodbury identity and determinant lemma."""
+        diff = value - self.loc
+        M = _batch_lowrank_mahalanobis(
+            self._unbroadcasted_cov_factor,
+            self._unbroadcasted_cov_diag,
+            diff,
+            self._capacitance_tril,
+        )
+        log_det = _batch_lowrank_logdet(
+            self._unbroadcasted_cov_diag,
+            self._capacitance_tril,
+        )
+        return -0.5 * (self._event_shape[0] * math.log(2.0 * math.pi) + log_det + M)
+
+    @override
+    def entropy(self) -> Tensor:
+        """Differential entropy of the :class:`LowRankMultivariateNormal` distribution."""
+        log_det = _batch_lowrank_logdet(
+            self._unbroadcasted_cov_diag,
+            self._capacitance_tril,
+        )
+        H = 0.5 * (self._event_shape[0] * (1.0 + math.log(2.0 * math.pi)) + log_det)
+        return H.expand(self._batch_shape)

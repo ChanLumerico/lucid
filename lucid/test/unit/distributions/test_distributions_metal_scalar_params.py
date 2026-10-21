@@ -84,15 +84,18 @@ SPECS: dict[str, _Spec] = {
     "Gumbel": _Spec({"loc": 0.5, "scale": 1.5}, 0.7),
     "StudentT": _Spec({"df": 3.0, "loc": 0.5, "scale": 1.5}, 0.7),
     "Pareto": _Spec({"scale": 1.0, "alpha": 2.0}, 1.7),
+    "GeneralizedPareto": _Spec({"loc": 0.5, "scale": 1.5, "concentration": 0.25}, 1.7),
     "Weibull": _Spec({"scale": 1.0, "concentration": 1.5}, 0.7),
     "HalfNormal": _Spec({"scale": 1.5}, 0.7),
     "HalfCauchy": _Spec({"scale": 1.5}, 0.7),
     "FisherSnedecor": _Spec({"df1": 3.0, "df2": 5.0}, 0.7),
+    "VonMises": _Spec({"loc": 0.5, "concentration": 1.5}, 0.7),
     "Gamma": _Spec({"concentration": 2.0, "rate": 1.5}, 0.7),
     "Chi2": _Spec({"df": 3.0}, 0.7),
     "Beta": _Spec({"concentration1": 2.0, "concentration0": 3.0}, 0.3),
     "InverseGamma": _Spec({"concentration": 2.0, "rate": 1.5}, 0.7),
     "Kumaraswamy": _Spec({"concentration1": 2.0, "concentration0": 3.0}, 0.3),
+    "LogisticNormal": _Spec({}, _PROBS, {"loc": [0.0, 0.5], "scale": [1.0, 1.5]}),
     "Poisson": _Spec({"rate": 1.5}, 2.0),
     "Bernoulli": _Spec({"probs": 0.3}, 1.0),
     "Geometric": _Spec({"probs": 0.3}, 2.0),
@@ -103,10 +106,20 @@ SPECS: dict[str, _Spec] = {
     "Dirichlet": _Spec({}, _PROBS, {"concentration": [1.0, 2.0, 3.0]}),
     "Categorical": _Spec({}, 1, {"probs": _PROBS}),
     "OneHotCategorical": _Spec({}, [0.0, 1.0, 0.0], {"probs": _PROBS}),
+    "OneHotCategoricalStraightThrough": _Spec({}, [0.0, 1.0, 0.0], {"probs": _PROBS}),
     "Multinomial": _Spec({"total_count": 5}, [1.0, 2.0, 2.0], {"probs": _PROBS}),
     "RelaxedOneHotCategorical": _Spec({"temperature": 0.5}, _PROBS, {"probs": _PROBS}),
     "MultivariateNormal": _Spec(
         {}, [0.3, -0.2], {"loc": [0.0, 0.0], "covariance_matrix": _COV}
+    ),
+    "LowRankMultivariateNormal": _Spec(
+        {},
+        [0.3, -0.2],
+        {
+            "loc": [0.0, 1.0],
+            "cov_factor": [[1.0], [0.5]],
+            "cov_diag": [1.0, 2.0],
+        },
     ),
     "Wishart": _Spec(
         {"df": 3.0}, [[2.0, 0.3], [0.3, 1.0]], {"covariance_matrix": _COV}

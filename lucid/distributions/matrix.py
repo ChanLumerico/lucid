@@ -8,7 +8,8 @@ All computation is done in pure Lucid — no external libraries.
 """
 
 import math
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 import lucid.linalg as _la
@@ -23,7 +24,7 @@ from lucid.distributions.constraints import (
     positive_definite,
 )
 from lucid.distributions.distribution import Distribution
-from lucid.distributions.gamma import Beta, _sample_standard_gamma
+from lucid.distributions.gamma import Beta, _sample_standard_gamma, _standard_gamma
 from lucid.distributions.multivariate import _precision_of, _scale_tril_of
 
 # ── Wishart ───────────────────────────────────────────────────────────────────
@@ -121,7 +122,7 @@ class Wishart(Distribution):
         "scale_tril": lower_cholesky,
         "df": positive,
     }
-    has_rsample: bool = False
+    has_rsample: bool = True
 
     def __init__(
         self,
@@ -240,7 +241,7 @@ class Wishart(Distribution):
     @property
     def mean(self) -> Tensor:
         """``df · Σ``."""
-        return self.df * self._cov
+        return self.df.unsqueeze(-1).unsqueeze(-1) * self._cov
 
     @override
     @property
@@ -261,9 +262,48 @@ class Wishart(Distribution):
         S = self._cov
         diag = S.diagonal(dim1=-2, dim2=-1)  # (..., d)
         diag_outer = diag.unsqueeze(-1) * diag.unsqueeze(-2)  # (..., d, d)
-        return self.df * (S * S + diag_outer)
+        return self.df.unsqueeze(-1).unsqueeze(-1) * (S * S + diag_outer)
 
     # -- sampling (Bartlett decomposition) ------------------------------------
+
+    def _bartlett_sample(
+        self, sample_shape: tuple[int, ...], *, reparameterised: bool
+    ) -> Tensor:
+        d: int = self._dim
+        L: Tensor = self.scale_tril  # (..., d, d)
+        dt = L.dtype
+        dev = L.device
+
+        # ── diagonal: chi-squared samples ──────────────────────────────────
+        # chi²(k) = 2 · Gamma(k/2, rate=1)
+        # concentrations for each diagonal position: (df−0)/2, (df−1)/2, …
+        idx = lucid.arange(0, d, 1, dtype=dt, device=dev)
+        chi2_conc = (
+            self.df.broadcast_to(self._batch_shape).unsqueeze(-1) - idx
+        ) / 2.0  # (*batch_shape, d)
+        if reparameterised:
+            conc_full = chi2_conc.expand(tuple(sample_shape) + tuple(chi2_conc.shape))
+            std_g = _standard_gamma(conc_full)
+        else:
+            std_g = _sample_standard_gamma(chi2_conc, sample_shape)
+        sqrt_chi = (2.0 * std_g).sqrt()  # (*sample_shape, *batch_shape, d)
+
+        # ── off-diagonal: standard normals ──────────────────────────────────
+        full_shape = self._extended_shape(sample_shape)
+        Z = lucid.randn(*full_shape, dtype=dt, device=dev)
+        lower_mask = lucid.tril(lucid.ones(d, d, dtype=dt, device=dev), diagonal=-1)
+        Z_lower = Z * lower_mask  # strictly lower triangular
+
+        # ── assemble A ──────────────────────────────────────────────────────
+        A = Z_lower + lucid.diag_embed(sqrt_chi)  # (*sample_shape, *batch_shape, d, d)
+
+        # ── W = L A Aᵀ Lᵀ ──────────────────────────────────────────────────
+        return L @ A @ A.mT @ L.mT
+
+    @override
+    def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        """Draw a reparameterised sample via the Bartlett decomposition."""
+        return self._bartlett_sample(sample_shape, reparameterised=True)
 
     @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
@@ -275,32 +315,8 @@ class Wishart(Distribution):
         * diagonal ``A_{ii} ~ sqrt(χ²_{df − i})``  for ``i = 0, …, d−1``,
         * off-diagonal ``A_{ij} ~ N(0, 1)``  for ``i > j``.
         """
-        d: int = self._dim
-        df_val: float = float(self.df.item())
-        L: Tensor = self.scale_tril  # (d, d)
-        dt = L.dtype
-        dev = L.device
-
-        # ── diagonal: chi-squared samples ──────────────────────────────────
-        # chi²(k) = 2 · Gamma(k/2, rate=1)
-        # concentrations for each diagonal position: (df−0)/2, (df−1)/2, …
-        chi2_conc = lucid.tensor(
-            [(df_val - i) / 2.0 for i in range(d)], dtype=dt, device=dev
-        )
-        # _sample_standard_gamma(conc, sample_shape) → (*sample_shape, d)
-        std_g = _sample_standard_gamma(chi2_conc, sample_shape)
-        sqrt_chi = (2.0 * std_g).sqrt()  # (*sample_shape, d)
-
-        # ── off-diagonal: standard normals ──────────────────────────────────
-        Z = lucid.randn(*sample_shape, d, d, dtype=dt, device=dev)
-        lower_mask = lucid.tril(lucid.ones(d, d, dtype=dt, device=dev), diagonal=-1)
-        Z_lower = Z * lower_mask  # strictly lower triangular
-
-        # ── assemble A ──────────────────────────────────────────────────────
-        A = Z_lower + lucid.diag_embed(sqrt_chi)  # (*sample_shape, d, d)
-
-        # ── W = L A Aᵀ Lᵀ ──────────────────────────────────────────────────
-        return (L @ A @ A.mT @ L.mT).detach()
+        with lucid.no_grad():
+            return self._bartlett_sample(sample_shape, reparameterised=False).detach()
 
     # -- log probability ──────────────────────────────────────────────────────
 
@@ -343,6 +359,32 @@ class Wishart(Distribution):
         t5 = -_sp.multigammaln(df / 2.0, d)
 
         return t1 + t2 + t3 + t4 + t5
+
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`Wishart` instance with parameters expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Wishart, _instance)
+        batch_shape = tuple(batch_shape)
+        cov_shape = batch_shape + self.event_shape
+        new.df = self.df.expand(batch_shape)
+        new._dim = self._dim
+        new.scale_tril = self.scale_tril.expand(cov_shape)
+        new._cov = self._cov.expand(cov_shape)
+        if "covariance_matrix" in self.__dict__:
+            new.covariance_matrix = self.covariance_matrix.expand(cov_shape)
+        if "precision_matrix" in self.__dict__:
+            new.precision_matrix = self.precision_matrix.expand(cov_shape)
+        super(Wishart, new).__init__(
+            batch_shape=batch_shape,
+            event_shape=self.event_shape,
+            validate_args=False,
+        )
+        new._validate_args = self._validate_args
+        return new
 
 
 # ── LKJCholesky ───────────────────────────────────────────────────────────────
@@ -572,3 +614,23 @@ class LKJCholesky(Distribution):
         pi_constant = 0.5 * dm1 * math.log(math.pi)
 
         return pi_constant + numerator - denominator
+
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`LKJCholesky` instance with parameters expanded to ``batch_shape``."""
+        new = self._get_checked_instance(LKJCholesky, _instance)
+        batch_shape = tuple(batch_shape)
+        new.dim = self.dim
+        new.concentration = self.concentration.expand(batch_shape)
+        new._beta = self._beta.expand(batch_shape + (self.dim,))
+        super(LKJCholesky, new).__init__(
+            batch_shape=batch_shape,
+            event_shape=self.event_shape,
+            validate_args=False,
+        )
+        new._validate_args = self._validate_args
+        return new

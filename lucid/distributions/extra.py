@@ -7,7 +7,8 @@ approximations or clamping where analytic expressions degenerate.
 """
 
 import math
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._dtype import finfo
@@ -132,9 +133,7 @@ class Gumbel(Distribution):
         validate_args : bool | None, optional
             If ``True``, validate parameter constraints at construction time.
         """
-        self.loc = _as_tensor(loc)
-        self.scale = _as_tensor(scale)
-        self.loc, self.scale = _broadcast_pair(self.loc, self.scale)
+        self.loc, self.scale = _broadcast_pair(_as_tensor(loc), _as_tensor(scale))
         super().__init__(
             batch_shape=tuple(self.loc.shape),
             event_shape=(),
@@ -146,6 +145,11 @@ class Gumbel(Distribution):
     def mean(self) -> Tensor:
         """``μ + s · γ`` where ``γ`` is the Euler–Mascheroni constant."""
         return self.loc + self.scale * _EULER_GAMMA
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Gumbel` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_attributes(Gumbel, batch_shape, _instance, "loc", "scale")
 
     @property
     @override
@@ -312,9 +316,7 @@ class InverseGamma(Distribution):
 
     arg_constraints = {"concentration": positive, "rate": positive}
     support: Constraint | None = positive
-    # Lucid's Gamma sampler uses rejection sampling without a reparameterised
-    # kernel, so samples are detached — has_rsample is False.
-    has_rsample: bool = False
+    has_rsample: bool = True
 
     def __init__(
         self,
@@ -356,6 +358,13 @@ class InverseGamma(Distribution):
             self.concentration > 1.0, closed, lucid.full_like(closed, float("inf"))
         )
 
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`InverseGamma` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_attributes(
+            InverseGamma, batch_shape, _instance, "concentration", "rate", "_gamma"
+        )
+
     @property
     @override
     def mode(self) -> Tensor:
@@ -373,6 +382,11 @@ class InverseGamma(Distribution):
         # variance rather than the divergence it stands for.
         closed = r * r / ((c - 1.0) ** 2 * (c - 2.0))
         return lucid.where(c > 2.0, closed, lucid.full_like(closed, float("inf")))
+
+    @override
+    def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        """Draw reparameterised samples by taking the reciprocal of a ``Gamma`` sample."""
+        return 1.0 / self._gamma.rsample(sample_shape)
 
     @override
     def sample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
@@ -552,6 +566,13 @@ class Kumaraswamy(Distribution):
             - lucid.lgamma(1.0 + 1.0 / a + b)
         )
         return log_mean.exp()
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Kumaraswamy` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_attributes(
+            Kumaraswamy, batch_shape, _instance, "concentration1", "concentration0"
+        )
 
     @property
     @override
@@ -825,6 +846,18 @@ class Multinomial(Distribution):
             event_shape=(self._cat._num_events,),
             validate_args=validate_args,
         )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Multinomial` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Multinomial, _instance)
+        batch_shape_t = tuple(batch_shape)
+        new._cat = self._cat.expand(batch_shape_t)
+        new._is_logits = self._is_logits
+        new._total_count = self._total_count
+        key = "logits" if new._is_logits else "probs"
+        new.__dict__[key] = getattr(new._cat, key)
+        return self._finish_expand(new, batch_shape_t, self._event_shape)
 
     @property
     @override
@@ -1107,6 +1140,11 @@ class ContinuousBernoulli(Distribution):
             event_shape=(),
             validate_args=validate_args,
         )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`ContinuousBernoulli` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_probs_or_logits(ContinuousBernoulli, batch_shape, _instance)
 
     @property
     def _param(self) -> Tensor:

@@ -123,7 +123,8 @@ def _lgamma_lanczos(x: Tensor) -> Tensor:
     series = lucid.full_like(x, _LANCZOS_P[0])
     for k in range(1, len(_LANCZOS_P)):
         series = series + _LANCZOS_P[k] / (z + float(k))
-    return 0.5 * math.log(2.0 * math.pi) + (z + 0.5) * lucid.log(t) - t + lucid.log(series)
+    c = 0.5 * math.log(2.0 * math.pi) - (_LANCZOS_G + 0.5)
+    return (c - z) + (z + 0.5) * lucid.log(t) + lucid.log(series)
 
 
 # B_2, B_4, ..., B_12.  Every odd Bernoulli number past B_1 is zero, which
@@ -368,7 +369,9 @@ def _igam_fac(a: Tensor, x: Tensor, k: _IgamConstants) -> Tensor:
     # flushes the subnormal — P(174.49, 105.92) came out 0 for 6.7e-10.
     direct = lucid.exp(a - x + a * lucid.log(x / fac))
     numfac = (x - a - _LANCZOS13_G + 0.5) / fac
-    scaled = lucid.exp(a * (lucid.log1p(numfac) - numfac) + x * (0.5 - _LANCZOS13_G) / fac)
+    scaled = lucid.exp(
+        a * (lucid.log1p(numfac) - numfac) + x * (0.5 - _LANCZOS13_G) / fac
+    )
     near_value = res * lucid.where(moderate, direct, scaled)
     return lucid.where(far, far_value, near_value)
 
@@ -518,7 +521,9 @@ def _igam_asymptotic(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
     zero = lucid.zeros_like(a)
     near_sig = lucid.abs(sigma) < _IGAM_ETA_SERIES
     eta_sq_series = (
-        sigma * sigma * _horner_float(_ETA_SQ_COEFFS, lucid.where(near_sig, sigma, zero))
+        sigma
+        * sigma
+        * _horner_float(_ETA_SQ_COEFFS, lucid.where(near_sig, sigma, zero))
     )
     eta_sq_log = -2.0 * (lucid.log1p(sigma) - sigma)
     eta_sq = lucid.where(near_sig, eta_sq_series, eta_sq_log)
@@ -547,7 +552,12 @@ def _igam_interior(a: Tensor, x: Tensor, *, lower: bool) -> Tensor:
     """P or Q off the edges of the domain, by the branch ``igam`` picks."""
     k = _IgamConstants(a.dtype)
     edge = (
-        lucid.isnan(a) | lucid.isnan(x) | lucid.isinf(a) | lucid.isinf(x) | (a <= 0.0) | (x <= 0.0)
+        lucid.isnan(a)
+        | lucid.isnan(x)
+        | lucid.isinf(a)
+        | lucid.isinf(x)
+        | (a <= 0.0)
+        | (x <= 0.0)
     )
     rel = lucid.abs(x - a) / a
     asym_large = (rel < _IGAM_LARGE_RATIO / lucid.sqrt(a)) | (

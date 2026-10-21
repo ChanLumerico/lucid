@@ -1,6 +1,7 @@
 """``TransformedDistribution`` and base/composite ``Transform`` abstractions."""
 
-from typing import final, override
+from collections.abc import Sequence
+from typing import Self, final, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -489,7 +490,9 @@ class TransformedDistribution(Distribution):
                 and len(base_shape) >= transform.domain.event_dim
             ):
                 base_distribution = Independent(
-                    base_distribution, reinterpreted_batch_ndims
+                    base_distribution,
+                    reinterpreted_batch_ndims,
+                    validate_args=validate_args,
                 )
             transform_change_in_event_dim = (
                 transform.codomain.event_dim - transform.domain.event_dim
@@ -577,3 +580,26 @@ class TransformedDistribution(Distribution):
             )
             - log_det
         )
+
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`TransformedDistribution` instance with parameters expanded to ``batch_shape``."""
+        new = self._get_checked_instance(TransformedDistribution, _instance)
+        batch_shape = tuple(batch_shape)
+        shape = batch_shape + self.event_shape
+        for t in reversed(self.transforms):
+            shape = t.inverse_shape(shape)
+        base_batch_shape = shape[: len(shape) - len(self.base_dist.event_shape)]
+        new.base_dist = self.base_dist.expand(base_batch_shape)
+        new.transforms = self.transforms
+        super(TransformedDistribution, new).__init__(
+            batch_shape=batch_shape,
+            event_shape=self.event_shape,
+            validate_args=False,
+        )
+        new._validate_args = self._validate_args
+        return new

@@ -16,9 +16,9 @@ them), so no family can forget to.
 
 import functools
 import inspect
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextvars import ContextVar
-from typing import override
+from typing import Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -75,7 +75,13 @@ def _is_validated(method: object) -> bool:
 
 
 # The scorers the base validates, and whether each takes a probability.
-_SCORERS: dict[str, bool] = {"log_prob": False, "cdf": False, "icdf": True}
+_SCORERS: dict[str, bool] = {
+    "log_prob": False,
+    "cdf": False,
+    "log_cdf": False,
+    "log_survival_function": False,
+    "icdf": True,
+}
 
 _RANK_WORDS = {1: "one", 2: "two"}
 
@@ -367,6 +373,91 @@ class Distribution:
         """
         return tuple(sample_shape) + self._batch_shape + self._event_shape
 
+    def _get_checked_instance(
+        self, cls: type[Distribution], _instance: Self | None = None
+    ) -> Self:
+        """Allocate or reuse an instance for :meth:`expand`, verifying ``__init__``.
+
+        Raises
+        ------
+        NotImplementedError
+            If a subclass of ``cls`` defines a custom ``__init__`` without
+            defining a custom :meth:`expand`.
+        """
+        if _instance is None and type(self).__init__ != cls.__init__:
+            raise NotImplementedError(
+                f"Subclass {type(self).__name__} of {cls.__name__} that defines a "
+                f"custom __init__ method must also define a custom .expand() method."
+            )
+        return self.__new__(type(self)) if _instance is None else _instance
+
+    def _finish_expand(
+        self,
+        new: Self,
+        batch_shape: Sequence[int],
+        event_shape: tuple[int, ...] = (),
+    ) -> Self:
+        """Initialise ``new``'s shape metadata and copy ``_validate_args``."""
+        new._batch_shape = tuple(batch_shape)
+        new._event_shape = event_shape
+        new._validate_args = self._validate_args
+        return new
+
+    def _expand_attributes(
+        self,
+        cls: type[Distribution],
+        batch_shape: Sequence[int],
+        _instance: Self | None,
+        *names: str,
+        event_shape: tuple[int, ...] = (),
+    ) -> Self:
+        """Allocate ``new``, expand each named attribute to ``batch_shape``, and finish."""
+        new = self._get_checked_instance(cls, _instance)
+        batch_shape_t = tuple(batch_shape)
+        for name in names:
+            setattr(new, name, getattr(self, name).expand(batch_shape_t))
+        return self._finish_expand(new, batch_shape_t, event_shape)
+
+    def _expand_probs_or_logits(
+        self,
+        cls: type[Distribution],
+        batch_shape: Sequence[int],
+        _instance: Self | None,
+    ) -> Self:
+        """Allocate ``new`` and expand its active ``probs`` or ``logits`` parameter."""
+        new = self._get_checked_instance(cls, _instance)
+        batch_shape_t = tuple(batch_shape)
+        is_logits = bool(self.__dict__.get("_is_logits", False))
+        key = "logits" if is_logits else "probs"
+        new.__dict__[key] = getattr(self, key).expand(batch_shape_t)
+        new.__dict__["_is_logits"] = is_logits
+        return self._finish_expand(new, batch_shape_t)
+
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        r"""Return a new distribution instance with batch dimensions expanded to ``batch_shape``.
+
+        Parameters
+        ----------
+        batch_shape : Sequence[int]
+            The desired expanded batch shape.
+        _instance : Distribution or None, optional
+            New instance provided by subclasses that need to override
+            :meth:`expand`.
+
+        Returns
+        -------
+        Distribution
+            New distribution instance with batch dimensions expanded to
+            ``batch_shape``.
+
+        Raises
+        ------
+        NotImplementedError
+            If not implemented by the concrete subclass.
+        """
+        del batch_shape, _instance
+        raise NotImplementedError(f"{type(self).__name__}.expand")
+
     @property
     def support(self) -> Constraint | None:
         """The set the random variable takes values in.
@@ -465,6 +556,16 @@ class Distribution:
         distribution is more spread out / less predictable.
         """
         raise NotImplementedError(f"{type(self).__name__}.entropy")
+
+    def perplexity(self) -> Tensor:
+        r"""Perplexity of the distribution, :math:`\exp(H[X])`.
+
+        Returns
+        -------
+        Tensor
+            A tensor of shape ``batch_shape``.
+        """
+        return lucid.exp(self.entropy())
 
     # ── sampling ───────────────────────────────────────────────────────────
 
@@ -997,3 +1098,6 @@ class ExponentialFamily(Distribution):
             assert g is not None
             result = result - (np * g).reshape(self._batch_shape + (-1,)).sum(-1)
         return result
+
+
+set_default_validate_args = Distribution.set_default_validate_args

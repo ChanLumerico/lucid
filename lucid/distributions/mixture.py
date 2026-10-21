@@ -1,6 +1,7 @@
 """``MixtureSameFamily`` — finite mixture of identically-typed components."""
 
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -316,3 +317,23 @@ class MixtureSameFamily(Distribution):
         """
         cdf_k: Tensor = self.component_distribution.cdf(value.unsqueeze(-1))
         return (cdf_k * self.mixture_distribution._probs).sum(dim=-1)
+
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`MixtureSameFamily` instance with parameters expanded to ``batch_shape``."""
+        new = self._get_checked_instance(MixtureSameFamily, _instance)
+        batch_shape = tuple(batch_shape)
+        comp_batch = batch_shape + (self.mixture_distribution._num_events,)
+        new.mixture_distribution = self.mixture_distribution.expand(batch_shape)
+        new.component_distribution = self.component_distribution.expand(comp_batch)
+        super(MixtureSameFamily, new).__init__(
+            batch_shape=batch_shape,
+            event_shape=self.event_shape,
+            validate_args=False,
+        )
+        new._validate_args = self._validate_args
+        return new

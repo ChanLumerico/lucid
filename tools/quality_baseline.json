@@ -1014,7 +1014,7 @@
     "lucid/compile/_optim/compiler.py": 773,
     "lucid/coreml/_build.py": 1726,
     "lucid/coreml/_emit.py": 1167,
-    "lucid/distributions/transforms.py": 279,
+    "lucid/distributions/transforms.py": 37,
     "lucid/fft/__init__.py": 379,
     "lucid/linalg/__init__.py": 2087,
     "lucid/models/_utils/_detection.py": 1335,
@@ -1289,14 +1289,14 @@
     "lucid/distributions/categorical.py": 9,
     "lucid/distributions/continuous_extra.py": 7,
     "lucid/distributions/discrete.py": 14,
-    "lucid/distributions/exponential.py": 17,
-    "lucid/distributions/extra.py": 4,
-    "lucid/distributions/gamma.py": 6,
+    "lucid/distributions/exponential.py": 14,
+    "lucid/distributions/extra.py": 3,
+    "lucid/distributions/gamma.py": 3,
     "lucid/distributions/independent.py": 2,
     "lucid/distributions/mixture.py": 2,
     "lucid/distributions/multivariate.py": 3,
     "lucid/distributions/normal.py": 3,
-    "lucid/distributions/relaxed.py": 9,
+    "lucid/distributions/relaxed.py": 8,
     "lucid/distributions/student.py": 3,
     "lucid/distributions/uniform.py": 2,
     "lucid/fft/__init__.py": 14,
@@ -2196,7 +2196,6 @@
    "PERF401": {
     "lucid/compile/_debug/diagnose.py": 1,
     "lucid/compile/_entry/module.py": 1,
-    "lucid/distributions/transforms.py": 2,
     "lucid/models/_utils/_detection.py": 1,
     "lucid/models/_utils/_segmentation.py": 1,
     "lucid/models/generative/genie/_model.py": 1,
@@ -2417,9 +2416,6 @@
    },
    "UP033": {
     "lucid/diffeq/_multistep.py": 1
-   },
-   "UP034": {
-    "lucid/distributions/transforms.py": 2
    },
    "UP035": {
     "lucid/__init__.py": 1,

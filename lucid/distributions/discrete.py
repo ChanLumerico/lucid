@@ -6,7 +6,8 @@ All three are pure-Lucid composites — sampling reuses
 closed-form via lgamma.
 """
 
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -233,6 +234,18 @@ class Poisson(ExponentialFamily):
     def _log_normalizer(self, *natural_params: Tensor) -> Tensor:
         (x,) = natural_params
         return x.exp()
+
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`Poisson` instance with parameters expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Poisson, _instance)
+        batch_shape = tuple(batch_shape)
+        new.rate = self.rate.expand(batch_shape)
+        return self._finish_expand(new, batch_shape)
 
 
 class Binomial(Distribution):
@@ -628,6 +641,23 @@ class Binomial(Distribution):
         )
         return self._expand_support(values, expand)
 
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`Binomial` instance with parameters expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Binomial, _instance)
+        batch_shape = tuple(batch_shape)
+        new.total_count = self.total_count.expand(batch_shape)
+        new._is_logits = self._is_logits
+        if "probs" in self.__dict__:
+            new.probs = self.probs.expand(batch_shape)
+        if "logits" in self.__dict__:
+            new.logits = self.logits.expand(batch_shape)
+        return self._finish_expand(new, batch_shape)
+
 
 class NegativeBinomial(Distribution):
     r"""Negative Binomial distribution over the number of failures before r successes.
@@ -943,3 +973,20 @@ class NegativeBinomial(Distribution):
             - r * neg_log_q
             - k * neg_log_p
         )
+
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`NegativeBinomial` instance with parameters expanded to ``batch_shape``."""
+        new = self._get_checked_instance(NegativeBinomial, _instance)
+        batch_shape = tuple(batch_shape)
+        new.total_count = self.total_count.expand(batch_shape)
+        new._is_logits = self._is_logits
+        if "probs" in self.__dict__:
+            new.probs = self.probs.expand(batch_shape)
+        if "logits" in self.__dict__:
+            new.logits = self.logits.expand(batch_shape)
+        return self._finish_expand(new, batch_shape)

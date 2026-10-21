@@ -9,7 +9,8 @@ Both forward into :func:`lucid.nn.functional.gumbel_softmax` for the
 sampling math, so the same Lucid Philox stream applies.
 """
 
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._dtype import finfo
@@ -287,6 +288,27 @@ class RelaxedBernoulli(Distribution):
         diff: Tensor = l - tau * (log_y - log_1my)
         return tau.log() + diff - 2.0 * diff.softplus() - log_y - log_1my
 
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`RelaxedBernoulli` instance with parameters expanded to ``batch_shape``."""
+        new = self._get_checked_instance(RelaxedBernoulli, _instance)
+        batch_shape = tuple(batch_shape)
+        new.temperature = self.temperature.expand(batch_shape)
+        new._is_logits = self._is_logits
+        if "probs" in self.__dict__:
+            new.probs = self.probs.expand(batch_shape)
+        if "logits" in self.__dict__:
+            new.logits = self.logits.expand(batch_shape)
+        super(RelaxedBernoulli, new).__init__(
+            batch_shape=batch_shape, event_shape=(), validate_args=False
+        )
+        new._validate_args = self._validate_args
+        return new
+
 
 class RelaxedOneHotCategorical(Distribution):
     r"""Concrete distribution — a continuous relaxation of OneHotCategorical.
@@ -474,8 +496,8 @@ class RelaxedOneHotCategorical(Distribution):
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
         """Draw a reparameterised sample via the Gumbel-softmax trick.
 
-        Delegates to :func:`lucid.nn.functional.gumbel_softmax` with
-        ``hard=False``, ensuring the output lies strictly inside the open
+        Computes the Concrete relaxation directly on ``logits`` and
+        ``temperature``, ensuring the output lies strictly inside the open
         :math:`K`-simplex and gradients propagate through both ``logits`` and
         ``temperature``.
 
@@ -490,16 +512,19 @@ class RelaxedOneHotCategorical(Distribution):
             Samples on the open simplex of shape
             ``(*sample_shape, *batch_shape, K)``.
         """
-        from lucid.nn.functional.activations import gumbel_softmax
+        from lucid.nn.functional.activations import softmax
 
-        # Broadcast logits to (sample_shape + batch_shape + (K,)).
         out_shape = (
             tuple(sample_shape) + tuple(self._batch_shape) + tuple(self._event_shape)
         )
         l = self._logits + lucid.zeros(
             out_shape, dtype=self._logits.dtype, device=self._logits.device
         )
-        return gumbel_softmax(l, tau=float(self.temperature.item()), hard=False)
+        u = lucid.rand(*out_shape, dtype=l.dtype, device=l.device).clip(
+            1e-7, 1.0 - 1e-7
+        )
+        g = -(-(u.log())).log()
+        return softmax((l + g) / self.temperature.unsqueeze(-1), dim=-1)
 
     @override
     def log_prob(self, value: Tensor) -> Tensor:
@@ -520,15 +545,40 @@ class RelaxedOneHotCategorical(Distribution):
         #                   + Σ (logits − (τ+1)·log y) − K·logsumexp(logits − τ·log y).
         K: int = self._num_events
         l: Tensor = self._logits
-        tau: Tensor = self.temperature
+        tau: Tensor = self.temperature.unsqueeze(-1)
         log_y: Tensor = value.log()
         log_z: Tensor = lucid.logsumexp(l - tau * log_y, dim=-1)
         return (
             float(_lgamma_int(K))
-            + (K - 1.0) * tau.log()
+            + (K - 1.0) * self.temperature.log()
             + (l - (tau + 1.0) * log_y).sum(dim=-1)
             - K * log_z
         )
+
+    @override
+    def expand(
+        self,
+        batch_shape: Sequence[int],
+        _instance: Self | None = None,
+    ) -> Self:
+        """Return a new :class:`RelaxedOneHotCategorical` expanded to ``batch_shape``."""
+        new = self._get_checked_instance(RelaxedOneHotCategorical, _instance)
+        batch_shape = tuple(batch_shape)
+        param_shape = batch_shape + (self._num_events,)
+        new.temperature = self.temperature.expand(batch_shape)
+        new._num_events = self._num_events
+        new._is_logits = self._is_logits
+        if "probs" in self.__dict__:
+            new.probs = self.probs.expand(param_shape)
+        if "logits" in self.__dict__:
+            new.logits = self.logits.expand(param_shape)
+        super(RelaxedOneHotCategorical, new).__init__(
+            batch_shape=batch_shape,
+            event_shape=self._event_shape,
+            validate_args=False,
+        )
+        new._validate_args = self._validate_args
+        return new
 
 
 def _lgamma_int(n: int) -> float:

@@ -107,6 +107,14 @@ _DIST_PAIRS: dict[str, tuple[_Builder, _Builder]] = {
         lambda M, t: M.LogNormal(t([0.5, -0.5]), t([1.2, 0.8])),
         lambda M, t: M.LogNormal(t([0.0, 0.5]), t([1.5, 1.2])),
     ),
+    "LowRankMultivariateNormal": (
+        lambda M, t: M.LowRankMultivariateNormal(
+            t([0.0, 1.0]), t([[1.0], [0.5]]), t([1.0, 2.0])
+        ),
+        lambda M, t: M.LowRankMultivariateNormal(
+            t([0.5, -0.5]), t([[0.8], [-0.3]]), t([1.5, 1.0])
+        ),
+    ),
     "MixtureSameFamily": (
         lambda M, t: M.MixtureSameFamily(
             M.Categorical(probs=t([0.3, 0.7])),
@@ -194,12 +202,10 @@ def _ref_at(ref: Any, dtype: Any) -> Callable[[Any], Any]:
 
 def test_registry_covers_all_reference_pairs(ref: Any) -> None:
     """Every (P, Q) pair in the reference's ``distributions.kl._KL_REGISTRY``
-    (excluding LowRankMultivariateNormal) must resolve via _dispatch_kl in Lucid."""
+    must resolve via _dispatch_kl in Lucid."""
     missing = []
     for p_ref, q_ref in ref.distributions.kl._KL_REGISTRY:
         pn, qn = p_ref.__name__, q_ref.__name__
-        if "LowRankMultivariateNormal" in (pn, qn):
-            continue
         p_cls = getattr(D, pn)
         q_cls = getattr(D, qn)
         if _dispatch_kl(p_cls, q_cls) is None:
@@ -523,7 +529,11 @@ def test_batched_kl_matches_unbatched_across_expfamily_and_wishart(
 
     # 3. Every concrete ExponentialFamily subclass in Lucid: batched KL equals
     #    the per-slice unbatched KL.
-    exp_cases: list[tuple[D.Distribution, D.Distribution, list[tuple[D.Distribution, D.Distribution]]]] = [
+    exp_cases: list[
+        tuple[
+            D.Distribution, D.Distribution, list[tuple[D.Distribution, D.Distribution]]
+        ]
+    ] = [
         (
             D.Bernoulli(probs=t([0.2, 0.7])),
             D.Bernoulli(probs=t([0.6, 0.3])),
@@ -588,4 +598,3 @@ def test_batched_kl_matches_unbatched_across_expfamily_and_wishart(
             dtype=np.float32,
         )
         np.testing.assert_allclose(got_b, want_b, rtol=1e-5, atol=1e-6)
-

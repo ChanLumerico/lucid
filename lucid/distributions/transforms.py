@@ -259,6 +259,8 @@ class AffineTransform(Transform):
         Additive offset :math:`b`.
     scale : Tensor or float
         Multiplicative slope :math:`a` (assumed positive).
+    event_dim : int, optional
+        Number of trailing dimensions treated as a single event. Default ``0``.
 
     Notes
     -----
@@ -286,8 +288,13 @@ class AffineTransform(Transform):
     tensor(7.)
     """
 
-    def __init__(self, loc: Tensor | float, scale: Tensor | float) -> None:
-        """Store the affine offset ``loc`` and multiplier ``scale``.
+    def __init__(
+        self,
+        loc: Tensor | float,
+        scale: Tensor | float,
+        event_dim: int = 0,
+    ) -> None:
+        """Store the affine offset ``loc``, multiplier ``scale``, and ``event_dim``.
 
         The caller is responsible for ensuring ``scale > 0``; ``sign`` is
         fixed at ``+1`` here so the transform is treated as increasing.
@@ -295,6 +302,7 @@ class AffineTransform(Transform):
         super().__init__()
         self.loc = _as_tensor(loc)
         self.scale = _as_tensor(scale)
+        self.event_dim = event_dim
         self.sign = 1  # Caller is responsible for ``scale > 0``.
 
     @override
@@ -344,11 +352,12 @@ class AffineTransform(Transform):
         Returns
         -------
         Tensor
-            ``log|scale|`` broadcast to ``x.shape``.
+            ``log|scale|`` broadcast to ``x.shape`` and summed over ``event_dim``.
         """
-        return _align_device(self.scale, x).abs().log() + lucid.zeros(
+        ladj = _align_device(self.scale, x).abs().log() + lucid.zeros(
             tuple(x.shape), dtype=x.dtype, device=x.device
         )
+        return _sum_rightmost(ladj, self.event_dim)
 
 
 class PowerTransform(Transform):
@@ -637,33 +646,17 @@ class StickBreakingTransform(Transform):
         Recovers :math:`z_k = y_k / (1 - \sum_{j<k} y_j)` and then
         :math:`x_k = \operatorname{logit}(z_k) + \log(K - k)`.
         """
-        # Recover x_k from y via z_k = y_k / (1 − Σ_{j<k} y_j),
-        # then x_k = logit(z_k) + log(K−k).
-        K: int = int(y.shape[-1])
-        K_minus_1: int = K - 1
-        # Cumulative tail sums: stick remaining before drawing y_k.
-        cum: Tensor = y.narrow(-1, 0, K_minus_1).cumsum(dim=-1)
-        # remaining_before_k = 1 − Σ_{j<k} y_j  → shifted version.
-        remaining: list[Tensor] = []
-        ones: Tensor = lucid.ones_like(y.narrow(-1, 0, 1))
-        remaining.append(ones)
-        for k in range(1, K_minus_1):
-            remaining.append((1.0 - cum.narrow(-1, k - 1, 1)))
-        rem: Tensor = (
-            lucid.cat(remaining, dim=-1).squeeze(-1)
-            if K_minus_1 == 1
-            else lucid.cat(remaining, dim=-1)
-        )
-        # rem has shape (..., K-1) by construction above.
-        z: Tensor = y.narrow(-1, 0, K_minus_1) / rem
+        K_minus_1: int = int(y.shape[-1]) - 1
+        y_crop: Tensor = y.narrow(-1, 0, K_minus_1)
+        sf: Tensor = (1.0 - y_crop.cumsum(dim=-1)).clamp(min=lucid.finfo(y.dtype).tiny)
         offsets: Tensor = lucid.arange(K_minus_1, 0, -1, dtype=y.dtype, device=y.device)
-        return (z.log() - (1.0 - z).log()) + offsets.log()
+        return y_crop.log() - sf.log() + offsets.log()
 
     @override
     def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
         r"""Standard simplex-to-:math:`\mathbb{R}^{K-1}` log-Jacobian.
 
-        :math:`\log|\det J| = \sum_k \bigl[\log y_k + \log\!\bigl(1 - \sum_{j<k} y_j\bigr)\bigr]`.
+        :math:`\log|\det J| = \sum_k \bigl[\log y_k + \log\!\bigl(1 - z_k\bigr)\bigr]`.
 
         Parameters
         ----------
@@ -684,23 +677,16 @@ class StickBreakingTransform(Transform):
         #     log|det J| = Σ_k [ log(rem_k · z_k) + log(1 - z_k) ]
         #                = Σ_k [ log(y_k)         + log(1 - z_k) ]
         #
-        # since ``y_k = rem_k · z_k``.  The ``rem`` factor is already inside
-        # ``y_k``; adding ``log(rem_k)`` on top counted it twice, which put
-        # the density off by ``Σ_k log(rem_k)`` — a quantity that varies
-        # with the sample, so it does not even cancel as a constant.  Any
-        # ``TransformedDistribution`` over the simplex was optimising the
-        # wrong objective.
+        # since ``y_k = rem_k · z_k``.  Using ``1 - sigmoid(u) = exp(-u) * sigmoid(u)``
+        # with ``u = x_k - log(K - k)`` avoids ``0 / 0`` when a prefix reaches 1.
+        from lucid.nn.functional.activations import logsigmoid
+
         K_minus_1: int = int(x.shape[-1])
-        head: Tensor = y.narrow(-1, 0, K_minus_1)
-        # remaining-before for each k: rem_k = 1 − Σ_{j<k} y_j.
-        remaining: list[Tensor] = []
-        cum: Tensor = head.cumsum(dim=-1)
-        ones: Tensor = lucid.ones_like(head.narrow(-1, 0, 1))
-        remaining.append(ones)
-        for k in range(1, K_minus_1):
-            remaining.append((1.0 - cum.narrow(-1, k - 1, 1)))
-        rem: Tensor = lucid.cat(remaining, dim=-1)
-        return (head.log() + (1.0 - head / rem).log()).sum(dim=-1)
+        offsets: Tensor = lucid.arange(K_minus_1, 0, -1, dtype=x.dtype, device=x.device)
+        x_shifted: Tensor = x - offsets.log()
+        return (
+            -x_shifted + logsigmoid(x_shifted) + y.narrow(-1, 0, K_minus_1).log()
+        ).sum(dim=-1)
 
 
 class LowerCholeskyTransform(Transform):
@@ -1164,9 +1150,10 @@ class CorrCholeskyTransform(Transform):
 
     Parameters
     ----------
-    dim : int
-        Size :math:`d \geq 2` of the square correlation matrix.  The
-        unconstrained input has trailing dimension :math:`d(d-1)/2`.
+    dim : int or None, optional
+        Size :math:`d \geq 2` of the square correlation matrix.  If ``None``,
+        inferred from the trailing input dimension :math:`d(d-1)/2` or matrix
+        shape :math:`(d, d)`.
 
     Notes
     -----
@@ -1212,17 +1199,41 @@ class CorrCholeskyTransform(Transform):
     codomain: Constraint = constraints.corr_cholesky
     event_dim: int = 2
 
-    def __init__(self, dim: int) -> None:
-        """Store the correlation-matrix dimension ``dim`` (must be ``>= 2``)."""
+    def __init__(self, dim: int | None = None) -> None:
+        """Store the correlation-matrix dimension ``dim`` (or ``None`` to infer from inputs)."""
         super().__init__()
-        if dim < 2:
+        if dim is not None and dim < 2:
             raise ValueError(f"CorrCholeskyTransform: dim must be ≥ 2, got {dim}.")
         self.dim = dim
+
+    def _resolve_dim_from_free(self, free_n: int) -> int:
+        if self.dim is not None:
+            if free_n != self._free_ndim:
+                raise ValueError(
+                    f"CorrCholeskyTransform: expected {self._free_ndim} free parameters "
+                    f"for dim={self.dim}, got {free_n}."
+                )
+            return self.dim
+        d = round((math.sqrt(1 + 8 * free_n) + 1) / 2)
+        if d * (d - 1) // 2 != free_n or d < 2:
+            raise ValueError(
+                f"CorrCholeskyTransform: invalid unconstrained dimension {free_n}"
+            )
+        return d
+
+    def _resolve_dim_from_matrix(self, mat_d: int) -> int:
+        if self.dim is not None:
+            return self.dim
+        if mat_d < 2:
+            raise ValueError(f"CorrCholeskyTransform: dim must be ≥ 2, got {mat_d}.")
+        return mat_d
 
     # Dimension of the free vector
     @property
     def _free_ndim(self) -> int:
         """Number of free parameters in the unconstrained representation: :math:`d(d-1)/2`."""
+        if self.dim is None:
+            raise ValueError("CorrCholeskyTransform: dim is not fixed on this instance")
         d = self.dim
         return d * (d - 1) // 2
 
@@ -1231,20 +1242,22 @@ class CorrCholeskyTransform(Transform):
         """Map ``(..., d*(d-1)/2)`` to ``(..., d, d)``."""
         if len(shape) < 1:
             raise ValueError(f"Event shape {shape} must have at least 1 dimension")
-        return shape[:-1] + (self.dim, self.dim)
+        d = self._resolve_dim_from_free(shape[-1])
+        return shape[:-1] + (d, d)
 
     @override
     def inverse_shape(self, shape: tuple[int, ...]) -> tuple[int, ...]:
         """Map ``(..., d, d)`` to ``(..., d*(d-1)/2)``."""
         if len(shape) < 2:
             raise ValueError(f"Event shape {shape} must have at least 2 dimensions")
-        return shape[:-2] + (self._free_ndim,)
+        d = self._resolve_dim_from_matrix(shape[-1])
+        return shape[:-2] + (d * (d - 1) // 2,)
 
     @override
     def _call(self, x: Tensor) -> Tensor:
         """Map unconstrained ``(..., d*(d-1)/2)`` vector to ``(..., d, d)`` Chol."""
-        d = self.dim
-        *batch, _ = x.shape
+        *batch, free_n = x.shape
+        d = self._resolve_dim_from_free(int(free_n))
         z = x.tanh()  # (..., free_ndim)
         return self._build_chol(z, batch, d, x.dtype, x.device)
 
@@ -1328,8 +1341,8 @@ class CorrCholeskyTransform(Transform):
     @override
     def _inverse(self, y: Tensor) -> Tensor:
         """Extract the free parameters ``x`` from a Cholesky factor ``L``."""
-        d = self.dim
-        *batch, _, _ = y.shape
+        *batch, _, mat_d = y.shape
+        d = self._resolve_dim_from_matrix(int(mat_d))
         # Each row i of L: first i elements are off-diagonal, element i is diag.
         # Back-solve for z from L[row, :row].
         free: list[Tensor] = []
@@ -1407,7 +1420,7 @@ class CorrCholeskyTransform(Transform):
         # ``d - row``.  It is off by a sample-dependent amount — ``-0.5973``
         # against ``-0.3885`` at ``d = 3`` — which is a wrong density rather
         # than a wrong constant, so nothing downstream normalises it away.
-        d = self.dim
+        d = self._resolve_dim_from_matrix(int(y.shape[-1]))
         if d < 2:
             return lucid.zeros(tuple(x.shape[:-1]), dtype=x.dtype, device=x.device)
 
@@ -1513,267 +1526,12 @@ class CumulativeDistributionTransform(Transform):
         return self.distribution.log_prob(x)
 
 
-class StackTransform(Transform):
-    r"""Apply a list of transforms to indexed slices along a stack axis.
-
-    The :math:`k`-th transform is applied to the :math:`k`-th slice
-    obtained by :meth:`~Tensor.unbind` along ``dim``, and the results
-    are stacked back along the same axis.  This is the heterogeneous
-    counterpart of :class:`IndependentTransform`: different bijections
-    can be applied to different coordinates of an event vector.
-
-    Parameters
-    ----------
-    transforms : list[Transform]
-        One transform per slice.  Must be non-empty and the same length
-        as ``x.shape[dim]``.
-    dim : int, optional
-        Dimension along which to slice.  Default ``0``.
-
-    Raises
-    ------
-    ValueError
-        If ``transforms`` is empty, or if the size of ``dim`` does not
-        match ``len(transforms)`` at call time.
-
-    Notes
-    -----
-    Forward (with :math:`\mathbf{x}_k = \mathbf{x}[\ldots, k, \ldots]`):
-
-    .. math::
-
-        \mathbf{y}_k = T_k(\mathbf{x}_k)
-
-    Inverse:
-
-    .. math::
-
-        \mathbf{x}_k = T_k^{-1}(\mathbf{y}_k)
-
-    Log Jacobian determinant (per-slice values stacked back along ``dim``):
-
-    .. math::
-
-        \log|\det J|_k = \log|\det J_{T_k}|(\mathbf{x}_k, \mathbf{y}_k)
-
-    Useful for "block" flows where each coordinate of the latent vector
-    has its own bijection — e.g., applying :class:`ExpTransform` to
-    positive components and :class:`TanhTransform` to bounded ones.
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.distributions.transforms import ExpTransform, TanhTransform, StackTransform
-    >>> T = StackTransform([ExpTransform(), TanhTransform()], dim=-1)
-    >>> T(lucid.tensor([0.0, 0.0]))  # (exp(0), tanh(0)) = (1, 0)
-    tensor([1., 0.])
-    """
-
-    def __init__(self, transforms: list[Transform], dim: int = 0) -> None:
-        """Store the per-slice transforms and the stacking axis ``dim``.
-
-        Raises
-        ------
-        ValueError
-            If ``transforms`` is empty.
-        """
-        super().__init__()
-        if not transforms:
-            raise ValueError("StackTransform: transforms cannot be empty.")
-        self.transforms = list(transforms)
-        self.dim = dim
-        self.event_dim = max(t.event_dim for t in transforms)
-
-    @override
-    @property
-    def domain(self) -> Constraint:
-        """Stacked domain constraint across all slice transforms."""
-        return constraints.stack([t.domain for t in self.transforms], self.dim)
-
-    @override
-    @property
-    def codomain(self) -> Constraint:
-        """Stacked codomain constraint across all slice transforms."""
-        return constraints.stack([t.codomain for t in self.transforms], self.dim)
-
-    def _slices(self, x: Tensor) -> list[Tensor]:
-        """Unbind ``x`` along ``dim``: one slice per transform, or ``ValueError``."""
-        if len(slices := x.unbind(self.dim)) != len(self.transforms):
-            raise ValueError(
-                f"StackTransform: got {len(slices)} slices but "
-                f"{len(self.transforms)} transforms."
-            )
-        return slices
-
-    @override
-    def _call(self, x: Tensor) -> Tensor:
-        """Unbind ``x`` along ``dim`` and apply each transform to the matching slice.
-
-        Raises
-        ------
-        ValueError
-            If the number of slices differs from the number of stored transforms.
-        """
-        slices = self._slices(x)
-        return lucid.stack(
-            [t(s) for t, s in zip(self.transforms, slices, strict=True)], dim=self.dim
-        )
-
-    @override
-    def _inverse(self, y: Tensor) -> Tensor:
-        """Unbind ``y`` along ``dim`` and apply each transform's inverse per slice."""
-        slices = self._slices(y)
-        return lucid.stack(
-            [t._inverse(s) for t, s in zip(self.transforms, slices, strict=True)],
-            dim=self.dim,
-        )
-
-    @override
-    def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        """Per-slice Jacobians stacked back along ``dim``."""
-        xs, ys = self._slices(x), self._slices(y)
-        ladjs = [
-            t.log_abs_det_jacobian(xi, yi)
-            for t, xi, yi in zip(self.transforms, xs, ys, strict=True)
-        ]
-        return lucid.stack(ladjs, dim=self.dim)
-
-
-class CatTransform(Transform):
-    r"""Apply different transforms to contiguous partitions along an axis.
-
-    Splits the input along ``dim`` into contiguous chunks of size
-    ``lengths[i]`` (one element each if ``lengths`` is ``None``),
-    applies the :math:`i`-th transform to the :math:`i`-th chunk, and
-    concatenates the results back along the same axis.  Differs from
-    :class:`StackTransform` in that each partition can have a different
-    *length*, not just a single index.
-
-    Parameters
-    ----------
-    transforms : list[Transform]
-        One transform per partition.
-    dim : int, optional
-        Concatenation dimension.  Default ``0``.
-    lengths : list[int], optional
-        Length of each partition.  Default ``None``: one per transform, so
-        ``dim`` holds ``len(transforms)`` elements.  ``dim`` must hold
-        ``sum(lengths)`` of them, as the reference requires.
-
-    Raises
-    ------
-    ValueError
-        If ``transforms`` is empty, or ``lengths`` is not one per transform.
-    lucid._C.engine.InvalidArgument
-        When applied, if ``dim`` does not hold ``sum(lengths)`` elements.
-
-    Notes
-    -----
-    Forward (with :math:`\mathbf{x}_i` the :math:`i`-th partition):
-
-    .. math::
-
-        \mathbf{y} = \mathrm{cat}\bigl([T_i(\mathbf{x}_i)]_{i=1}^{n},
-                                       \;\mathrm{dim}\bigr)
-
-    Inverse: split, invert, re-concatenate.
-
-    Log Jacobian determinant: per-partition Jacobians concatenated back
-    along ``dim``:
-
-    .. math::
-
-        \log|\det J| = \mathrm{cat}\bigl(
-            [\log|\det J_{T_i}|(\mathbf{x}_i, \mathbf{y}_i)]_{i=1}^{n},
-            \;\mathrm{dim}\bigr)
-
-    Examples
-    --------
-    >>> import lucid
-    >>> from lucid.distributions.transforms import ExpTransform, AffineTransform, CatTransform
-    >>> T = CatTransform([ExpTransform(), AffineTransform(0.0, 2.0)],
-    ...                  dim=0, lengths=[2, 3])
-    >>> T(lucid.tensor([0.0, 0.0, 1.0, 2.0, 3.0])).shape
-    (5,)
-    """
-
-    def __init__(
-        self,
-        transforms: list[Transform],
-        dim: int = 0,
-        lengths: list[int] | None = None,
-    ) -> None:
-        """Store the per-partition transforms, concat axis, and partition lengths.
-
-        Raises
-        ------
-        ValueError
-            If ``transforms`` is empty, or ``lengths`` is not one per transform.
-        """
-        super().__init__()
-        if not transforms:
-            raise ValueError("CatTransform: transforms cannot be empty.")
-        if lengths is not None and len(lengths) != len(transforms):
-            raise ValueError(
-                f"CatTransform: got {len(lengths)} lengths but {len(transforms)} transforms."
-            )
-        self.transforms = list(transforms)
-        self.dim = dim
-        # The reference's default: one element per transform, which ``dim``
-        # then has to hold — not equal parts of whatever it holds.
-        self.lengths = [1] * len(transforms) if lengths is None else list(lengths)
-        self.event_dim = max(t.event_dim for t in transforms)
-
-    @override
-    @property
-    def domain(self) -> Constraint:
-        """Concatenated domain constraint across all partition transforms."""
-        return constraints.cat(
-            [t.domain for t in self.transforms], self.dim, self.lengths
-        )
-
-    @override
-    @property
-    def codomain(self) -> Constraint:
-        """Concatenated codomain constraint across all partition transforms."""
-        return constraints.cat(
-            [t.codomain for t in self.transforms], self.dim, self.lengths
-        )
-
-    def _split(self, x: Tensor) -> list[Tensor]:
-        """Split ``x`` along ``self.dim`` into pieces of ``self.lengths``.
-
-        Raises
-        ------
-        lucid._C.engine.InvalidArgument
-            If ``dim`` does not hold ``sum(self.lengths)`` elements — the
-            check :func:`lucid.split` makes of a size list.
-        """
-        return list(x.split(self.lengths, dim=self.dim))
-
-    @override
-    def _call(self, x: Tensor) -> Tensor:
-        """Split ``x`` along ``dim``, apply each transform, and concatenate."""
-        return lucid.cat(
-            [t(p) for t, p in zip(self.transforms, self._split(x), strict=True)],
-            dim=self.dim,
-        )
-
-    @override
-    def _inverse(self, y: Tensor) -> Tensor:
-        """Split ``y`` along ``dim``, apply each inverse, and concatenate."""
-        return lucid.cat(
-            [t._inverse(p) for t, p in zip(self.transforms, self._split(y), strict=True)],
-            dim=self.dim,
-        )
-
-    @override
-    def log_abs_det_jacobian(self, x: Tensor, y: Tensor) -> Tensor:
-        """Per-partition Jacobians concatenated or summed according to ``event_dim``."""
-        xs, ys = self._split(x), self._split(y)
-        ladjs = [
-            _sum_rightmost(t.log_abs_det_jacobian(xi, yi), self.event_dim - t.event_dim)
-            for t, xi, yi in zip(self.transforms, xs, ys, strict=True)
-        ]
-        dim = (self.dim - x.ndim if self.dim >= 0 else self.dim) + self.event_dim
-        return lucid.cat(ladjs, dim=dim) if dim < 0 else sum(ladjs[1:], ladjs[0])
+from lucid.distributions.constraint_registry import (
+    CatTransform as CatTransform,
+    ConstraintRegistry as ConstraintRegistry,
+    PositiveDefiniteTransform as PositiveDefiniteTransform,
+    SoftplusTransform as SoftplusTransform,
+    StackTransform as StackTransform,
+    biject_to as biject_to,
+    transform_to as transform_to,
+)

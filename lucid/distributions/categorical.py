@@ -1,6 +1,7 @@
 """``Categorical`` (discrete with K outcomes) and ``OneHotCategorical``."""
 
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._dtype import finfo
@@ -167,6 +168,23 @@ class Categorical(Distribution):
             event_shape=(),
             validate_args=validate_args,
         )
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Categorical` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(Categorical, _instance)
+        batch_shape_t = tuple(batch_shape)
+        param_shape = batch_shape_t + (self._num_events,)
+        if not self._is_logits:
+            new.probs = self.probs.expand(param_shape)
+            new._is_logits = False
+        else:
+            new.logits = self.logits.expand(param_shape)
+            new._is_logits = True
+        new._num_events = self._num_events
+        super(Categorical, new).__init__(batch_shape_t, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
 
     @_lazy_param
     def probs(self) -> Tensor:
@@ -515,6 +533,22 @@ class OneHotCategorical(Distribution):
             validate_args=validate_args,
         )
 
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`OneHotCategorical` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(OneHotCategorical, _instance)
+        batch_shape_t = tuple(batch_shape)
+        new._cat = self._cat.expand(batch_shape_t)
+        if not new._cat._is_logits:
+            new.probs = new._cat.probs
+        else:
+            new.logits = new._cat.logits
+        super(OneHotCategorical, new).__init__(
+            batch_shape_t, self._event_shape, validate_args=False
+        )
+        new._validate_args = self._validate_args
+        return new
+
     @_lazy_param
     def probs(self) -> Tensor:
         """Normalised probabilities, from the underlying :class:`Categorical`."""
@@ -686,3 +720,27 @@ class OneHotCategorical(Distribution):
     def stddev(self) -> Tensor:
         r"""Per-coordinate standard deviation, :math:`\sqrt{p_k (1 - p_k)}`."""
         return self.variance.sqrt()
+
+
+class OneHotCategoricalStraightThrough(OneHotCategorical):
+    r"""Reparameterisable :class:`OneHotCategorical` based on the straight-through gradient estimator.
+
+    Uses the straight-through estimator (Bengio et al., 2013): the forward pass
+    returns a discrete one-hot sample while the backward pass propagates
+    gradients through :attr:`probs`.
+    """
+
+    has_rsample = True
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`OneHotCategoricalStraightThrough` with batch dimensions expanded."""
+        new = self._get_checked_instance(OneHotCategoricalStraightThrough, _instance)
+        return super().expand(batch_shape, _instance=new)
+
+    @override
+    def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
+        """Draw one-hot samples with straight-through gradients through ``probs``."""
+        samples = self.sample(sample_shape)
+        probs = self._cat.probs
+        return samples + (probs - probs.detach())

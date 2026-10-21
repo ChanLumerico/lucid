@@ -6,7 +6,8 @@ the rejection-based Gamma sampler so gradient is detached on it).
 """
 
 import math
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 import lucid.autograd
@@ -164,6 +165,18 @@ class StudentT(Distribution):
         )
 
     @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`StudentT` with batch dimensions expanded to ``batch_shape``."""
+        new = self._get_checked_instance(StudentT, _instance)
+        batch_shape_t = tuple(batch_shape)
+        new.df = self.df.expand(batch_shape_t)
+        new.loc = self.loc.expand(batch_shape_t)
+        new.scale = self.scale.expand(batch_shape_t)
+        super(StudentT, new).__init__(batch_shape_t, validate_args=False)
+        new._validate_args = self._validate_args
+        return new
+
+    @override
     @property
     def mean(self) -> Tensor:
         r"""Expected value of the Student's t-distribution.
@@ -240,17 +253,16 @@ class StudentT(Distribution):
 
     @override
     def rsample(self, sample_shape: tuple[int, ...] = ()) -> Tensor:
-        """Reparameterised sample: gradient flows through the Normal variate.
+        """Reparameterised sample: gradient flows through both the Normal and Chi² variates.
 
-        ``T = loc + scale · z / sqrt(g / df)``  where  ``z ~ N(0,1)``
-        is differentiable and ``g ~ Chi²(df)`` is detached (standard
-        practice — the marginal gradient w.r.t. df is not tracked).
+        ``T = loc + scale · z / sqrt(g / df)`` where ``z ~ N(0,1)`` and
+        ``g ~ Chi²(df) = Gamma(df/2, 1/2)``.
         """
-        from lucid.distributions.gamma import _sample_standard_gamma
+        from lucid.distributions.gamma import _standard_gamma
 
         shape = self._extended_shape(sample_shape)
         z = lucid.randn(*shape, dtype=self.loc.dtype, device=self.loc.device)
-        gamma_std = _sample_standard_gamma(self.df * 0.5, sample_shape).detach() * 2.0
+        gamma_std = _standard_gamma((self.df * 0.5).expand(shape)) * 2.0
         return self.loc + self.scale * z * (self.df / gamma_std).sqrt()
 
     @override

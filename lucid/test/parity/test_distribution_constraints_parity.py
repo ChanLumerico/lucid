@@ -278,6 +278,19 @@ def _mixture(M: Any, t: Callable[[Any], Any], va: bool | None, **o: Any) -> Any:
     )
 
 
+def _low_rank_mvn(M: Any, t: Callable[[Any], Any], va: bool | None, **o: Any) -> Any:
+    loc = t(o.get("loc", [0.0, 1.0]))
+    cov_factor = t(o.get("cov_factor", [[1.0], [0.5]]))
+    cov_diag = t(o.get("cov_diag", [1.0, 2.0]))
+    return M.LowRankMultivariateNormal(loc, cov_factor, cov_diag, validate_args=va)
+
+
+def _logistic_normal(M: Any, t: Callable[[Any], Any], va: bool | None, **o: Any) -> Any:
+    loc = t(o.get("loc", [0.0, 0.5]))
+    scale = t(o.get("scale", [1.0, 1.5]))
+    return M.LogisticNormal(loc, scale, validate_args=va)
+
+
 _MATRIX_PARAMS: dict[str, list[Any]] = {
     "covariance_matrix": _COVARIANCES,
     "precision_matrix": _COVARIANCES,
@@ -293,10 +306,14 @@ CASES: dict[str, _Case] = {
     "Cauchy": _plain("Cauchy", {"loc": 0.5, "scale": 1.5}),
     "StudentT": _plain("StudentT", {"df": 3.0, "loc": 0.5, "scale": 1.5}),
     "Pareto": _plain("Pareto", {"scale": 1.0, "alpha": 2.0}),
+    "GeneralizedPareto": _plain(
+        "GeneralizedPareto", {"loc": 0.5, "scale": 1.5, "concentration": 0.25}
+    ),
     "Weibull": _plain("Weibull", {"scale": 1.0, "concentration": 1.5}),
     "HalfNormal": _plain("HalfNormal", {"scale": 1.5}),
     "HalfCauchy": _plain("HalfCauchy", {"scale": 1.5}),
     "FisherSnedecor": _plain("FisherSnedecor", {"df1": 3.0, "df2": 5.0}),
+    "VonMises": _plain("VonMises", {"loc": 0.5, "concentration": 1.5}),
     "Gamma": _plain("Gamma", {"concentration": 2.0, "rate": 1.5}),
     "Chi2": _plain("Chi2", {"df": 3.0}),
     "Beta": _plain("Beta", {"concentration1": 2.0, "concentration0": 3.0}),
@@ -304,6 +321,15 @@ CASES: dict[str, _Case] = {
     "InverseGamma": _plain("InverseGamma", {"concentration": 2.0, "rate": 1.5}),
     "Kumaraswamy": _plain(
         "Kumaraswamy", {"concentration1": 2.0, "concentration0": 3.0}
+    ),
+    "LogisticNormal": _Case(
+        _logistic_normal,
+        {
+            "loc": [[0.0, 0.5], [_INF, 0.0], [_NAN, 0.0]],
+            "scale": [[1.0, 1.5], [0.0, 1.0], [-1.0, 1.0], [_NAN, 1.0]],
+        },
+        _VECTOR_VALUES,
+        {"loc": [0.0, 0.5], "scale": [1.0, 1.5]},
     ),
     "Poisson": _plain("Poisson", {"rate": 1.5}),
     "Dirichlet": _Case(
@@ -317,6 +343,9 @@ CASES: dict[str, _Case] = {
     "RelaxedBernoulli": _binary("RelaxedBernoulli", {"temperature": 0.5}),
     "Categorical": _categorical("Categorical"),
     "OneHotCategorical": _categorical("OneHotCategorical"),
+    "OneHotCategoricalStraightThrough": _categorical(
+        "OneHotCategoricalStraightThrough"
+    ),
     "RelaxedOneHotCategorical": _categorical(
         "RelaxedOneHotCategorical", {"temperature": 0.5}
     ),
@@ -325,6 +354,16 @@ CASES: dict[str, _Case] = {
         _mvn,
         {"loc": [[0.0, 0.0], [_INF, 0.0], [_NAN, 0.0]]} | _MATRIX_PARAMS,
         [[0.0, 1.0]],
+    ),
+    "LowRankMultivariateNormal": _Case(
+        _low_rank_mvn,
+        {
+            "loc": [[0.0, 1.0], [_INF, 0.0], [_NAN, 0.0]],
+            "cov_factor": [[[1.0], [0.5]], [[_INF], [0.5]], [[_NAN], [0.5]]],
+            "cov_diag": [[1.0, 2.0], [0.0, 1.0], [-1.0, 1.0], [_NAN, 1.0]],
+        },
+        [[0.0, 1.0], [-1.0, 0.5], [_NAN, 0.0]],
+        {"loc": [0.0, 1.0], "cov_factor": [[1.0], [0.5]], "cov_diag": [1.0, 2.0]},
     ),
     "Wishart": _Case(_wishart, {"df": _SCALARS} | _MATRIX_PARAMS, _MATRIX_VALUES),
     "LKJCholesky": _Case(_lkj, {"concentration": _SCALARS}, _MATRIX_VALUES),
@@ -763,7 +802,13 @@ def _value_grid(case: _Case, method: str, ref: Any) -> list[Any]:
 def test_method_values(name: str, method: str, place: Any, ref: Any) -> None:
     device, dtype = place
     case = CASES[name]
-    lt, rt = _lucid_at(device, dtype), _ref_at(ref, dtype)
+    # In float64 the reference's GeneralizedPareto.log_survival_function raises
+    # RuntimeError ('Double did not match Float') because it passes an untyped
+    # scalar 0.0 tensor to isclose; compare against its float32 answer.
+    ref_dtype = (
+        np.float32 if (name == "GeneralizedPareto" and method == "cdf") else dtype
+    )
+    lt, rt = _lucid_at(device, dtype), _ref_at(ref, ref_dtype)
     ours_dist = case.build(D, lt, False)
     theirs_dist = case.build(ref.distributions, rt, False)
     differences = []
@@ -779,7 +824,7 @@ def test_method_values(name: str, method: str, place: Any, ref: Any) -> None:
         theirs = _outcome(lambda: _call(theirs_dist, method, rt, v))
         if "absent" in (ours[0], theirs[0]):
             continue  # presence is test_method_presence's question
-        if _close(ours, theirs, dtype):
+        if _close(ours, theirs, ref_dtype):
             continue
         if dtype == np.float32:
             wide = _outcome(lambda: _call(wide_dist, method, rt64, v))
@@ -863,6 +908,9 @@ def test_method_gradients(
 ) -> None:
     case = CASES[name]
     dtype = np.float64 if device == "cpu" else np.float32
+    ref_dtype = (
+        np.float32 if (name == "GeneralizedPareto" and method == "cdf") else dtype
+    )
     points = _grad_points(case, method, ref)
     if not points:
         pytest.skip(f"{name} offers no interior support point")
@@ -875,13 +923,13 @@ def test_method_gradients(
     )
     theirs = _grad_outcome(
         lambda t: case.build(ref.distributions, t, False, **leaf),
-        _ref_at(ref, dtype),
+        _ref_at(ref, ref_dtype),
         method,
         points,
     )
     if "absent" in (ours[0], theirs[0]):
         return  # presence is test_method_presence's question
-    differences = [] if _close(ours, theirs, dtype) else [(param, ours, theirs)]
+    differences = [] if _close(ours, theirs, ref_dtype) else [(param, ours, theirs)]
     _judge(name, f"grad:{method}", differences)
 
 

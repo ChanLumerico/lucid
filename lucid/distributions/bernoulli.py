@@ -1,6 +1,7 @@
 """Discrete ``Bernoulli`` and ``Geometric``."""
 
-from typing import override
+from collections.abc import Sequence
+from typing import Self, override
 
 import lucid
 from lucid._tensor.tensor import Tensor
@@ -190,6 +191,11 @@ class Bernoulli(ExponentialFamily):
             tuple(self.probs.shape) if not self._is_logits else tuple(self.logits.shape)
         )
         super().__init__(batch_shape=shape, event_shape=(), validate_args=validate_args)
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Bernoulli` with batch dimensions expanded to ``batch_shape``."""
+        return self._expand_probs_or_logits(Bernoulli, batch_shape, _instance)
 
     @_lazy_param
     def probs(self) -> Tensor:
@@ -582,6 +588,12 @@ class Geometric(Distribution):
         the reference framework derives it.
         """
         return _probs_to_logits(_clamp_probs(self.probs))
+
+    @override
+    def expand(self, batch_shape: Sequence[int], _instance: Self | None = None) -> Self:
+        """Return a new :class:`Geometric` with batch dimensions expanded to ``batch_shape``."""
+        names = tuple(k for k in ("probs", "logits") if k in vars(self))
+        return self._expand_attributes(Geometric, batch_shape, _instance, *names)
 
     @override
     @property
