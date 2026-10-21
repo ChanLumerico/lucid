@@ -84,13 +84,7 @@ class _VisionTransformer(nn.Module):
             stride=config.patch_size,
             bias=False,
         )
-        # Created at zeros and filled by :meth:`CLIP._init_weights`.
-        # ``nn.Parameter(scale * lucid.randn(...))`` would also work at
-        # runtime, but the arithmetic runs on a phantom impl under
-        # ``shadow_alloc`` and the resulting shape is lost — which the
-        # docs site reports as a parameter count short by exactly these
-        # tensors.  Every bare Parameter here is a direct creation call
-        # for that reason.
+        # Created at zeros and filled by :meth:`CLIPModel._init_weights`.
         self.class_embedding = nn.Parameter(lucid.zeros((width,)))
         self.positional_embedding = nn.Parameter(
             lucid.zeros((self.num_patches + 1, width))

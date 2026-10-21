@@ -219,15 +219,8 @@ def _make_join_adapter(engine_fn: Callable[..., _Impl]) -> Callable[..., _Impl]:
     there first; inputs that already agree pass straight through.
     """
 
-    name = engine_fn.__name__
-
     def _adapter(tensors: Sequence[_Impl], *args: object, **kwargs: object) -> _Impl:
-        # Looked up by name on each call rather than captured: shadow
-        # allocation swaps the engine's attributes for phantom-aware stand-ins
-        # and rebinds only the registry entries that hold the bare engine op,
-        # so an adapter holding the original would hand it phantoms it rejects.
-        join = cast(Callable[..., _Impl], getattr(_C_engine, name))
-        return join(_promote_impls(tensors), *args, **kwargs)
+        return engine_fn(_promote_impls(tensors), *args, **kwargs)
 
     _keep_engine_signature(_adapter, engine_fn)
     return _adapter

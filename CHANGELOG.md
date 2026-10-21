@@ -1237,6 +1237,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - fold CPU index readers into IndexBounds.h
 - unify boundary validators and add error-taxonomy rules (LCD-263)
 - cluster jscpd clones and extract owners (LCD-266)
+- switch shadow_alloc to engine thread-local phantom mode
 
 ---
 

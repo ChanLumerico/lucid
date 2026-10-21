@@ -762,6 +762,7 @@ class LBFGS(Optimizer):
         """
         if closure is None:
             raise ValueError("L-BFGS requires a closure that reevaluates the model")
+        self._refuse_phantom_step()
 
         # The group is read below as it is; an edited one is checked first.
         self._sync_hyperparams()
@@ -772,6 +773,7 @@ class LBFGS(Optimizer):
         with lucid.no_grad():
             with lucid.enable_grad():
                 orig_loss = closure()
+            self._refuse_phantom_step()
             self._lbfgs_state.func_evals += 1
             flat_grad = _flat_grad(params)
             self._lbfgs_state.follow(flat_grad)

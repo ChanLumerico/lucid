@@ -1236,7 +1236,10 @@ class SparseAdam(Optimizer):
         >>> loss.backward()
         >>> optimizer.step()
         """
+        self._refuse_phantom_step()
         loss = closure() if closure is not None else None
+        if closure is not None:
+            self._refuse_phantom_step()
         # The groups are read below as they are; an edited one is checked
         # first.
         self._sync_hyperparams()

@@ -439,7 +439,7 @@ def test_a_phantom_running_statistic_takes_the_update(device):
     assert bn.running_mean._impl.is_phantom and out._impl.is_phantom
 
 
-@pytest.mark.parametrize("optimizer", ["SGD", "Adam"])
+@pytest.mark.parametrize("optimizer", ["SGD", "Adam", "SparseAdam"])
 def test_an_optimizer_step_under_the_mode_refuses_before_any_state_moves(
     optimizer, device
 ):
@@ -489,20 +489,16 @@ def test_an_optimizer_step_of_a_phantom_parameter_refuses(device):
         "data",
     ],
 )
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-466 card 3: _dispatch._swap_data rebinds a real Parameter's _impl to the "
-    "phantom .data / Module._apply hand it — pure Python, the engine never sees it",
-)
 def test_a_real_parameter_is_not_rebound_to_a_phantom(rebind):
     m = nn.Linear(3, 2)
     with phantom():
-        if rebind == "half":
-            m.half()
-        elif rebind == "to":
-            m.to("metal")
-        else:
-            m.weight.data = lucid.zeros(2, 3)
+        with pytest.raises(_C_engine.LucidError, match="phantom tensor has no values"):
+            if rebind == "half":
+                m.half()
+            elif rebind == "to":
+                m.to("metal")
+            else:
+                m.weight.data = lucid.zeros(2, 3)
     assert not m.weight._impl.is_phantom
 
 

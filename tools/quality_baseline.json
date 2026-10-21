@@ -908,7 +908,6 @@
     "lucid/models/_protocols.py": 7,
     "lucid/models/_registry.py": 2,
     "lucid/models/_summary.py": 8,
-    "lucid/nn/_shadow.py": 222,
     "lucid/nn/module.py": 4,
     "lucid/nn/utils/weight_norm.py": 4,
     "lucid/optim/lbfgs.py": 2,
@@ -917,7 +916,7 @@
     "lucid/serialization/__init__.py": 7
    },
    "cast": {
-    "lucid/_ops/_adapters.py": 2,
+    "lucid/_ops/_adapters.py": 1,
     "lucid/_ops/composite/elementwise.py": 3,
     "lucid/_tensor/_indexing.py": 10,
     "lucid/_tensor/_methods.py": 2,
@@ -971,14 +970,13 @@
     "lucid/models/vision/rcnn/_model.py": 3,
     "lucid/models/vision/yolo/_v1.py": 2,
     "lucid/models/vision/yolo/_v3.py": 1,
-    "lucid/nn/_shadow.py": 2,
     "lucid/nn/functional/_index_checks.py": 2,
     "lucid/nn/intrinsic/qat/modules.py": 9,
     "lucid/nn/module.py": 5,
     "lucid/nn/modules/container.py": 11,
     "lucid/nn/modules/conv.py": 1,
     "lucid/nn/modules/transformer.py": 2,
-    "lucid/nn/parameter.py": 2,
+    "lucid/nn/parameter.py": 1,
     "lucid/nn/qat/conv.py": 16,
     "lucid/nn/qat/linear.py": 6,
     "lucid/nn/qat/sparse.py": 3,
@@ -1153,7 +1151,7 @@
   },
   "engine": {
    "unbound": {
-    "lucid/_C/engine.pyi": 38
+    "lucid/_C/engine.pyi": 36
    }
   },
   "jscpd": {
@@ -1845,7 +1843,6 @@
     "lucid/_C/ops/utils/View.cpp": 1,
     "lucid/_C/utils/tokenizer/Unigram.cpp": 1,
     "lucid/_factories/creation.py": 1,
-    "lucid/_ops/composite/statistics.py": 1,
     "lucid/_tensor/_indexing.py": 1,
     "lucid/_tensor/tensor.py": 2,
     "lucid/autograd/_backward.py": 2,
@@ -1971,7 +1968,6 @@
     "lucid/_C/ops/utils/View.cpp": 10,
     "lucid/_C/utils/tokenizer/Unigram.cpp": 46,
     "lucid/_factories/creation.py": 19,
-    "lucid/_ops/composite/statistics.py": 16,
     "lucid/_tensor/_indexing.py": 130,
     "lucid/_tensor/tensor.py": 23,
     "lucid/autograd/_backward.py": 86,
@@ -2502,8 +2498,7 @@
   },
   "semgrep": {
    "lucid-impl-unwrap": {
-    "lucid/_promotion.py": 1,
-    "lucid/nn/_shadow.py": 1
+    "lucid/_promotion.py": 1
    }
   }
  }

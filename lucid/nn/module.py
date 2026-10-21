@@ -907,7 +907,10 @@ class Module:
         for key, buf in self._buffers.items():
             if buf is None:
                 continue
-            self._buffers[key] = fn(buf)
+            converted = fn(buf)
+            if not buf._impl.is_phantom and converted._impl.is_phantom:
+                raise _C_engine.LucidError("phantom tensor has no values: _apply")
+            self._buffers[key] = converted
         _tensors_replaced(self)
         return self
 

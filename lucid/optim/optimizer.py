@@ -1210,12 +1210,28 @@ class Optimizer:
             for p, g in saved_grads:
                 p.grad = g
 
+    def _refuse_phantom_step(self) -> None:
+        """Refuse an optimizer step under phantom mode or over a phantom parameter/gradient."""
+        if _C_engine.phantom_mode():
+            raise _C_engine.LucidError(
+                "phantom tensor has no values: optimizer step under phantom mode"
+            )
+        for group in self.param_groups:
+            for p in _group_params(group):
+                g_impl = p._impl.grad_as_impl()
+                if p._impl.is_phantom or (g_impl is not None and g_impl.is_phantom):
+                    raise _C_engine.LucidError(
+                        "phantom tensor has no values: optimizer step of a phantom parameter"
+                    )
+
     def _step_engines(self, closure: _OptimizerClosure = None) -> Tensor | None:
         """Evaluate ``closure`` (if given) and step each group's engine optimizer."""
+        self._refuse_phantom_step()
         loss: Tensor | None = None
         if closure is not None:
             with _lucid.enable_grad():
                 loss = closure()
+            self._refuse_phantom_step()
         for group, optim in zip(self.param_groups, self._engine_optims, strict=True):
             self._step_one_group(group, optim)
         return loss

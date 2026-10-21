@@ -92,33 +92,15 @@ class Parameter(Tensor):
         Parameter
             Fresh instance ready to be bound as a Module attribute.
         """
-        # ``shadow_alloc`` mode short-circuit: when the underlying impl
-        # is a PhantomImpl, ``clone_with_grad`` already returns a phantom
-        # so the normal path Just Works.  The only branch that *must*
-        # be specialised is ``data=None`` — the engine's ``zeros`` is
-        # patched in shadow mode but the manual ``[0]`` shape would
-        # still allocate before the patch ran.  Importing locally to
-        # avoid a circular import.
-        from lucid.nn._shadow import is_active as _shadow_active, PhantomImpl
-
-        # ``impl`` may be a real ``TensorImpl`` or — under the shadow
-        # allocator (size-tracing for ``model_summary``) — a structural
-        # ``PhantomImpl`` stand-in.  The assignment below casts back to
-        # ``TensorImpl`` because ``Tensor._impl`` is declared concrete;
-        # phantom impls duck-type the surface we touch in shadow mode.
-        impl: _C_engine.TensorImpl | PhantomImpl
         if data is None:
-            if _shadow_active():
-                impl = PhantomImpl((0,), None, None, requires_grad)
-            else:
-                impl = _C_engine.zeros([0], _C_engine.F32, _C_engine.CPU)
-                impl = _impl_with_grad(impl, requires_grad)
+            impl = _C_engine.zeros([0], _C_engine.F32, _C_engine.CPU)
+            impl = _impl_with_grad(impl, requires_grad)
         elif isinstance(data, Tensor):
             impl = _impl_with_grad(data._impl, requires_grad)
         else:
             impl = _to_impl(data, requires_grad=requires_grad)
         obj = object.__new__(cls)
-        obj._impl = cast(_C_engine.TensorImpl, impl)
+        obj._impl = impl
         if isinstance(data, Tensor):
             from lucid._tensor._metal_views import _rebind_view
 

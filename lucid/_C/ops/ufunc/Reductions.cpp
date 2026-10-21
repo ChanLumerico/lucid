@@ -463,7 +463,9 @@ Storage ProdBackward::grad_formula(const Storage& grad_out) {
     const Shape& shape = this->full_input_shape_;
     const bool one_or_all = this->reduce_axes_.size() == 1 ||
                             (!shape.empty() && this->reduce_axes_.size() == shape.size());
-    if (this->device_ == Device::CPU && one_or_all) {
+    if (this->device_ == Device::CPU && one_or_all && !PhantomMode::is_enabled() &&
+        std::holds_alternative<CpuStorage>(this->saved_inputs_[0]) &&
+        std::holds_alternative<CpuStorage>(grad_out)) {
         const OIR oir = this->reduce_axes_.size() == 1 ? oir_for_axis(shape, this->reduce_axes_[0])
                                                        : OIR{1, shape_numel(shape), 1};
         const auto& x_cpu = std::get<CpuStorage>(this->saved_inputs_[0]);

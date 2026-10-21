@@ -234,7 +234,10 @@ public:
 
     // From the values saved at forward, under no-grad.
     std::vector<Storage> apply(Storage grad_out) override {
-        if (device_ == Device::CPU) {
+        if (device_ == Device::CPU && !PhantomMode::is_enabled() &&
+            std::holds_alternative<CpuStorage>(grad_out) &&
+            std::holds_alternative<CpuStorage>(saved_inputs_[0]) &&
+            std::holds_alternative<CpuStorage>(saved_y_)) {
             const auto& g_cpu = std::get<CpuStorage>(grad_out);
             const auto& x_cpu = std::get<CpuStorage>(saved_inputs_[0]);
             const auto& y_cpu = std::get<CpuStorage>(saved_y_);

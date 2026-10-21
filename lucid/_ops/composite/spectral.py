@@ -621,15 +621,16 @@ def _overlap_add_normalised(
     envelope = _envelope(window, frames, hop).narrow(-1, start, kept)
     # The read only decides whether to raise; the division below uses the
     # envelope itself, so a trace does not count the read as a dependency.
-    with _host_check():
-        lowest = float(envelope.abs().min().item())
-    if lowest < 1e-11:
-        raise _invalid(
-            "istft",
-            "the window's overlap-add is zero somewhere in the output (it fails "
-            "the NOLA condition); use a window and hop whose overlap covers "
-            "every sample",
-        )
+    if not envelope._impl.is_phantom:
+        with _host_check():
+            lowest = float(envelope.abs().min().item())
+        if lowest < 1e-11:
+            raise _invalid(
+                "istft",
+                "the window's overlap-add is zero somewhere in the output (it fails "
+                "the NOLA condition); use a window and hop whose overlap covers "
+                "every sample",
+            )
     return signal / envelope
 
 

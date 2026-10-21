@@ -651,6 +651,32 @@ def _bincount_dtype(weights: Tensor) -> DTypeLike:
 _MULTINOMIAL_CHUNK = 1 << 24
 
 
+def _validate_multinomial_weights(
+    rows: Tensor, num_samples: int, replacement: bool
+) -> None:
+    """Validate that ``rows`` contains finite, non-negative weights with sufficient support."""
+    if rows._impl.is_phantom:
+        return
+    # The checks only decide whether to raise; nothing read here reaches
+    # the draws, so a trace does not count them as data dependencies.
+    # Imported here: ``lucid.compile`` imports the tensor this module builds on.
+    from lucid.compile import _host_check
+
+    with _host_check():
+        lowest = float(rows.min().item())
+        total = float(rows.sum().item())
+        positive = int((rows > 0).sum(dim=-1).min().item())
+    if lowest < 0 or not math.isfinite(total):
+        raise ValueError("multinomial: weights must be finite and non-negative")
+    if positive == 0:
+        raise ValueError("multinomial: every distribution needs a positive weight")
+    if not replacement and positive < num_samples:
+        raise ValueError(
+            f"multinomial: cannot draw {num_samples} samples without replacement "
+            f"from a distribution with {positive} positive weights"
+        )
+
+
 def multinomial(
     input: Tensor,
     num_samples: int,
@@ -711,24 +737,7 @@ def multinomial(
     rows = input.detach().reshape(-1, k)
     if rows.dtype not in (lucid.float32, lucid.float64):
         rows = rows.float()
-    # The checks only decide whether to raise; nothing read here reaches
-    # the draws, so a trace does not count them as data dependencies.
-    # Imported here: ``lucid.compile`` imports the tensor this module builds on.
-    from lucid.compile import _host_check
-
-    with _host_check():
-        lowest = float(rows.min().item())
-        total = float(rows.sum().item())
-        positive = int((rows > 0).sum(dim=-1).min().item())
-    if lowest < 0 or not math.isfinite(total):
-        raise ValueError("multinomial: weights must be finite and non-negative")
-    if positive == 0:
-        raise ValueError("multinomial: every distribution needs a positive weight")
-    if not replacement and positive < num_samples:
-        raise ValueError(
-            f"multinomial: cannot draw {num_samples} samples without replacement "
-            f"from a distribution with {positive} positive weights"
-        )
+    _validate_multinomial_weights(rows, num_samples, replacement)
     batch = int(rows.shape[0])
 
     if replacement:

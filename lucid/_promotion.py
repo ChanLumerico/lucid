@@ -417,8 +417,7 @@ def result_type(*operands: Operand) -> _C_engine.Dtype:
     ----------
     *operands : TensorImpl or bool or int or float or complex
         Engine tensors and Python numbers, in any order.  A tensor is read
-        through ``dtype``, ``shape`` and ``device`` only, so shadow
-        allocation's phantom impls classify as real ones do.
+        through ``dtype``, ``shape`` and ``device`` only.
 
     Returns
     -------

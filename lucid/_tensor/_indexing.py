@@ -463,7 +463,7 @@ def _coordinate_select(
         bad = _C_engine.logical_or(
             _C_engine.less(idx, zero), _C_engine.greater_equal(idx, size)
         )
-        if dev == _CPU:
+        if dev == _CPU and not bad.is_phantom:
             # Only decides whether to raise — ``bad`` reaches the result
             # through ``outside`` below, not through this read — so a trace
             # does not count it as a data dependency.  Imported here:

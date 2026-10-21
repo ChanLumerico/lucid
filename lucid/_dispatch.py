@@ -270,10 +270,6 @@ def _float_operand(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
     The cast comes first and any autocast policy after it: an integer input
     is made the default float, which autocast may then narrow, never the
     reverse.
-
-    Anything that is not an engine tensor — a phantom under shadow
-    allocation, a stray Python object — is passed through for the op itself
-    to take or refuse.
     """
     if type(impl) is _IMPL and _promotion.is_integral(impl.dtype):
         return _C_engine.astype(impl, _promotion.default_float(impl.device))
@@ -429,7 +425,7 @@ def _binary_operands(
         If ``inplace`` is True and the promoted dtype cannot be cast to ``a``'s.
     """
     # A Tensor's impl is one attribute away and a bare impl is itself; a
-    # number, or a phantom under shadow allocation, takes the general route.
+    # number takes the general route.
     ai = _promotion.try_unwrap(a)
     if ai is None:
         a = _promotion.as_number(a)
@@ -585,6 +581,8 @@ def _swap_data(
             "cannot set .data of a tensor that is not a leaf: the graph that "
             "computed it would be lost; set it on a detached tensor instead"
         )
+    if not old.is_phantom and value.is_phantom:
+        raise _C_engine.LucidError("phantom tensor has no values: .data")
     new = _impl_with_grad(value, old.requires_grad)
     grad = old.grad_to_tensor()
     # The reference keeps any gradient; here a gradient must match its

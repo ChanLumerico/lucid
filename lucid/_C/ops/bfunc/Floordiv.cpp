@@ -52,6 +52,8 @@ GpuStorage gpu_divmod(DivMod mode, const GpuStorage& a, const GpuStorage& b, Dty
 
 Storage divmod_storage(
     DivMod mode, const Storage& a, const Storage& b, const Shape& shape, Dtype dt, Device device) {
+    if (PhantomMode::is_enabled() || storage_is_phantom(a) || storage_is_phantom(b))
+        return phantom_storage(shape, dt, device);
     if (device == Device::GPU)
         return Storage{gpu_divmod(mode, std::get<GpuStorage>(a), std::get<GpuStorage>(b), dt)};
     return Storage{cpu_divmod(mode, std::get<CpuStorage>(a), std::get<CpuStorage>(b), shape, dt)};
@@ -69,7 +71,7 @@ check_operands(const char* op, const TensorImplPtr& a_in, const TensorImplPtr& b
         ErrorBuilder(op).not_implemented(std::string("dtype ") + std::string(dtype_name(dt)) +
                                          " is not supported; " + op +
                                          " takes integer or real floating-point operands");
-    if (is_integral(dt) && b->device() == Device::CPU) {
+    if (is_integral(dt) && b->device() == Device::CPU && !b->is_phantom()) {
         if (backend::cpu::any_zero_integer(std::get<CpuStorage>(b->storage()), b->numel(), dt))
             ErrorBuilder(op).fail("ZeroDivisionError: integer division by zero");
     }

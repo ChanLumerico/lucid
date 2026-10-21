@@ -879,6 +879,42 @@ TensorImplPtr attach_scatter_reduce(std::shared_ptr<ScatterReduceNode> node,
     return out;
 }
 
+struct ScatterProdNode : ScatterReduceNode {
+    std::string node_name() const override { return "scatter_prod"; }
+
+    bool can_use_cpu_fast_path(const Storage& g) const {
+        if (device_ != Device::CPU || PhantomMode::is_enabled())
+            return false;
+        if (!std::holds_alternative<CpuStorage>(g) || saved_base_->is_phantom() ||
+            saved_indices_->is_phantom() || saved_src_->is_phantom())
+            return false;
+        const Dtype idx_dt = saved_indices_->dtype();
+        return (idx_dt == Dtype::I64 || idx_dt == Dtype::I32) &&
+               same_off_axis_shape(saved_base_->shape(), saved_indices_->shape(), dim_);
+    }
+
+    std::vector<Storage> apply(Storage g) override {
+        if (can_use_cpu_fast_path(g)) {
+            const bool i64 = saved_indices_->dtype() == Dtype::I64;
+            if (dtype_ == Dtype::F32)
+                return i64 ? cpu_scatter_prod_grads<float, std::int64_t>(
+                                 g, saved_base_, saved_indices_, saved_src_, dim_)
+                           : cpu_scatter_prod_grads<float, std::int32_t>(
+                                 g, saved_base_, saved_indices_, saved_src_, dim_);
+            if (dtype_ == Dtype::F64)
+                return i64 ? cpu_scatter_prod_grads<double, std::int64_t>(
+                                 g, saved_base_, saved_indices_, saved_src_, dim_)
+                           : cpu_scatter_prod_grads<double, std::int32_t>(
+                                 g, saved_base_, saved_indices_, saved_src_, dim_);
+        }
+        NoGradGuard no_grad;
+        auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
+        auto [grad_base, grad_src] =
+            scatter_prod_grads(g_impl, saved_base_, saved_indices_, saved_src_, dim_);
+        return {grad_base->storage(), grad_src->storage()};
+    }
+};
+
 }  // anonymous namespace
 
 // ── scatter_amax ──────────────────────────────────────────────────────────────
@@ -1030,33 +1066,6 @@ TensorImplPtr scatter_prod_op(const TensorImplPtr& base,
         GradMode::is_enabled() && (base->requires_grad() || src->requires_grad());
     if (!needs_grad)
         return out;
-
-    struct ScatterProdNode : ScatterReduceNode {
-        std::string node_name() const override { return "scatter_prod"; }
-
-        std::vector<Storage> apply(Storage g) override {
-            if (device_ == Device::CPU &&
-                (saved_indices_->dtype() == Dtype::I64 || saved_indices_->dtype() == Dtype::I32) &&
-                same_off_axis_shape(saved_base_->shape(), saved_indices_->shape(), dim_)) {
-                const bool i64 = saved_indices_->dtype() == Dtype::I64;
-                if (dtype_ == Dtype::F32)
-                    return i64 ? cpu_scatter_prod_grads<float, std::int64_t>(
-                                     g, saved_base_, saved_indices_, saved_src_, dim_)
-                               : cpu_scatter_prod_grads<float, std::int32_t>(
-                                     g, saved_base_, saved_indices_, saved_src_, dim_);
-                if (dtype_ == Dtype::F64)
-                    return i64 ? cpu_scatter_prod_grads<double, std::int64_t>(
-                                     g, saved_base_, saved_indices_, saved_src_, dim_)
-                               : cpu_scatter_prod_grads<double, std::int32_t>(
-                                     g, saved_base_, saved_indices_, saved_src_, dim_);
-            }
-            NoGradGuard no_grad;
-            auto g_impl = std::make_shared<TensorImpl>(g, base_shape_, dtype_, device_, false);
-            auto [grad_base, grad_src] =
-                scatter_prod_grads(g_impl, saved_base_, saved_indices_, saved_src_, dim_);
-            return {grad_base->storage(), grad_src->storage()};
-        }
-    };
 
     return attach_scatter_reduce(std::make_shared<ScatterProdNode>(), base, indices, src,
                                  std::move(out), d);

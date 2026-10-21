@@ -147,6 +147,14 @@ TensorImplPtr nextafter_op(const TensorImplPtr& a_in, const TensorImplPtr& b_in)
 
     OpScopeFull scope{"nextafter", a->device(), a->dtype(), a->shape()};
 
+    if (PhantomMode::is_enabled()) [[unlikely]] {
+        auto result = fresh(phantom_storage(a->shape(), a->dtype(), a->device()), a->shape(),
+                            a->dtype(), a->device());
+        kernel::NaryKernel<NextafterBackward, 2>::wire_autograd(
+            std::make_shared<NextafterBackward>(), {a, b}, result, false);
+        return result;
+    }
+
     // Metal/F32 fast path: bit-twiddle on MLX, no CPU round-trip.
     if (a->device() == Device::GPU && a->dtype() == Dtype::F32) {
         const auto& ga = std::get<GpuStorage>(a->storage());

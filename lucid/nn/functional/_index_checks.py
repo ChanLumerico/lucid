@@ -159,7 +159,7 @@ def _refuse(index: Tensor, usable: Tensor, message: Callable[[object], str]) -> 
     clamp already needed. The failure path finds the first offending entry
     with ``tolist``, which dispatches no op.
     """
-    if _host_read(lambda: bool(usable.all().item())):
+    if usable._impl.is_phantom or _host_read(lambda: bool(usable.all().item())):
         return
     first = _host_read(
         lambda: next(
@@ -426,6 +426,8 @@ def _check_offsets(offsets: Tensor, length: int, op: str) -> None:
             f"{op}: offsets must be 1-D, got shape "
             f"{tuple(int(d) for d in offsets.shape)}"
         )
+    if offsets._impl.is_phantom:
+        return
     bounds = [int(cast(int, v)) for v in _flat(_host_read(offsets.tolist))]
     for v in bounds:
         if not 0 <= v <= length:

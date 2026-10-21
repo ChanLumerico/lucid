@@ -102,10 +102,6 @@ def _make_div_adapter(*, inplace: bool = False) -> Callable[..., _Impl]:
     method; its dtype must be castable to ``input``'s, so an integer tensor
     divided by a float is refused, as it is for ``rounding_mode=None``.
 
-    The engine ops are looked up on each call: shadow allocation swaps the
-    engine's attributes for phantom-aware stand-ins, and an op captured
-    here would hand it phantoms it rejects.
-
     Raises
     ------
     lucid._C.engine.InvalidArgument
