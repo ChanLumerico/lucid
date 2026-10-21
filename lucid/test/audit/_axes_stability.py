@@ -425,9 +425,14 @@ class ContiguityAxis(Axis):
         # Numeric differentiation deliberately projects onto real float64;
         # layout must instead preserve every value and the operand's dtype.
         base = np.array(base, copy=True)
-        padded_shape = (*base.shape[:-1], base.shape[-1] * 2 + 1)
-        padded = np.full(padded_shape, 0, dtype=base.dtype)
-        padded[..., 1::2] = base
+        if symbol.qualname == "lucid.view_as_complex" and base.ndim >= 2:
+            padded_shape = (*base.shape[:-2], base.shape[-2] * 2 + 1, base.shape[-1])
+            padded = np.full(padded_shape, 0, dtype=base.dtype)
+            padded[..., 1::2, :] = base
+        else:
+            padded_shape = (*base.shape[:-1], base.shape[-1] * 2 + 1)
+            padded = np.full(padded_shape, 0, dtype=base.dtype)
+            padded[..., 1::2] = base
         try:
             if not isinstance(original, lucid.Tensor):
                 original = lucid.tensor(base)
@@ -440,7 +445,10 @@ class ContiguityAxis(Axis):
             # assumes a dense buffer reads the sentinels instead of the
             # probe.  Metal tensors are always packed, and there the slice
             # is a copy.
-            view = big[..., 1:][..., ::2]
+            if symbol.qualname == "lucid.view_as_complex" and base.ndim >= 2:
+                view = big[..., 1:, :][..., ::2, :]
+            else:
+                view = big[..., 1:][..., ::2]
         except Exception as exc:  # noqa: BLE001
             return self._finding(
                 symbol, Status.SKIP, f"could not build a view: {exc!r}"

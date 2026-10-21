@@ -938,24 +938,6 @@ public:
         });
     }
 
-    // ``x`` with NaN, +inf and -inf replaced, for a real float ``x``.
-    static ::mlx::core::array replace_nonfinite(const ::mlx::core::array& x,
-                                                double nan_val,
-                                                double posinf_val,
-                                                double neginf_val) {
-        const auto mdt = x.dtype();
-        ::mlx::core::array nan_a(static_cast<float>(nan_val), mdt);
-        ::mlx::core::array pi_a(static_cast<float>(posinf_val), mdt);
-        ::mlx::core::array ni_a(static_cast<float>(neginf_val), mdt);
-        auto out = ::mlx::core::where(::mlx::core::isnan(x), nan_a, x);
-        auto pos_inf = ::mlx::core::logical_and(
-            ::mlx::core::isinf(out), ::mlx::core::greater(out, ::mlx::core::array(0.f, mdt)));
-        out = ::mlx::core::where(pos_inf, pi_a, out);
-        auto neg_inf = ::mlx::core::logical_and(
-            ::mlx::core::isinf(out), ::mlx::core::less(out, ::mlx::core::array(0.f, mdt)));
-        return ::mlx::core::where(neg_inf, ni_a, out);
-    }
-
     Storage nan_to_num(const Storage& a,
                        const Shape& shape,
                        Dtype dt,

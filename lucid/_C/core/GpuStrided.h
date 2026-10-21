@@ -225,4 +225,64 @@ write(const ::mlx::core::array& root, const ::mlx::core::array& value, const Geo
     return mx::reshape(mx::put_along_axis(flat, positions(g, root_numel), run, 0, s), root_shape);
 }
 
+// Re-expresses a complex member's geometry as pairs of real-lane elements.
+inline Geometry lane_geometry(const Shape& shape,
+                              const Stride& byte_stride,
+                              std::size_t byte_offset,
+                              std::size_t lane_elem) {
+    Shape s = shape;
+    s.push_back(2);
+    Stride b = byte_stride;
+    b.push_back(static_cast<std::int64_t>(lane_elem));
+    return Geometry(s, b, byte_offset, lane_elem);
+}
+
+// Reads a member of dtype ``dt`` from ``root`` even when the two differ by a
+// complex/real-lane reinterpretation (``complex64`` <-> ``float32``).
+inline ::mlx::core::array read(const ::mlx::core::array& root,
+                               const Shape& shape,
+                               const Stride& byte_stride,
+                               std::size_t byte_offset,
+                               ::mlx::core::Dtype dt) {
+    namespace mx = ::mlx::core;
+    const std::size_t elem = dt.size();
+    if (root.dtype() == dt)
+        return read(root, Geometry(shape, byte_stride, byte_offset, elem));
+    if (shape_numel(shape) == 0)
+        return mx::zeros(to_mlx(shape), dt);
+    if (root.itemsize() > elem) {
+        const mx::array r = mx::view(mx::flatten(root), dt);
+        return read(r, Geometry(shape, byte_stride, byte_offset, elem));
+    }
+    const Geometry g_lane = lane_geometry(shape, byte_stride, byte_offset, root.itemsize());
+    const mx::array pairs = mx::contiguous(read(root, g_lane));
+    return mx::reshape(mx::view(pairs, dt), to_mlx(shape));
+}
+
+// Writes ``value`` into ``root`` through ``(shape, byte_stride, byte_offset)``,
+// reinterpreting through the real lane when ``root`` and ``value`` differ in
+// complex vs. real-lane dtype.
+inline ::mlx::core::array write(const ::mlx::core::array& root,
+                                const ::mlx::core::array& value,
+                                const Shape& shape,
+                                const Stride& byte_stride,
+                                std::size_t byte_offset) {
+    namespace mx = ::mlx::core;
+    const std::size_t elem = value.itemsize();
+    if (root.dtype() == value.dtype())
+        return write(root, value, Geometry(shape, byte_stride, byte_offset, elem));
+    if (shape_numel(shape) == 0)
+        return root;
+    if (root.itemsize() > elem) {
+        const mx::array r = mx::view(mx::flatten(root), value.dtype());
+        const mx::array next =
+            mx::contiguous(write(r, value, Geometry(shape, byte_stride, byte_offset, elem)));
+        return mx::reshape(mx::view(next, root.dtype()), root.shape());
+    }
+    const Geometry g_lane = lane_geometry(shape, byte_stride, byte_offset, root.itemsize());
+    const mx::array flat_val = mx::contiguous(mx::flatten(value));
+    const mx::array val_lane = mx::reshape(mx::view(flat_val, root.dtype()), to_mlx(g_lane.shape));
+    return write(root, val_lane, g_lane);
+}
+
 }  // namespace lucid::gpu_strided

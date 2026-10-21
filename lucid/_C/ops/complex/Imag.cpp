@@ -21,32 +21,35 @@ namespace lucid {
 TensorImplPtr imag_op(const TensorImplPtr& a) {
     Validator::input(a, "imag.a").non_null();
     complex_detail::require_complex(a->dtype(), "imag");
+    const Dtype lane = real_lane_of(a->dtype());
     // The scope's dtype is the output's: this strips a lane, so it is
     // the real one, not the complex input's.
-    OpScopeFull scope{"imag", a->device(), real_lane_of(a->dtype()), a->shape()};
+    OpScopeFull scope{"imag", a->device(), lane, a->shape()};
 
-    Storage out =
-        backend::Dispatcher::for_device(a->device()).complex_imag(a->storage(), a->shape());
-    auto result =
-        complex_detail::fresh(std::move(out), a->shape(), real_lane_of(a->dtype()), a->device());
+    auto result = TensorImpl::make_dtype_view(a, lane, a->shape(), a->stride(), dtype_size(lane));
 
     auto bwd = std::make_shared<ImagBackward>();
     bwd->shape_ = a->shape();
-    bwd->lane_ = real_lane_of(a->dtype());
+    bwd->lane_ = lane;
     bwd->device_ = a->device();
     kernel::NaryKernel<ImagBackward, 1>::wire_autograd(std::move(bwd), {a}, result, false);
     return result;
 }
 
-const OpSchema ImagBackward::schema_v1{"imag", 1, AmpPolicy::KeepInput, true};
+template <>
+const OpSchema ComplexUnaryBackwardBase<ImagBackward>::schema_v1{"imag", 1, AmpPolicy::KeepInput,
+                                                                 true};
 
-std::vector<Storage> ImagBackward::apply(Storage grad_out) {
+template <>
+std::vector<Storage> ComplexUnaryBackwardBase<ImagBackward>::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
     auto zero = zeros_op(shape_, lane_, device_);
     return {be.complex_combine(zero->storage(), grad_out, shape_)};
 }
 
-std::vector<TensorImplPtr> ImagBackward::apply_for_graph(const TensorImplPtr& grad_out) {
+template <>
+std::vector<TensorImplPtr>
+ComplexUnaryBackwardBase<ImagBackward>::apply_for_graph(const TensorImplPtr& grad_out) {
     return {complex_op(zeros_op(shape_, lane_, device_), grad_out)};
 }
 

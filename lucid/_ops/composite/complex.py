@@ -1,24 +1,23 @@
 """Complex-number composite ops: ``angle``, ``polar``, ``view_as_real``,
 ``view_as_complex``.
 
-The four primitives ``real`` / ``imag`` / ``complex`` / ``conj`` are
-engine ops (each backend has its own native implementation — CPU walks
-the interleaved C64 storage, GPU dispatches to ``mlx::core::real`` /
-``imag`` / ``conjugate``).  This module layers higher-level views on top.
+The primitives ``real`` / ``imag`` / ``view_as_real`` / ``view_as_complex`` /
+``complex`` / ``conj`` are engine ops.  ``real``, ``imag``, ``view_as_real``,
+and ``view_as_complex`` return zero-copy storage views on both CPU and Metal.
 
 * ``angle(c) = atan2(imag(c), real(c))`` — always in ``[-π, π]``.
 * ``polar(abs, angle) = complex(abs * cos(angle), abs * sin(angle))``.
-* ``view_as_real(c64) -> f32(..., 2)`` — interleaves real / imag
-  along a new last axis.  Currently a copy (``stack``) rather than a
-  zero-copy storage reinterpret — performance hot-spots can revisit.
-* ``view_as_complex(f32(..., 2)) -> c64(...)`` — inverse of the above.
+* ``view_as_real(c) -> real(..., 2)`` — zero-copy view exposing ``[real, imag]``
+  pairs along a trailing size-2 axis.
+* ``view_as_complex(real(..., 2)) -> complex(...)`` — zero-copy inverse view.
 """
 
 import math
 from typing import TYPE_CHECKING
 
 import lucid
-from lucid._dispatch import _float_input
+from lucid._C import engine as _C_engine
+from lucid._dispatch import _float_input, _unwrap, _wrap
 from lucid._ops.composite.elementwise import _promote_pair
 from lucid._types import TensorOrScalar
 
@@ -128,19 +127,21 @@ def polar(abs: TensorOrScalar, angle: TensorOrScalar) -> Tensor:
 def view_as_real(input: Tensor) -> Tensor:
     r"""Reinterpret a complex tensor as a real tensor with a trailing pair axis.
 
-    Given an input of shape :math:`(\dots)` and dtype ``complex64``,
-    returns an F32 tensor of shape :math:`(\dots, 2)` where the trailing
-    axis carries ``[real, imag]`` pairs.
+    Given an input of shape :math:`(\dots)` and dtype ``complex64`` or
+    ``complex128``, returns a zero-copy ``float32`` or ``float64`` view of
+    shape :math:`(\dots, 2)` where the trailing axis carries ``[real, imag]``
+    pairs.
 
     Parameters
     ----------
     input : Tensor
-        Complex-valued tensor (dtype ``complex64``).
+        Complex-valued tensor (dtype ``complex64`` or ``complex128``).
 
     Returns
     -------
     Tensor
-        Real F32 tensor of shape ``input.shape + (2,)``.
+        Real view of shape ``input.shape + (2,)`` sharing storage with
+        ``input``.
 
     Notes
     -----
@@ -150,10 +151,9 @@ def view_as_real(input: Tensor) -> Tensor:
 
         z_i = a_i + i\,b_i \;\mapsto\; (a_i, b_i).
 
-    Currently implemented as a copy via :func:`lucid.stack`, not a
-    zero-copy storage reinterpret.  Apple Silicon's GPU memory model
-    makes a genuine zero-copy alias tricky.  Use freely for shape
-    round-trips; a write into the result never reaches the input.
+    Returns a zero-copy storage view on both CPU and Metal: in-place writes
+    into the returned tensor reach ``input`` and vice versa, with stride
+    ``(*(2 * s for s in input.stride()), 1)`` and ``2 * input.storage_offset()``.
 
     Examples
     --------
@@ -162,31 +162,35 @@ def view_as_real(input: Tensor) -> Tensor:
     >>> lucid.view_as_real(z)
     tensor([[1., 2.], [3., 4.]])
     """
-    return lucid.stack([lucid.real(input), lucid.imag(input)], dim=-1)
+    return _wrap(_C_engine.view_as_real(_unwrap(input)))
 
 
 def view_as_complex(input: Tensor) -> Tensor:
     r"""Reinterpret a real tensor with a trailing pair axis as a complex tensor.
 
-    Inverse of :func:`view_as_real`.  Given an F32 input of shape
-    :math:`(\dots, 2)`, returns a ``complex64`` tensor of shape
-    :math:`(\dots)` whose last axis is consumed.
+    Inverse of :func:`view_as_real`.  Given a real input of shape
+    :math:`(\dots, 2)`, returns a zero-copy ``complex64`` or ``complex128``
+    view of shape :math:`(\dots)` whose last axis is consumed.
 
     Parameters
     ----------
     input : Tensor
-        Real F32 tensor whose final dimension has size 2; the two
+        Real tensor whose final dimension has size 2 with stride 1 and even
+        strides / storage offset along all preceding dimensions; the two
         components are interpreted as ``(real, imag)``.
 
     Returns
     -------
     Tensor
-        ``complex64`` tensor of shape ``input.shape[:-1]``.
+        Complex view of shape ``input.shape[:-1]`` sharing storage with
+        ``input``.
 
     Raises
     ------
     ValueError
-        If ``input.ndim < 1`` or the last axis does not have size 2.
+        If ``input.ndim < 1``, the last axis does not have size 2 or unit
+        stride, or any non-singleton preceding dimension stride or the
+        storage offset is odd.
 
     Notes
     -----
@@ -196,8 +200,10 @@ def view_as_complex(input: Tensor) -> Tensor:
 
         (a_i, b_i) \;\mapsto\; z_i = a_i + i\,b_i.
 
-    Same copy / aliasing caveat as :func:`view_as_real` — implemented as
-    a materialised gather, not a zero-copy reinterpret.
+    Returns a zero-copy storage view on both CPU and Metal: in-place writes
+    into the returned tensor reach ``input`` and vice versa, with stride
+    ``tuple(s // 2 for s in input.stride()[:-1])`` and
+    ``input.storage_offset() // 2``.
 
     Examples
     --------
@@ -206,22 +212,7 @@ def view_as_complex(input: Tensor) -> Tensor:
     >>> lucid.view_as_complex(r)
     tensor([(1.+2.j), (3.+4.j)], dtype=lucid.complex64)
     """
-    if input.ndim < 1 or int(input.shape[-1]) != 2:
-        raise ValueError(
-            "view_as_complex: expected last dim == 2, got "
-            f"shape {tuple(input.shape)}"
-        )
-    re = lucid.gather(
-        input,
-        -1,
-        lucid.zeros_like(input, dtype=lucid.int32)[..., :1],
-    ).squeeze(-1)
-    im = lucid.gather(
-        input,
-        -1,
-        lucid.zeros_like(input, dtype=lucid.int32)[..., :1] + 1,
-    ).squeeze(-1)
-    return lucid.complex(re, im)
+    return _wrap(_C_engine.view_as_complex(_unwrap(input)))
 
 
 __all__ = [

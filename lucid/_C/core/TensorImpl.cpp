@@ -516,6 +516,47 @@ TensorImplPtr trace_gpu_op(compile::Tracer& trc,
     return out;
 }
 
+void trace_gpu_member_scatter(compile::Tracer& trc,
+                              const TensorImplPtr& m,
+                              const TensorImplPtr& from,
+                              const ::mlx::core::array& root_arr,
+                              const ::mlx::core::array& val_arr,
+                              const ::mlx::core::array& next,
+                              const gpu_strided::Geometry& g,
+                              std::int64_t root_numel,
+                              Dtype dt) {
+    const Shape flat_shape{root_numel};
+    const Shape src_flat_shape{g.numel};
+    TensorImplPtr flat_m =
+        m->shape() == flat_shape
+            ? m
+            : trace_gpu_op(trc, "reshape", {m}, ::mlx::core::flatten(root_arr), flat_shape, dt);
+    TensorImplPtr flat_src =
+        from->is_contiguous() ? from
+                              : trace_gpu_op(trc, "contiguous", {from},
+                                             ::mlx::core::contiguous(val_arr), from->shape(), dt);
+    if (flat_src->shape() != src_flat_shape)
+        flat_src = trace_gpu_op(
+            trc, "reshape", {flat_src},
+            ::mlx::core::reshape(::mlx::core::contiguous(val_arr), {static_cast<int>(g.numel)}),
+            src_flat_shape, dt);
+    ::mlx::core::array pos_arr = gpu_strided::positions(g, root_numel);
+    const Dtype idx_dt = pos_arr.dtype() == ::mlx::core::int64 ? Dtype::I64 : Dtype::I32;
+    auto idx_impl =
+        std::make_shared<TensorImpl>(Storage{gpu::wrap_mlx_array(std::move(pos_arr), idx_dt)},
+                                     src_flat_shape, idx_dt, Device::GPU, false);
+    TensorImplPtr flat_next =
+        trace_gpu_op(trc, "scatter_set", {flat_m, idx_impl, flat_src},
+                     ::mlx::core::reshape(next, {static_cast<int>(root_numel)}), flat_shape, dt);
+    TensorImplPtr next_m =
+        m->shape() == flat_shape
+            ? flat_next
+            : trace_gpu_op(trc, "reshape", {flat_next},
+                           ::mlx::core::reshape(next, gpu_strided::to_mlx(m->shape())), m->shape(),
+                           dt);
+    trc.on_inplace_write(m, next_m);
+}
+
 void trace_gpu_member_write(const TensorImpl& dst,
                             const TensorImpl& src,
                             const ::mlx::core::array& root_arr,
@@ -523,7 +564,7 @@ void trace_gpu_member_write(const TensorImpl& dst,
                             const ::mlx::core::array& next,
                             const gpu_strided::Geometry& g) {
     auto* trc = compile::current_tracer();
-    if (!trc)
+    if (!trc || root_arr.dtype() != val_arr.dtype())
         return;
     auto from = std::const_pointer_cast<TensorImpl>(src.weak_from_this().lock());
     if (!from)
@@ -531,7 +572,8 @@ void trace_gpu_member_write(const TensorImpl& dst,
     const auto root_numel = static_cast<std::int64_t>(root_arr.size());
     const Dtype dt = dst.dtype();
     for (const auto& m : dst.live_views()) {
-        if (m->storage_offset() != 0 || !m->is_contiguous() || m->nbytes() != root_arr.nbytes())
+        if (m->dtype() != dt || m->storage_offset() != 0 || !m->is_contiguous() ||
+            m->nbytes() != root_arr.nbytes())
             continue;
         if (g.covers(root_numel)) {
             TensorImplPtr next_m =
@@ -542,38 +584,7 @@ void trace_gpu_member_write(const TensorImpl& dst,
                                    m->shape(), dt);
             trc->on_inplace_write(m, next_m);
         } else if (g.numel > 0) {
-            const Shape flat_shape{root_numel};
-            const Shape src_flat_shape{g.numel};
-            TensorImplPtr flat_m =
-                m->shape() == flat_shape
-                    ? m
-                    : trace_gpu_op(*trc, "reshape", {m}, ::mlx::core::flatten(root_arr), flat_shape,
-                                   dt);
-            TensorImplPtr flat_src =
-                from->is_contiguous()
-                    ? from
-                    : trace_gpu_op(*trc, "contiguous", {from}, ::mlx::core::contiguous(val_arr),
-                                   from->shape(), dt);
-            if (flat_src->shape() != src_flat_shape)
-                flat_src = trace_gpu_op(*trc, "reshape", {flat_src},
-                                        ::mlx::core::reshape(::mlx::core::contiguous(val_arr),
-                                                             {static_cast<int>(g.numel)}),
-                                        src_flat_shape, dt);
-            ::mlx::core::array pos_arr = gpu_strided::positions(g, root_numel);
-            const Dtype idx_dt = pos_arr.dtype() == ::mlx::core::int64 ? Dtype::I64 : Dtype::I32;
-            auto idx_impl = std::make_shared<TensorImpl>(
-                Storage{gpu::wrap_mlx_array(std::move(pos_arr), idx_dt)}, src_flat_shape, idx_dt,
-                Device::GPU, false);
-            TensorImplPtr flat_next = trace_gpu_op(
-                *trc, "scatter_set", {flat_m, idx_impl, flat_src},
-                ::mlx::core::reshape(next, {static_cast<int>(root_numel)}), flat_shape, dt);
-            TensorImplPtr next_m =
-                m->shape() == flat_shape
-                    ? flat_next
-                    : trace_gpu_op(*trc, "reshape", {flat_next},
-                                   ::mlx::core::reshape(next, gpu_strided::to_mlx(m->shape())),
-                                   m->shape(), dt);
-            trc->on_inplace_write(m, next_m);
+            trace_gpu_member_scatter(*trc, m, from, root_arr, val_arr, next, g, root_numel, dt);
         }
     }
 }
@@ -696,7 +707,9 @@ void TensorImpl::take_storage_from(TensorImpl& out, const char* name) {
 }
 
 bool TensorImpl::covers_root() const {
-    return offset_ == 0 && is_contiguous() && nbytes() == family_->nbytes;
+    return offset_ == 0 && is_contiguous() && nbytes() == family_->nbytes &&
+           storage_dtype(*family_->root) == meta_.dtype &&
+           (numel() > 0 || meta_.stride == contiguous_stride(meta_.shape, dtype_size(meta_.dtype)));
 }
 
 const Storage& TensorImpl::storage() const {
@@ -714,7 +727,8 @@ const Storage& TensorImpl::storage() const {
             stale_gpu_pack(packed_, packed_root_, rg, is_contiguous())) {
             const gpu_strided::Geometry g(meta_.shape, meta_.stride, offset_,
                                           dtype_size(meta_.dtype));
-            ::mlx::core::array elems = gpu_strided::read(*rg.arr, g);
+            ::mlx::core::array elems = gpu_strided::read(*rg.arr, meta_.shape, meta_.stride,
+                                                         offset_, gpu::to_mlx_dtype(meta_.dtype));
             if (g.contiguous) {
                 // A reshape or a run of the root reads the root's own buffer:
                 // no allocation of its own for the memory statistics to count.
@@ -839,21 +853,22 @@ void TensorImpl::write_gpu_member(const TensorImpl& src, const char* name, bool 
     if (!value.arr || !root.arr)
         ErrorBuilder(name).fail("a Metal tensor without an array");
     const gpu_strided::Geometry g(meta_.shape, meta_.stride, offset_, dtype_size(meta_.dtype));
-    ::mlx::core::array next = gpu_strided::write(*root.arr, *value.arr, g);
+    ::mlx::core::array next =
+        gpu_strided::write(*root.arr, *value.arr, meta_.shape, meta_.stride, offset_);
     trace_gpu_member_write(*this, src, *root.arr, *value.arr, next, g);
     // The family was built over a Metal shared buffer that the root still
     // reads.  With no graph to protect — a node's snapshot reads the same
     // bytes — the values go into that buffer, so its CPU alias sees them as
     // well (take_storage_from's rule), and the root stays the buffer.
-    if ((raw || !graph) && root_is_shared_buffer(shared_, root, meta_.dtype)) {
+    if ((raw || !graph) && root_is_shared_buffer(shared_, root, root.dtype)) {
         copy_into_shared(*shared_, next);
-    } else if (g.covers(static_cast<std::int64_t>(root.arr->size())) &&
+    } else if (root.dtype == meta_.dtype && g.covers(static_cast<std::int64_t>(root.arr->size())) &&
                value.arr->shape() == root.arr->shape()) {
         // The whole value in the root's shape: the root is the value itself,
         // as a slot swap would have made it.
         root.arr = value.arr;
     } else {
-        root.arr = gpu::wrap_mlx_array(std::move(next), meta_.dtype).arr;
+        root.arr = gpu::wrap_mlx_array(std::move(next), root.dtype).arr;
     }
     rebind_gpu_grad_slot(family_, root.arr);
     drop_family_caches();
@@ -898,7 +913,7 @@ void TensorImpl::leave_family() {
 }
 
 void TensorImpl::check_wholesale_writable(const char* name) const {
-    if (gpu_member() && !covers_root())
+    if (gpu_member() && !(offset_ == 0 && is_contiguous() && nbytes() == family_->nbytes))
         ErrorBuilder(name).not_implemented(
             "an engine in-place step (an optimizer, BatchNorm's running statistics, a compiled "
             "step) on a Metal view of part of a tensor is not supported — clone() first");
@@ -913,6 +928,13 @@ Storage& TensorImpl::mutable_storage() {
     }
     check_wholesale_writable("mutable_storage");
     auto& root = std::get<GpuStorage>(*family_->root);
+    if (root.arr && root.dtype != meta_.dtype) {
+        root.arr = gpu::wrap_mlx_array(::mlx::core::view(::mlx::core::flatten(*root.arr),
+                                                         gpu::to_mlx_dtype(meta_.dtype)),
+                                       meta_.dtype)
+                       .arr;
+        root.dtype = meta_.dtype;
+    }
     if (root.arr &&
         !(root.arr->ndim() == meta_.shape.size() &&
           std::equal(meta_.shape.begin(), meta_.shape.end(), root.arr->shape().begin())))
@@ -1010,7 +1032,8 @@ bool TensorImpl::is_contiguous() const {
 }
 
 bool TensorImpl::is_dense() const {
-    return offset_ == 0 && is_contiguous() && storage_nbytes(raw_storage()) == nbytes();
+    return offset_ == 0 && is_contiguous() && storage_nbytes(raw_storage()) == nbytes() &&
+           (numel() > 0 || meta_.stride == contiguous_stride(meta_.shape, dtype_size(meta_.dtype)));
 }
 
 std::size_t TensorImpl::allocation_offset() const noexcept {
@@ -2122,29 +2145,41 @@ std::shared_ptr<TensorImpl> TensorImpl::make_view(const std::shared_ptr<TensorIm
                                                   Stride stride,
                                                   std::size_t offset_bytes,
                                                   bool join_family) {
+    return make_dtype_view(base, base->meta_.dtype, std::move(shape), std::move(stride),
+                           offset_bytes, join_family);
+}
+
+std::shared_ptr<TensorImpl> TensorImpl::make_dtype_view(const std::shared_ptr<TensorImpl>& base,
+                                                        Dtype dtype,
+                                                        Shape shape,
+                                                        Stride stride,
+                                                        std::size_t offset_bytes,
+                                                        bool join_family) {
     refuse_phantom_outside_mode(base->storage_, "a view of a phantom");
-    const Dtype dtype = base->meta_.dtype;
     // offset_ accumulates: a view of a view has the combined byte offset from
     // the original allocation's start.
     const std::size_t offset = base->offset_ + offset_bytes;
     if (base->gpu_member() && !join_family) {
         const auto& root = std::get<GpuStorage>(*base->family_->root);
-        const gpu_strided::Geometry g(shape, stride, offset, dtype_size(dtype));
-        auto view = std::make_shared<TensorImpl>(
-            Storage{gpu::wrap_mlx_array(gpu_strided::read(*root.arr, g), dtype)}, std::move(shape),
-            dtype, base->meta_.device, false);
-        // The buffer's version counter only while the root still is a Metal
-        // shared buffer: the lazy read then takes whatever the buffer holds
-        // when it runs, so a write to the buffer does reach it.  A root an
-        // op replaced is an immutable array, and a write to the buffer
-        // leaves this value as it is.
-        if (root_is_shared_buffer(base->shared_, root, dtype))
+        ::mlx::core::array elems =
+            gpu_strided::read(*root.arr, shape, stride, offset, gpu::to_mlx_dtype(dtype));
+        auto view =
+            std::make_shared<TensorImpl>(Storage{gpu::wrap_mlx_array(std::move(elems), dtype)},
+                                         std::move(shape), dtype, base->meta_.device, false);
+        if (root_is_shared_buffer(base->shared_, root, root.dtype))
             view->shared_ = base->shared_;
         return view;
     }
     const bool gpu_family = join_family && storage_is_gpu(base->raw_storage());
-    auto view = std::make_shared<TensorImpl>(gpu_family ? gpu_placeholder(dtype) : base->storage_,
-                                             std::move(shape), dtype, base->meta_.device, false);
+    Storage view_storage = gpu_family ? gpu_placeholder(dtype) : base->storage_;
+    if (auto* cpu = std::get_if<CpuStorage>(&view_storage)) {
+        cpu->dtype = dtype;
+    } else if (auto* ph = std::get_if<PhantomStorage>(&view_storage)) {
+        ph->dtype = dtype;
+        ph->nbytes = base->allocation_nbytes();
+    }
+    auto view = std::make_shared<TensorImpl>(std::move(view_storage), std::move(shape), dtype,
+                                             base->meta_.device, false);
     view->meta_.stride = std::move(stride);
     view->offset_ = offset;
     // A view of a shared buffer reads the same bytes, so it shares the

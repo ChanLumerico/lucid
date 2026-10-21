@@ -31,6 +31,7 @@
 #include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
+#include "_Detail.h"
 
 namespace lucid {
 
@@ -88,6 +89,9 @@ public:
     std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
 };
 
+class LUCID_API ViewAsComplexBackward : public ComplexUnaryBackwardBase<ViewAsComplexBackward> {};
+
 LUCID_API TensorImplPtr complex_op(const TensorImplPtr& re, const TensorImplPtr& im);
+LUCID_API TensorImplPtr view_as_complex_op(const TensorImplPtr& a);
 
 }  // namespace lucid

@@ -14,8 +14,9 @@
 #include "../../core/Validate.h"
 #include "../../kernel/BinaryKernel.h"  // detail::broadcast_shapes
 #include "../../kernel/NaryKernel.h"
-#include "../ufunc/Astype.h"  // astype_op
-#include "../utils/Layout.h"  // broadcast_to_op
+#include "../ufunc/Astype.h"   // astype_op
+#include "../utils/Layout.h"   // broadcast_to_op
+#include "../utils/Promote.h"  // AmpScope
 #include "Imag.h"
 #include "Real.h"
 #include "_Detail.h"
@@ -70,7 +71,63 @@ TensorImplPtr complex_op(const TensorImplPtr& re_in, const TensorImplPtr& im_in)
     return result;
 }
 
+TensorImplPtr view_as_complex_op(const TensorImplPtr& a_in) {
+    Validator::input(a_in, "view_as_complex.a").non_null();
+    TensorImplPtr a = AmpScope{"view_as_complex", a_in->device()}.cast(a_in);
+    complex_detail::require_real_float(a->dtype(), "view_as_complex");
+    if (a->dtype() == Dtype::BF16)
+        ErrorBuilder("view_as_complex")
+            .not_implemented("view_as_complex is only supported for float16, float32 and float64 "
+                             "tensors, got bfloat16");
+    if (a->shape().empty() || a->shape().back() != 2)
+        ErrorBuilder("view_as_complex").invalid_argument("view_as_complex: expected last dim == 2");
+    if (a->dtype() == Dtype::F16)
+        a = astype_op(a, Dtype::F32);
+
+    const std::size_t lane_bytes = dtype_size(a->dtype());
+    const auto lane_elem = static_cast<std::int64_t>(lane_bytes);
+    const auto complex_elem = lane_elem * 2;
+    if (a->stride().back() != lane_elem)
+        ErrorBuilder("view_as_complex")
+            .invalid_argument("Tensor must have a last dimension with stride 1");
+    if (static_cast<std::int64_t>(a->allocation_offset()) % complex_elem != 0)
+        ErrorBuilder("view_as_complex")
+            .invalid_argument("Tensor must have a storage_offset divisible by 2");
+
+    const bool empty = shape_numel(a->shape()) == 0;
+    Shape out_shape(a->shape().begin(), a->shape().end() - 1);
+    Stride out_stride;
+    out_stride.reserve(out_shape.size());
+    for (std::size_t d = 0; d + 1 < a->shape().size(); ++d) {
+        const std::int64_t s = a->stride()[d];
+        if (s % complex_elem != 0) {
+            if (empty || a->shape()[d] != 1)
+                ErrorBuilder("view_as_complex")
+                    .invalid_argument(
+                        "Tensor must have a stride divisible by 2 for all but last dimension");
+            out_stride.push_back(complex_elem);
+        } else {
+            out_stride.push_back(s);
+        }
+    }
+
+    const Dtype out_dt = complex_for(a->dtype());
+    OpScopeFull scope{"view_as_complex", a->device(), out_dt, out_shape};
+    auto result =
+        TensorImpl::make_dtype_view(a, out_dt, std::move(out_shape), std::move(out_stride), 0);
+
+    auto bwd = std::make_shared<ViewAsComplexBackward>();
+    bwd->shape_ = result->shape();
+    bwd->lane_ = a->dtype();
+    bwd->device_ = a->device();
+    kernel::NaryKernel<ViewAsComplexBackward, 1>::wire_autograd(std::move(bwd), {a}, result, false);
+    return result;
+}
+
 const OpSchema ComplexBackward::schema_v1{"complex", 1, AmpPolicy::KeepInput, true};
+template <>
+const OpSchema ComplexUnaryBackwardBase<ViewAsComplexBackward>::schema_v1{
+    "view_as_complex", 1, AmpPolicy::KeepInput, true};
 
 std::vector<Storage> ComplexBackward::apply(Storage grad_out) {
     auto& be = backend::Dispatcher::for_device(device_);
@@ -81,6 +138,21 @@ std::vector<TensorImplPtr> ComplexBackward::apply_for_graph(const TensorImplPtr&
     return {real_op(grad_out), imag_op(grad_out)};
 }
 
+template <>
+std::vector<Storage> ComplexUnaryBackwardBase<ViewAsComplexBackward>::apply(Storage grad_out) {
+    NoGradGuard no_grad;
+    auto g = std::make_shared<TensorImpl>(std::move(grad_out), shape_, complex_for(lane_), device_,
+                                          false);
+    return {view_as_real_op(g)->storage()};
+}
+
+template <>
+std::vector<TensorImplPtr>
+ComplexUnaryBackwardBase<ViewAsComplexBackward>::apply_for_graph(const TensorImplPtr& grad_out) {
+    return {view_as_real_op(grad_out)};
+}
+
 LUCID_REGISTER_OP(ComplexBackward)
+LUCID_REGISTER_OP(ViewAsComplexBackward)
 
 }  // namespace lucid

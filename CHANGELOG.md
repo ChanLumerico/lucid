@@ -136,6 +136,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - strided Metal view families, grad slot, and _metal_views removal
 
+- make real, imag, view_as_real, and view_as_complex views
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster

@@ -129,7 +129,6 @@ _COMPOSITES = {
     "triplet_margin_loss": "lucid.nn.functional.triplet_margin_loss",
     "vecdot": "lucid.linalg.vecdot",
     "vector_norm": "lucid.linalg.vector_norm",
-    "view_as_complex": "lucid.view_as_complex",
 }
 
 # The two autocast settings the table is checked under: the Metal column

@@ -49,6 +49,24 @@ inline bool is_complex_tensor(MPSGraphTensor* t) {
            (t.dataType == MPSDataTypeComplexFloat32 || t.dataType == MPSDataTypeComplexFloat16);
 }
 
+inline bool resolve_unary_complex_op(BuilderContext& ctx,
+                                     const OpNode& node,
+                                     MPSGraph* __strong& g,
+                                     MPSGraphTensor* __strong& x) {
+    if (node.inputs.empty() || node.outputs.empty() || node.inputs[0] < 0)
+        return false;
+    g = (__bridge MPSGraph*)ctx.graph();
+    x = (__bridge MPSGraphTensor*)ctx.resolve(node.inputs[0]);
+    return g != nil && x != nil;
+}
+
+inline bool bind_complex_output(BuilderContext& ctx, const OpNode& node, MPSGraphTensor* out) {
+    if (out == nil)
+        return false;
+    ctx.bind(node.outputs[0].id, (__bridge void*)(out));
+    return true;
+}
+
 // ── complex — two real tensors into one complex tensor.
 class ComplexEmitter final : public OpEmitter {
 public:
@@ -68,16 +86,10 @@ public:
             return false;
         // The engine widens half inputs and rejects a dtype mismatch
         // before tracing, so both lanes arrive real and equal.
-        if (is_complex_tensor(re) || is_complex_tensor(im))
+        if (is_complex_tensor(re) || is_complex_tensor(im) || re.dataType != im.dataType)
             return false;
-        if (re.dataType != im.dataType)
-            return false;
-
-        MPSGraphTensor* out = [g complexTensorWithRealTensor:re imaginaryTensor:im name:@"complex"];
-        if (out == nil)
-            return false;
-        ctx.bind(node.outputs[0].id, (__bridge void*)(out));
-        return true;
+        return bind_complex_output(
+            ctx, node, [g complexTensorWithRealTensor:re imaginaryTensor:im name:@"complex"]);
     }
 };
 
@@ -89,27 +101,16 @@ public:
     std::string_view op_name() const override { return name_; }
 
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty())
-            return false;
-        const TensorId x_id = node.inputs[0];
-        if (x_id < 0)
-            return false;
-        MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
-        MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil)
-            return false;
+        MPSGraph* g = nil;
+        MPSGraphTensor* x = nil;
         // ``real_op`` / ``imag_op`` require a complex input, so anything
         // else means the node was mis-declared upstream.  Declining is
         // the only honest answer: there is no lane to take out.
-        if (!is_complex_tensor(x))
+        if (!resolve_unary_complex_op(ctx, node, g, x) || !is_complex_tensor(x))
             return false;
-
         MPSGraphTensor* out = IS_REAL ? [g realPartOfTensor:x name:@"real"]
                                       : [g imaginaryPartOfTensor:x name:@"imag"];
-        if (out == nil)
-            return false;
-        ctx.bind(node.outputs[0].id, (__bridge void*)(out));
-        return true;
+        return bind_complex_output(ctx, node, out);
     }
 
 private:
@@ -122,31 +123,68 @@ public:
     std::string_view op_name() const override { return "conj"; }
 
     bool emit(BuilderContext& ctx, const OpNode& node) override {
-        if (node.inputs.empty() || node.outputs.empty())
+        MPSGraph* g = nil;
+        MPSGraphTensor* x = nil;
+        if (!resolve_unary_complex_op(ctx, node, g, x))
             return false;
-        const TensorId x_id = node.inputs[0];
-        if (x_id < 0)
-            return false;
-        MPSGraph* g = (__bridge MPSGraph*)ctx.graph();
-        MPSGraphTensor* x = (__bridge MPSGraphTensor*)ctx.resolve(x_id);
-        if (g == nil || x == nil)
-            return false;
-
         // The engine keeps a node for a real input so the gradient still
         // flows; there the conjugate is the identity.  The reshape gives
         // the output its own graph identity rather than aliasing the
         // input's binding.
-        if (!is_complex_tensor(x)) {
-            ctx.bind(node.outputs[0].id, (__bridge void*)([g reshapeTensor:x
-                                                                 withShape:x.shape
-                                                                      name:@"conj"]));
-            return true;
-        }
-        MPSGraphTensor* out = [g conjugateWithTensor:x name:@"conj"];
-        if (out == nil)
+        MPSGraphTensor* out = is_complex_tensor(x)
+                                  ? [g conjugateWithTensor:x name:@"conj"]
+                                  : [g reshapeTensor:x withShape:x.shape name:@"conj"];
+        return bind_complex_output(ctx, node, out);
+    }
+};
+
+class ViewAsRealEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "view_as_real"; }
+
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        MPSGraph* g = nil;
+        MPSGraphTensor* x = nil;
+        if (!resolve_unary_complex_op(ctx, node, g, x) || !is_complex_tensor(x))
             return false;
-        ctx.bind(node.outputs[0].id, (__bridge void*)(out));
-        return true;
+        MPSGraphTensor* re = [g realPartOfTensor:x name:@"view_as_real_re"];
+        MPSGraphTensor* im = [g imaginaryPartOfTensor:x name:@"view_as_real_im"];
+        if (re == nil || im == nil)
+            return false;
+        return bind_complex_output(ctx, node,
+                                   [g stackTensors:@[ re, im ] axis:-1 name:@"view_as_real"]);
+    }
+};
+
+class ViewAsComplexEmitter final : public OpEmitter {
+public:
+    std::string_view op_name() const override { return "view_as_complex"; }
+
+    bool emit(BuilderContext& ctx, const OpNode& node) override {
+        MPSGraph* g = nil;
+        MPSGraphTensor* x = nil;
+        if (!resolve_unary_complex_op(ctx, node, g, x) || is_complex_tensor(x) || x.shape.count < 1)
+            return false;
+        MPSGraphTensor* re_slice = [g sliceTensor:x
+                                        dimension:-1
+                                            start:0
+                                           length:1
+                                             name:@"view_as_complex_re_slice"];
+        MPSGraphTensor* im_slice = [g sliceTensor:x
+                                        dimension:-1
+                                            start:1
+                                           length:1
+                                             name:@"view_as_complex_im_slice"];
+        if (re_slice == nil || im_slice == nil)
+            return false;
+        MPSGraphTensor* re = [g squeezeTensor:re_slice axis:-1 name:@"view_as_complex_re"];
+        MPSGraphTensor* im = [g squeezeTensor:im_slice axis:-1 name:@"view_as_complex_im"];
+        if (re == nil || im == nil)
+            return false;
+        return bind_complex_output(ctx, node,
+                                   [g complexTensorWithRealTensor:re
+                                                  imaginaryTensor:im
+                                                             name:@"view_as_complex"]);
     }
 };
 
@@ -156,6 +194,8 @@ struct ComplexRegistrar {
         register_emitter(std::make_unique<ComplexLaneEmitterT<true>>("real"));
         register_emitter(std::make_unique<ComplexLaneEmitterT<false>>("imag"));
         register_emitter(std::make_unique<ConjEmitter>());
+        register_emitter(std::make_unique<ViewAsRealEmitter>());
+        register_emitter(std::make_unique<ViewAsComplexEmitter>());
     }
 };
 

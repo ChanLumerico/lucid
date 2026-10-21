@@ -488,6 +488,15 @@ public:
                                                  std::size_t offset_bytes = 0,
                                                  bool join_family = true);
 
+    // Creates a dtype-reinterpreting view over ``base``'s storage (used by
+    // ``real``, ``imag``, ``view_as_real``, and ``view_as_complex``).
+    static std::shared_ptr<TensorImpl> make_dtype_view(const std::shared_ptr<TensorImpl>& base,
+                                                       Dtype dtype,
+                                                       Shape shape,
+                                                       Stride stride,
+                                                       std::size_t offset_bytes = 0,
+                                                       bool join_family = true);
+
     // A view of a contiguous run of ``base``'s buffer: ``byte_offset`` bytes
     // in, ``shape``'s elements long — what a leading-dimension slice reads.
     //

@@ -35,6 +35,7 @@
 #include "../../core/OpSchema.h"
 #include "../../core/Storage.h"
 #include "../../core/fwd.h"
+#include "_Detail.h"
 
 namespace lucid {
 
@@ -91,18 +92,11 @@ namespace lucid {
 //
 // Each is expressible with ops that already exist, so the backward is a
 // storage-level call rather than a new kernel.
-class LUCID_API RealBackward : public FuncOp<RealBackward, 1> {
-public:
-    static const OpSchema schema_v1;
-    Shape shape_;
-    Dtype lane_ = Dtype::F32;  // the real dtype one lane holds
-    Device device_ = Device::CPU;
+class LUCID_API RealBackward : public ComplexUnaryBackwardBase<RealBackward> {};
 
-    // ``g`` lands in the real lane; the imaginary lane receives nothing.
-    std::vector<Storage> apply(Storage grad_out) override;
-    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override;
-};
+class LUCID_API ViewAsRealBackward : public ComplexUnaryBackwardBase<ViewAsRealBackward> {};
 
 LUCID_API TensorImplPtr real_op(const TensorImplPtr& a);
+LUCID_API TensorImplPtr view_as_real_op(const TensorImplPtr& a);
 
 }  // namespace lucid

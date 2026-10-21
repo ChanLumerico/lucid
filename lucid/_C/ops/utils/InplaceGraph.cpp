@@ -23,6 +23,8 @@
 #include "../../core/Error.h"
 #include "../../core/Shape.h"
 #include "../../kernel/BinaryKernel.h"
+#include "../complex/Complex.h"
+#include "../complex/Real.h"
 #include "../composite/Indexing.h"
 #include "../gfunc/Gfunc.h"
 #include "../ufunc/Astype.h"
@@ -32,6 +34,53 @@
 namespace lucid::inplace {
 
 namespace {
+
+Dtype lane_dtype(Dtype dt) {
+    return is_complex(dt) ? real_lane_of(dt) : dt;
+}
+
+Shape lane_shape(const Shape& shape, Dtype dt) {
+    if (!is_complex(dt))
+        return shape;
+    Shape s = shape;
+    s.push_back(2);
+    return s;
+}
+
+Stride lane_stride(const Stride& stride, Dtype dt) {
+    if (!is_complex(dt))
+        return stride;
+    Stride s = stride;
+    s.push_back(static_cast<std::int64_t>(dtype_size(real_lane_of(dt))));
+    return s;
+}
+
+TensorImplPtr to_lane_tensor(const TensorImplPtr& t, bool is_cplx) {
+    return is_cplx ? view_as_real_op(t) : t;
+}
+
+TensorImplPtr from_lane_tensor(const TensorImplPtr& t, bool is_cplx) {
+    return (t && is_cplx) ? view_as_complex_op(t) : t;
+}
+
+Storage to_lane_storage(Storage s, const Shape& lane_shp, Dtype lane_dt, Device dev, bool is_cplx) {
+    if (!is_cplx)
+        return s;
+    NoGradGuard no_grad;
+    Shape cplx_shp(lane_shp.begin(), lane_shp.end() - 1);
+    auto impl = std::make_shared<TensorImpl>(std::move(s), std::move(cplx_shp),
+                                             complex_for(lane_dt), dev, false);
+    return view_as_real_op(impl)->storage();
+}
+
+Storage
+from_lane_storage(Storage s, const Shape& lane_shp, Dtype lane_dt, Device dev, bool is_cplx) {
+    if (!is_cplx)
+        return s;
+    NoGradGuard no_grad;
+    auto impl = std::make_shared<TensorImpl>(std::move(s), lane_shp, lane_dt, dev, false);
+    return view_as_complex_op(impl)->storage();
+}
 
 // A CPU buffer of ``nbytes`` zero bytes.
 CpuStorage zeroed_cpu(std::size_t nbytes, Dtype dtype) {
@@ -92,25 +141,31 @@ public:
                        std::int64_t dst_begin,
                        std::int64_t src_begin,
                        std::int64_t len,
-                       Dtype dtype,
+                       Dtype out_dtype,
+                       Dtype src_dtype,
                        Device device)
-        : out_shape_(std::move(out_shape)),
-          src_shape_(std::move(src_shape)),
+        : out_shape_(lane_shape(out_shape, out_dtype)),
+          src_shape_(lane_shape(src_shape, src_dtype)),
           dst_begin_(dst_begin),
           src_begin_(src_begin),
           len_(len),
-          dtype_(dtype),
+          dtype_(lane_dtype(src_dtype)),
+          out_complex_(is_complex(out_dtype)),
+          src_complex_(is_complex(src_dtype)),
           device_(device) {}
 
     CopySlicesBackward(Shape out_shape,
                        Shape src_shape,
                        std::vector<std::int64_t> dst_idx,
                        std::vector<std::int64_t> src_idx,
-                       Dtype dtype,
+                       Dtype out_dtype,
+                       Dtype src_dtype,
                        Device device)
-        : out_shape_(std::move(out_shape)),
-          src_shape_(std::move(src_shape)),
-          dtype_(dtype),
+        : out_shape_(lane_shape(out_shape, out_dtype)),
+          src_shape_(lane_shape(src_shape, src_dtype)),
+          dtype_(lane_dtype(src_dtype)),
+          out_complex_(is_complex(out_dtype)),
+          src_complex_(is_complex(src_dtype)),
           device_(device),
           indexed_(true),
           dst_idx_(std::move(dst_idx)),
@@ -127,8 +182,31 @@ public:
     // they were read from.  A live edge always gets a buffer: the engine
     // hands an empty one to the next node as it is.
     std::vector<Storage> apply(Storage grad_out) override {
-        if (indexed_)
-            return apply_indexed(grad_out);
+        grad_out = to_lane_storage(std::move(grad_out), out_shape_, dtype_, device_, out_complex_);
+        std::vector<Storage> grads = indexed_ ? apply_indexed(grad_out) : apply_run(grad_out);
+        if (next_edges_[0].node)
+            grads[0] =
+                from_lane_storage(std::move(grads[0]), out_shape_, dtype_, device_, out_complex_);
+        if (next_edges_[1].node)
+            grads[1] =
+                from_lane_storage(std::move(grads[1]), src_shape_, dtype_, device_, src_complex_);
+        return grads;
+    }
+
+    // The same two gradients, built from ops so they carry a graph of their
+    // own.
+    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
+        const TensorImplPtr g = to_lane_tensor(grad_out, out_complex_);
+        std::vector<TensorImplPtr> grads = indexed_ ? graph_indexed(g) : graph_run(g);
+        grads[0] = from_lane_tensor(grads[0], out_complex_);
+        grads[1] = from_lane_tensor(grads[1], src_complex_);
+        return grads;
+    }
+
+    std::string node_name() const override { return "CopySlices"; }
+
+private:
+    std::vector<Storage> apply_run(const Storage& grad_out) const {
         auto& be = backend::Dispatcher::for_device(device_);
         const auto n = static_cast<std::int64_t>(shape_numel(out_shape_));
         const Shape flat{n};
@@ -170,11 +248,7 @@ public:
         return grads;
     }
 
-    // The same two gradients, built from ops so they carry a graph of their
-    // own.
-    std::vector<TensorImplPtr> apply_for_graph(const TensorImplPtr& grad_out) override {
-        if (indexed_)
-            return graph_indexed(grad_out);
+    std::vector<TensorImplPtr> graph_run(const TensorImplPtr& grad_out) const {
         const auto n = static_cast<std::int64_t>(shape_numel(out_shape_));
         const auto flat = reshape_op(grad_out, {n});
         const auto zeros = [&](std::int64_t count) {
@@ -207,10 +281,6 @@ public:
         }
         return grads;
     }
-
-    std::string node_name() const override { return "CopySlices"; }
-
-private:
     std::vector<Storage> apply_indexed(const Storage& grad_out) const {
         const auto* g = std::get_if<CpuStorage>(&grad_out);
         if (!g ||
@@ -284,6 +354,8 @@ private:
     std::int64_t src_begin_ = 0;
     std::int64_t len_ = 0;
     Dtype dtype_;
+    bool out_complex_ = false;
+    bool src_complex_ = false;
     Device device_;
     bool indexed_ = false;
     bool injective_ = true;
@@ -316,13 +388,14 @@ Footprint footprint(const TensorImpl& t) {
         base = reinterpret_cast<std::uintptr_t>(cpu->ptr.get());
     if (base == 0)
         return f;
+    const Dtype ldt = lane_dtype(t.dtype());
+    const Shape shape = lane_shape(t.shape(), t.dtype());
+    const Stride stride = lane_stride(t.stride(), t.dtype());
     f.first = base + t.storage_offset();
-    f.n = t.numel();
-    f.item = dtype_size(t.dtype());
+    f.n = shape_numel(shape);
+    f.item = dtype_size(ldt);
     if (t.is_contiguous() || f.n == 0)
         return f;
-    const auto& shape = t.shape();
-    const auto& stride = t.stride();
     f.addr.resize(f.n);
     std::vector<std::int64_t> idx(shape.size(), 0);
     for (std::size_t i = 0; i < f.n; ++i) {
@@ -372,6 +445,19 @@ void attach(const TensorImplPtr& m,
     m->set_leaf(false);
 }
 
+bool is_identity_mapping(const std::vector<std::int64_t>& src,
+                         std::size_t fm_n,
+                         std::size_t fa_n,
+                         bool covered,
+                         bool same_dtype) {
+    if (!covered || fm_n != fa_n || !same_dtype)
+        return false;
+    for (std::size_t k = 0; k < src.size(); ++k)
+        if (src[k] != static_cast<std::int64_t>(k))
+            return false;
+    return true;
+}
+
 }  // namespace
 
 void rebase_views(const TensorImplPtr& a) {
@@ -414,6 +500,7 @@ void rebase_views(const TensorImplPtr& a) {
 
         bool covered = false;
         bool same = false;
+        const bool same_dtype = m->dtype() == a->dtype();
         std::shared_ptr<CopySlicesBackward> node;
         if (fa.run() && fm.run()) {
             // Two runs meet in a run.
@@ -425,11 +512,12 @@ void rebase_views(const TensorImplPtr& a) {
             const auto item = static_cast<std::int64_t>(fa.item);
             const auto len = static_cast<std::int64_t>(hi - lo) / item;
             covered = len == static_cast<std::int64_t>(fm.n);
-            same = covered && len == static_cast<std::int64_t>(fa.n);
+            same = covered && len == static_cast<std::int64_t>(fa.n) && same_dtype;
             if (!same)
                 node = std::make_shared<CopySlicesBackward>(
                     m->shape(), a->shape(), static_cast<std::int64_t>(lo - fm.first) / item,
-                    static_cast<std::int64_t>(lo - fa.first) / item, len, a->dtype(), a->device());
+                    static_cast<std::int64_t>(lo - fa.first) / item, len, m->dtype(), a->dtype(),
+                    a->device());
         } else {
             // A strided side meets the other at scattered positions.
             std::vector<std::int64_t> dst;
@@ -442,13 +530,11 @@ void rebase_views(const TensorImplPtr& a) {
             if (dst.empty())
                 continue;
             covered = dst.size() == fm.n;
-            same = covered && fm.n == fa.n;
-            for (std::size_t k = 0; same && k < src.size(); ++k)
-                same = src[k] == static_cast<std::int64_t>(k);
+            same = is_identity_mapping(src, fm.n, fa.n, covered, same_dtype);
             if (!same)
-                node =
-                    std::make_shared<CopySlicesBackward>(m->shape(), a->shape(), std::move(dst),
-                                                         std::move(src), a->dtype(), a->device());
+                node = std::make_shared<CopySlicesBackward>(m->shape(), a->shape(), std::move(dst),
+                                                            std::move(src), m->dtype(), a->dtype(),
+                                                            a->device());
         }
 
         if (covered && !differentiable) {
