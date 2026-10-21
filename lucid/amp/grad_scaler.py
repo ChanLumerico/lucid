@@ -330,32 +330,20 @@ class GradScaler:
             # dtype: mixed-dtype multiply is not supported (BinaryKernel
             # validates same-dtype operands).
             work_dtype = _C_engine.F32 if grad_dtype == _C_engine.BF16 else grad_dtype
-            # Pin the autocast dtype to ``work_dtype`` while unscaling so any
-            # autocast-lowered op inside the block stays in ``work_dtype``;
-            # dropping the guard restores the caller's state.
-            amp_active = _C_engine.amp_is_active(g_impl.device)
-            guard = (
-                _C_engine.AutocastGuard(work_dtype, g_impl.device)
-                if amp_active
-                else None
+            g_work = (
+                g_impl
+                if grad_dtype == work_dtype
+                else _C_engine.astype(g_impl, work_dtype)
             )
-            try:
-                g_work = (
-                    g_impl
-                    if grad_dtype == work_dtype
-                    else _C_engine.astype(g_impl, work_dtype)
-                )
-                bad = _C_engine.any(_C_engine.logical_not(_C_engine.isfinite(g_work)))
-                seen = nonfinite.get(g_work.device)
-                nonfinite[g_work.device] = (
-                    bad if seen is None else _C_engine.logical_or(seen, bad)
-                )
-                coef = _C_engine.full(
-                    list(g_work.shape), inv_scale, work_dtype, g_work.device
-                )
-                unscaled = _C_engine.mul(g_work, coef)
-            finally:
-                del guard
+            bad = _C_engine.any(_C_engine.logical_not(_C_engine.isfinite(g_work)))
+            seen = nonfinite.get(g_work.device)
+            nonfinite[g_work.device] = (
+                bad if seen is None else _C_engine.logical_or(seen, bad)
+            )
+            coef = _C_engine.full(
+                list(g_work.shape), inv_scale, work_dtype, g_work.device
+            )
+            unscaled = _C_engine.mul(g_work, coef)
             if unscaled.dtype != grad_dtype:
                 unscaled = _C_engine.astype(unscaled, grad_dtype)
             p._impl.set_grad(unscaled)

@@ -97,22 +97,13 @@ def _zero_safe_root(s: _Impl, p: float) -> _Impl:
     passes through as itself.  The values are the plain root's, so a sum
     no gradient will reach takes the plain root.
     """
-    # Suspend autocast on ``s.device`` so the root keeps ``s``'s dtype (LCD-120).
-    guard = (
-        _C_engine.AutocastGuard(_C_engine.F32, s.device, False)
-        if _C_engine.amp_is_active(s.device)
-        else None
-    )
-    try:
-        if not s.requires_grad:
-            return _C_engine.sqrt(s) if p == 2 else _C_engine.pow_scalar(s, 1.0 / p)
-        at_zero = _C_engine.equal(s, _C_engine.zeros_like(s))
-        safe = _C_engine.where(at_zero, _C_engine.ones_like(s), s)
-        # The root of an integer sum is floating, so its zero is taken from it.
-        root = _C_engine.sqrt(safe) if p == 2 else _C_engine.pow_scalar(safe, 1.0 / p)
-        return _C_engine.where(at_zero, _C_engine.zeros_like(root), root)
-    finally:
-        del guard
+    if not s.requires_grad:
+        return _C_engine.sqrt(s) if p == 2 else _C_engine.pow_scalar(s, 1.0 / p)
+    at_zero = _C_engine.equal(s, _C_engine.zeros_like(s))
+    safe = _C_engine.where(at_zero, _C_engine.ones_like(s), s)
+    # The root of an integer sum is floating, so its zero is taken from it.
+    root = _C_engine.sqrt(safe) if p == 2 else _C_engine.pow_scalar(safe, 1.0 / p)
+    return _C_engine.where(at_zero, _C_engine.zeros_like(root), root)
 
 
 #: A set rather than a tuple: the membership test is on every norm's path.
@@ -240,31 +231,21 @@ def _bessel_correct(
     n = math.prod([shape[a] for a in axes_list] if axes_list else shape)
     if correction == 0 and n > 0:
         return result_impl
-    # Suspend autocast on ``result_impl.device`` so Bessel correction preserves
-    # the variance's dtype (LCD-120).
-    guard = (
-        _C_engine.AutocastGuard(_C_engine.F32, result_impl.device, False)
-        if _C_engine.amp_is_active(result_impl.device)
-        else None
+    dof = n - correction
+    if dof > 0:
+        return _scale(result_impl, n / dof)
+    warnings.warn(
+        f"{name}(): degrees of freedom is <= 0. Correction should be strictly "
+        "less than the reduction factor (input numel divided by output numel).",
+        UserWarning,
+        skip_file_prefixes=(_PACKAGE_DIR,),
     )
-    try:
-        dof = n - correction
-        if dof > 0:
-            return _scale(result_impl, n / dof)
-        warnings.warn(
-            f"{name}(): degrees of freedom is <= 0. Correction should be strictly "
-            "less than the reduction factor (input numel divided by output numel).",
-            UserWarning,
-            skip_file_prefixes=(_PACKAGE_DIR,),
-        )
-        undivided = _scale(result_impl, math.inf)
-        if dof == 0 or not result_impl.requires_grad:
-            return undivided
-        slope = _scale(result_impl, n / dof)
-        detached = _C_engine.sub(undivided.data_alias(), slope.data_alias())
-        return _C_engine.add(slope, detached)
-    finally:
-        del guard
+    undivided = _scale(result_impl, math.inf)
+    if dof == 0 or not result_impl.requires_grad:
+        return undivided
+    slope = _scale(result_impl, n / dof)
+    detached = _C_engine.sub(undivided.data_alias(), slope.data_alias())
+    return _C_engine.add(slope, detached)
 
 
 def _scale(impl: _Impl, factor: float) -> _Impl:

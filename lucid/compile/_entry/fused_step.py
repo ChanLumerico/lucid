@@ -800,8 +800,6 @@ class _FusedStep:
         copt = self._copt
         params = copt._params
         groups = copt._opt.param_groups
-        autocast_was_active = _C_engine.amp_is_active()
-        autocast_prev_dtype = _C_engine.amp_active_dtype()
 
         _tls.active = True
         try:
@@ -823,36 +821,21 @@ class _FusedStep:
                         layout = copt._new_layout(members, False, flags)
                         vectors = copt._trace_vectors(layout)
 
-                    opt_guard = (
-                        _C_engine.AutocastGuard(_C_engine.F32)
-                        if autocast_was_active
-                        else None
-                    )
-                    if opt_guard is not None:
-                        opt_guard.__enter__()
-                    try:
-                        found_inf_f32: Tensor | None = None
-                        if scaler_enabled:
-                            opt_outputs, slots, found_inf_f32 = (
-                                self._emit_scaled_update(
-                                    ghost_grads,
-                                    layout,
-                                    vectors,
-                                    flags,
-                                    loss_for_bwd,
-                                )
+                    found_inf_f32: Tensor | None = None
+                    if scaler_enabled:
+                        opt_outputs, slots, found_inf_f32 = (
+                            self._emit_scaled_update(
+                                ghost_grads,
+                                layout,
+                                vectors,
+                                flags,
+                                loss_for_bwd,
                             )
-                        else:
-                            opt_outputs, slots = copt._emit(
-                                members, ghost_grads, layout, vectors, flags, False
-                            )
-                    finally:
-                        if (
-                            opt_guard is not None
-                            and autocast_prev_dtype is not None
-                            and autocast_was_active
-                        ):
-                            _C_engine.AutocastGuard(autocast_prev_dtype).__enter__()
+                        )
+                    else:
+                        opt_outputs, slots = copt._emit(
+                            members, ghost_grads, layout, vectors, flags, False
+                        )
                 finally:
                     refuse(tracer)
         finally:

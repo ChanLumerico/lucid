@@ -10,7 +10,6 @@ The loss modules in :mod:`lucid.nn.modules.loss` delegate here, so they
 inherit both.
 """
 
-import contextlib
 import math
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
@@ -88,19 +87,17 @@ def _reduce(
     weighted = weight is not None and reduction == "mean"
     acc = _accumulation_dtype(t)
     # Half is widened under autocast (its answer is float32) and for a
-    # weighted mean (its count of kept samples is a sum of its own); the
-    # float32 scope pins the autocast dtype while active.
+    # weighted mean (its count of kept samples is a sum of its own).
     if (autocast or weighted) and acc != t.dtype:
         t = t.to(dtype=acc)
         if weighted and weight is not None:
             weight = weight.to(dtype=acc)
-    with _float32_scope():
-        if reduction == "sum":
-            t = t.sum()
-        elif weighted and weight is not None:
-            t = _weighted_mean(t, weight)
-        else:
-            t = t.mean()
+    if reduction == "sum":
+        t = t.sum()
+    elif weighted and weight is not None:
+        t = _weighted_mean(t, weight)
+    else:
+        t = t.mean()
     if t.dtype != out_dtype and not autocast:
         t = t.to(dtype=out_dtype)
     return t
@@ -116,19 +113,6 @@ def _accumulation_dtype(t: Tensor) -> _dtype:
     numbers at all.  The result is rounded back to the input's dtype.
     """
     return _float32 if t.dtype in (_float16, _bfloat16) else t.dtype
-
-
-def _float32_scope() -> contextlib.AbstractContextManager[object]:
-    """A scope in which autocast resolves to float32, or a no-op outside
-    autocast.
-
-    The engine guard is RAII and restores the enclosing state on exit.
-    Outside autocast it is not entered: an active float32 guard would cast
-    float64 operands down on ``LOWER`` rows.
-    """
-    from lucid._engine_scope import autocast_dtype
-
-    return autocast_dtype(_C_engine.Dtype.F32)
 
 
 def _check_same_weight(weight: Tensor | None, x: Tensor, op: str) -> None:
@@ -393,9 +377,7 @@ def smooth_l1_loss(
         # The degenerate limit is plain L1, as the reference also answers.
         return l1_loss(x, target, reduction=reduction)
     loss: Tensor = huber_loss(x, target, reduction=reduction, delta=beta)
-    # Rescale the Huber loss by 1 / beta in the loss's dtype.
-    with _float32_scope():
-        return loss / beta
+    return loss / beta
 
 
 def huber_loss(
@@ -888,23 +870,22 @@ def binary_cross_entropy(
             weight = _wrap(cast_ops[2])
         out_dtype = x.dtype
         acc = _accumulation_dtype(x)
-        with _float32_scope():
-            p, y = x.to(dtype=acc), target.to(dtype=acc)
-            # The floor is 1e-12, or 1 / 65504 for a float16 input: a float16
-            # gradient of 1e12 is inf and sends ``inf * 0 = NaN`` to saturated logits.
-            eps: float = max(1e-12, 1.0 / float(_finfo(out_dtype).max))
-            p_d: Tensor = p.detach()
-            inside: Tensor = p_d * (1.0 - p_d) >= eps
-            p_in: Tensor = _lucid.where(inside, p, _lucid.full_like(p_d, 0.5))
-            interior: Tensor = -(y * p_in.log() + (1.0 - y) * (1.0 - p_in).log())
-            log_p: Tensor = p_d.log().clamp(min=-100.0)
-            log_q: Tensor = (1.0 - p_d).log().clamp(min=-100.0)
-            grad_edge: Tensor = (p_d - y.detach()) / eps
-            edge: Tensor = -(y * log_p + (1.0 - y) * log_q) + (p - p_d) * grad_edge
-            bce: Tensor = _lucid.where(inside, interior, edge)
-            if weight is not None:
-                bce = bce * weight.to(dtype=acc)
-            return _reduce(bce, reduction, out_dtype)
+        p, y = x.to(dtype=acc), target.to(dtype=acc)
+        # The floor is 1e-12, or 1 / 65504 for a float16 input: a float16
+        # gradient of 1e12 is inf and sends ``inf * 0 = NaN`` to saturated logits.
+        eps: float = max(1e-12, 1.0 / float(_finfo(out_dtype).max))
+        p_d: Tensor = p.detach()
+        inside: Tensor = p_d * (1.0 - p_d) >= eps
+        p_in: Tensor = _lucid.where(inside, p, _lucid.full_like(p_d, 0.5))
+        interior: Tensor = -(y * p_in.log() + (1.0 - y) * (1.0 - p_in).log())
+        log_p: Tensor = p_d.log().clamp(min=-100.0)
+        log_q: Tensor = (1.0 - p_d).log().clamp(min=-100.0)
+        grad_edge: Tensor = (p_d - y.detach()) / eps
+        edge: Tensor = -(y * log_p + (1.0 - y) * log_q) + (p - p_d) * grad_edge
+        bce: Tensor = _lucid.where(inside, interior, edge)
+        if weight is not None:
+            bce = bce * weight.to(dtype=acc)
+        return _reduce(bce, reduction, out_dtype)
 
 
 def binary_cross_entropy_with_logits(

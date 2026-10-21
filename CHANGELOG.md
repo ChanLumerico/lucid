@@ -1243,6 +1243,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - cluster jscpd clones and extract owners (LCD-266)
 - switch shadow_alloc to engine thread-local phantom mode
 
+- delete obsolete elementwise autocast opt-out guards
+
 ### Removed
 
 - delete dead C++ einops kernels and unbound engine bindings

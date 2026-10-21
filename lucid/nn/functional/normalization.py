@@ -422,13 +422,12 @@ def _fold_instance_stats(
     its own, the mean is put back.
     """
     import lucid as _lucid
-    from lucid._engine_scope import autocast_dtype
 
     spatial_dims = list(range(2, x.ndim))
     # Under autocast the statistics stay at the buffers' dtype: ``x`` is
     # cast up before the reductions, since ``var`` keeps its input's dtype
     # and a half variance loses the small spread to cancellation.
-    with autocast_dtype(), _lucid.no_grad():
+    with _lucid.no_grad():
         x_s = x if x.dtype == running_mean.dtype else x.to(dtype=running_mean.dtype)
         batch_mean = x_s.mean([0, *spatial_dims])
         batch_var = x_s.var(spatial_dims, correction=1).mean(0)

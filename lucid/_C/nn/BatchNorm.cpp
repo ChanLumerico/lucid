@@ -525,7 +525,7 @@ LUCID_REGISTER_OP(BatchNorm3dBackward)
 // the Python composition takes ~8.8 ms / forward via ~160 pybind11 crossings
 // (16 BN × ~10 Python ops); a single C++ call eliminates the per-arithmetic-op
 // crossing cost.  Behaviour matches Lucid's existing Python `_update_running_stats`
-// 1:1, including the AutocastGuard(F32) override when AMP is active.
+// 1:1.
 //
 // Constraints:
 //   - momentum must be a finite double (cumulative mode — Python's
@@ -564,14 +564,6 @@ void batch_norm_update_running_stats(std::shared_ptr<TensorImpl> running_mean,
     const int n_total = reduced_count(op, x_shape, reduce_axes);
 
     Dtype buf_dt = running_mean->dtype();
-
-    // AMP override — matches the Python AutocastGuard(F32) the previous
-    // implementation engaged for the duration of the update.  Running buffers
-    // are always kept at F32 regardless of the outer autocast scope.
-    std::unique_ptr<amp::AutocastGuard> amp_off;
-    if (amp::is_active(device)) {
-        amp_off = std::make_unique<amp::AutocastGuard>(Dtype::F32, device);
-    }
 
     // Cast x → buf_dt if needed.  ``astype`` is a no-op when dtypes match.
     Storage x_eff = x->storage();

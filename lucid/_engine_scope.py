@@ -1,4 +1,4 @@
-"""Scoped thread-local engine state helpers (tracer suspension and autocast dtype)."""
+"""Scoped thread-local engine state helpers (tracer suspension)."""
 
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -23,23 +23,3 @@ def untraced() -> Iterator[None]:
         yield
     finally:
         _C_engine.compile.set_current_tracer(saved)
-
-
-@contextmanager
-def autocast_dtype(dtype: _C_engine.Dtype = _C_engine.Dtype.F32) -> Iterator[None]:
-    """Pin the engine's autocast dtype to ``dtype`` for the block when autocast is active.
-
-    Parameters
-    ----------
-    dtype : lucid._C.engine.Dtype, optional
-        Target engine dtype to install for ``LOWER`` autocast rows
-        while autocast is enabled (defaults to ``_C_engine.Dtype.F32``).
-    """
-    if not _C_engine.amp_is_active():
-        yield
-        return
-    guard = _C_engine.AutocastGuard(dtype)
-    try:
-        yield
-    finally:
-        del guard

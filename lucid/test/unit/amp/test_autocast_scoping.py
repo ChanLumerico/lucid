@@ -281,10 +281,10 @@ def test_scoping_matches_the_reference_on_cpu(ref) -> None:
     assert got == want
 
 
-def test_engine_scope_untraced_and_autocast_dtype() -> None:
-    """LCD-242: `untraced()` and `autocast_dtype()` restore thread-local engine state."""
+def test_engine_scope_untraced_and_running_stats_dtype() -> None:
+    """LCD-242 / LCD-500-C5: `untraced()` restores thread-local engine state and norm running stats stay float32 under autocast."""
     from lucid._C import engine as _C_engine
-    from lucid._engine_scope import autocast_dtype, untraced
+    from lucid._engine_scope import untraced
     import lucid.nn as nn
     import lucid.nn.functional as F
 
@@ -301,23 +301,13 @@ def test_engine_scope_untraced_and_autocast_dtype() -> None:
         assert _C_engine.compile.current_tracer() is tracer
         _ = F.dropout(lucid.ones(4), p=0.5, training=True)
 
-    # Outside autocast: autocast_dtype() is a no-op and does not activate AMP.
-    assert not _C_engine.amp_is_active()
-    with autocast_dtype():
-        assert not _C_engine.amp_is_active()
-
-    # Inside autocast: autocast_dtype() pins to F32 and restores outer dtype on exit.
+    # Inside autocast: running stats stay float32 without an explicit autocast_dtype() guard.
     x = lucid.randn(2, 3, 4)
     bn = nn.BatchNorm1d(3)
     inorm = nn.InstanceNorm1d(3, track_running_stats=True)
     rm = lucid.zeros(3)
     rv = lucid.ones(3)
     with autocast(device_type="cpu", dtype=lucid.bfloat16):
-        assert _C_engine.amp_active_dtype(_C_engine.Device.CPU) == _C_engine.Dtype.BF16
-        with autocast_dtype():
-            assert (
-                _C_engine.amp_active_dtype(_C_engine.Device.CPU) == _C_engine.Dtype.F32
-            )
         assert _C_engine.amp_active_dtype(_C_engine.Device.CPU) == _C_engine.Dtype.BF16
         _ = bn(x)
         _ = inorm(x)

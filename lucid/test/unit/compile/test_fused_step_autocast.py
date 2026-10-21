@@ -9,16 +9,9 @@ The autocast → fused_step integration works as a side-effect of:
    casts cleanly (gradient flows back as ``astype`` to the
    source dtype)
 3. The mixed-dtype trace acceptance lifted in X4.1
-4. The compile path's split-scope fix in
-   ``_FusedStep._build_plan`` — capture user's autocast
-   state, run model + loss under it, but disable for the
-   optimizer update emission (so F32 master weights stay F32
-   and don't get cast to F16 by the optimizer reading them
-   through the autocast guard)
-
-The whole X4.4 work landed in ~25 lines of `_fused_step.py`
-(vs ~300 estimated in [[retro-3-5-phase-vjp-long-tail]]) because
-items 1-3 above were already in place from prior phases.
+4. Elementwise optimizer math runs under ``KeepInput`` (LCD-500),
+   so F32 master weights stay F32 under autocast without needing an
+   explicit ``AutocastGuard`` opt-out around optimizer emission.
 
 Known limitations (documented for follow-up):
 - BatchNorm under autocast in fused_step fails (`emitter

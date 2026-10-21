@@ -65,16 +65,10 @@ def _total_norm(
     impls: list[_C_engine.TensorImpl], norm_type: float, error_if_nonfinite: bool
 ) -> float:
     """The :math:`\\ell_p` norm of ``impls`` taken jointly, as a Python float."""
-    amp_active = _C_engine.amp_is_active()
-    dt = _norm_work_dtype(impls, amp_active)
-    guard = _C_engine.AutocastGuard(dt) if amp_active else None
-    try:
-        total_norm = (
-            _inf_norm(impls, dt) if norm_type == math.inf else _lp_norm(impls, dt, norm_type)
-        )
-    finally:
-        del guard
-
+    dt = _norm_work_dtype(impls, _C_engine.amp_is_active())
+    total_norm = (
+        _inf_norm(impls, dt) if norm_type == math.inf else _lp_norm(impls, dt, norm_type)
+    )
     if error_if_nonfinite and (math.isnan(total_norm) or math.isinf(total_norm)):
         raise RuntimeError(
             f"The total norm of order {norm_type} for gradients is non-finite ({total_norm})."
@@ -92,17 +86,13 @@ def _scale_clipped_grads(
     for p, g_impl in zip(params_with_grad, grads, strict=True):
         g_dt = g_impl.dtype
         w_dt = _D.F32 if (amp_active and g_dt in (_D.F16, _D.BF16)) else g_dt
-        guard = _C_engine.AutocastGuard(w_dt) if amp_active else None
-        try:
-            g_w = g_impl if g_dt == w_dt else _C_engine.astype(g_impl, w_dt)
-            key = (w_dt, g_w.device)
-            coef = coefs.get(key)
-            if coef is None:
-                coef = _C_engine.full([], clip_coef, w_dt, g_w.device)
-                coefs[key] = coef
-            scaled = _C_engine.mul(g_w, coef)
-        finally:
-            del guard
+        g_w = g_impl if g_dt == w_dt else _C_engine.astype(g_impl, w_dt)
+        key = (w_dt, g_w.device)
+        coef = coefs.get(key)
+        if coef is None:
+            coef = _C_engine.full([], clip_coef, w_dt, g_w.device)
+            coefs[key] = coef
+        scaled = _C_engine.mul(g_w, coef)
         p._impl.set_grad(scaled if scaled.dtype == g_dt else _C_engine.astype(scaled, g_dt))
 
 
