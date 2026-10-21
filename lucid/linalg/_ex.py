@@ -16,6 +16,7 @@ import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
 from lucid._dtype import finfo as _finfo
+from lucid._ops._dims import _wrap_dim
 from lucid._tensor._indexing import broadcast_shapes as _broadcast_batch
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function, FunctionCtx
@@ -1186,7 +1187,8 @@ def _check_matrix_norm_dims(rank: int, dim: tuple[int, int]) -> tuple[int, int]:
         )
     if len(dim) != 2:
         raise ValueError(f"matrix_norm: dim must be a pair of axes, got {dim!r}")
-    d0, d1 = int(dim[0]) % rank, int(dim[1]) % rank
+    d0 = _wrap_dim(int(dim[0]), rank, "linalg.matrix_norm")
+    d1 = _wrap_dim(int(dim[1]), rank, "linalg.matrix_norm")
     if d0 == d1:
         raise ValueError(f"matrix_norm: dim must name two distinct axes, got {dim!r}")
     return d0, d1

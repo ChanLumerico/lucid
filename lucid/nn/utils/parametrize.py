@@ -20,6 +20,7 @@ from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid.nn.modules.container import ModuleList
 from lucid.nn.parameter import Parameter
+from lucid.nn.utils._checks import _require_parameter
 
 # Sentinel attribute on a parametrized module.  Maps original-parameter
 # name → ``ParametrizationContainer``; the container in turn holds the
@@ -149,9 +150,6 @@ def register_parametrization(
     >>> bool((layer.weight == layer.weight.mT).all())
     True
     """
-    if not hasattr(module, tensor_name):
-        raise AttributeError(f"module has no parameter '{tensor_name}'")
-
     container_dict: dict[str, ParametrizationContainer] = getattr(
         module, _PARAM_HOOK_ATTR, {}
     )
@@ -174,12 +172,7 @@ def register_parametrization(
         existing.append(parametrization)
         return module
 
-    weight: Parameter = getattr(module, tensor_name)
-    if not isinstance(weight, Parameter):
-        raise TypeError(
-            f"'{tensor_name}' must be a Parameter to parametrise, got "
-            f"{type(weight).__name__}"
-        )
+    weight: Parameter = _require_parameter(module, tensor_name, "parametrise")
 
     container: ParametrizationContainer = ParametrizationContainer(
         parametrization, Parameter(weight.detach())

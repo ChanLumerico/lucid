@@ -28,6 +28,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
+from lucid.nn.utils._checks import _require_module, _require_parameter
 
 # Sentinel attribute used by ``remove_spectral_norm`` to find an active
 # registration on a module.
@@ -125,16 +126,8 @@ def spectral_norm(
     >>> from lucid.nn.utils import spectral_norm
     >>> disc = spectral_norm(nn.Conv2d(3, 64, 3, padding=1))
     """
-    if not isinstance(module, Module):
-        raise TypeError(f"spectral_norm requires a Module, got {type(module).__name__}")
-    if not hasattr(module, name):
-        raise AttributeError(f"module has no parameter '{name}'")
-    weight: Parameter = getattr(module, name)
-    if not isinstance(weight, Parameter):
-        raise TypeError(
-            f"'{name}' must be a Parameter to apply spectral_norm, got "
-            f"{type(weight).__name__}"
-        )
+    _require_module(module, "spectral_norm")
+    weight: Parameter = _require_parameter(module, name, "apply spectral_norm")
 
     # ConvTranspose* stores weights as (in_channels, out_channels, ...) — the
     # spectral norm should be taken with the output-channel axis (1) on top.

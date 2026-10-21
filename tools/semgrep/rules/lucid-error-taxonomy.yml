@@ -1,0 +1,58 @@
+rules:
+  - id: lucid.error.lucid-dim-range-value-error
+    message: >-
+      An out-of-range axis or index is an IndexError, not a ValueError
+      (obsidian/architecture/arch-error-taxonomy.md). Route dim wrapping
+      through lucid._ops._dims._wrap_dim or lucid.nn.functional._index_checks.
+    severity: WARNING
+    languages: [python]
+    paths:
+      exclude:
+        # Reference framework parity: constraints.cat/stack and spectral_norm
+        # explicitly specify ValueError for out-of-range dim.
+        - lucid/distributions/constraints.py
+        - lucid/nn/utils/spectral_norm.py
+    patterns:
+      - pattern: raise ValueError($MSG)
+      - metavariable-regex:
+          metavariable: $MSG
+          regex: '(?i).*\b(dim|axis|index)\b.*\bis out of range.*'
+
+  - id: lucid.error.lucid-inline-reduction-check
+    message: >-
+      Loss reduction validation belongs in
+      lucid.nn.functional._loss_checks._check_reduction (S21).
+    severity: WARNING
+    languages: [python]
+    paths:
+      include:
+        - lucid/nn/**
+      exclude:
+        - lucid/nn/functional/_loss_checks.py
+        - lucid/nn/functional/loss.py
+    pattern-either:
+      - pattern: |
+          if $R not in ("none", "mean", "sum"):
+              raise ValueError(...)
+      - pattern: |
+          if $R not in ("none", "mean", "sum", "batchmean"):
+              raise ValueError(...)
+
+  - id: lucid.error.lucid-nn-utils-inline-param-check
+    message: >-
+      Module/Parameter boundary checks in lucid.nn.utils belong in
+      lucid.nn.utils._checks._require_parameter and _require_module (S21).
+    severity: WARNING
+    languages: [python]
+    paths:
+      include:
+        - lucid/nn/utils/**
+      exclude:
+        - lucid/nn/utils/_checks.py
+    pattern-either:
+      - pattern: |
+          if not hasattr($M, $N):
+              raise AttributeError(...)
+      - pattern: |
+          if not isinstance($W, Parameter):
+              raise TypeError(...)

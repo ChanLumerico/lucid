@@ -17,6 +17,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
+from lucid.nn.utils._checks import _require_module, _require_parameter
 
 # Sentinel attribute on a Module to record which parameter name carries an
 # active weight-norm registration; used by ``remove_weight_norm`` to undo it.
@@ -96,16 +97,8 @@ def weight_norm(module: Module, name: str = "weight", dim: int = 0) -> Module:
     >>> layer.weight_g.shape, layer.weight_v.shape
     ((64, 1), (64, 128))
     """
-    if not isinstance(module, Module):
-        raise TypeError(f"weight_norm requires a Module, got {type(module).__name__}")
-    if not hasattr(module, name):
-        raise AttributeError(f"module has no parameter '{name}'")
-    weight: Parameter = getattr(module, name)
-    if not isinstance(weight, Parameter):
-        raise TypeError(
-            f"'{name}' must be a Parameter to apply weight_norm, "
-            f"got {type(weight).__name__}"
-        )
+    _require_module(module, "weight_norm")
+    weight: Parameter = _require_parameter(module, name, "apply weight_norm")
 
     ndim: int = len(weight.shape)
     if dim < 0:

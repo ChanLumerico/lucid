@@ -843,3 +843,42 @@ def test_clang_tidy_collector_counts_seeded_cpp_regression(tmp_path: Path) -> No
     assert out.returncode == 1, out.stdout + out.stderr
     assert "cppcoreguidelines-init-variables" in out.stdout
     assert "lucid/_C/sample.cpp" in out.stdout
+
+
+@pytest.mark.skipif(
+    shutil.which("semgrep") is None
+    and not (Path(sys.executable).parent / "semgrep").is_file(),
+    reason="semgrep is not installed",
+)
+def test_semgrep_error_taxonomy_rules_catch_seeded_violations(tmp_path: Path) -> None:
+    """DS-4 (LCD-263): semgrep rules catch out-of-range ValueError, inline
+    loss reduction checks, and inline nn.utils parameter checks."""
+    root = tmp_path / "repo"
+    (root / "lucid" / "nn" / "utils").mkdir(parents=True)
+    (root / "tools").mkdir()
+    (root / "lucid" / "ops.py").write_text(CLEAN)
+    (root / "lucid" / "nn" / "loss.py").write_text(CLEAN)
+    (root / "lucid" / "nn" / "utils" / "norm.py").write_text(CLEAN)
+    git(root, "init", "-q", "-b", "main")
+    done = gate(root, "--rebaseline", "--reason", "t", "--collectors", "semgrep")
+    assert done.returncode == 0, done.stdout + done.stderr
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+
+    (root / "lucid" / "ops.py").write_text(
+        'def check(dim: int) -> None:\n    raise ValueError(f"op: dim {dim} is out of range")\n'
+    )
+    (root / "lucid" / "nn" / "loss.py").write_text(
+        'def check(r: str) -> None:\n    if r not in ("none", "mean", "sum"):\n        raise ValueError(r)\n'
+    )
+    (root / "lucid" / "nn" / "utils" / "norm.py").write_text(
+        "def check(m: object, name: str) -> None:\n"
+        "    if not hasattr(m, name):\n"
+        '        raise AttributeError(f"module has no parameter {name}")\n'
+    )
+    out = gate(root, "--full", "--collectors", "semgrep")
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "lucid-dim-range-value-error" in out.stdout
+    assert "lucid-inline-reduction-check" in out.stdout
+    assert "lucid-nn-utils-inline-param-check" in out.stdout
+

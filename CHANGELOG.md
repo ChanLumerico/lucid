@@ -1231,6 +1231,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - eliminate vulture, ARG, ERA001, and RUF100 findings
 - type module attributes and generic containers
 - fold CPU index readers into IndexBounds.h
+- unify boundary validators and add error-taxonomy rules (LCD-263)
 
 ---
 

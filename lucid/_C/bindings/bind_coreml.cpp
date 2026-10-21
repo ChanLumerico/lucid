@@ -90,6 +90,60 @@ private:
     std::shared_ptr<lucid::coreml::CoreMLModel> handle_;
 };
 
+const CpuStorage&
+require_cpu_storage(const TensorImplPtr& tensor, const char* null_msg, const char* cpu_msg) {
+    if (!tensor)
+        throw std::invalid_argument(null_msg);
+    if (tensor->device() != Device::CPU)
+        throw std::invalid_argument(cpu_msg);
+    const auto& storage = std::get<CpuStorage>(tensor->storage());
+    if (storage.ptr == nullptr)
+        throw std::invalid_argument(cpu_msg);
+    return storage;
+}
+
+std::uint32_t read_pack_key(const void* base, Dtype dtype, std::size_t i) {
+    switch (dtype) {
+    case Dtype::I64:
+        return static_cast<std::uint32_t>(static_cast<const std::int64_t*>(base)[i]);
+    case Dtype::I32:
+        return static_cast<std::uint32_t>(static_cast<const std::int32_t*>(base)[i]);
+    case Dtype::Bool:
+        return static_cast<const std::uint8_t*>(base)[i] ? 1u : 0u;
+    default:
+        throw std::invalid_argument("coreml.pack_bits: keys must be int32, int64 or bool");
+    }
+}
+
+py::bytes pack_bits_impl(const TensorImplPtr& keys, int bits) {
+    if (bits < 1 || bits > 8)
+        throw std::invalid_argument("coreml.pack_bits: width must be 1..8 bits");
+    const auto& storage = require_cpu_storage(keys, "coreml.pack_bits: null tensor",
+                                              "coreml.pack_bits: keys must be on the CPU");
+    const std::size_t count = static_cast<std::size_t>(keys->numel());
+    const Dtype dtype = keys->dtype();
+    const void* base = storage.ptr.get();
+    if (dtype != Dtype::I64 && dtype != Dtype::I32 && dtype != Dtype::Bool)
+        throw std::invalid_argument("coreml.pack_bits: keys must be int32, int64 or bool");
+    std::string out;
+    out.reserve((count * static_cast<std::size_t>(bits) + 7) / 8);
+    std::uint32_t accumulator = 0;
+    int filled = 0;
+    const std::uint32_t mask = (1u << bits) - 1u;
+    for (std::size_t i = 0; i < count; ++i) {
+        accumulator |= (read_pack_key(base, dtype, i) & mask) << filled;
+        filled += bits;
+        while (filled >= 8) {
+            out.push_back(static_cast<char>(accumulator & 0xFF));
+            accumulator >>= 8;
+            filled -= 8;
+        }
+    }
+    if (filled > 0)
+        out.push_back(static_cast<char>(accumulator & 0xFF));
+    return py::bytes(out);
+}
+
 }  // namespace
 
 void register_coreml(py::module_& m) {
@@ -303,55 +357,11 @@ void register_coreml(py::module_& m) {
             "Serialised Core ML ``Model`` protobuf.")
         .def_property_readonly("op_count", &lucid::coreml::MilProgram::op_count);
 
-    cm.def(
-        "pack_bits",
-        [](const TensorImplPtr& keys, int bits) {
-            if (!keys)
-                throw std::invalid_argument("coreml.pack_bits: null tensor");
-            if (bits < 1 || bits > 8)
-                throw std::invalid_argument("coreml.pack_bits: width must be 1..8 bits");
-            const auto& storage = std::get<lucid::CpuStorage>(keys->storage());
-            if (storage.ptr == nullptr)
-                throw std::invalid_argument("coreml.pack_bits: keys must be on the CPU");
-            const std::size_t count = static_cast<std::size_t>(keys->numel());
-            const auto read = [&](std::size_t i) -> std::uint32_t {
-                switch (keys->dtype()) {
-                case lucid::Dtype::I64:
-                    return static_cast<std::uint32_t>(
-                        reinterpret_cast<const std::int64_t*>(storage.ptr.get())[i]);
-                case lucid::Dtype::I32:
-                    return static_cast<std::uint32_t>(
-                        reinterpret_cast<const std::int32_t*>(storage.ptr.get())[i]);
-                case lucid::Dtype::Bool:
-                    return reinterpret_cast<const std::uint8_t*>(storage.ptr.get())[i] ? 1u : 0u;
-                default:
-                    throw std::invalid_argument(
-                        "coreml.pack_bits: keys must be int32, int64 or bool");
-                }
-            };
-            std::string out;
-            out.reserve((count * static_cast<std::size_t>(bits) + 7) / 8);
-            std::uint32_t accumulator = 0;
-            int filled = 0;
-            const std::uint32_t mask = (bits == 32) ? ~0u : ((1u << bits) - 1u);
-            for (std::size_t i = 0; i < count; ++i) {
-                accumulator |= (read(i) & mask) << filled;
-                filled += bits;
-                while (filled >= 8) {
-                    out.push_back(static_cast<char>(accumulator & 0xFF));
-                    accumulator >>= 8;
-                    filled -= 8;
-                }
-            }
-            if (filled > 0)
-                out.push_back(static_cast<char>(accumulator & 0xFF));
-            return py::bytes(out);
-        },
-        py::arg("keys"), py::arg("bits"),
-        "Pack unsigned keys into a little-endian bit stream, least significant "
-        "bit first — the layout Core ML reads palettization indices and sparsity "
-        "masks from.  In the engine because a weight has tens of millions of "
-        "them and a Python loop over that is minutes, not milliseconds.");
+    cm.def("pack_bits", &pack_bits_impl, py::arg("keys"), py::arg("bits"),
+           "Pack unsigned keys into a little-endian bit stream, least significant "
+           "bit first — the layout Core ML reads palettization indices and sparsity "
+           "masks from.  In the engine because a weight has tens of millions of "
+           "them and a Python loop over that is minutes, not milliseconds.");
 
     py::class_<lucid::coreml::BlobWriter>(cm, "BlobWriter")
         .def(py::init([](const std::string& path) {
@@ -371,16 +381,10 @@ void register_coreml(py::module_& m) {
         .def(
             "append_tensor",
             [](lucid::coreml::BlobWriter& self, const TensorImplPtr& tensor, int dtype) {
-                if (!tensor)
-                    throw std::invalid_argument("BlobWriter.append_tensor: null tensor");
-                if (tensor->device() != Device::CPU)
-                    throw std::invalid_argument(
-                        "BlobWriter.append_tensor: weights must be on the CPU to be "
-                        "written into the blob");
-                const auto& storage = std::get<CpuStorage>(tensor->storage());
-                if (!storage.ptr)
-                    throw std::runtime_error(
-                        "BlobWriter.append_tensor: the tensor has no host storage");
+                const auto& storage = require_cpu_storage(
+                    tensor, "BlobWriter.append_tensor: null tensor",
+                    "BlobWriter.append_tensor: weights must be on the CPU to be "
+                    "written into the blob");
                 return self.append(storage.ptr.get(), storage.nbytes,
                                    static_cast<lucid::coreml::BlobDataType>(dtype));
             },

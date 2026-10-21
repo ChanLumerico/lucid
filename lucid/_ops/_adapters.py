@@ -1272,9 +1272,7 @@ def _prepare_unique_rows(
     ndim = len(a_impl.shape)
     if ndim == 0:
         raise IndexError(f"Dimension specified as {dim} but tensor has no dimensions")
-    if not -ndim <= dim < ndim:
-        raise IndexError(f"{op_name}: dim {dim} is out of range for a {ndim}-d tensor")
-    d = dim % ndim
+    d = _wrap_dim(int(dim), ndim, op_name)
     if any(int(s) == 0 for ax, s in enumerate(a_impl.shape) if ax != d):
         raise RuntimeError(
             "There are 0 sized dimensions, and they aren't selected, so unique cannot be applied"

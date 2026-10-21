@@ -15,6 +15,7 @@ from typing import final, override
 import lucid
 from lucid._C import engine as _C_engine
 from lucid._dispatch import _unwrap, _wrap
+from lucid._ops._dims import _wrap_dim
 from lucid._tensor.tensor import Tensor
 from lucid.autograd.function import Function as _AutogradFunction
 from lucid.autograd.function import FunctionCtx
@@ -82,13 +83,9 @@ def _as_size_list(s: int | Sequence[int] | None) -> list[int]:
 
 
 def _normalise_axes(axes: list[int], rank: int) -> list[int]:
-    out: list[int] = []
-    for ax in axes:
-        a = ax + rank if ax < 0 else ax
-        if a < 0 or a >= rank:
-            raise IndexError(f"FFT axis {ax} out of range for rank-{rank} tensor")
-        out.append(a)
-    return out
+    if rank == 0 and axes:
+        raise IndexError(f"FFT axis {axes[0]} out of range for rank-0 tensor")
+    return [_wrap_dim(ax, rank, "fft") for ax in axes]
 
 
 def _validate_axes_and_s(axes: list[int], s: list[int], op: str) -> None:

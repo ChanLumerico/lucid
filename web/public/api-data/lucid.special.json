@@ -3,7 +3,7 @@
   "name": "special",
   "path": "lucid.special",
   "kind": "module",
-  "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1",
+  "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1",
   "members": [
     {
       "name": "gammainc",
@@ -11,7 +11,7 @@
       "kind": "function",
       "labels": [],
       "signature": "gammainc(input: Tensor, other: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/_ops/composite/_gamma.py#L662",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/_ops/composite/_gamma.py#L654",
       "subcategory": "gamma",
       "summary": "Regularized lower incomplete gamma function $P(a, x)$.",
       "extended": "$$\nP(a, x) = \\frac{1}{\\Gamma(a)} \\int_0^x t^{a-1} e^{-t}\\, dt\n$$\n\nThe CDF of a `Gamma(a, 1)` variable at `x` — what\n`lucid.distributions.Gamma.cdf` evaluates.",
@@ -55,7 +55,7 @@
       "kind": "function",
       "labels": [],
       "signature": "gammaincc(input: Tensor, other: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/_ops/composite/_gamma.py#L714",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/_ops/composite/_gamma.py#L706",
       "subcategory": "gamma",
       "summary": "Regularized upper incomplete gamma function $Q(a, x)$.",
       "extended": "$$\nQ(a, x) = \\frac{1}{\\Gamma(a)} \\int_x^\\infty t^{a-1} e^{-t}\\, dt\n        = 1 - P(a, x)\n$$\n\nEvaluated directly rather than as `1 - gammainc`, so a small upper\ntail keeps its relative precision.",
@@ -98,35 +98,35 @@
       "path": "lucid._ops.composite._zeta.zeta",
       "kind": "function",
       "labels": [],
-      "signature": "zeta(x: Tensor, q: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/_ops/composite/_zeta.py#L15",
+      "signature": "zeta(input: Tensor, other: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/_ops/composite/_zeta.py#L15",
       "subcategory": "zeta",
       "summary": "Hurwitz zeta function $\\zeta(x, q)$.",
       "extended": "Computes the Hurwitz zeta function, a two-argument generalisation\nof the Riemann zeta that arises in moment-generating functions of\ndiscrete distributions, in expansions of polygamma functions, and\nas a regulariser in analytic number theory.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Exponent; must satisfy $\\Re(x) > 1$ for the series to\nconverge.  Any floating-point dtype.",
           "default": null
         },
         {
-          "name": "q",
+          "name": "other",
           "annotation": "Tensor",
-          "description": "Shift parameter; broadcast-compatible with `x`.  The\nnon-positive integers are poles.",
+          "description": "Shift parameter; broadcast-compatible with `input`.  The\nnon-positive integers are poles.",
           "default": null
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$\\zeta(x, q)$ element-wise, broadcast to the common shape\nof `x` and `q`."
+        "description": "$\\zeta(x, q)$ element-wise, broadcast to the common shape\nof `input` and `other`."
       },
       "raises": [],
       "examples": [
         ">>> import lucid\n>>> from lucid.special import zeta\n>>> x = lucid.tensor([2.0, 3.0])\n>>> q = lucid.tensor([1.0, 1.0])\n>>> zeta(x, q)\ntensor([1.645, 1.202])"
       ],
       "notes": [
-        "Series definition:\n\n\n\n$$\n\\zeta(x, q) = \\sum_{k=0}^\\infty \\frac{1}{(k + q)^x}.\n$$\n\nThe implementation accumulates an explicit prefix of 12 terms and\ncloses the tail with the Euler–Maclaurin correction\n\n\n\n$$\n\\sum_{k=N}^\\infty (k + q)^{-x}\n    \\approx \\frac{a^{1-x}}{x - 1}\n          + \\frac{a^{-x}}{2}\n          + \\sum_j \\frac{B_{2j}}{(2j)!}\n            \\prod_{i=0}^{2j-2}(x + i)\\, a^{-x-2j+1},\n$$\n\nwhere $a = q + N$ and the $B_{2j}$ are Bernoulli\nnumbers; that is accurate to float64 rounding for $x > 1$\nand $q > 0$.  A negative non-integer `q` is real only for\nan integer `x` and is reduced to positive arguments; otherwise it\nis NaN.  The non-positive integers `q` are poles (`+inf`),\n`x = 1` is `+inf` and `x < 1` is NaN.  The Riemann zeta is the\nspecial case $\\zeta(x) = \\zeta(x, 1)$."
+        "Series definition:\n\n\n\n$$\n\\zeta(x, q) = \\sum_{k=0}^\\infty \\frac{1}{(k + q)^x}.\n$$\n\nThe implementation accumulates an explicit prefix of 12 terms and\ncloses the tail with the Euler–Maclaurin correction\n\n\n\n$$\n\\sum_{k=N}^\\infty (k + q)^{-x}\n    \\approx \\frac{a^{1-x}}{x - 1}\n          + \\frac{a^{-x}}{2}\n          + \\sum_j \\frac{B_{2j}}{(2j)!}\n            \\prod_{i=0}^{2j-2}(x + i)\\, a^{-x-2j+1},\n$$\n\nwhere $a = q + N$ and the $B_{2j}$ are Bernoulli\nnumbers; that is accurate to float64 rounding for $x > 1$\nand $q > 0$.  A negative non-integer `other` is real only for\nan integer `input` and is reduced to positive arguments; otherwise it\nis NaN.  The non-positive integers `other` are poles (`+inf`),\n`input = 1` is `+inf` and `input < 1` is NaN.  The Riemann zeta is the\nspecial case $\\zeta(x) = \\zeta(x, 1)$."
       ],
       "attributes": [],
       "warns": [],
@@ -137,14 +137,14 @@
       "path": "lucid.special.erfcx",
       "kind": "function",
       "labels": [],
-      "signature": "erfcx(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L52",
+      "signature": "erfcx(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L52",
       "subcategory": null,
       "summary": "Scaled complementary error function.",
       "extended": "Computes $\\mathrm{erfcx}(x) = e^{x^2}\\, \\mathrm{erfc}(x)$, the\nMills-ratio-friendly scaling of the complementary error function.\nWhereas $\\mathrm{erfc}(x)$ underflows to zero for moderately\nlarge $x$, `erfcx` decays only as $1/(x\\sqrt\\pi)$ and\nremains finite, which is essential for tail-probability evaluations\nof Gaussian-related distributions.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -152,7 +152,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$e^{x^2}\\,\\mathrm{erfc}(x)$ element-wise, same shape and\ndtype as `x`."
+        "description": "$e^{x^2}\\,\\mathrm{erfc}(x)$ element-wise, same shape and\ndtype as `input`."
       },
       "raises": [],
       "examples": [
@@ -170,14 +170,14 @@
       "path": "lucid.special.i0e",
       "kind": "function",
       "labels": [],
-      "signature": "i0e(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L151",
+      "signature": "i0e(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L151",
       "subcategory": null,
       "summary": "Exponentially scaled modified Bessel function of order 0.",
       "extended": "Computes $I_0(x)\\, e^{-|x|}$, the standard exponentially-scaled\nvariant of the modified Bessel function of the first kind.  `I_0`\nitself grows as $e^{|x|}/\\sqrt{|x|}$ and therefore overflows\nfloating-point representation for moderately large arguments; the\nscaled form is bounded by 1 for $x \\ge 0$ and is the natural\nquantity to manipulate in log-density computations (von Mises /\nBessel distributions, Rice distribution, etc.).",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -185,7 +185,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$I_0(x)\\, e^{-|x|}$ element-wise, same shape and dtype as\n`x`."
+        "description": "$I_0(x)\\, e^{-|x|}$ element-wise, same shape and dtype as\n`input`."
       },
       "raises": [],
       "examples": [
@@ -203,14 +203,14 @@
       "path": "lucid.special.i1",
       "kind": "function",
       "labels": [],
-      "signature": "i1(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L237",
+      "signature": "i1(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L237",
       "subcategory": null,
       "summary": "Modified Bessel function of the first kind, order 1.",
       "extended": "Computes $I_1(x)$, the order-one solution of the modified\nBessel equation $x^2 y'' + x y' - (x^2 + 1) y = 0$ that is\nregular at the origin.  Used in Rician statistics, Bessel /\nvon Mises – Fisher distributions, and rotational-symmetric kernels.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -218,7 +218,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$I_1(x)$ element-wise, same shape and dtype as `x`."
+        "description": "$I_1(x)$ element-wise, same shape and dtype as `input`."
       },
       "raises": [],
       "examples": [
@@ -236,14 +236,14 @@
       "path": "lucid.special.i1e",
       "kind": "function",
       "labels": [],
-      "signature": "i1e(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L307",
+      "signature": "i1e(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L307",
       "subcategory": null,
       "summary": "Exponentially scaled modified Bessel function of order 1.",
       "extended": "Computes $I_1(x)\\, e^{-|x|}$, the bounded counterpart of\n`i1`.  Because $I_1$ itself grows exponentially with\n$|x|$, this scaled form is the safer building block for\nlog-likelihood expressions (Rice / Skellam distributions and\nsimilar) where evaluating `I_1` directly would overflow.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -251,7 +251,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$I_1(x)\\, e^{-|x|}$ element-wise, same shape and dtype as\n`x`."
+        "description": "$I_1(x)\\, e^{-|x|}$ element-wise, same shape and dtype as\n`input`."
       },
       "raises": [],
       "examples": [
@@ -269,14 +269,14 @@
       "path": "lucid.special.ndtr",
       "kind": "function",
       "labels": [],
-      "signature": "ndtr(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L373",
+      "signature": "ndtr(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L373",
       "subcategory": null,
       "summary": "Standard normal cumulative distribution function.",
       "extended": "Evaluates $\\Phi(x) = P(Z \\le x)$ where $Z$ is a standard\nnormal random variable.  Implemented as a thin wrapper around the\nerror function via the textbook identity\n$\\Phi(x) = \\tfrac{1}{2}\\,(1 + \\mathrm{erf}(x/\\sqrt{2}))$.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -284,7 +284,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$\\Phi(x)$ element-wise, same shape and dtype as `x`;\nvalues lie in `(0, 1)`."
+        "description": "$\\Phi(x)$ element-wise, same shape and dtype as `input`;\nvalues lie in `(0, 1)`."
       },
       "raises": [],
       "examples": [
@@ -302,14 +302,14 @@
       "path": "lucid.special.log_ndtr",
       "kind": "function",
       "labels": [],
-      "signature": "log_ndtr(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L425",
+      "signature": "log_ndtr(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L425",
       "subcategory": null,
       "summary": "Numerically stable logarithm of the standard normal CDF.",
       "extended": "Computes $\\log \\Phi(x)$ without losing precision in the deep\nleft tail, where the direct composition `log(ndtr(x))` underflows.\nEssential for log-likelihood evaluation of probit / Tobit / censored\nmodels that need to handle $x \\ll 0$ cleanly.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -317,7 +317,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$\\log \\Phi(x)$ element-wise, same shape and dtype as\n`x`; values lie in $(-\\infty, 0]$."
+        "description": "$\\log \\Phi(x)$ element-wise, same shape and dtype as\n`input`; values lie in $(-\\infty, 0]$."
       },
       "raises": [],
       "examples": [
@@ -335,14 +335,14 @@
       "path": "lucid.special.ndtri",
       "kind": "function",
       "labels": [],
-      "signature": "ndtri(p: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L531",
+      "signature": "ndtri(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L531",
       "subcategory": null,
       "summary": "Inverse standard normal CDF (probit / quantile function).",
       "extended": "Computes $\\Phi^{-1}(p)$, the quantile function of the standard\nnormal distribution.  This is the workhorse for sampling Gaussian\nvariates from uniforms via inverse-CDF, for probit regression, and\nfor converting tail probabilities back to standard scores.",
       "parameters": [
         {
-          "name": "p",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor of probabilities in $(0, 1)$; any\nfloating-point dtype.",
           "default": null
@@ -350,7 +350,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$\\Phi^{-1}(p)$ element-wise, same shape and dtype as\n`p`; values are unbounded reals."
+        "description": "$\\Phi^{-1}(p)$ element-wise, same shape and dtype as\n`input`; values are unbounded reals."
       },
       "raises": [],
       "examples": [
@@ -368,28 +368,28 @@
       "path": "lucid.special.xlog1py",
       "kind": "function",
       "labels": [],
-      "signature": "xlog1py(x: Tensor, y: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L647",
+      "signature": "xlog1py(input: Tensor, other: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L647",
       "subcategory": null,
       "summary": "Safe product $x \\log(1 + y)$ with limit-convention zero handling.",
       "extended": "Computes $x \\log(1 + y)$ element-wise but takes the product as\n`0` wherever $x = 0$, including where $\\log(1 + y)$ is\ninfinite (`y = -1`).  Mirrors `lucid.xlogy` but uses\n$\\log(1 + y)$ instead of $\\log y$, which is the right\nprimitive for log-densities of distributions expressed in terms of\nsmall offsets (Negative Binomial log-likelihood, Beta survival\nfunctions, etc.).",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Multiplier tensor.",
           "default": null
         },
         {
-          "name": "y",
+          "name": "other",
           "annotation": "Tensor",
-          "description": "Argument of `log1p`; broadcast-compatible with `x`.",
+          "description": "Argument of `log1p`; broadcast-compatible with `input`.",
           "default": null
         }
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$x \\log(1 + y)$ element-wise, broadcast to the common\nshape of `x` and `y`."
+        "description": "$x \\log(1 + y)$ element-wise, broadcast to the common\nshape of `input` and `other`."
       },
       "raises": [],
       "examples": [
@@ -407,14 +407,14 @@
       "path": "lucid.special.entr",
       "kind": "function",
       "labels": [],
-      "signature": "entr(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L713",
+      "signature": "entr(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L713",
       "subcategory": null,
       "summary": "Element-wise entropy kernel $-x \\log x$.",
       "extended": "Returns the per-element contribution to Shannon entropy.  This is\nthe standard building block for evaluating $H(p) = \\sum_i \\mathrm{entr}(p_i)$ for a discrete distribution, with the\nlimit convention $0 \\log 0 = 0$ applied at the boundary.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor.  Integer and bool inputs are taken as `float32`.\nValues below zero give `-inf`.",
           "default": null
@@ -422,7 +422,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "Element-wise $-x \\log x$ with the limit convention at\n`x = 0`; same shape as `x`."
+        "description": "Element-wise $-x \\log x$ with the limit convention at\n`x = 0`; same shape as `input`."
       },
       "raises": [],
       "examples": [
@@ -440,14 +440,14 @@
       "path": "lucid.special.multigammaln",
       "kind": "function",
       "labels": [],
-      "signature": "multigammaln(a: Tensor, p: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L779",
+      "signature": "multigammaln(input: Tensor, p: int)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L779",
       "subcategory": null,
       "summary": "Logarithm of the multivariate gamma function $\\Gamma_p(a)$.",
       "extended": "Computes $\\log \\Gamma_p(a)$, the natural generalisation of\n`lgamma` that appears in the normalising constants of the Wishart\nand inverse-Wishart distributions over positive-definite matrices,\nand in matrix-Bayes log-evidence formulas.",
       "parameters": [
         {
-          "name": "a",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Real argument; any floating-point dtype.  Each entry must\nsatisfy $a > (p - 1)/2$ for the function to be finite\n(otherwise the underlying `lgamma` returns `inf`).",
           "default": null
@@ -461,7 +461,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$\\log \\Gamma_p(a)$ element-wise over `a`, same shape\nand dtype as `a`."
+        "description": "$\\log \\Gamma_p(a)$ element-wise over `input`, same shape\nand dtype as `input`."
       },
       "raises": [],
       "examples": [
@@ -479,8 +479,8 @@
       "path": "lucid.special.polygamma",
       "kind": "function",
       "labels": [],
-      "signature": "polygamma(n: int, x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L832",
+      "signature": "polygamma(n: int, input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L832",
       "subcategory": null,
       "summary": "Polygamma function $\\psi^{(n)}(x)$.",
       "extended": "The `n`-th derivative of the digamma function.  Polygamma\nfunctions appear in the derivatives of log-partition functions of\nthe Gamma / Beta / Dirichlet families and are needed for evaluating\nFisher information matrices for these distributions analytically.",
@@ -492,7 +492,7 @@
           "default": null
         },
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Real argument; any floating-point dtype.",
           "default": null
@@ -500,7 +500,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$\\psi^{(n)}(x)$ element-wise, same shape and dtype as\n`x`."
+        "description": "$\\psi^{(n)}(x)$ element-wise, same shape and dtype as\n`input`."
       },
       "raises": [],
       "examples": [
@@ -519,7 +519,7 @@
       "kind": "function",
       "labels": [],
       "signature": "spherical_bessel_j0(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L918",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L918",
       "subcategory": null,
       "summary": "Spherical Bessel function of the first kind, order 0.",
       "extended": "Computes $j_0(x) = \\sin x / x$ with the continuous extension\n$j_0(0) = 1$.  Arises in 3D wave / scattering problems and is\nthe radial component of plane waves expanded in spherical harmonics.",
@@ -552,7 +552,7 @@
       "kind": "function",
       "labels": [],
       "signature": "chebyshev_polynomial_t(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L998",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L998",
       "subcategory": null,
       "summary": "Chebyshev polynomial of the first kind, $T_n(x)$.",
       "extended": "The Chebyshev T polynomials are orthogonal on $[-1, 1]$ with\nweight $1/\\sqrt{1 - x^2}$ and underlie spectral methods,\nminimax polynomial approximation, and Clenshaw-Curtis quadrature.",
@@ -591,7 +591,7 @@
       "kind": "function",
       "labels": [],
       "signature": "chebyshev_polynomial_u(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1042",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1042",
       "subcategory": null,
       "summary": "Chebyshev polynomial of the second kind, $U_n(x)$.",
       "extended": "The U polynomials are orthogonal on $[-1, 1]$ with weight\n$\\sqrt{1 - x^2}$.  They appear naturally as the derivative of\nthe T polynomials (up to a normalisation) and in Gauss-Chebyshev\nquadrature of the second kind.",
@@ -630,7 +630,7 @@
       "kind": "function",
       "labels": [],
       "signature": "chebyshev_polynomial_v(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1085",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1085",
       "subcategory": null,
       "summary": "Chebyshev polynomial of the third kind, $V_n(x)$.",
       "extended": "The V polynomials are orthogonal on $[-1, 1]$ with weight\n$\\sqrt{(1 + x)/(1 - x)}$ and arise in problems with one\nDirichlet and one Neumann boundary condition along the interval.",
@@ -669,7 +669,7 @@
       "kind": "function",
       "labels": [],
       "signature": "chebyshev_polynomial_w(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1132",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1132",
       "subcategory": null,
       "summary": "Chebyshev polynomial of the fourth kind, $W_n(x)$.",
       "extended": "The W polynomials are orthogonal on $[-1, 1]$ with weight\n$\\sqrt{(1 - x)/(1 + x)}$ — the mirror image of the V family —\nand partner with V under the substitution $x \\mapsto -x$.",
@@ -708,7 +708,7 @@
       "kind": "function",
       "labels": [],
       "signature": "shifted_chebyshev_polynomial_t(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1180",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1180",
       "subcategory": null,
       "summary": "Shifted Chebyshev T polynomial $T^*_n(x)$ on $[0, 1]$.",
       "extended": "Maps the standard Chebyshev T family from $[-1, 1]$ onto the\nunit interval $[0, 1]$ via the linear substitution\n$x \\mapsto 2x - 1$.  Useful when the natural domain of an\napproximation problem is $[0, 1]$.",
@@ -747,7 +747,7 @@
       "kind": "function",
       "labels": [],
       "signature": "shifted_chebyshev_polynomial_u(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1217",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1217",
       "subcategory": null,
       "summary": "Shifted Chebyshev U polynomial $U^*_n(x)$ on $[0, 1]$.",
       "extended": "Standard Chebyshev U polynomials shifted from $[-1, 1]$ onto\nthe unit interval by $x \\mapsto 2x - 1$.",
@@ -786,7 +786,7 @@
       "kind": "function",
       "labels": [],
       "signature": "shifted_chebyshev_polynomial_v(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1250",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1250",
       "subcategory": null,
       "summary": "Shifted Chebyshev V polynomial $V^*_n(x)$ on $[0, 1]$.",
       "extended": "Chebyshev V polynomials of the third kind composed with\n$x \\mapsto 2x - 1$, yielding a basis orthogonal on\n$[0, 1]$.",
@@ -825,7 +825,7 @@
       "kind": "function",
       "labels": [],
       "signature": "shifted_chebyshev_polynomial_w(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1283",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1283",
       "subcategory": null,
       "summary": "Shifted Chebyshev W polynomial $W^*_n(x)$ on $[0, 1]$.",
       "extended": "Chebyshev W polynomials of the fourth kind composed with\n$x \\mapsto 2x - 1$.",
@@ -864,7 +864,7 @@
       "kind": "function",
       "labels": [],
       "signature": "hermite_polynomial_h(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1315",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1315",
       "subcategory": null,
       "summary": "Physicist's Hermite polynomial $H_n(x)$.",
       "extended": "The physicists' Hermite polynomials are orthogonal on\n$(-\\infty, \\infty)$ with weight $e^{-x^2}$ and form the\neigenfunctions of the quantum harmonic oscillator (in conjunction\nwith the Gaussian envelope).",
@@ -903,7 +903,7 @@
       "kind": "function",
       "labels": [],
       "signature": "hermite_polynomial_he(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1361",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1361",
       "subcategory": null,
       "summary": "Probabilist's Hermite polynomial $\\mathit{He}_n(x)$.",
       "extended": "Probabilists' Hermite polynomials are orthogonal on\n$(-\\infty, \\infty)$ with weight $e^{-x^2/2} / \\sqrt{2\\pi}$ — the standard normal density — and are the natural\nbasis for Hermite-expansions of functions against a Gaussian\nmeasure (Wiener chaos, Gauss-Hermite quadrature with weight 1).",
@@ -942,7 +942,7 @@
       "kind": "function",
       "labels": [],
       "signature": "legendre_polynomial_p(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1406",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1406",
       "subcategory": null,
       "summary": "Legendre polynomial $P_n(x)$.",
       "extended": "The Legendre polynomials are orthogonal on $[-1, 1]$ with\nuniform weight, and serve as the angular eigenfunctions of the\nLaplacian on the sphere (spherical harmonics with $m = 0$)\nand as a basis for Gauss-Legendre quadrature.",
@@ -981,7 +981,7 @@
       "kind": "function",
       "labels": [],
       "signature": "laguerre_polynomial_l(x: Tensor, n: int)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1455",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1455",
       "subcategory": null,
       "summary": "Laguerre polynomial $L_n(x)$.",
       "extended": "The (simple) Laguerre polynomials are orthogonal on\n$[0, \\infty)$ with weight $e^{-x}$ and appear as the\nradial eigenfunctions of the hydrogen atom, as the basis of\nGauss-Laguerre quadrature, and in survival-analysis kernels.",
@@ -1019,14 +1019,14 @@
       "path": "lucid.special.bessel_j0",
       "kind": "function",
       "labels": [],
-      "signature": "bessel_j0(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1595",
+      "signature": "bessel_j0(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1595",
       "subcategory": null,
       "summary": "Bessel function of the first kind, order 0.",
       "extended": "Computes $J_0(x)$, the regular-at-origin solution of Bessel's\nequation $x^2 y'' + x y' + x^2 y = 0$ for order 0.  Appears\nthroughout wave propagation, optical diffraction (the Airy disk\nprofile), and vibration of circular membranes.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -1034,7 +1034,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$J_0(x)$ element-wise, same shape and dtype as `x`."
+        "description": "$J_0(x)$ element-wise, same shape and dtype as `input`."
       },
       "raises": [],
       "examples": [
@@ -1052,14 +1052,14 @@
       "path": "lucid.special.bessel_j1",
       "kind": "function",
       "labels": [],
-      "signature": "bessel_j1(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1687",
+      "signature": "bessel_j1(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1687",
       "subcategory": null,
       "summary": "Bessel function of the first kind, order 1.",
       "extended": "Computes $J_1(x)$, the regular order-one solution of Bessel's\nequation.  Closely related to $J_0$ by\n$J_0'(x) = -J_1(x)$; appears as the radial derivative of\ncylindrical waves and in the antenna-pattern of a uniformly\nilluminated circular aperture.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -1067,7 +1067,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$J_1(x)$ element-wise, same shape and dtype as `x`."
+        "description": "$J_1(x)$ element-wise, same shape and dtype as `input`."
       },
       "raises": [],
       "examples": [
@@ -1085,14 +1085,14 @@
       "path": "lucid.special.bessel_y0",
       "kind": "function",
       "labels": [],
-      "signature": "bessel_y0(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1772",
+      "signature": "bessel_y0(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1772",
       "subcategory": null,
       "summary": "Bessel function of the second kind, order 0.",
       "extended": "Computes $Y_0(x)$, the singular-at-origin partner of\n$J_0$.  Together $J_0$ and $Y_0$ span the\nsolution space of Bessel's equation at order 0; $Y_0$ is the\none that diverges (logarithmically) at the origin.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; only $x > 0$ is in the domain.  Any\nfloating-point dtype.",
           "default": null
@@ -1100,7 +1100,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$Y_0(x)$ element-wise, same shape and dtype as `x`."
+        "description": "$Y_0(x)$ element-wise, same shape and dtype as `input`."
       },
       "raises": [],
       "examples": [
@@ -1118,14 +1118,14 @@
       "path": "lucid.special.bessel_y1",
       "kind": "function",
       "labels": [],
-      "signature": "bessel_y1(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1867",
+      "signature": "bessel_y1(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1867",
       "subcategory": null,
       "summary": "Bessel function of the second kind, order 1.",
       "extended": "Computes $Y_1(x)$, the singular-at-origin order-one solution\nof Bessel's equation.  Diverges as $-2/(\\pi x)$ at the origin\nand decays as $\\sqrt{2/(\\pi x)}$ for large `x`.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; only $x > 0$ is in the domain.  Any\nfloating-point dtype.",
           "default": null
@@ -1133,7 +1133,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$Y_1(x)$ element-wise, same shape and dtype as `x`."
+        "description": "$Y_1(x)$ element-wise, same shape and dtype as `input`."
       },
       "raises": [],
       "examples": [
@@ -1151,14 +1151,14 @@
       "path": "lucid.special.modified_bessel_k0",
       "kind": "function",
       "labels": [],
-      "signature": "modified_bessel_k0(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1936",
+      "signature": "modified_bessel_k0(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1936",
       "subcategory": null,
       "summary": "Modified Bessel function of the second kind, order 0.",
       "extended": "Computes $K_0(x)$, the exponentially decaying solution of the\nmodified Bessel equation at order 0.  Appears as the Green's\nfunction of the 2D Helmholtz operator and as the log-density kernel\nof certain heavy-tailed distributions.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; only $x > 0$ is in the domain.  Any\nfloating-point dtype.",
           "default": null
@@ -1166,7 +1166,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$K_0(x)$ element-wise, same shape and dtype as `x`."
+        "description": "$K_0(x)$ element-wise, same shape and dtype as `input`."
       },
       "raises": [],
       "examples": [
@@ -1185,7 +1185,7 @@
       "kind": "function",
       "labels": [],
       "signature": "scaled_modified_bessel_k0(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L1986",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L1986",
       "subcategory": null,
       "summary": "Exponentially scaled modified Bessel $K_0$: $e^x K_0(x)$.",
       "extended": "Computes $e^{x} K_0(x)$, the bounded counterpart of\n`modified_bessel_k0`.  Because $K_0$ decays\nexponentially as $e^{-x}/\\sqrt{x}$, the scaled form is the\nnatural quantity to manipulate in log-density expressions where\ndirect evaluation of $K_0$ would underflow.",
@@ -1217,14 +1217,14 @@
       "path": "lucid.special.modified_bessel_k1",
       "kind": "function",
       "labels": [],
-      "signature": "modified_bessel_k1(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L2046",
+      "signature": "modified_bessel_k1(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L2046",
       "subcategory": null,
       "summary": "Modified Bessel function of the second kind, order 1.",
       "extended": "Computes $K_1(x)$, the order-one analogue of $K_0$.\nDiverges as $1/x$ near the origin and decays exponentially\nfor large argument.  Appears in Generalised-Inverse-Gaussian and\nNormal-Inverse-Gaussian log-densities.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; only $x > 0$ is in the domain.",
           "default": null
@@ -1232,7 +1232,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$K_1(x)$ element-wise, same shape and dtype as `x`."
+        "description": "$K_1(x)$ element-wise, same shape and dtype as `input`."
       },
       "raises": [],
       "examples": [
@@ -1251,7 +1251,7 @@
       "kind": "function",
       "labels": [],
       "signature": "scaled_modified_bessel_k1(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L2094",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L2094",
       "subcategory": null,
       "summary": "Exponentially scaled modified Bessel $K_1$: $e^x K_1(x)$.",
       "extended": "Computes $e^x K_1(x)$, the bounded scaled variant of\n`modified_bessel_k1` suitable for stable evaluation of\nlog-densities involving $K_1$ at large argument.",
@@ -1283,14 +1283,14 @@
       "path": "lucid.special.gammaln",
       "kind": "function",
       "labels": [],
-      "signature": "gammaln(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L2137",
+      "signature": "gammaln(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L2137",
       "subcategory": null,
       "summary": "Natural logarithm of the absolute value of the gamma function.",
       "extended": "Convenience alias for `lucid.lgamma`.  Computes\n$\\log|\\Gamma(x)|$ with numerical stability for large\narguments where $\\Gamma(x)$ would itself overflow.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -1316,14 +1316,14 @@
       "path": "lucid.special.psi",
       "kind": "function",
       "labels": [],
-      "signature": "psi(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L2177",
+      "signature": "psi(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L2177",
       "subcategory": null,
       "summary": "Digamma function $\\psi(x) = \\frac{d}{dx} \\log \\Gamma(x)$.",
       "extended": "Convenience alias for `lucid.digamma`.  The digamma function\nis the logarithmic derivative of the gamma function and the\nfundamental building block of the polygamma family.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -1349,14 +1349,14 @@
       "path": "lucid.special.expit",
       "kind": "function",
       "labels": [],
-      "signature": "expit(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L2220",
+      "signature": "expit(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L2220",
       "subcategory": null,
       "summary": "Logistic sigmoid (expit) function $\\sigma(x)$.",
       "extended": "Convenience alias for `lucid.sigmoid`.  Maps the real line\nonto the open interval $(0, 1)$ and is the inverse of\n`lucid.logit`.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -1364,7 +1364,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$\\sigma(x) = 1 / (1 + e^{-x})$ element-wise, same shape\nand dtype as `x`."
+        "description": "$\\sigma(x) = 1 / (1 + e^{-x})$ element-wise, same shape\nand dtype as `input`."
       },
       "raises": [],
       "examples": [
@@ -1382,14 +1382,14 @@
       "path": "lucid.special.modified_bessel_i0",
       "kind": "function",
       "labels": [],
-      "signature": "modified_bessel_i0(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L2261",
+      "signature": "modified_bessel_i0(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L2261",
       "subcategory": null,
       "summary": "Modified Bessel function of the first kind, order 0.",
       "extended": "Convenience alias for `lucid.i0`.  Computes $I_0(x)$,\nthe order-zero regular solution of the modified Bessel equation,\nused in the von Mises density and rotational kernel families.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null
@@ -1397,7 +1397,7 @@
       ],
       "returns": {
         "annotation": "Tensor",
-        "description": "$I_0(x)$ element-wise, same shape and dtype as `x`."
+        "description": "$I_0(x)$ element-wise, same shape and dtype as `input`."
       },
       "raises": [],
       "examples": [
@@ -1415,14 +1415,14 @@
       "path": "lucid.special.modified_bessel_i1",
       "kind": "function",
       "labels": [],
-      "signature": "modified_bessel_i1(x: Tensor)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/special/__init__.py#L2301",
+      "signature": "modified_bessel_i1(input: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/special/__init__.py#L2301",
       "subcategory": null,
       "summary": "Modified Bessel function of the first kind, order 1.",
       "extended": "Convenience wrapper around `i1`.  Computes $I_1(x)$,\nthe order-one regular solution of the modified Bessel equation,\nforming a natural pair with $I_0$ for log-density evaluation\nof Rician / Bessel-family distributions.",
       "parameters": [
         {
-          "name": "x",
+          "name": "input",
           "annotation": "Tensor",
           "description": "Input tensor; any floating-point dtype.",
           "default": null

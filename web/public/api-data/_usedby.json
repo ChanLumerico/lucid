@@ -274,6 +274,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.linalg._ex"
+    },
+    {
+      "kind": "module",
       "module": "lucid.metal"
     },
     {
@@ -291,6 +295,14 @@
     {
       "kind": "module",
       "module": "lucid.nn._state_dict"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional._grid_sampling"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.functional._inplace"
     },
     {
       "kind": "module",
@@ -455,6 +467,12 @@
     {
       "kind": "module",
       "module": "lucid.utils.tokenizer._wordpiece"
+    }
+  ],
+  "lucid._factories._generator.Generator": [
+    {
+      "kind": "module",
+      "module": "lucid._factories.random"
     }
   ],
   "lucid._ops.composite._gamma.gammainc": [
@@ -2023,7 +2041,25 @@
       "module": "lucid.linalg"
     }
   ],
+  "lucid.linalg._ex.tensorinv": [
+    {
+      "kind": "module",
+      "module": "lucid.linalg"
+    }
+  ],
+  "lucid.linalg._ex.tensorsolve": [
+    {
+      "kind": "module",
+      "module": "lucid.linalg"
+    }
+  ],
   "lucid.linalg.cholesky": [
+    {
+      "kind": "module",
+      "module": "lucid.linalg._ex"
+    }
+  ],
+  "lucid.linalg.eigh": [
     {
       "kind": "module",
       "module": "lucid.linalg._ex"
@@ -2042,6 +2078,12 @@
     }
   ],
   "lucid.linalg.solve_triangular": [
+    {
+      "kind": "module",
+      "module": "lucid.linalg._ex"
+    }
+  ],
+  "lucid.linalg.svd": [
     {
       "kind": "module",
       "module": "lucid.linalg._ex"
@@ -11964,10 +12006,6 @@
     },
     {
       "kind": "module",
-      "module": "lucid.models.generative.ncsn._model"
-    },
-    {
-      "kind": "module",
       "module": "lucid.models.generative.ncsn._refinenet"
     },
     {
@@ -14310,6 +14348,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.nn.utils._checks"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn.utils._copy"
     },
     {
@@ -15454,6 +15496,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.nn.utils._checks"
+    },
+    {
+      "kind": "module",
       "module": "lucid.nn.utils.clip_grad"
     },
     {
@@ -15521,6 +15567,10 @@
     {
       "kind": "module",
       "module": "lucid.nn.modules._lazy"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.nn.modules.normalization"
     }
   ],
   "lucid.nn.qat": [
@@ -18115,6 +18165,10 @@
     {
       "kind": "module",
       "module": "lucid.utils.transforms._geometric"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.utils.transforms._misc"
     },
     {
       "kind": "module",

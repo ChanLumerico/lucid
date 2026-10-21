@@ -19,6 +19,7 @@ import lucid
 from lucid._tensor.tensor import Tensor
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
+from lucid.nn.utils._checks import _require_parameter
 
 # Sentinel attribute mapping ``tensor_name`` → handle so ``remove`` /
 # ``is_pruned`` can find the registration.
@@ -32,13 +33,7 @@ def _install_mask(module: Module, name: str, mask: Tensor) -> Module:
     as a buffer ``{name}_mask``, and installs a forward-pre-hook that
     materialises ``{name} = {name}_orig * {name}_mask`` before each call.
     """
-    if not hasattr(module, name):
-        raise AttributeError(f"module has no parameter '{name}'")
-    weight: Parameter = getattr(module, name)
-    if not isinstance(weight, Parameter):
-        raise TypeError(
-            f"'{name}' must be a Parameter to prune, got {type(weight).__name__}"
-        )
+    weight: Parameter = _require_parameter(module, name, "prune")
     if tuple(mask.shape) != tuple(weight.shape):
         raise ValueError(
             f"prune mask shape {tuple(mask.shape)} does not match weight "
@@ -98,7 +93,7 @@ def identity(module: Module, name: str = "weight") -> Module:
     >>> prune.is_pruned(layer)
     True
     """
-    weight: Parameter = getattr(module, name)
+    weight: Parameter = _require_parameter(module, name, "prune")
     mask: Tensor = lucid.ones_like(weight)
     return _install_mask(module, name, mask)
 
@@ -155,7 +150,7 @@ def random_unstructured(
     """
     if not 0.0 <= amount <= 1.0:
         raise ValueError(f"amount must be in [0, 1], got {amount}")
-    weight: Parameter = getattr(module, name)
+    weight: Parameter = _require_parameter(module, name, "prune")
     # The mask multiplies ``weight`` — it must be created on the weight's
     # device, not the default one.
     rand_t: Tensor = lucid.rand(*weight.shape, dtype=weight.dtype, device=weight.device)
@@ -219,7 +214,7 @@ def l1_unstructured(
     """
     if not 0.0 <= amount <= 1.0:
         raise ValueError(f"amount must be in [0, 1], got {amount}")
-    weight: Parameter = getattr(module, name)
+    weight: Parameter = _require_parameter(module, name, "prune")
     abs_w: Tensor = lucid.abs(weight.detach())
     flat: Tensor = abs_w.reshape([-1])
     n_total: int = int(flat._impl.numel())

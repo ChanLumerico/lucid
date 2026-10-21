@@ -64,6 +64,10 @@ _PAST_THE_LAST_AXIS = {
     "diff": lambda lib, t, d: lib.diff(t, dim=d),
     "Tensor.diff": lambda lib, t, d: t.diff(dim=d),
     "linalg.cross": lambda lib, t, d: lib.linalg.cross(t, t, dim=d),
+    "unique": lambda lib, t, d: lib.unique(t, dim=d),
+    "unique_consecutive": lambda lib, t, d: lib.unique_consecutive(t, dim=d),
+    "fft": lambda lib, t, d: lib.fft.fft(t, dim=d),
+    "fftshift": lambda lib, t, d: lib.fft.fftshift(t, dim=d),
 }
 
 
@@ -73,9 +77,9 @@ def test_an_axis_past_the_last_is_refused(ref, device, op, shape):
     call = _PAST_THE_LAST_AXIS[op]
     bad = max(len(shape), 1)
     for dim in (bad, -bad - 1):
-        with pytest.raises(IndexError, match=f"axis out of range: got {dim}"):
+        with pytest.raises(IndexError, match=f"axis out of range: got {dim}|Dimension specified as {dim}|FFT axis {dim}"):
             call(lucid, lucid.zeros(shape, device=device), dim)
-        if op in ("split", "chunk", "glu", "diff", "Tensor.diff") and not shape:
+        if op in ("split", "chunk", "glu", "diff", "Tensor.diff", "unique", "unique_consecutive", "fft", "fftshift") and not shape:
             continue
         with pytest.raises(IndexError):
             call(ref, ref.zeros(shape), dim)
@@ -348,3 +352,16 @@ def test_sort_and_argsort_on_a_0d_tensor(ref, device, dim, descending):
     want_idx = ref.argsort(ref.tensor(1.5), dim=dim, descending=descending)
     assert got_idx.shape == () and got_idx.dtype == lucid.int64
     assert got_idx.item() == want_idx.item() == 0
+
+
+def test_matrix_norm_refuses_out_of_range_dims(ref, device) -> None:
+    """LCD-263: ``linalg.matrix_norm`` wraps its axis pair through ``_wrap_dim``
+    instead of ``% rank``."""
+    x = lucid.ones(2, 3, device=device)
+    xr = ref.ones(2, 3)
+    for bad_dim in ((0, 2), (-3, 1)):
+        with pytest.raises(IndexError, match="axis out of range"):
+            lucid.linalg.matrix_norm(x, dim=bad_dim)
+        with pytest.raises(IndexError):
+            ref.linalg.matrix_norm(xr, dim=bad_dim)
+

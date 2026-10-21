@@ -301,3 +301,13 @@ class TestTheOtherFourAxesReachingThisOne:
             cml.export(
                 Carries().eval(), lucid.randn(4, 4), f"{tmp_path}/buffers.mlpackage"
             )
+
+    def test_pack_bits_refuses_gpu_keys_with_value_error(self) -> None:
+        """LCD-263 / LCD-521: ``pack_bits`` must check ``device() == CPU``
+        before ``std::get<CpuStorage>(keys->storage())`` so a Metal tensor
+        raises ``ValueError`` (``InvalidArgument``) instead of
+        ``std::bad_variant_access``."""
+        gpu_keys = lucid.tensor([0, 1, 2, 3], dtype=lucid.int32, device="metal")
+        with pytest.raises(ValueError, match="keys must be on the CPU"):
+            _C_engine.coreml.pack_bits(gpu_keys._impl, 2)
+

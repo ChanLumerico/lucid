@@ -3,7 +3,7 @@
   "name": "amp",
   "path": "lucid.amp",
   "kind": "module",
-  "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/__init__.py#L1",
+  "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/__init__.py#L1",
   "members": [
     {
       "name": "autocast",
@@ -12,8 +12,8 @@
       "class_kind": "regular",
       "bases": [],
       "labels": [],
-      "signature": "autocast(device_type: str = 'metal', dtype: dtype | None = None, enabled: bool = True)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/autocast.py#L25",
+      "signature": "autocast(device_type: str = 'metal', dtype: dtype | None = None, enabled: bool = True, cache_enabled: bool | None = None)",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/autocast.py#L25",
       "subcategory": "autocast",
       "methods": [
         {
@@ -21,8 +21,8 @@
           "path": "lucid.amp.autocast.autocast.__init__",
           "kind": "function",
           "labels": [],
-          "signature": "__init__(device_type: str = 'metal', dtype: dtype | None = None, enabled: bool = True)",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/autocast.py#L105",
+          "signature": "__init__(device_type: str = 'metal', dtype: dtype | None = None, enabled: bool = True, cache_enabled: bool | None = None)",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/autocast.py#L102",
           "subcategory": "autocast",
           "summary": "Configure the autocast context.",
           "extended": null,
@@ -36,7 +36,7 @@
             {
               "name": "dtype",
               "annotation": "lucid.dtype or None",
-              "description": "Lower-precision dtype that supported ops cast inputs to inside\nthe scope (defaults to `lucid.float16` when `None`).",
+              "description": "Lower-precision dtype that supported ops cast inputs to inside\nthe scope (defaults to `lucid.float16` on `'metal'` and\n`lucid.bfloat16` on `'cpu'` when `None`).",
               "default": "None"
             },
             {
@@ -44,6 +44,12 @@
               "annotation": "bool",
               "description": "When `False` autocast is disabled on `device_type` inside\nthe scope (useful for ablation or nested full-precision blocks).",
               "default": "True"
+            },
+            {
+              "name": "cache_enabled",
+              "annotation": "bool or None",
+              "description": "Whether weight-cast caching is enabled inside the autocast scope.\nDefaults to `True` when `None`.",
+              "default": "None"
             }
           ],
           "returns": {
@@ -63,12 +69,35 @@
           "see_also": []
         },
         {
+          "name": "cache_enabled",
+          "path": "lucid.amp.autocast.autocast.cache_enabled",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "cache_enabled: bool",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/autocast.py#L147",
+          "summary": "Whether weight-cast caching is enabled inside this autocast scope.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "bool",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
           "name": "__enter__",
           "path": "lucid.amp.autocast.autocast.__enter__",
           "kind": "function",
           "labels": [],
           "signature": "__enter__()",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/autocast.py#L150",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/autocast.py#L161",
           "subcategory": "autocast",
           "summary": "Activate (or disable) the autocast scope and return `self`.",
           "extended": "Constructing the engine `AutocastGuard` sets the AMP state for\n`self._device_type` to `(enabled, dtype)` and records the state\nit replaced; the guard is kept until `__exit__`.",
@@ -90,7 +119,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__exit__(args: object = ())",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/autocast.py#L166",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/autocast.py#L177",
           "subcategory": "autocast",
           "summary": "Restore the AMP state that was active when the scope was entered.",
           "extended": "Releases the guard `__enter__` made.  Its destructor runs at\nonce and puts back the state it recorded, so the scope ends here\nrather than whenever the `autocast` object is collected.\nExceptions propagate.",
@@ -112,7 +141,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__call__(fn: F)",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/autocast.py#L177",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/autocast.py#L188",
           "subcategory": "autocast",
           "summary": "Use as a function decorator.",
           "extended": "Every call of the decorated function runs inside this scope — the\nsame `device_type`, `dtype` and `enabled` — and leaves it on\nreturn or on an exception.",
@@ -143,7 +172,7 @@
             "staticmethod"
           ],
           "signature": "is_autocast_enabled(device_type: str | None = None)",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/autocast.py#L203",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/autocast.py#L214",
           "subcategory": "autocast",
           "summary": "Return True if autocast is currently active (for `device_type` if given).",
           "extended": null,
@@ -167,7 +196,7 @@
             "staticmethod"
           ],
           "signature": "get_autocast_dtype(device_type: str | None = None)",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/autocast.py#L210",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/autocast.py#L221",
           "subcategory": "autocast",
           "summary": "Return the currently active autocast dtype (for `device_type` if given), or None.",
           "extended": null,
@@ -196,7 +225,7 @@
         {
           "name": "dtype",
           "annotation": "lucid.dtype",
-          "description": "Lower-precision dtype that supported ops cast inputs to inside\nthe scope.  Default `lucid.float16`.  On the CPU, float16\nruns in float32 — Accelerate has no half-precision kernels — so a\nCPU scope with the default dtype changes nothing; pass\n`dtype=lucid.bfloat16` for reduced precision there, as the\nreference framework's CPU autocast does by default.  Not every CPU\nop has a bfloat16 kernel yet.",
+          "description": "Lower-precision dtype that supported ops cast inputs to inside\nthe scope.  Default `lucid.float16` on `\"metal\"` and\n`lucid.bfloat16` on `\"cpu\"` (matching the reference\nframework).",
           "default": "None"
         },
         {
@@ -229,7 +258,7 @@
       "bases": [],
       "labels": [],
       "signature": "GradScaler(init_scale: float = 2.0 ** 16, growth_factor: float = 2.0, backoff_factor: float = 0.5, growth_interval: int = 2000, enabled: bool = True)",
-      "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/grad_scaler.py#L45",
+      "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/grad_scaler.py#L45",
       "subcategory": "grad_scaler",
       "methods": [
         {
@@ -238,7 +267,7 @@
           "kind": "function",
           "labels": [],
           "signature": "__init__(init_scale: float = 2.0 ** 16, growth_factor: float = 2.0, backoff_factor: float = 0.5, growth_interval: int = 2000, enabled: bool = True)",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/grad_scaler.py#L164",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/grad_scaler.py#L164",
           "subcategory": "grad_scaler",
           "summary": "Initialize the scaler state.",
           "extended": null,
@@ -291,7 +320,7 @@
           "kind": "function",
           "labels": [],
           "signature": "scale(outputs: Tensor | list[Tensor])",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/grad_scaler.py#L202",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/grad_scaler.py#L201",
           "subcategory": "grad_scaler",
           "summary": "Multiply outputs by the current scale factor.",
           "extended": null,
@@ -320,7 +349,7 @@
           "kind": "function",
           "labels": [],
           "signature": "unscale_(optimizer: Optimizer)",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/grad_scaler.py#L229",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/grad_scaler.py#L228",
           "subcategory": "grad_scaler",
           "summary": "Divide the optimizer's gradients by the current scale, in place.",
           "extended": "Call it between `backward()` and `step` when the real\ngradients are needed — to clip them, or to inspect their norm.  The\nscaler records that this optimizer's gradients are unscaled, so the\n`step` that follows does not divide them again.",
@@ -364,7 +393,7 @@
           "kind": "function",
           "labels": [],
           "signature": "step(optimizer: Optimizer, args: object = (), kwargs: object = {})",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/grad_scaler.py#L367",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/grad_scaler.py#L366",
           "subcategory": "grad_scaler",
           "summary": "Unscale the gradients if needed, then step unless they overflowed.",
           "extended": "If `unscale_` already ran for `optimizer` in this iteration\nits gradients are used as they are; otherwise they are unscaled\nhere.  The optimizer's `step()` is skipped when its gradients held\nan `inf` or `NaN`.",
@@ -418,7 +447,7 @@
           "kind": "function",
           "labels": [],
           "signature": "update(new_scale: float | None = None)",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/grad_scaler.py#L428",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/grad_scaler.py#L427",
           "subcategory": "grad_scaler",
           "summary": "Update the scale factor and start the next iteration.",
           "extended": "If a scale is provided, it is set directly. Otherwise, the scale\nis reduced by `backoff_factor` if any optimizer's gradients\noverflowed since the last update, or grown by `growth_factor`\nafter `growth_interval` overflow-free updates.  Either way every\noptimizer returns to the state where `unscale_` and\n`step` may be called again.",
@@ -447,7 +476,7 @@
           "kind": "function",
           "labels": [],
           "signature": "get_scale()",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/grad_scaler.py#L460",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/grad_scaler.py#L459",
           "subcategory": "grad_scaler",
           "summary": "Return the current scale factor.",
           "extended": null,
@@ -469,7 +498,7 @@
           "kind": "function",
           "labels": [],
           "signature": "state_dict()",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/grad_scaler.py#L464",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/grad_scaler.py#L463",
           "subcategory": "grad_scaler",
           "summary": "Return serializable state dict.",
           "extended": null,
@@ -491,7 +520,7 @@
           "kind": "function",
           "labels": [],
           "signature": "load_state_dict(state_dict: dict[str, float])",
-          "source": "https://github.com/lucid-official/lucid/blob/b4ffa5e/lucid/amp/grad_scaler.py#L474",
+          "source": "https://github.com/lucid-official/lucid/blob/3f53b8301/lucid/amp/grad_scaler.py#L473",
           "subcategory": "grad_scaler",
           "summary": "Load state from a dict.",
           "extended": null,
