@@ -157,6 +157,7 @@ class CMakeBuildExt(build_ext):
         ext_dir.mkdir(parents=True, exist_ok=True)
 
         build_mode = os.environ.get("LUCID_BUILD_MODE", "release").lower()
+        sanitize = os.environ.get("LUCID_SANITIZE", "").strip()
         # The floor is the pinned MLX binary's: one wheel for that macOS and later.
         deployment_target = _deployment_target(mlx_pin.macos)
         cmake_args = [
@@ -171,6 +172,7 @@ class CMakeBuildExt(build_ext):
             f"-DCMAKE_OSX_SYSROOT={_macos_sdkroot()}",
             f"-DCMAKE_OSX_DEPLOYMENT_TARGET={deployment_target}",
             f"-DLUCID_BUILD_MODE={build_mode}",
+            f"-DLUCID_SANITIZE={sanitize}",
             f"-DLUCID_COVERAGE={os.environ.get('LUCID_COVERAGE', 'OFF')}",
             f"-DLUCID_PYTHON_INCLUDE_DIR={sysconfig.get_paths()['include']}",
             f"-DLUCID_PYBIND11_INCLUDE_DIR={pybind11.get_include()}",

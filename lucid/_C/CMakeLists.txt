@@ -22,6 +22,7 @@ if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
 endif()
 
 set(LUCID_BUILD_MODE "release" CACHE STRING "Lucid build mode: release, debug, debug-ubsan, debug-asan, debug-tsan")
+set(LUCID_SANITIZE "" CACHE STRING "Comma-separated Clang sanitizers (e.g. address,undefined, thread)")
 option(LUCID_COVERAGE "Enable LLVM coverage instrumentation" OFF)
 set(LUCID_REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/../..")
 
@@ -181,7 +182,16 @@ target_compile_options(
         -Wno-unused-parameter
         -fvisibility=hidden)
 
-if(LUCID_BUILD_MODE STREQUAL "release")
+if(LUCID_SANITIZE)
+    target_compile_options(
+        lucid_compile_options
+        INTERFACE
+            -O1
+            -g
+            -fno-omit-frame-pointer
+            -fsanitize=${LUCID_SANITIZE})
+    target_link_options(lucid_compile_options INTERFACE -fsanitize=${LUCID_SANITIZE})
+elseif(LUCID_BUILD_MODE STREQUAL "release")
     target_compile_options(lucid_compile_options INTERFACE -O3)
     target_compile_definitions(lucid_compile_options INTERFACE NDEBUG)
 elseif(LUCID_BUILD_MODE STREQUAL "debug")

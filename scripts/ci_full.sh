@@ -363,9 +363,9 @@ part_native() {
     # schedule, manual runs and a local ``ci_full.sh`` run everything.
     # Last of all: it replaces the installed engine with the sanitizer build,
     # and every stage before it reads the release one.
-    if slow "UBSan build + fast tests"; then
-        echo "==> UBSan build + fast tests"
-        ./scripts/ci_sanitizer.sh ubsan
+    if slow "ASan + UBSan build + fast tests"; then
+        echo "==> ASan + UBSan build + fast tests"
+        ./scripts/ci_sanitizer.sh asan
     fi
 }
 

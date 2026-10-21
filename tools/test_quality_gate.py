@@ -805,3 +805,41 @@ def test_unlaunder_end_to_end_reaches_a_fixpoint(tmp_path: Path) -> None:
     assert (root / "lucid" / "other" / "mod.py").read_text() == UNLAUNDER_MOD
     done = unlaunder(root, "--check", "--paths", "lucid/pkg")
     assert done.returncode == 0 and "0 redundant-cast, 0 unused-ignore" in done.stdout
+
+
+@pytest.mark.skipif(
+    shutil.which("clang-tidy") is None
+    and not (Path(sys.executable).parent / "clang-tidy").is_file(),
+    reason="clang-tidy is not installed",
+)
+def test_clang_tidy_collector_counts_seeded_cpp_regression(tmp_path: Path) -> None:
+    """DS-3 (LCD-262): clang-tidy counts findings from compile_commands.json."""
+    root = tmp_path / "repo"
+    (root / "lucid" / "_C").mkdir(parents=True)
+    (root / "tools").mkdir()
+    (root / "build").mkdir()
+    cpp_file = root / "lucid" / "_C" / "sample.cpp"
+    cpp_file.write_text("int clean(int x) { return x + 1; }\n")
+    sdk = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
+    (root / "build" / "compile_commands.json").write_text(
+        json.dumps(
+            [
+                {
+                    "directory": str(root),
+                    "command": f"/usr/bin/clang++ -std=c++20 -isysroot {sdk} -c lucid/_C/sample.cpp",
+                    "file": str(cpp_file),
+                }
+            ]
+        )
+    )
+    git(root, "init", "-q", "-b", "main")
+    done = gate(root, "--rebaseline", "--reason", "t", "--collectors", "clang-tidy")
+    assert done.returncode == 0, done.stdout + done.stderr
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+
+    cpp_file.write_text("int bad() { int uninit; return uninit; }\n")
+    out = gate(root, "--full", "--collectors", "clang-tidy")
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "cppcoreguidelines-init-variables" in out.stdout
+    assert "lucid/_C/sample.cpp" in out.stdout

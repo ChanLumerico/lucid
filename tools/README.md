@@ -25,7 +25,7 @@ Python is `lucid/` minus `lucid/test/`; C++ is `lucid/_C/`.
 | `jscpd` | clone pairs of 8+ lines / 50+ tokens (py + C++), via `npx jscpd@5.4.0` | D2 |
 | `mypy` | the documented `mypy --strict lucid/` verbatim (`config.MYPY_COMMAND`) plus `warn-unused-ignores`, `ignore-without-code`, `redundant-cast`, `redundant-expr`, `truthy-bool`, `possibly-undefined`; every file it reports counts, including the `tools/` modules `lucid/` imports | D1, D4 |
 | `semgrep` | Lucid rules in `tools/semgrep/rules/` (none until DS-4) | D5 |
-| `clang-tidy` | stub, off by default (DS-3) | — |
+| `clang-tidy` | `bugprone-*`, `cppcoreguidelines-pro-bounds-*`, `cppcoreguidelines-init-variables`, `cppcoreguidelines-narrowing-conversions`, `readability-function-size`, `performance-*` on `build/compile_commands.json` (opt-in via `--collectors clang-tidy`; DS-3) | D3, D4, style |
 
 Deliberately off: `FBT` and public-API `PLR0913` (signatures follow the
 reference framework's), `TRY003` (a library's exceptions carry their own

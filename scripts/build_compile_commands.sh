@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 BUILD_DIR="${BUILD_DIR:-build/compile_commands}"
 LUCID_BUILD_MODE="${LUCID_BUILD_MODE:-release}"
+LUCID_SANITIZE="${LUCID_SANITIZE:-}"
 # Match the canonical build target (setup.py: [tool.lucid.mlx] macos, the
 # minos of the bundled MLX) so the generated compile_commands.json — and thus
 # clang-tidy / IDE diagnostics — reflect the same SDK the real build uses.
@@ -65,6 +66,7 @@ echo "==> Configuring CMake compile database"
     -DCMAKE_OSX_SYSROOT="$SDKROOT" \
     -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
     -DLUCID_BUILD_MODE="$LUCID_BUILD_MODE" \
+    -DLUCID_SANITIZE="$LUCID_SANITIZE" \
     -DLUCID_PYTHON_INCLUDE_DIR="${CMAKE_PATHS[0]}" \
     -DLUCID_PYBIND11_INCLUDE_DIR="${CMAKE_PATHS[1]}" \
     -DLUCID_MLX_INCLUDE_DIR="$MLX_DIR/include" \

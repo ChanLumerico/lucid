@@ -128,6 +128,22 @@ MYPY_FLAGS = (
 # ── semgrep ───────────────────────────────────────────────────────────────
 SEMGREP_RULES_DIR = "tools/semgrep/rules"
 
+# ── clang-tidy ────────────────────────────────────────────────────────────
+# DS-3 (LCD-262): bugprone-*, the safe subset of cppcoreguidelines-*
+# (pro-bounds, init-variables, narrowing), readability-function-size, and
+# performance-*.  Opt-in (--collectors clang-tidy): needs compile_commands.json
+# and ~30 s across all 249 translation units.
+CLANG_TIDY_CHECKS = (
+    "-*,"
+    "bugprone-*,"
+    "cppcoreguidelines-pro-bounds-*,"
+    "cppcoreguidelines-init-variables,"
+    "cppcoreguidelines-narrowing-conversions,"
+    "readability-function-size,"
+    "performance-*"
+)
+CLANG_TIDY_HEADER_FILTER = r".*lucid/_C/.*"
+
 # ── defect classes (obsidian roadmap-deslop-quality-gate) ─────────────────
 CLASSES = {
     "D1": "type laundering",
@@ -166,6 +182,8 @@ _CLASS_RULES = (
     ("engine", "", "D7"),
     ("jscpd", "", "D2"),
     ("semgrep", "", "D5"),
+    ("clang-tidy", "readability-function-size", "D3"),
+    ("clang-tidy", "performance-", "S"),
     ("clang-tidy", "", "D4"),
 )
 
@@ -215,4 +233,8 @@ def contract() -> dict[str, dict[str, object]]:
         },
         "mypy": {"mypy_flags": " ".join(MYPY_FLAGS)},
         "engine": {"engine_test_only_bindings": ",".join(sorted(ENGINE_TEST_ONLY_BINDINGS))},
+        "clang-tidy": {
+            "clang_tidy_checks": CLANG_TIDY_CHECKS,
+            "clang_tidy_header_filter": CLANG_TIDY_HEADER_FILTER,
+        },
     }

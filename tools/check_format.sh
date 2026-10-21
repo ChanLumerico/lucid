@@ -42,7 +42,11 @@ if [[ $TIDY -eq 1 ]]; then
   CLANG_TIDY="${CLANG_TIDY:-clang-tidy}"
   if command -v "$CLANG_TIDY" &>/dev/null; then
     echo "[check_format] Running clang-tidy..."
-    BUILD_DB="build/temp.macosx-10.15-universal2-cpython-314/lucid__C_engine/compile_commands.json"
+    if [[ -f "build/compile_commands.json" ]]; then
+      BUILD_DB="build/compile_commands.json"
+    else
+      BUILD_DB="build/temp.macosx-10.15-universal2-cpython-314/lucid__C_engine/compile_commands.json"
+    fi
     if [[ -f "$BUILD_DB" ]]; then
       $CLANG_TIDY -p "$BUILD_DB" $CPP_FILES 2>&1 | grep -E "warning:|error:" | head -40 || true
     else

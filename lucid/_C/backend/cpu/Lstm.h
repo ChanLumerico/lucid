@@ -176,6 +176,8 @@ void recurrent_input(const Dims& d,
                      S* scratch,
                      S* h_prev) {
     const int B = d.B, H = d.H, fH = d.gates(), Hr = d.rec();
+    if (B == 0)
+        return;
     if (t == 0) {
         std::copy_n(H0, n(B, Hr), h_prev);
         return;
@@ -229,6 +231,8 @@ void hidden_grad(const Dims& d,
                  S* dWhr,
                  S* dh_raw) {
     const int B = d.B, H = d.H, fH = d.gates(), Hr = d.rec();
+    if (B == 0)
+        return;
     for (std::size_t j = 0; j < n(B, Hr); ++j)
         dh_step[j] = dY[n(t, B, Hr) + j] + dh_next[j];
     if (d.P == 0) {
