@@ -136,9 +136,9 @@ def _view_strides(
 # ``attn.permute(0, 2, 1, 3).reshape(b, n, e)`` asks of every attention layer,
 # every step.  ``as_strided``, ``stride()`` and ``storage_offset()`` need its
 # first element's place in the storage too.  Each rule below works both out
-# from the op's own arguments, as the reference lays the view out — replaying
-# the op on a CPU tensor to read them back cost a host allocation and a CPU
-# op per step, and the CPU restarts the storage of a leading slice (LCD-517).
+# from the op's own arguments, matching the CPU allocation frame (LCD-517) —
+# replaying the op on a CPU tensor to read them back would cost a host
+# allocation and a CPU op per step.
 # The strides agree with the reference on every axis that moves an element;
 # an axis of length one moves none, and the stride it is given varies with
 # how the view was composed.  A rule takes the view's geometry, then the

@@ -117,7 +117,11 @@ def _select_slice(
     # The result is a zero-width narrow of ``impl``, not a fresh ``zeros``: a
     # new constant has no grad_fn, so the slice cut the autograd edge and a
     # module that sliced its input at batch 0 lost its weights' gradients.
-    if (step > 0 and stop <= start) or (step < 0 and stop >= start):
+    # For a positive step, narrowing at ``[start:start]`` preserves the slice's
+    # start offset in the underlying allocation (LCD-517).
+    if step > 0 and stop <= start:
+        return _narrow(impl, dim, start, start, length)
+    if step < 0 and stop >= start:
         return _narrow(impl, dim, 0, 0, length)
 
     if step == 1:

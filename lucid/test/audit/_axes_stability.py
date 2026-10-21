@@ -379,6 +379,7 @@ class ContiguityAxis(Axis):
             "Tensor.stride",
             "Tensor.storage_offset",
             "Tensor.data_ptr",
+            "Tensor.untyped_storage",
             "Tensor.as_strided",
             "lucid.as_strided",
         }

@@ -227,6 +227,15 @@ class TestTrackBParity:
         assert st.nbytes() == 12
         assert isinstance(st.data_ptr(), int)
 
+        y = lucid.arange(6.0, device=device).reshape(2, 3)
+        base_ptr = y.untyped_storage().data_ptr()
+        for v in (y[1], y[1:], y[:, 1], y.t()[1], y[1][1:]):
+            vst = v.untyped_storage()
+            assert vst.data_ptr() == base_ptr
+            assert vst.size() == 24
+            assert vst.nbytes() == 24
+            assert len(vst) == 24
+
     def test_expand_minus_one(self, device: str) -> None:
         t = lucid.tensor([[1.0], [2.0]], device=device)  # (2,1)
         r = t.expand(-1, 4)

@@ -14,9 +14,8 @@ Strides are compared on the axes that move an element.  An axis of length
 one moves none, and the CPU's choice of stride for it depends on how the
 view was composed (a slice squeezes its window axis, which re-strides every
 length-one axis), so it says nothing about the layout.  Offsets are compared
-with where the CPU view's first element sits in its base's buffer, read from
-its address: the CPU's own ``storage_offset()`` restarts at a leading slice
-(LCD-517).
+against both the CPU view's ``storage_offset()`` and where its first element
+sits in its base's buffer (LCD-517).
 """
 
 import itertools
@@ -49,7 +48,7 @@ def _moving(shape: tuple[int, ...], stride: tuple[int, ...]) -> tuple[int, ...]:
 def _contiguous(shape: tuple[int, ...], stride: tuple[int, ...]) -> bool:
     """The reference's contiguity: row-major steps on every axis that moves.
 
-    The CPU's ``is_contiguous()`` also asks it of length-one axes.
+    Matches ``is_contiguous()`` on both devices, ignoring length-one axes.
     """
     if 0 in shape:
         return True
@@ -145,7 +144,10 @@ def test_a_metal_view_layout_dispatches_nothing_and_is_the_cpus(make: _View) -> 
     cpu = make(base)
     assert view.shape == cpu.shape
     assert _moving(view.shape, layout.stride) == _moving(cpu.shape, cpu.stride())
-    assert view.is_contiguous() == _contiguous(cpu.shape, cpu.stride())
+    assert view.is_contiguous() == cpu.is_contiguous() == _contiguous(
+        cpu.shape, cpu.stride()
+    )
+    assert view.storage_offset() == cpu.storage_offset()
     if cpu.numel():
         assert layout.offset == _cpu_offset(cpu, base)
 
@@ -327,15 +329,13 @@ def _same_view(
         cpu.shape, cpu.stride()
     ), where
     if cpu.numel():
-        # A tensor that is no view reports what the engine does on either device.
-        contiguous = (
-            _contiguous(cpu.shape, cpu.stride())
-            if _metal_views._ATTR in metal.__dict__
-            else cpu.is_contiguous()
-        )
-        assert metal.is_contiguous() == contiguous, where
+        assert metal.is_contiguous() == cpu.is_contiguous(), where
         if root is not None:
-            assert metal.storage_offset() == _cpu_offset(cpu, root), where
+            assert (
+                metal.storage_offset()
+                == cpu.storage_offset()
+                == _cpu_offset(cpu, root)
+            ), where
     assert metal.tolist() == cpu.tolist(), where
 
 
@@ -351,8 +351,8 @@ def _a_window_reads_the_storage(
 ) -> None:
     """A window anywhere in the storage reads what the storage holds there.
 
-    Compared with the CPU's buffer itself: the CPU's ``as_strided`` restarts
-    the storage at a leading slice (LCD-517).
+    Both CPU and Metal ``as_strided`` count offsets in the root allocation
+    frame (LCD-517).
     """
     flat = root.reshape(-1).tolist()
     size = tuple(rng.randrange(1, 4) for _ in range(rng.randrange(1, 3)))
@@ -367,7 +367,9 @@ def _a_window_reads_the_storage(
             for at in itertools.product(*(range(n) for n in size))
         ]
     ).reshape(size)
+    got_cpu = chain.cpu.as_strided(size, stride, offset)
     got = chain.metal.as_strided(size, stride, offset)
+    assert got_cpu.tolist() == want.tolist(), (chain.where(), size, stride, offset)
     assert got.tolist() == want.tolist(), (chain.where(), size, stride, offset)
 
 

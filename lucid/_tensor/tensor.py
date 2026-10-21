@@ -2637,15 +2637,14 @@ class Tensor:
     def data_ptr(self) -> int:
         r"""Return the address of the first element as an integer.
 
-        The address is the start of the tensor's buffer plus its storage
-        offset.  A metal tensor is evaluated first, so its buffer exists
-        and the address is one the CPU can read in unified memory.
+        The address is the start of :meth:`untyped_storage` plus
+        :meth:`storage_offset` elements.  A metal tensor is evaluated first,
+        so its buffer exists and can be read in unified memory.
 
         Returns
         -------
         int
-            Address of the first element.  Tensors that share a buffer
-            and start at the same element report the same address.
+            Address of the first element.
 
         Examples
         --------
@@ -2660,31 +2659,33 @@ class Tensor:
 
         Notes
         -----
-        The address says where the tensor's values are now, not which
-        tensor it is: an in-place op that computes its result into a new
-        buffer moves it.  Compare addresses to ask whether two tensors
-        read the same memory at this moment.
+        An in-place op that computes its result into a new buffer moves the
+        address; compare addresses to ask whether two tensors read the same
+        memory at this moment.
         """
         return int(self._impl.data_ptr())
 
     def storage_offset(self) -> int:
-        r"""Return the offset, in elements, of the first element in its buffer.
+        r"""Return the offset, in elements, of the first element in its storage.
 
-        A tensor that owns its buffer starts at element ``0``.  A view that
-        begins partway through its base's buffer reports how far in, so
-        :math:`\text{data\_ptr}(t) = \text{base} + \text{offset}(t) \times
-        \text{element\_size}(t)`.
+        A tensor that owns its allocation starts at ``0``.  A view reports
+        where its first element sits in :meth:`untyped_storage`, and
+        :meth:`as_strided` counts offsets from that same allocation start:
+        :math:`\text{data\_ptr}(t) = \text{untyped\_storage}(t).\text{data\_ptr}()
+        + \text{storage\_offset}(t) \times \text{element\_size}(t)`.
 
         Returns
         -------
         int
-            Element offset of the first element within the buffer.
+            Element offset of the first element within the underlying storage.
 
         Examples
         --------
         >>> import lucid
         >>> lucid.zeros(3, 4).storage_offset()
         0
+        >>> lucid.arange(6.).reshape(2, 3)[1].storage_offset()
+        3
         """
         return int(self._impl.storage_offset_bytes()) // self.element_size()
 
@@ -2930,13 +2931,19 @@ class Tensor:
             """Store the owning ``Tensor`` so storage queries can forward to it."""
             self._tensor = tensor
 
+        def _owner_impl(self) -> _C_engine.TensorImpl:
+            """Return the ``TensorImpl`` that owns the underlying allocation."""
+            from lucid._tensor import _metal_views
+
+            return _metal_views._storage_owner(self._tensor)._impl
+
         def data_ptr(self) -> int:
-            """Pointer-like identifier for the underlying storage."""
-            return self._tensor.data_ptr()
+            """Address of the first byte of the underlying allocation."""
+            return int(self._owner_impl().storage_data_ptr())
 
         def size(self) -> int:
-            """Total size in bytes."""
-            return self._tensor.nbytes
+            """Total allocation size in bytes."""
+            return int(self._owner_impl().storage_nbytes())
 
         def nbytes(self) -> int:
             """Alias for :meth:`size`."""
@@ -2947,41 +2954,34 @@ class Tensor:
             return self.size()
 
         def __repr__(self) -> str:
-            return (
-                f"UntypedStorage(nbytes={self.size()}, "
-                f"device={self._tensor.device})"
-            )
+            return f"UntypedStorage(nbytes={self.size()}, device={self._tensor.device})"
 
     def untyped_storage(self) -> _UntypedStorage:
-        r"""Return a minimal storage view of the underlying data buffer.
+        r"""Return a minimal storage view of the underlying allocation.
 
-        The returned object exposes :meth:`data_ptr`, :meth:`size`,
-        and :meth:`nbytes` — the subset needed for common introspection
-        patterns (aliasing checks, memory-footprint accounting, debug
-        printing).
+        Exposes :meth:`data_ptr`, :meth:`size`, and :meth:`nbytes` for
+        aliasing checks and memory accounting.  A base tensor and all views
+        of it report the same allocation base address and byte size.
 
         Returns
         -------
         Tensor._UntypedStorage
-            Lightweight storage handle whose ``__len__`` and ``size``
-            report the byte count of the buffer.
+            Storage handle reporting the byte count and base address.
 
         Notes
         -----
-        Lucid does not currently expose a fully-featured ``Storage`` type;
-        ``untyped_storage`` is the introspection-only minimum. Mutating
-        through this handle is not supported. The reported size satisfies
-        :math:`|\text{storage}| = \text{numel} \cdot \text{itemsize}`.
+        Introspection-only; mutating through this handle is not supported.
+        On CPU the engine tracks the root allocation window across views; on
+        Metal a linked view reports the root of its live view chain (an
+        unlinked tensor or dead root reports the last live tensor in its chain).
 
         Examples
         --------
         >>> import lucid
         >>> x = lucid.zeros(4, dtype=lucid.float32)
         >>> s = x.untyped_storage()
-        >>> s.size()
-        16
-        >>> len(s)
-        16
+        >>> (s.size(), len(s), x[2:].untyped_storage().size())
+        (16, 16, 16)
         """
         return Tensor._UntypedStorage(self)
 

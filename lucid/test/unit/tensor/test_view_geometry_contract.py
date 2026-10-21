@@ -36,8 +36,6 @@ from lucid.test._fixtures.devices import metal_available
 
 type _View = Callable[[lucid.Tensor], lucid.Tensor]
 
-_XF_UNTYPED = pytest.mark.xfail(strict=True, reason="LCD-517 untyped_storage")
-
 _DEVICES: tuple[str, ...] = ("cpu", "metal") if metal_available() else ("cpu",)
 
 
@@ -60,14 +58,6 @@ class _Cell(NamedTuple):
     expected_offset: int
     #: CPU ``make_block_view`` narrows ``CpuStorage`` to the slice's span.
     cpu_narrowed: bool
-    #: ``_indexing._select_slice`` narrows an empty slice from 0 (A1).
-    empty_slice_zeroed: bool = False
-    #: CPU ``is_contiguous()`` checks length-1/0 axis strides (E1).
-    cpu_contig_size1: bool = False
-    #: ``lucid.conj`` is not linked in ``_metal_views`` on Metal.
-    metal_unlinked: bool = False
-    #: ``v.numel() == 24 and v.data_ptr() == root.data_ptr()`` on CPU today.
-    cpu_untyped_ok: bool = False
 
 
 #: Grid of (view op x position) on a dense (4, 6) root (24 float32 elements).
@@ -81,11 +71,11 @@ GRID: dict[str, _Cell] = {
     "slice-first": _Cell(lambda t: t[:1], 0, True),
     "slice-middle": _Cell(lambda t: t[1:3], 6, True),
     "slice-last": _Cell(lambda t: t[-1:], 18, True),
-    "slice-empty": _Cell(lambda t: t[3:1], 18, True, empty_slice_zeroed=True),
+    "slice-empty": _Cell(lambda t: t[3:1], 18, True),
     "slice-col-first": _Cell(lambda t: t[:, :2], 0, False),
     "slice-col-middle": _Cell(lambda t: t[:, 2:4], 2, False),
     "slice-col-last": _Cell(lambda t: t[:, -2:], 4, False),
-    "slice-col-empty": _Cell(lambda t: t[:, 3:1], 3, False, empty_slice_zeroed=True),
+    "slice-col-empty": _Cell(lambda t: t[:, 3:1], 3, False),
     # stepped slice
     "step-first": _Cell(lambda t: t[:3:2], 0, True),
     "step-middle": _Cell(lambda t: t[1::2], 6, True),
@@ -125,7 +115,7 @@ GRID: dict[str, _Cell] = {
     "hsplit-first": _Cell(lambda t: t.hsplit([2, 4, 4])[0], 0, False),
     "hsplit-middle": _Cell(lambda t: t.hsplit([2, 4, 4])[1], 2, False),
     "hsplit-last": _Cell(lambda t: t.hsplit([2, 4, 4])[3], 4, False),
-    "hsplit-empty": _Cell(lambda t: t.hsplit([2, 4, 4])[2], 4, False, cpu_contig_size1=True),
+    "hsplit-empty": _Cell(lambda t: t.hsplit([2, 4, 4])[2], 4, False),
     "vsplit-first": _Cell(lambda t: t.vsplit([1, 3, 3])[0], 0, True),
     "vsplit-middle": _Cell(lambda t: t.vsplit([1, 3, 3])[1], 6, True),
     "vsplit-last": _Cell(lambda t: t.vsplit([1, 3, 3])[3], 18, True),
@@ -135,7 +125,7 @@ GRID: dict[str, _Cell] = {
     "list-middle": _Cell(lambda t: list(t)[1], 6, True),
     "list-last": _Cell(lambda t: list(t)[-1], 18, True),
     # t / mT / permute / transpose / movedim
-    "t-whole": _Cell(lambda t: t.t(), 0, False, cpu_untyped_ok=True),
+    "t-whole": _Cell(lambda t: t.t(), 0, False),
     "t-middle": _Cell(lambda t: t.t()[2], 2, False),
     "t-last": _Cell(lambda t: t.t()[-1], 5, False),
     "mT-middle": _Cell(lambda t: t.mT[1:3], 1, False),
@@ -146,17 +136,17 @@ GRID: dict[str, _Cell] = {
     "diagonal-first": _Cell(lambda t: t.diagonal(0), 0, False),
     "diagonal-middle": _Cell(lambda t: t.diagonal(2), 2, False),
     "diagonal-last": _Cell(lambda t: t.diagonal(-2), 12, False),
-    "diagonal-empty": _Cell(lambda t: t.diagonal(10), 0, False, cpu_contig_size1=True),
+    "diagonal-empty": _Cell(lambda t: t.diagonal(10), 0, False),
     # unfold
     "unfold-first": _Cell(lambda t: t.unfold(0, 2, 1)[0], 0, False),
     "unfold-middle": _Cell(lambda t: t.unfold(0, 2, 1)[1], 6, False),
     "unfold-last": _Cell(lambda t: t.unfold(0, 2, 1)[-1], 12, False),
-    "unfold-col": _Cell(lambda t: t.unfold(1, 3, 2), 0, False, cpu_untyped_ok=True),
+    "unfold-col": _Cell(lambda t: t.unfold(1, 3, 2), 0, False),
     # expand
     "expand-first": _Cell(lambda t: t[:1].expand(3, 6), 0, True),
     "expand-middle": _Cell(lambda t: t[1:2].expand(3, 6), 6, True),
     "expand-last": _Cell(lambda t: t[-1:].expand(3, 6), 18, True),
-    "expand-empty": _Cell(lambda t: t[2:2].expand(0, 6), 12, True, empty_slice_zeroed=True),
+    "expand-empty": _Cell(lambda t: t[2:2].expand(0, 6), 12, True),
     "expand-col": _Cell(lambda t: t[:, :1].expand(4, 3), 0, False),
     # view / reshape / flatten / unflatten
     "view-first": _Cell(lambda t: t[:2].view(-1), 0, True),
@@ -182,38 +172,27 @@ GRID: dict[str, _Cell] = {
     # as_strided(own)
     "as_strided-first": _Cell(lambda t: t.as_strided((2, 3), (6, 1), 0), 0, False),
     "as_strided-middle": _Cell(lambda t: t.as_strided((2, 3), (6, 1), 6), 6, False),
-    "as_strided-last": _Cell(
-        lambda t: t.as_strided((1, 3), (6, 1), 21),
-        21,
-        False,
-        cpu_contig_size1=True,
-    ),
-    "as_strided-empty": _Cell(
-        lambda t: t.as_strided((0, 3), (6, 1), 6),
-        6,
-        False,
-        cpu_contig_size1=True,
-    ),
+    "as_strided-last": _Cell(lambda t: t.as_strided((1, 3), (6, 1), 21), 21, False),
+    "as_strided-empty": _Cell(lambda t: t.as_strided((0, 3), (6, 1), 6), 6, False),
     "as_strided-on-row": _Cell(lambda t: t[1:].as_strided((2, 3), (6, 1)), 6, True),
     # conj(real)
-    "conj-first": _Cell(lambda t: lucid.conj(t[0]), 0, True, metal_unlinked=True),
-    "conj-middle": _Cell(lambda t: lucid.conj(t[1]), 6, True, metal_unlinked=True),
-    "conj-last": _Cell(lambda t: lucid.conj(t[-1]), 18, True, metal_unlinked=True),
+    "conj-first": _Cell(lambda t: lucid.conj(t[0]), 0, True),
+    "conj-middle": _Cell(lambda t: lucid.conj(t[1]), 6, True),
+    "conj-last": _Cell(lambda t: lucid.conj(t[-1]), 18, True),
     # chained slice of slice
     "row-of-rows": _Cell(lambda t: t[1:][1], 12, True),
 }
 
 
-def _offset_params() -> list[object]:
+def _grid_params() -> list[object]:
     params: list[object] = []
-    for name, cell in GRID.items():
+    for name in GRID:
         for device in _DEVICES:
-            marks = [_XF_UNTYPED] if device == "cpu" and cell.empty_slice_zeroed else []
-            params.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
+            params.append(pytest.param(name, device, id=f"{name}-{device}"))
     return params
 
 
-@pytest.mark.parametrize(("name", "device"), _offset_params())
+@pytest.mark.parametrize(("name", "device"), _grid_params())
 def test_offset_counts_from_the_root(name: str, device: str) -> None:
     cell = GRID[name]
     root = _root_2d(device)
@@ -232,15 +211,7 @@ def test_offset_counts_from_the_root(name: str, device: str) -> None:
         assert v.storage_offset() == cell.expected_offset
 
 
-def _as_strided_params() -> list[object]:
-    params: list[object] = []
-    for name in GRID:
-        for device in _DEVICES:
-            params.append(pytest.param(name, device, id=f"{name}-{device}"))
-    return params
-
-
-@pytest.mark.parametrize(("name", "device"), _as_strided_params())
+@pytest.mark.parametrize(("name", "device"), _grid_params())
 def test_as_strided_reads_the_root(name: str, device: str) -> None:
     cell = GRID[name]
     root = _root_2d(device)
@@ -251,20 +222,7 @@ def test_as_strided_reads_the_root(name: str, device: str) -> None:
         assert v.as_strided((root.numel(),), (1,)).tolist() == root.reshape(-1).tolist()
 
 
-def _untyped_storage_params() -> list[object]:
-    params: list[object] = []
-    for name, cell in GRID.items():
-        for device in _DEVICES:
-            marks = []
-            if device == "cpu" and not cell.cpu_untyped_ok:
-                marks.append(_XF_UNTYPED)
-            elif device == "metal":
-                marks.append(_XF_UNTYPED)
-            params.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
-    return params
-
-
-@pytest.mark.parametrize(("name", "device"), _untyped_storage_params())
+@pytest.mark.parametrize(("name", "device"), _grid_params())
 def test_untyped_storage_is_the_roots(name: str, device: str) -> None:
     cell = GRID[name]
     root = _root_2d(device)
@@ -277,16 +235,7 @@ def test_untyped_storage_is_the_roots(name: str, device: str) -> None:
         )
 
 
-def _save_load_params() -> list[object]:
-    params: list[object] = []
-    for name, cell in GRID.items():
-        for device in _DEVICES:
-            marks = [_XF_UNTYPED] if device == "cpu" and cell.empty_slice_zeroed else []
-            params.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
-    return params
-
-
-@pytest.mark.parametrize(("name", "device"), _save_load_params())
+@pytest.mark.parametrize(("name", "device"), _grid_params())
 def test_save_load_keeps_geometry(name: str, device: str) -> None:
     cell = GRID[name]
     root = _root_2d(device)
@@ -439,13 +388,7 @@ def test_as_strided_refuses_negative_storage_offset(device: str) -> None:
         x.as_strided((2,), (1,), -1)
 
 
-@pytest.mark.parametrize(
-    "device",
-    [
-        pytest.param("cpu", marks=_XF_UNTYPED),
-        *(["metal"] if metal_available() else []),
-    ],
-)
+@pytest.mark.parametrize("device", _DEVICES)
 def test_empty_slice_storage_offset_counts_from_its_start(device: str) -> None:
     x = lucid.arange(24.0, device=device).reshape(4, 6)
     empty = x[:, 3:1]

@@ -1114,6 +1114,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - track allocation frame across CPU block views (LCD-517)
 
+- report root allocation in untyped_storage and empty slices
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:

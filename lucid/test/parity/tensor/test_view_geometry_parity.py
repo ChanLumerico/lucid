@@ -21,7 +21,6 @@ import lucid
 from lucid.test.unit.tensor.test_view_geometry_contract import (
     GRID,
     _DEVICES,
-    _XF_UNTYPED,
     _moving,
 )
 
@@ -41,10 +40,9 @@ def _apply_named(name: str, root: Any, module: Any) -> Any:
 
 def _layout_parity_params() -> list[object]:
     params: list[object] = []
-    for name, cell in GRID.items():
+    for name in GRID:
         for device in _DEVICES:
-            marks = [_XF_UNTYPED] if device == "cpu" and cell.empty_slice_zeroed else []
-            params.append(pytest.param(name, device, marks=marks, id=f"{name}-{device}"))
+            params.append(pytest.param(name, device, id=f"{name}-{device}"))
     return params
 
 
@@ -63,15 +61,7 @@ def test_view_layout_matches_the_reference(name: str, device: str, ref: Any) -> 
     assert ours.storage_offset() == theirs.storage_offset()
 
 
-def _untyped_parity_params() -> list[object]:
-    params: list[object] = []
-    for name, cell in GRID.items():
-        marks = [_XF_UNTYPED] if not cell.cpu_untyped_ok else []
-        params.append(pytest.param(name, marks=marks, id=name))
-    return params
-
-
-@pytest.mark.parametrize("name", _untyped_parity_params())
+@pytest.mark.parametrize("name", list(GRID))
 def test_untyped_storage_and_data_ptr_match_the_reference_on_cpu(name: str, ref: Any) -> None:
     ours_root = lucid.arange(24.0).reshape(4, 6)
     theirs_root = ref.arange(24.0).reshape(4, 6)
@@ -80,9 +70,11 @@ def test_untyped_storage_and_data_ptr_match_the_reference_on_cpu(name: str, ref:
     assert ours.untyped_storage().nbytes() == theirs.untyped_storage().nbytes()
     assert ours.untyped_storage().data_ptr() == ours_root.untyped_storage().data_ptr()
     ours_delta = ours.data_ptr() - ours.untyped_storage().data_ptr()
-    theirs_delta = theirs.data_ptr() - theirs.untyped_storage().data_ptr()
-    assert ours_delta == theirs_delta
     assert ours_delta == ours.storage_offset() * ours.element_size()
+    assert ours_delta == theirs.storage_offset() * theirs.element_size()
+    if ours.numel() > 0:
+        theirs_delta = theirs.data_ptr() - theirs.untyped_storage().data_ptr()
+        assert ours_delta == theirs_delta
 
 
 def _window_parity_params() -> list[object]:

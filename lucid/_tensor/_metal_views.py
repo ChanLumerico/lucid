@@ -656,6 +656,17 @@ def _integers(name: str, value: object) -> _Dims:
     return tuple(operator.index(item) for item in value)
 
 
+def _storage_owner(t: Tensor) -> Tensor:
+    """The tensor whose buffer ``t.untyped_storage()`` describes.
+
+    On the CPU ``t._impl`` carries the root allocation's base address and byte
+    size directly; on Metal a linked view walks its live ``_Link`` chain to
+    the root tensor (or, if unlinked or the root has been collected, reports
+    the last live tensor in the chain).
+    """
+    return _frames(t)[0][-1]
+
+
 def _frames(t: Tensor) -> tuple[list[Tensor], int]:
     """The live tensors ``t``'s storage is reached through, ``t`` first, and its size.
 
