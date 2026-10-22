@@ -262,6 +262,22 @@ if [[ -n "${PY}" && -f "${DTYPE_SCRIPT}" ]]; then
     fi
 fi
 
+# ── 1f. Backend method family layout (LCD-264) ──────────────────────────────
+# Hard-fail, <1 s.  ``tools/check_backend_layout.py`` enforces that CpuBackend.h
+# and GpuBackend.h only carry inline bodies on the KEEP_INLINE allow-list (<=10
+# lines) and that backend/{cpu,gpu}/methods/*.cpp are git-tracked and contain
+# only out-of-line <Backend>:: member definitions.
+LAYOUT_SCRIPT="${REPO_ROOT}/tools/check_backend_layout.py"
+if [[ -n "${PY}" && -f "${LAYOUT_SCRIPT}" ]]; then
+    if git diff --cached --name-only --diff-filter=ACMRD \
+        | grep -qE '^(lucid/_C/backend/(cpu|gpu)/.*\.(cpp|h)|tools/(check_backend_layout|backend_split)\.py)$'; then
+        if ! (cd "${REPO_ROOT}" && "${PY}" "${LAYOUT_SCRIPT}" --quiet >&2); then
+            echo "  ❌  Pre-commit blocked: backend method family layout violation (see above)." >&2
+            exit 1
+        fi
+    fi
+fi
+
 # ── 2. Docstring coverage gate ──────────────────────────────────────────────
 # Hard-fail.  The validator surfaces six distinct blind-spot categories
 # that all manifest as empty / sparse / misleading docs pages on the

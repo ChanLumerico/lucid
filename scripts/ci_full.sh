@@ -158,6 +158,7 @@ sys.exit(0 if ref_module() and zoo_module() else 1)
     stage "Kernel template coverage" "$PYTHON_BIN" tools/check_kernel_template.py
     stage "Storage API compliance" "$PYTHON_BIN" tools/check_storage_api.py
     stage "Dtype dispatch refusals" "$PYTHON_BIN" tools/check_dtype_dispatch.py
+    stage "Backend method family layout" "$PYTHON_BIN" tools/check_backend_layout.py
     stage "Dead model-config fields" "$PYTHON_BIN" tools/check_dead_config_fields.py
     stage "H4 numpy guard (sanctioned bridge files only)" "$PYTHON_BIN" tools/check_numpy_h4.py
 

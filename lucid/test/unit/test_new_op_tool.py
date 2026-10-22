@@ -5,13 +5,49 @@ import shutil
 
 import pytest
 
-from tools import backend_split, new_op
+from tools import new_op
+
+_INLINE_CPU_HEADER = """\
+#pragma once
+namespace lucid::backend {
+class CpuBackend final : public IBackend {
+public:
+    Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) override {
+        return a;
+    }
+
+    Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
+        return a;
+    }
+};
+}  // namespace lucid::backend
+"""
+
+_INLINE_GPU_HEADER = """\
+#pragma once
+namespace lucid::backend {
+class GpuBackend final : public IBackend {
+public:
+    Storage erfinv(const Storage& a, const Shape& shape, Dtype dt) override {
+        return mlx_unary(a, shape, dt, [](auto& x) { return ::mlx::core::erfinv(x); });
+    }
+
+    Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
+        return mlx_binary(a, b, shape, dt, [](auto& x, auto& y) { return ::mlx::core::add(x, y); });
+    }
+};
+}  // namespace lucid::backend
+"""
 
 
-def _copy_backends(tmp_path: Path) -> Path:
+def _copy_real_split_backends(tmp_path: Path) -> Path:
     for rel in (
         "lucid/_C/backend/cpu/CpuBackend.h",
+        "lucid/_C/backend/cpu/methods/Unary.cpp",
+        "lucid/_C/backend/cpu/methods/Binary.cpp",
         "lucid/_C/backend/gpu/GpuBackend.h",
+        "lucid/_C/backend/gpu/methods/Unary.cpp",
+        "lucid/_C/backend/gpu/methods/Binary.cpp",
     ):
         dst = tmp_path / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -20,7 +56,11 @@ def _copy_backends(tmp_path: Path) -> Path:
 
 
 def test_new_op_supports_inline_backend_headers(tmp_path: Path) -> None:
-    be_dir = _copy_backends(tmp_path)
+    be_dir = tmp_path / "lucid/_C/backend"
+    (be_dir / "cpu").mkdir(parents=True, exist_ok=True)
+    (be_dir / "gpu").mkdir(parents=True, exist_ok=True)
+    (be_dir / "cpu/CpuBackend.h").write_text(_INLINE_CPU_HEADER, encoding="utf-8")
+    (be_dir / "gpu/GpuBackend.h").write_text(_INLINE_GPU_HEADER, encoding="utf-8")
 
     new_op._mod_cpu_unary("dummy_uop", dry_run=False, be_dir=be_dir, root=tmp_path)
     new_op._mod_cpu_binary("dummy_bop", dry_run=False, be_dir=be_dir, root=tmp_path)
@@ -38,19 +78,7 @@ def test_new_op_supports_inline_backend_headers(tmp_path: Path) -> None:
 def test_new_op_supports_split_backend_headers_and_methods_cpp(
     tmp_path: Path,
 ) -> None:
-    be_dir = _copy_backends(tmp_path)
-    backend_split.move_families(
-        backend="cpu",
-        families=["Unary", "Binary"],
-        root=tmp_path,
-        format_files=True,
-    )
-    backend_split.move_families(
-        backend="gpu",
-        families=["Unary", "Binary"],
-        root=tmp_path,
-        format_files=True,
-    )
+    be_dir = _copy_real_split_backends(tmp_path)
 
     new_op._mod_cpu_unary("dummy_uop", dry_run=False, be_dir=be_dir, root=tmp_path)
     new_op._mod_cpu_binary("dummy_bop", dry_run=False, be_dir=be_dir, root=tmp_path)

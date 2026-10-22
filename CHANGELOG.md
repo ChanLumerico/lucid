@@ -1257,6 +1257,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - delete obsolete elementwise autocast opt-out guards
 
+- split CpuBackend/GpuBackend into 14 op-family TUs
+
 ### Removed
 
 - delete dead C++ einops kernels and unbound engine bindings

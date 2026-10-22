@@ -419,10 +419,48 @@ def _slug_from_qname(qname: str) -> str:
     return "lucid._C.engine." + ".".join(parts)
 
 
+_METHOD_DEF_INDEX: dict[tuple[str, str], tuple[str, int]] | None = None
+
+
+def _backend_method_def_index() -> dict[tuple[str, str], tuple[str, int]]:
+    """Index out-of-line ``CpuBackend::`` / ``GpuBackend::`` definitions in ``methods/*.cpp``."""
+    global _METHOD_DEF_INDEX
+    if _METHOD_DEF_INDEX is not None:
+        return _METHOD_DEF_INDEX
+    idx: dict[tuple[str, str], tuple[str, int]] = {}
+    for bk, cls_name in (("cpu", "CpuBackend"), ("gpu", "GpuBackend")):
+        methods_dir = HEADERS_ROOT / "backend" / bk / "methods"
+        if not methods_dir.is_dir():
+            continue
+        pat = re.compile(rf"\b{cls_name}::([A-Za-z_]\w*)\s*\(")
+        for cpp_file in sorted(methods_dir.glob("*.cpp")):
+            rel = cpp_file.resolve().relative_to(REPO_ROOT).as_posix()
+            for lineno, line in enumerate(
+                cpp_file.read_text(encoding="utf-8", errors="replace").splitlines(),
+                start=1,
+            ):
+                if line.lstrip().startswith("//"):
+                    continue
+                m = pat.search(line)
+                if m is not None:
+                    key = (cls_name, m.group(1))
+                    if key not in idx:
+                        idx[key] = (rel, lineno)
+    _METHOD_DEF_INDEX = idx
+    return idx
+
+
 def _source_link(c: Cursor, sha: str) -> str | None:
     loc = c.location
     if loc is None or loc.file is None:
         return None
+    if c.kind in (CursorKind.CXX_METHOD, CursorKind.FUNCTION_TEMPLATE):
+        parent = c.semantic_parent
+        if parent is not None and parent.spelling in ("CpuBackend", "GpuBackend"):
+            hit = _backend_method_def_index().get((parent.spelling, c.spelling))
+            if hit is not None:
+                rel_cpp, def_line = hit
+                return f"{GITHUB_BASE}/{sha}/{rel_cpp}#L{def_line}"
     try:
         rel = Path(loc.file.name).resolve().relative_to(REPO_ROOT)
     except ValueError:

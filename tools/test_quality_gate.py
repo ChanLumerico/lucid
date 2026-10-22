@@ -882,3 +882,26 @@ def test_semgrep_error_taxonomy_rules_catch_seeded_violations(tmp_path: Path) ->
     assert "lucid-inline-reduction-check" in out.stdout
     assert "lucid-nn-utils-inline-param-check" in out.stdout
 
+
+def test_backend_methods_loc_cap_enforced_at_1500_lines(tmp_path: Path) -> None:
+    """DS-5 (LCD-264): backend/{cpu,gpu}/methods/*.cpp files use the 1,500-line cap."""
+    root = tmp_path / "repo"
+    (root / "lucid" / "_C" / "backend" / "cpu" / "methods").mkdir(parents=True)
+    (root / "tools").mkdir()
+    m_cpp = root / "lucid" / "_C" / "backend" / "cpu" / "methods" / "Binary.cpp"
+    hdr = root / "lucid" / "_C" / "backend" / "cpu" / "CpuBackend.h"
+    m_cpp.write_text("// ok\n" * config.LOC_CAP_BACKEND_METHODS)
+    hdr.write_text("// ok\n" * (config.LOC_CAP_BACKEND_METHODS + 100))
+    git(root, "init", "-q", "-b", "main")
+    done = gate(root, "--rebaseline", "--reason", "t", "--collectors", "counters")
+    assert done.returncode == 0, done.stdout + done.stderr
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "base")
+
+    m_cpp.write_text("// over\n" * (config.LOC_CAP_BACKEND_METHODS + 5))
+    out = gate(root, "--full", "--collectors", "counters")
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "file-loc-over-cap" in out.stdout
+    assert "lucid/_C/backend/cpu/methods/Binary.cpp" in out.stdout
+
+

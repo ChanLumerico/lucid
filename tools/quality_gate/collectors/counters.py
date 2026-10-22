@@ -68,7 +68,7 @@ class CountersCollector(Collector):
 
     @override
     def version(self) -> str:
-        return "2"  # 2: counts `Any`
+        return "3"  # 3: applies LOC_CAP_BACKEND_METHODS to backend/{cpu,gpu}/methods/*.cpp
 
     @override
     def collect(self, scope: Scope) -> Counts:
@@ -82,7 +82,12 @@ class CountersCollector(Collector):
                 counts[("counters", "file-loc-over-cap", path)] = over
         for path in scope.cpp:
             text = (scope.root / path).read_text(encoding="utf-8", errors="replace")
-            over = loc(text) - config.LOC_CAP_CPP
+            cap = (
+                config.LOC_CAP_BACKEND_METHODS
+                if path.startswith(config.BACKEND_METHODS_PREFIXES)
+                else config.LOC_CAP_CPP
+            )
+            over = loc(text) - cap
             if over > 0:
                 counts[("counters", "file-loc-over-cap", path)] = over
         return counts

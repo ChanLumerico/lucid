@@ -142,10 +142,6 @@ def test_a_strided_member_shows_the_write_its_earlier_reader_does_not(
         assert _flat(y) == STRIDED_PRE[member]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="LCD-18: strided Metal producers are not view-family members yet (ARC-01 MV-ENG-2)",
-)
 @pytest.mark.parametrize("writer", ["metal", "cpu"])
 @pytest.mark.parametrize("order", ["empty", "filled"])
 @pytest.mark.parametrize("op", list(OP_VIEWS))

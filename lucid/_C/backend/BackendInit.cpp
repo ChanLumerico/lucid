@@ -2,14 +2,10 @@
 //
 // Entry point that instantiates and registers both the CPU and GPU backends
 // with the Dispatcher singleton.  This translation unit is pulled in by the
-// pybind11 module initialiser (typically in bindings/Module.cpp) so that
-// both backends are ready before any Python-side tensor operation executes.
-// Including CpuBackend.h and GpuBackend.h here is intentional: the headers
-// contain the full implementation (they are header-only implementations) and
-// each defines a static register_self() that injects the backend into the
-// Dispatcher via a unique_ptr.  The phantom backend (PhantomBackend.h) is
-// built here too, on first use, and handed out by Dispatcher::for_device
-// while phantom mode is on.
+// pybind11 module initialiser (in bindings/Module.cpp) so that both backends
+// are ready before any Python-side tensor operation executes.  The phantom
+// backend (PhantomBackend.h) is built here too, on first use, and handed out
+// by Dispatcher::for_device while phantom mode is on.
 
 #include "Dispatcher.h"
 #include "PhantomBackend.h"
@@ -25,3 +21,19 @@ IBackend& Dispatcher::phantom_backend(Device d) noexcept {
 }
 
 }  // namespace lucid::backend
+
+namespace {
+struct CpuBackendRegistrar {
+    CpuBackendRegistrar() {
+        lucid::backend::Dispatcher::register_backend(
+            lucid::Device::CPU, std::make_unique<lucid::backend::CpuBackend>());
+    }
+} g_cpu_registrar;
+
+struct GpuBackendRegistrar {
+    GpuBackendRegistrar() {
+        lucid::backend::Dispatcher::register_backend(
+            lucid::Device::GPU, std::make_unique<lucid::backend::GpuBackend>());
+    }
+} g_gpu_registrar;
+}  // namespace

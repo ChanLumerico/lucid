@@ -54,6 +54,11 @@ INTERNAL_ARGS_MAX = 7
 # may not grow and a new file may not start over it.
 LOC_CAP_PY = 1500
 LOC_CAP_CPP = 3000
+LOC_CAP_BACKEND_METHODS = 1500
+BACKEND_METHODS_PREFIXES = (
+    "lucid/_C/backend/cpu/methods/",
+    "lucid/_C/backend/gpu/methods/",
+)
 # Rules whose count is a size, not a number of findings: class totals count
 # one per file so 14954-line headers do not drown every other class.
 PER_FILE_RULES = frozenset({"file-loc-over-cap", "function-length-excess", "function-ccn-excess"})
@@ -217,7 +222,11 @@ def contract() -> dict[str, dict[str, object]]:
             "function_ccn_max": FUNCTION_CCN_MAX,
             "internal_args_max": INTERNAL_ARGS_MAX,
         },
-        "counters": {"loc_cap_py": LOC_CAP_PY, "loc_cap_cpp": LOC_CAP_CPP},
+        "counters": {
+            "loc_cap_py": LOC_CAP_PY,
+            "loc_cap_cpp": LOC_CAP_CPP,
+            "loc_cap_backend_methods": LOC_CAP_BACKEND_METHODS,
+        },
         "ruff": {"ruff_extend_select": RUFF_EXTEND_SELECT, "ruff_ignore": RUFF_IGNORE},
         "vulture": {
             "vulture_min_confidence": VULTURE_MIN_CONFIDENCE,

@@ -75,9 +75,33 @@ inline ::mlx::core::array read(const ::mlx::core::array& root, const Geometry& g
     if (g.covers(root_numel))
         return mx::reshape(root, to_mlx(g.shape));
     if (g.contiguous) {
+        constexpr auto kMax = static_cast<std::int64_t>(std::numeric_limits<int>::max());
+        if (root_numel > kMax && root.ndim() > 1 && root.shape(0) > 0) {
+            const auto row_size = root_numel / static_cast<std::int64_t>(root.shape(0));
+            if (row_size > 0 && row_size <= kMax) {
+                const auto r0 = static_cast<int>(g.offset / row_size);
+                const auto r1 = static_cast<int>((g.offset + g.numel - 1) / row_size) + 1;
+                if ((r1 - r0) * row_size <= kMax) {
+                    mx::Shape start(root.ndim(), 0);
+                    mx::Shape stop = root.shape();
+                    start[0] = r0;
+                    stop[0] = r1;
+                    const mx::array band = mx::slice(root, std::move(start), std::move(stop));
+                    const auto lo = static_cast<int>(g.offset - r0 * row_size);
+                    const auto hi = static_cast<int>(lo + g.numel);
+                    const mx::array run = mx::slice(mx::flatten(band), {lo}, {hi});
+                    if (g.shape.empty())
+                        return mx::reshape(mx::contiguous(run), to_mlx(g.shape));
+                    return mx::reshape(run, to_mlx(g.shape));
+                }
+            }
+        }
         const auto lo = static_cast<int>(g.offset);
         const auto hi = static_cast<int>(g.offset + g.numel);
-        return mx::reshape(mx::slice(mx::flatten(root), {lo}, {hi}), to_mlx(g.shape));
+        const mx::array run = mx::slice(mx::flatten(root), {lo}, {hi});
+        if (g.shape.empty())
+            return mx::reshape(mx::contiguous(run), to_mlx(g.shape));
+        return mx::reshape(run, to_mlx(g.shape));
     }
     // as_strided reads a flattened (row-contiguous) copy of its input, and
     // its result is a strided window onto that; laid out again so code that

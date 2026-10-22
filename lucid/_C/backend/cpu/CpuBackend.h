@@ -46,11 +46,27 @@
 // reduction loop.  ``cast_impl(src, dst, n, src_dt, dst_dt)`` performs
 // an element-by-element type cast.
 //
-// **Self-registration.**  An anonymous-namespace
-// :class:`CpuBackendRegistrar` struct at the bottom of the file
-// registers a :class:`CpuBackend` singleton with :class:`Dispatcher` at
-// static-init time.  ``BackendInit.cpp`` includes this header to
-// trigger that registration.
+// **Method family units.**  Non-template ``CpuBackend`` member definitions
+// live out-of-line in ``lucid/_C/backend/cpu/methods/<Family>.cpp`` across 14
+// symmetric op-family translation units:
+//   • ``Factory.cpp``    — allocation, conversion, random, cloning, shared storage.
+//   • ``Binary.cpp``     — elementwise binary arithmetic, comparisons, bitwise.
+//   • ``Unary.cpp``      — elementwise unary math, special functions, rounding, clip.
+//   • ``Activation.cpp`` — neural activations and softmax / log-softmax.
+//   • ``Reduction.cpp``  — axis reductions, cumulative scans, sort / topk, histogram.
+//   • ``Layout.cpp``     — reshape, permute, slice, pad, roll, flip, tile, repeat.
+//   • ``Indexing.cpp``   — gather, scatter, masked ops, where, embedding.
+//   • ``Linalg.cpp``     — Cholesky, QR, SVD, eig/eigh, solve, inv, matrix_exp, FFT.
+//   • ``Matmul.cpp``     — matmul, bmm, dot, outer, inner, tensordot, linear.
+//   • ``Norm.cpp``       — LayerNorm, BatchNorm, GroupNorm, InstanceNorm, RMSNorm.
+//   • ``Loss.cpp``       — MSE, L1, Huber, BCE, NLL, CrossEntropy, KL, CTC, distance.
+//   • ``Conv.cpp``       — ConvNd, ConvTransposeNd, im2col/col2im, fold/unfold.
+//   • ``Spatial.cpp``    — MaxPoolNd, AvgPoolNd, AdaptivePool, interpolate, grid_sample.
+//   • ``Sequence.cpp``   — RNN, LSTM, GRU, scaled_dot_product_attention.
+//
+// **Self-registration.**  ``BackendInit.cpp`` defines ``CpuBackendRegistrar``
+// to register a :class:`CpuBackend` singleton with :class:`Dispatcher` at
+// static-init time.
 //
 // See Also
 // --------
@@ -84,6 +100,7 @@
 #include "Blas.h"
 #include "CtcLoss.h"
 #include "DivMod.h"
+#include "DtypeDoors.h"
 #include "ErfPoly.h"
 #include "GeluGrad.h"
 #include "GlobalResponseNorm.h"
@@ -114,470 +131,6 @@
 
 namespace lucid {
 namespace backend {
-
-// Half conversion lives in ``core/Half.h`` — see the note there.
-
-namespace detail {
-
-// Run a float-only CPU path in single precision on behalf of a half input.
-//
-// Accelerate has no half kernels, so every entry point below relu, sigmoid,
-// clip, variance and friends refused F16 while Metal ran it — the "same
-// code, different device" failure this project already treats as a bug.
-// Widening once at the door and rounding once on the way out is what the
-// astype path does anyway.
-//: The two 16-bit float formats.  Accelerate has kernels for neither, so
-//: both take the same widen-reuse-narrow route through float32 — they
-//: differ only in how the sixteen bits are read.  The predicate itself
-//: lives in core beside ``is_floating_point``, because the random
-//: generators need it too and they are not part of this backend.
-// The layout ``gather`` can walk as (outer, taken, inner) blocks: every
-// non-gathered axis of the output is as wide as the input's.  ``extent`` is
-// the input's length along the gathered axis.  Empty when any other axis
-// differs, which leaves the general coordinate walk to handle it.
-struct GatherRows {
-    std::size_t outer = 1;
-    std::size_t taken = 0;
-    std::size_t inner = 1;
-    std::size_t extent = 0;
-
-    static std::optional<GatherRows> of(const Shape& in, const Shape& out, int axis) {
-        if (in.empty() || in.size() != out.size() || axis < 0 ||
-            axis >= static_cast<int>(in.size()))
-            return std::nullopt;
-        GatherRows rows;
-        for (std::size_t d = 0; d < in.size(); ++d) {
-            if (static_cast<int>(d) == axis)
-                continue;
-            if (out[d] != in[d])
-                return std::nullopt;
-            (static_cast<int>(d) < axis ? rows.outer : rows.inner) *=
-                static_cast<std::size_t>(in[d]);
-        }
-        rows.taken = static_cast<std::size_t>(out[static_cast<std::size_t>(axis)]);
-        rows.extent = static_cast<std::size_t>(in[static_cast<std::size_t>(axis)]);
-        return rows;
-    }
-};
-
-inline bool is_half_like(Dtype dt) {
-    return is_half_float(dt);
-}
-
-inline CpuStorage widen_half(const CpuStorage& in, std::size_t n) {
-    auto p = allocate_aligned_bytes(n * sizeof(float), Device::CPU);
-    half_or_bfloat16_to_float_bulk(reinterpret_cast<const std::uint16_t*>(in.ptr.get()),
-                                   reinterpret_cast<float*>(p.get()), n, in.dtype == Dtype::BF16);
-    return CpuStorage{p, n * sizeof(float), Dtype::F32};
-}
-
-inline Storage narrow_half(const Storage& wide, std::size_t n, Dtype to) {
-    const auto& w = std::get<CpuStorage>(wide);
-    auto p = allocate_aligned_bytes(n * sizeof(std::uint16_t), Device::CPU);
-    float_to_half_or_bfloat16_bulk(reinterpret_cast<const float*>(w.ptr.get()),
-                                   reinterpret_cast<std::uint16_t*>(p.get()), n, to == Dtype::BF16);
-    return Storage{CpuStorage{p, n * sizeof(std::uint16_t), to}};
-}
-
-// Widen a narrow integer storage to int64, exactly.
-//
-// The integer counterpart of widen_half, and exact rather than merely
-// close: every value of int8 / int16 / int32 / bool fits in an int64, so
-// a comparison or a sum computed wide is the same one the narrow type
-// would have produced had a kernel existed for it.
-inline CpuStorage widen_int(const CpuStorage& in, std::size_t n, Dtype from) {
-    auto p = allocate_aligned_bytes(n * sizeof(std::int64_t), Device::CPU);
-    auto* dst = reinterpret_cast<std::int64_t*>(p.get());
-    const auto* raw = in.ptr.get();
-    for (std::size_t i = 0; i < n; ++i) {
-        switch (from) {
-        case Dtype::I32:
-            dst[i] = reinterpret_cast<const std::int32_t*>(raw)[i];
-            break;
-        case Dtype::I16:
-            dst[i] = reinterpret_cast<const std::int16_t*>(raw)[i];
-            break;
-        case Dtype::I8:
-            dst[i] = reinterpret_cast<const std::int8_t*>(raw)[i];
-            break;
-        default:  // Bool
-            dst[i] = reinterpret_cast<const std::uint8_t*>(raw)[i] ? 1 : 0;
-            break;
-        }
-    }
-    return CpuStorage{p, n * sizeof(std::int64_t), Dtype::I64};
-}
-
-// The inverse.  Truncates on overflow, which cannot happen for the
-// reductions that use it: max and min of narrow values stay in range, and
-// a sum that overflows the caller's dtype would have overflowed it in a
-// native kernel too.
-inline Storage narrow_int(const Storage& wide, std::size_t n, Dtype to) {
-    const auto& w = std::get<CpuStorage>(wide);
-    const std::size_t width = dtype_size(to);
-    auto p = allocate_aligned_bytes(n * width, Device::CPU);
-    const auto* src = reinterpret_cast<const std::int64_t*>(w.ptr.get());
-    auto* raw = p.get();
-    for (std::size_t i = 0; i < n; ++i) {
-        switch (to) {
-        case Dtype::I32:
-            reinterpret_cast<std::int32_t*>(raw)[i] = static_cast<std::int32_t>(src[i]);
-            break;
-        case Dtype::I16:
-            reinterpret_cast<std::int16_t*>(raw)[i] = static_cast<std::int16_t>(src[i]);
-            break;
-        case Dtype::I8:
-            reinterpret_cast<std::int8_t*>(raw)[i] = static_cast<std::int8_t>(src[i]);
-            break;
-        default:  // Bool
-            reinterpret_cast<std::uint8_t*>(raw)[i] = src[i] ? 1 : 0;
-            break;
-        }
-    }
-    return Storage{CpuStorage{p, n * width, to}};
-}
-
-//: The narrow integers, as a set — the ones with no native kernel.
-inline bool is_narrow_int(Dtype dt) {
-    return dt == Dtype::I32 || dt == Dtype::I16 || dt == Dtype::I8 || dt == Dtype::Bool;
-}
-
-//: Every integer dtype, including I64 and bool.
-inline bool is_int_like(Dtype dt) {
-    return dt == Dtype::I64 || is_narrow_int(dt);
-}
-
-// Apply an elementwise function at the caller's integer width.
-//
-// These ops — relu6, clip, masked_fill — are comparisons and selections,
-// not arithmetic, so there is nothing to be gained by widening and a
-// dtype to be lost by it.  ``fn`` is a generic lambda instantiated once
-// per width; bool is handled as uint8 so a mask stays a mask.
-template <typename Fn>
-void for_each_int(Dtype dt, const std::byte* in, std::byte* out, std::size_t n, Fn fn) {
-    auto run = [&](auto tag) {
-        using T = decltype(tag);
-        const T* ip = reinterpret_cast<const T*>(in);
-        T* op = reinterpret_cast<T*>(out);
-        for (std::size_t i = 0; i < n; ++i)
-            op[i] = fn(ip[i]);
-    };
-    switch (dt) {
-    case Dtype::I64:
-        run(std::int64_t{});
-        break;
-    case Dtype::I32:
-        run(std::int32_t{});
-        break;
-    case Dtype::I16:
-        run(std::int16_t{});
-        break;
-    case Dtype::I8:
-        run(std::int8_t{});
-        break;
-    default:  // Bool
-        run(std::uint8_t{});
-        break;
-    }
-}
-
-// ``out[i] = mask[i] ? fill : in[i]`` at the caller's integer width.
-inline void for_each_int_masked(Dtype dt,
-                                const std::byte* in,
-                                const std::uint8_t* mask,
-                                std::byte* out,
-                                std::size_t n,
-                                std::int64_t fill) {
-    auto run = [&](auto tag) {
-        using T = decltype(tag);
-        const T* __restrict ip = reinterpret_cast<const T*>(in);
-        const std::uint8_t* __restrict mp = mask;
-        T* __restrict op = reinterpret_cast<T*>(out);
-        const T f = static_cast<T>(fill);
-        // Load, then select: a conditional load is a branch on the mask.
-        for (std::size_t i = 0; i < n; ++i) {
-            const T v = ip[i];
-            op[i] = mp[i] ? f : v;
-        }
-    };
-    switch (dt) {
-    case Dtype::I64:
-        run(std::int64_t{});
-        break;
-    case Dtype::I32:
-        run(std::int32_t{});
-        break;
-    case Dtype::I16:
-        run(std::int16_t{});
-        break;
-    case Dtype::I8:
-        run(std::int8_t{});
-        break;
-    default:  // Bool
-        run(std::uint8_t{});
-        break;
-    }
-}
-
-// Widen a storage to int64 iff it is a narrow integer; pass anything
-// else through.  The integer twin of as_f32, and dtype-driven for the
-// same reason: a call site hands it every operand and the floats, masks
-// and indices travel through unchanged.
-inline Storage as_i64(const Storage& s) {
-    const auto* c = std::get_if<CpuStorage>(&s);
-    if (c == nullptr || !is_narrow_int(c->dtype))
-        return s;
-    return Storage{widen_int(*c, c->nbytes / dtype_size(c->dtype), c->dtype)};
-}
-
-// The inverse, back to a stated dtype.  Unlike back_to_f16 the target
-// cannot be inferred from the result — every narrow integer widens to
-// the same I64 — so the caller names it.
-inline Storage back_to_int(const Storage& wide, Dtype to) {
-    const auto* c = std::get_if<CpuStorage>(&wide);
-    if (c == nullptr || c->dtype != Dtype::I64 || !is_narrow_int(to))
-        return wide;
-    return narrow_int(wide, c->nbytes / sizeof(std::int64_t), to);
-}
-
-// Widen any integer storage to double; pass anything else through.
-// Used where the only kernel is a BLAS one — see matmul.
-inline Storage as_f64(const Storage& s) {
-    const auto* c = std::get_if<CpuStorage>(&s);
-    if (c == nullptr || !is_int_like(c->dtype))
-        return s;
-    const std::size_t n = c->nbytes / dtype_size(c->dtype);
-    auto p = allocate_aligned_bytes(n * sizeof(double), Device::CPU);
-    auto* dst = reinterpret_cast<double*>(p.get());
-    const auto* raw = c->ptr.get();
-    for (std::size_t i = 0; i < n; ++i) {
-        switch (c->dtype) {
-        case Dtype::I64:
-            dst[i] = static_cast<double>(reinterpret_cast<const std::int64_t*>(raw)[i]);
-            break;
-        case Dtype::I32:
-            dst[i] = reinterpret_cast<const std::int32_t*>(raw)[i];
-            break;
-        case Dtype::I16:
-            dst[i] = reinterpret_cast<const std::int16_t*>(raw)[i];
-            break;
-        case Dtype::I8:
-            dst[i] = reinterpret_cast<const std::int8_t*>(raw)[i];
-            break;
-        default:  // Bool
-            dst[i] = reinterpret_cast<const std::uint8_t*>(raw)[i] ? 1.0 : 0.0;
-            break;
-        }
-    }
-    return Storage{CpuStorage{p, n * sizeof(double), Dtype::F64}};
-}
-
-//: How a double result becomes an integer.  The two callers want
-//: different things and the difference is visible in the answers.
-//:
-//: ``Nearest`` is for arithmetic whose exact result *is* an integer and
-//: which was only routed through double because Accelerate had no
-//: integer kernel — an integer matmul, say.  There the double may sit a
-//: few ulp off the true integer, and rounding to nearest repairs that;
-//: truncating would turn 5 into 4.
-//:
-//: ``TowardZero`` is for a result that is genuinely fractional and is
-//: being narrowed because the caller asked for an integer dtype — the
-//: mean of an integer pooling window.  That is a *cast*, and the
-//: framework's float-to-integer cast truncates: the reference pools
-//: [3,1,5,9] to 4, not 5, and Metal's own cast already agreed with it
-//: while the CPU rounded and disagreed.
-enum class IntRounding { Nearest, TowardZero };
-
-// Convert a double result back to an integer dtype.
-inline Storage
-f64_to_int(const Storage& wide, std::size_t n, Dtype to, IntRounding how = IntRounding::Nearest) {
-    const auto& w = std::get<CpuStorage>(wide);
-    const std::size_t width = dtype_size(to);
-    auto p = allocate_aligned_bytes(n * width, Device::CPU);
-    const auto* src = reinterpret_cast<const double*>(w.ptr.get());
-    auto* raw = p.get();
-    for (std::size_t i = 0; i < n; ++i) {
-        const std::int64_t v = how == IntRounding::Nearest
-                                   ? static_cast<std::int64_t>(std::llround(src[i]))
-                                   : static_cast<std::int64_t>(src[i]);
-        switch (to) {
-        case Dtype::I64:
-            reinterpret_cast<std::int64_t*>(raw)[i] = v;
-            break;
-        case Dtype::I32:
-            reinterpret_cast<std::int32_t*>(raw)[i] = static_cast<std::int32_t>(v);
-            break;
-        case Dtype::I16:
-            reinterpret_cast<std::int16_t*>(raw)[i] = static_cast<std::int16_t>(v);
-            break;
-        case Dtype::I8:
-            reinterpret_cast<std::int8_t*>(raw)[i] = static_cast<std::int8_t>(v);
-            break;
-        default:  // Bool
-            reinterpret_cast<std::uint8_t*>(raw)[i] = v ? 1 : 0;
-            break;
-        }
-    }
-    return Storage{CpuStorage{p, n * width, to}};
-}
-
-// The inverse of ``as_f64``, dtype-driven in the same way ``back_to_f16``
-// is: an F64 result rounds back to the caller's integer width, and a
-// result that is already an index or a mask passes through as it is.  A
-// pooling call returns both at once, which is exactly why this keys off
-// the storage rather than the position.
-inline Storage f64_back_to_int(const Storage& s, Dtype to, IntRounding how = IntRounding::Nearest) {
-    const auto* c = std::get_if<CpuStorage>(&s);
-    if (c == nullptr || c->dtype != Dtype::F64 || !is_int_like(to))
-        return s;
-    return f64_to_int(s, c->nbytes / sizeof(double), to, how);
-}
-
-inline std::vector<Storage>
-f64_back_to_int(const std::vector<Storage>& v, Dtype to, IntRounding how = IntRounding::Nearest) {
-    std::vector<Storage> out;
-    out.reserve(v.size());
-    for (const auto& s : v)
-        out.push_back(f64_back_to_int(s, to, how));
-    return out;
-}
-
-// Widen a storage to float iff it is half; pass anything else through
-// untouched.  Dtype-driven rather than position-driven, so a call site can
-// hand it every operand it has and the index / mask / condition tensors
-// travel through unchanged — there is no list of "which argument is the
-// float one" to get wrong.
-inline Storage as_f32(const Storage& s) {
-    const auto* c = std::get_if<CpuStorage>(&s);
-    if (c == nullptr || !is_half_like(c->dtype))
-        return s;
-    return Storage{widen_half(*c, c->nbytes / sizeof(std::uint16_t))};
-}
-
-// The same for an optional operand — an attention mask, a class weight.
-// Those used to be handed through raw while their siblings widened, and the
-// float kernel then read half bytes as floats.  ``hold`` owns the copy.
-inline const Storage* as_f32(const Storage* s, std::optional<Storage>& hold) {
-    if (s == nullptr)
-        return nullptr;
-    hold = as_f32(*s);
-    return &*hold;
-}
-
-// The inverse, equally dtype-driven: a float result rounds back to half, and
-// a result that is a mask (bool) or an index (int64) is returned as it is.
-inline Storage back_to_f16(const Storage& s, Dtype to) {
-    const auto* c = std::get_if<CpuStorage>(&s);
-    if (c == nullptr || c->dtype != Dtype::F32)
-        return s;
-    return narrow_half(s, c->nbytes / sizeof(float), to);
-}
-
-inline std::vector<Storage> back_to_f16(const std::vector<Storage>& v, Dtype to) {
-    std::vector<Storage> out;
-    out.reserve(v.size());
-    for (const auto& s : v)
-        out.push_back(back_to_f16(s, to));
-    return out;
-}
-
-inline std::pair<Storage, Storage> back_to_f16(const std::pair<Storage, Storage>& p, Dtype to) {
-    return {back_to_f16(p.first, to), back_to_f16(p.second, to)};
-}
-
-inline StoragePair back_to_f16(const StoragePair& p, Dtype to) {
-    return {back_to_f16(p.first, to), back_to_f16(p.second, to)};
-}
-
-}  // namespace detail
-
-// Elements of a scalar transcendental loop (``std::erf``, ``std::exp``) worth
-// a core of their own: at ~5 ns an element, 16k of them are ~80 us, far past
-// the few microseconds a dispatch costs.  See cpu::parallel_for.
-inline constexpr std::size_t kTranscendentalGrain = 16384;
-
-// Elements of a memory-bound loop (a comparison, a select) worth a core: at
-// ~0.4 ns an element, 64k of them are ~25 us, still well past a dispatch.
-inline constexpr std::size_t kStreamGrain = 65536;
-
-// Elements per vForce call inside a parallel chunk: the tile lives on the
-// stack and stays in L1 (8 KiB of double) between the passes over it.
-inline constexpr std::size_t kTanhTile = 1024;
-
-namespace detail {
-
-// ``out = x ** e`` for a scalar exponent.
-//
-// vForce's pow is exact but ~8 ns an element, and backward reaches it for
-// every power (``d/dx x**2`` is ``2 * x**1``).  Exponents whose answer is one
-// correctly rounded operation take that operation instead, so the result is
-// the same bits: x*x, 1/x and sqrt are each a single IEEE rounding, as the
-// exact power is.  sqrt differs from the power only at -0 (sqrt keeps the
-// sign) and -inf (sqrt is NaN, the power +inf); both are set right.
-// Any other exponent runs vForce in L1 tiles across cores.
-// ``out[i] = mask[i] ? value : in[i]``, without a branch.
-//
-// Written as a conditional, the element was loaded only when the mask was
-// clear, so the compiler branched on the mask — and a data mask (``x > 0``)
-// is a coin flip: 150 us for 64k floats, thirty times an add.  Loading first
-// and selecting makes it a vector blend.
-template <typename T>
-inline void select_fill(const T* in, const std::uint8_t* mask, T value, T* out, std::size_t n) {
-    cpu::parallel_for(n, kStreamGrain, [&](std::size_t lo, std::size_t hi) {
-        // Locals, not the closure's references: a store through ``y`` could
-        // alias a captured ``value``, which would keep the loop scalar.
-        const T* __restrict x = in;
-        const std::uint8_t* __restrict m = mask;
-        T* __restrict y = out;
-        const T fill = value;
-        for (std::size_t i = lo; i < hi; ++i) {
-            const T v = x[i];
-            y[i] = m[i] ? fill : v;
-        }
-    });
-}
-
-template <typename T>
-inline void pow_by_scalar(const T* in, T e, T* out, std::size_t n) {
-    constexpr T kInf = std::numeric_limits<T>::infinity();
-    auto each = [&](auto f) {
-        cpu::parallel_for(n, kStreamGrain, [&](std::size_t lo, std::size_t hi) {
-            const T* __restrict x = in;
-            T* __restrict y = out;
-            for (std::size_t i = lo; i < hi; ++i)
-                y[i] = f(x[i]);
-        });
-    };
-    if (e == T(2)) {
-        each([](T v) { return v * v; });
-    } else if (e == T(1)) {
-        each([](T v) { return v; });
-    } else if (e == T(0)) {
-        each([](T) { return T(1); });
-    } else if (e == T(-1)) {
-        each([](T v) { return T(1) / v; });
-    } else if (e == T(0.5)) {
-        each([](T v) {
-            const T r = std::sqrt(v) + T(0);
-            return v == -kInf ? kInf : r;
-        });
-    } else {
-        cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-            T expo[kTanhTile];
-            std::fill_n(expo, std::min(kTanhTile, hi - lo), e);
-            for (std::size_t s = lo; s < hi; s += kTanhTile) {
-                const std::size_t m = std::min(kTanhTile, hi - s);
-                if constexpr (std::is_same_v<T, float>)
-                    cpu::vpow_f32(in + s, expo, out + s, m);
-                else
-                    cpu::vpow_f64(in + s, expo, out + s, m);
-            }
-        });
-    }
-}
-
-}  // namespace detail
 
 // CPU (Apple Accelerate-backed) concrete :class:`IBackend`.
 //
@@ -633,7 +186,7 @@ public:
     // -------
     // Storage
     //     ``cpu`` re-wrapped as a :class:`Storage` variant.
-    Storage from_cpu(CpuStorage cpu, const Shape&) override { return Storage{std::move(cpu)}; }
+    Storage from_cpu(CpuStorage cpu, const Shape&) override;
 
     Storage zeros(const Shape& shape, Dtype dt) override {
         std::size_t n = shape_numel(shape);
@@ -643,62 +196,16 @@ public:
         return Storage{CpuStorage{ptr, nb, dt}};
     }
 
-    Storage ones(const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(ones(shape, Dtype::F32), dt);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        fill_ones(ptr.get(), n, dt);
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage ones(const Shape& shape, Dtype dt) override;
 
-    Storage clone(const Storage& src, const Shape& shape, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(src);
-        std::size_t nb = cs.nbytes;
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        std::memcpy(ptr.get(), cs.ptr.get(), nb);
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage clone(const Storage& src, const Shape& shape, Dtype dt) override;
 
     Storage contiguous(const Storage& src,
                        const Shape& shape,
                        const Stride& stride,
                        std::size_t storage_offset,
                        bool already_contiguous,
-                       Dtype dt) override {
-        // SharedStorage (MetalKernelRunner output) is CPU-readable via cpu_view().
-        // Create a temporary CpuStorage view and proceed normally.
-        CpuStorage tmp_view;
-        const CpuStorage* cs_ptr = nullptr;
-        if (storage_is_metal_shared(src)) {
-            tmp_view = std::get<SharedStorage>(src).cpu_view();
-            cs_ptr = &tmp_view;
-        } else {
-            cs_ptr = &std::get<CpuStorage>(src);
-        }
-        const auto& cs = *cs_ptr;
-        const std::size_t elem = dtype_size(dt);
-        const std::size_t n = shape_numel(shape);
-        const std::size_t nbytes = n * elem;
-        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
-        if (nbytes == 0)
-            return Storage{CpuStorage{ptr, nbytes, dt}};
-
-        if (already_contiguous && storage_offset == 0) {
-            std::memcpy(ptr.get(), cs.ptr.get(), nbytes);
-            return Storage{CpuStorage{ptr, nbytes, dt}};
-        }
-
-        // Axes merged, runs memcpy'd, a 2-D transpose tiled (core/StridedCopy.h)
-        // — this walked every element with a coordinate step and a memcpy.
-        strided::pack(cs.ptr.get() + storage_offset, ptr.get(), shape, stride, elem);
-        return Storage{CpuStorage{ptr, nbytes, dt}};
-    }
+                       Dtype dt) override;
 
     // An interleaved complex op over two same-shape buffers.  ``binary_op``
     // has no complex branch: its kernels are typed on one real scalar.
@@ -706,873 +213,85 @@ public:
     static Storage complex_binary(const Storage& a,
                                   const Storage& b,
                                   const Shape& shape,
-                                  void (*fn)(const Scalar*, const Scalar*, Scalar*, std::size_t)) {
-        const auto& ca = std::get<CpuStorage>(a);
-        const auto& cb = std::get<CpuStorage>(b);
-        const std::size_t n = shape_numel(shape);
-        constexpr auto dt = sizeof(Scalar) == sizeof(double) ? Dtype::C128 : Dtype::C64;
-        const std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        fn(reinterpret_cast<const Scalar*>(ca.ptr.get()),
-           reinterpret_cast<const Scalar*>(cb.ptr.get()), reinterpret_cast<Scalar*>(ptr.get()), n);
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                                  void (*fn)(const Scalar*, const Scalar*, Scalar*, std::size_t));
 
-    Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        if (dt == Dtype::C128)
-            return complex_binary(a, b, shape, cpu::vzadd_c128);
-        if (dt == Dtype::C64)
-            return complex_binary(a, b, shape, cpu::vzadd_c64);
-        return binary_op(
-            a, b, shape, dt,
-            [](const float* ap, const float* bp, float* op, std::size_t n) {
-                cpu::vadd_f32(ap, bp, op, n);
-            },
-            [](const double* ap, const double* bp, double* op, std::size_t n) {
-                cpu::vadd_f64(ap, bp, op, n);
-            },
-            [](const std::int32_t* ap, const std::int32_t* bp, std::int32_t* op, std::size_t n) {
-                cpu::vadd_i32(ap, bp, op, n);
-            },
-            [](const std::int64_t* ap, const std::int64_t* bp, std::int64_t* op, std::size_t n) {
-                cpu::vadd_i64(ap, bp, op, n);
-            });
-    }
+    Storage add(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;
 
-    Storage sub(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        if (dt == Dtype::C128)
-            return complex_binary(a, b, shape, cpu::vzsub_c128);
-        if (dt == Dtype::C64)
-            return complex_binary(a, b, shape, cpu::vzsub_c64);
-        return binary_op(
-            a, b, shape, dt,
-            [](const float* ap, const float* bp, float* op, std::size_t n) {
-                cpu::vsub_f32(ap, bp, op, n);
-            },
-            [](const double* ap, const double* bp, double* op, std::size_t n) {
-                cpu::vsub_f64(ap, bp, op, n);
-            },
-            [](const std::int32_t* ap, const std::int32_t* bp, std::int32_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = ap[i] - bp[i];
-            },
-            [](const std::int64_t* ap, const std::int64_t* bp, std::int64_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = ap[i] - bp[i];
-            });
-    }
+    Storage sub(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;
 
-    Storage mul(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        if (dt == Dtype::C128)
-            return complex_binary(a, b, shape, cpu::vzmul_c128);
-        if (dt == Dtype::C64)
-            return complex_binary(a, b, shape, cpu::vzmul_c64);
-        return binary_op(
-            a, b, shape, dt,
-            [](const float* ap, const float* bp, float* op, std::size_t n) {
-                cpu::vmul_f32(ap, bp, op, n);
-            },
-            [](const double* ap, const double* bp, double* op, std::size_t n) {
-                cpu::vmul_f64(ap, bp, op, n);
-            },
-            [](const std::int32_t* ap, const std::int32_t* bp, std::int32_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = ap[i] * bp[i];
-            },
-            [](const std::int64_t* ap, const std::int64_t* bp, std::int64_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = ap[i] * bp[i];
-            });
-    }
+    Storage mul(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;
 
-    Storage div(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        if (dt == Dtype::C128)
-            return complex_binary(a, b, shape, cpu::vzdiv_c128);
-        if (dt == Dtype::C64)
-            return complex_binary(a, b, shape, cpu::vzdiv_c64);
-        return binary_op(
-            a, b, shape, dt,
-            [](const float* ap, const float* bp, float* op, std::size_t n) {
-                cpu::vdiv_f32(ap, bp, op, n);
-            },
-            [](const double* ap, const double* bp, double* op, std::size_t n) {
-                cpu::vdiv_f64(ap, bp, op, n);
-            },
-            [](const std::int32_t* ap, const std::int32_t* bp, std::int32_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = ap[i] / bp[i];
-            },
-            [](const std::int64_t* ap, const std::int64_t* bp, std::int64_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = ap[i] / bp[i];
-            });
-    }
+    Storage div(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;
 
-    Storage pow(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        return binary_op(
-            a, b, shape, dt,
-            // vForce's pow is ~8 ns an element: split it across cores.
-            [](const float* ap, const float* bp, float* op, std::size_t n) {
-                cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                    cpu::vpow_f32(ap + lo, bp + lo, op + lo, hi - lo);
-                });
-            },
-            [](const double* ap, const double* bp, double* op, std::size_t n) {
-                cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                    cpu::vpow_f64(ap + lo, bp + lo, op + lo, hi - lo);
-                });
-            },
-            cpu::ipow_vec<std::int32_t>, cpu::ipow_vec<std::int64_t>);
-    }
+    Storage pow(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;
 
     Storage bitwise_binary(
-        const Storage& a, const Storage& b, const Shape& shape, Dtype dt, int op) override {
-        const auto& ca = std::get<CpuStorage>(a);
-        const auto& cb = std::get<CpuStorage>(b);
-        const std::size_t n = shape_numel(shape);
-        const std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-
-        if (op < 0 || op > 4)
-            ErrorBuilder("cpu_backend::bitwise_binary").fail("unknown op");
-        // The op is chosen once, outside the loop: inside, the if-chain and
-        // its error path kept ``a & b`` scalar — twelve times an add.
-        auto run = [&](auto* dst_in, const auto* lhs_in, const auto* rhs_in) {
-            using T = std::remove_pointer_t<decltype(dst_in)>;
-            // Width of T in bits — used to clamp shift amounts so we don't
-            // hit the C++ undefined-behaviour zone (shifts ≥ width are UB).
-            constexpr std::int64_t kWidth = static_cast<std::int64_t>(sizeof(T) * 8);
-            T* __restrict dst = dst_in;
-            const T* __restrict lhs = lhs_in;
-            const T* __restrict rhs = rhs_in;
-            auto each = [&](auto f) {
-                for (std::size_t i = 0; i < n; ++i)
-                    dst[i] = static_cast<T>(
-                        f(static_cast<std::int64_t>(lhs[i]), static_cast<std::int64_t>(rhs[i])));
-            };
-            switch (op) {
-            case 0:
-                each([](std::int64_t x, std::int64_t y) { return x & y; });
-                break;
-            case 1:
-                each([](std::int64_t x, std::int64_t y) { return x | y; });
-                break;
-            case 2:
-                each([](std::int64_t x, std::int64_t y) { return x ^ y; });
-                break;
-            case 3:
-                // Left-shift: clamp y into [0, width) — out-of-range shifts
-                // are UB in C++, but the reference framework returns 0 for
-                // y ≥ width and 0 for y < 0.
-                each([](std::int64_t x, std::int64_t y) -> std::int64_t {
-                    if (y < 0 || y >= kWidth)
-                        return 0;
-                    return static_cast<std::int64_t>(static_cast<T>(x) << y);
-                });
-                break;
-            default:
-                // Arithmetic right-shift on the *narrow* type so sign
-                // extension matches the input dtype.  Same out-of-range
-                // contract as left-shift.
-                each([](std::int64_t x, std::int64_t y) -> std::int64_t {
-                    if (y < 0)
-                        return 0;
-                    if (y >= kWidth)
-                        return (x < 0) ? -1 : 0;
-                    return static_cast<std::int64_t>(static_cast<T>(x) >> y);
-                });
-                break;
-            }
-        };
-
-        if (dt == Dtype::I32) {
-            run(reinterpret_cast<std::int32_t*>(ptr.get()),
-                reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int32_t*>(cb.ptr.get()));
-        } else if (dt == Dtype::I64) {
-            run(reinterpret_cast<std::int64_t*>(ptr.get()),
-                reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int64_t*>(cb.ptr.get()));
-        } else if (dt == Dtype::I16) {
-            run(reinterpret_cast<std::int16_t*>(ptr.get()),
-                reinterpret_cast<const std::int16_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int16_t*>(cb.ptr.get()));
-        } else if (dt == Dtype::I8) {
-            run(reinterpret_cast<std::int8_t*>(ptr.get()),
-                reinterpret_cast<const std::int8_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::int8_t*>(cb.ptr.get()));
-        } else if (dt == Dtype::Bool) {
-            run(reinterpret_cast<std::uint8_t*>(ptr.get()),
-                reinterpret_cast<const std::uint8_t*>(ca.ptr.get()),
-                reinterpret_cast<const std::uint8_t*>(cb.ptr.get()));
-        } else {
-            ErrorBuilder("cpu_backend::bitwise_binary")
-                .not_implemented("dtype must be integer or bool");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+        const Storage& a, const Storage& b, const Shape& shape, Dtype dt, int op) override;
 
     Storage compare_binary(
-        const Storage& a, const Storage& b, const Shape& shape, Dtype dt, int op) override {
-        // Comparison answers in Bool but has to read the operands, and
-        // Accelerate has no half compare.  Widen both and compare in
-        // single — the result is exact, since half is a subset of float.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            return compare_binary(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)},
-                                  Storage{detail::widen_half(std::get<CpuStorage>(b), half_n)},
-                                  shape, Dtype::F32, op);
-        }
-        const auto& ca = std::get<CpuStorage>(a);
-        const auto& cb = std::get<CpuStorage>(b);
-        const std::size_t n = shape_numel(shape);
-        auto ptr = allocate_aligned_bytes(n, Device::CPU);
-        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
+        const Storage& a, const Storage& b, const Shape& shape, Dtype dt, int op) override;
 
-        // The comparison is chosen once, outside the loop, and the loop is
-        // split across cores.  An if-chain over ``op`` with an error path in
-        // every element kept it scalar and on one core: 0.52 ms for ``x > 0``
-        // on 524k floats, twenty times ``x + y``.
-        if (op < 0 || op > 5)
-            ErrorBuilder("cpu_backend::compare_binary").fail("unknown op");
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const auto* lhs_in = reinterpret_cast<const T*>(ca.ptr.get());
-            const auto* rhs_in = reinterpret_cast<const T*>(cb.ptr.get());
-            auto each = [&](auto cmp) {
-                cpu::parallel_for(n, kStreamGrain, [&](std::size_t lo, std::size_t hi) {
-                    // Local restrict pointers: a byte store may alias
-                    // anything, so pointers read through the closure would
-                    // be reloaded every element and the loop stay scalar.
-                    const T* __restrict lhs = lhs_in;
-                    const T* __restrict rhs = rhs_in;
-                    std::uint8_t* __restrict out = dst;
-                    for (std::size_t i = lo; i < hi; ++i)
-                        out[i] = static_cast<std::uint8_t>(cmp(lhs[i], rhs[i]));
-                });
-            };
-            if (op == 0) {
-                each([](T l, T r) { return l == r; });
-            } else if (op == 1) {
-                each([](T l, T r) { return l != r; });
-            } else if constexpr (requires(T l, T r) { l < r; }) {
-                if (op == 2)
-                    each([](T l, T r) { return l > r; });
-                else if (op == 3)
-                    each([](T l, T r) { return l >= r; });
-                else if (op == 4)
-                    each([](T l, T r) { return l < r; });
-                else
-                    each([](T l, T r) { return l <= r; });
-            } else {
-                ErrorBuilder("cpu_backend::compare_binary")
-                    .not_implemented("ordering comparison is not supported for complex dtypes");
-            }
-        };
+    Storage maximum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;
 
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else if (dt == Dtype::I32)
-            run(std::int32_t{});
-        else if (dt == Dtype::I64)
-            run(std::int64_t{});
-        else if (dt == Dtype::I16)
-            run(std::int16_t{});
-        else if (dt == Dtype::I8)
-            run(std::int8_t{});
-        else if (dt == Dtype::Bool)
-            run(std::uint8_t{});
-        else if (dt == Dtype::C64)
-            run(std::complex<float>{});
-        else if (dt == Dtype::C128)
-            run(std::complex<double>{});
-        else
-            ErrorBuilder("cpu_backend::compare_binary").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, n, Dtype::Bool}};
-    }
+    Storage minimum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;
 
-    Storage maximum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        return binary_op(
-            a, b, shape, dt,
-            [](const float* ap, const float* bp, float* op, std::size_t n) {
-                cpu::vmax_f32(ap, bp, op, n);
-            },
-            [](const double* ap, const double* bp, double* op, std::size_t n) {
-                cpu::vmax_f64(ap, bp, op, n);
-            },
-            [](const std::int32_t* ap, const std::int32_t* bp, std::int32_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = std::max(ap[i], bp[i]);
-            },
-            [](const std::int64_t* ap, const std::int64_t* bp, std::int64_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = std::max(ap[i], bp[i]);
-            });
-    }
+    Storage exp(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage minimum(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        return binary_op(
-            a, b, shape, dt,
-            [](const float* ap, const float* bp, float* op, std::size_t n) {
-                cpu::vmin_f32(ap, bp, op, n);
-            },
-            [](const double* ap, const double* bp, double* op, std::size_t n) {
-                cpu::vmin_f64(ap, bp, op, n);
-            },
-            [](const std::int32_t* ap, const std::int32_t* bp, std::int32_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = std::min(ap[i], bp[i]);
-            },
-            [](const std::int64_t* ap, const std::int64_t* bp, std::int64_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = std::min(ap[i], bp[i]);
-            });
-    }
+    Storage log(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage exp(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vexp_f32, cpu::vexp_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::exp(static_cast<float>(ip[i])));
-                        });
-    }
+    Storage sqrt(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage log(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vlog_f32, cpu::vlog_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::log(static_cast<float>(ip[i])));
-                        });
-    }
+    Storage rsqrt(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage sqrt(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vsqrt_f32, cpu::vsqrt_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::sqrt(static_cast<float>(ip[i])));
-                        });
-    }
+    Storage abs(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage rsqrt(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(rsqrt(detail::as_f32(a), shape, Dtype::F32), dt);
-        auto sq = sqrt(a, shape, dt);
-        const auto& cs = std::get<CpuStorage>(sq);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32)
-            cpu::vrec_f32(reinterpret_cast<const float*>(cs.ptr.get()),
-                          reinterpret_cast<float*>(ptr.get()), n);
-        else if (dt == Dtype::F64)
-            cpu::vrec_f64(reinterpret_cast<const double*>(cs.ptr.get()),
-                          reinterpret_cast<double*>(ptr.get()), n);
-        else
-            ErrorBuilder("cpu_backend::rsqrt").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage neg(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage abs(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(
-            a, shape, dt,
-            [](const float* ip, float* op, std::size_t n) { cpu::vabs_f32(ip, op, n); },
-            [](const double* ip, double* op, std::size_t n) { cpu::vabs_f64(ip, op, n); },
-            [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = std::abs(ip[i]);
-            });
-    }
+    Storage sign(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage neg(const Storage& a, const Shape& shape, Dtype dt) override {
-        if (is_complex(dt))
-            return sub(zeros(shape, dt), a, shape, dt);
-        // A bool has no negation.  It went through the integer path as
-        // uint8, where ``-1`` wraps to 255 and 255 reads back as ``true``,
-        // so ``-tensor([True, False])`` answered ``[True, False]`` — the
-        // input, unchanged, with nothing raised.  Metal refuses this and
-        // says to use logical_not; so does the reference.  Refuse here too,
-        // and point at the same op, so the two devices agree on both the
-        // outcome and the reason.
-        if (dt == Dtype::Bool)
-            ErrorBuilder("cpu_backend::neg")
-                .not_implemented("negation is not defined for bool — use logical_not");
-        return unary_op(
-            a, shape, dt,
-            [](const float* ip, float* op, std::size_t n) { cpu::vneg_f32(ip, op, n); },
-            [](const double* ip, double* op, std::size_t n) { cpu::vneg_f64(ip, op, n); },
-            [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = -ip[i];
-            });
-    }
+    Storage floor(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage sign(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernel here; widen at the door and round
-        // once on the way out.  See detail::widen_half.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(
-                sign(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
-                     Dtype::F32),
-                half_n, dt);
-        }
-        // Integers take the same road, through int64.  Selection, movement
-        // and addition are all exact there, so this is the answer a native
-        // kernel would have produced rather than an approximation of it.
-        if (detail::is_narrow_int(dt))
-            return detail::back_to_int(sign(detail::as_i64(a), shape, Dtype::I64), dt);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const auto& cs = std::get<CpuStorage>(a);
-        if (dt == Dtype::F32) {
-            const float* ip = reinterpret_cast<const float*>(cs.ptr.get());
-            float* op = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = (ip[i] > 0.f) ? 1.f : ((ip[i] < 0.f) ? -1.f : 0.f);
-        } else if (dt == Dtype::F64) {
-            const double* ip = reinterpret_cast<const double*>(cs.ptr.get());
-            double* op = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = (ip[i] > 0.0) ? 1.0 : ((ip[i] < 0.0) ? -1.0 : 0.0);
-        } else if (dt == Dtype::I32) {
-            const std::int32_t* ip = reinterpret_cast<const std::int32_t*>(cs.ptr.get());
-            std::int32_t* op = reinterpret_cast<std::int32_t*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = (ip[i] > 0) ? 1 : ((ip[i] < 0) ? -1 : 0);
-        } else if (dt == Dtype::I64) {
-            const std::int64_t* ip = reinterpret_cast<const std::int64_t*>(cs.ptr.get());
-            std::int64_t* op = reinterpret_cast<std::int64_t*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = (ip[i] > 0) ? 1 : ((ip[i] < 0) ? -1 : 0);
-        } else {
-            ErrorBuilder("cpu_backend::sign").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage ceil(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage floor(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vfloor_f32, cpu::vfloor_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            std::copy(ip, ip + n, op);
-                        });
-    }
+    Storage round(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage ceil(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vceil_f32, cpu::vceil_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            std::copy(ip, ip + n, op);
-                        });
-    }
+    Storage sin(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage round(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vround_f32, cpu::vround_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            std::copy(ip, ip + n, op);
-                        });
-    }
+    Storage cos(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage sin(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vsin_f32, cpu::vsin_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::sin(static_cast<float>(ip[i])));
-                        });
-    }
+    Storage tanh(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage cos(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vcos_f32, cpu::vcos_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::cos(static_cast<float>(ip[i])));
-                        });
-    }
+    Storage sigmoid(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage tanh(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vtanh_f32, cpu::vtanh_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::tanh(static_cast<float>(ip[i])));
-                        });
-    }
+    Storage relu(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage sigmoid(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernel here; widen at the door and
-        // round once on the way out.  See detail::widen_half.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            const Storage wide = Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)};
-            return detail::narrow_half(sigmoid(wide, shape, Dtype::F32), half_n, dt);
-        }
-        // One pass over L1 tiles, split across cores.  The chain this replaces
-        // — neg, exp, ones, add, reciprocal — wrote three full-size
-        // temporaries and ran on one core, 2.4 times the reference.  Each
-        // element still takes the same operations in the same order (vForce
-        // exp of -x, plus one, the correctly rounded reciprocal
-        // cpu::vrec_f32/f64), so the bits are unchanged.
-        const auto& ca = std::get<CpuStorage>(a);
-        const std::size_t n = shape_numel(shape);
-        const std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        auto run = [&](const auto* in, auto* out, auto vexp, auto vrec) {
-            using T = std::remove_cv_t<std::remove_pointer_t<decltype(in)>>;
-            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                T tile[kTanhTile];
-                for (std::size_t s = lo; s < hi; s += kTanhTile) {
-                    const std::size_t m = std::min(kTanhTile, hi - s);
-                    for (std::size_t i = 0; i < m; ++i)
-                        tile[i] = -in[s + i];
-                    vexp(tile, tile, m);
-                    for (std::size_t i = 0; i < m; ++i)
-                        tile[i] = T(1) + tile[i];
-                    vrec(tile, out + s, m);
-                }
-            });
-        };
-        if (dt == Dtype::F32) {
-            run(reinterpret_cast<const float*>(ca.ptr.get()), reinterpret_cast<float*>(ptr.get()),
-                &cpu::vexp_f32, &cpu::vrec_f32);
-        } else if (dt == Dtype::F64) {
-            run(reinterpret_cast<const double*>(ca.ptr.get()), reinterpret_cast<double*>(ptr.get()),
-                &cpu::vexp_f64, &cpu::vrec_f64);
-        } else {
-            ErrorBuilder("cpu_backend::sigmoid").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage log2(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage relu(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernel here; widen at the door and
-        // round once on the way out.  See detail::widen_half.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            const Storage wide = Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)};
-            return detail::narrow_half(relu(wide, shape, Dtype::F32), half_n, dt);
-        }
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const auto& cs = std::get<CpuStorage>(a);
-        // ``max(0, x)`` needs no arithmetic beyond a comparison, so every
-        // integer width computes it in itself.  Written out rather than
-        // delegated to a wide path: there is no I64 kernel here to delegate
-        // *to*, which is what a first attempt at widening ran into.
-        // The reference framework answers relu on integers and keeps the
-        // dtype; Metal already did.
-        auto run_int = [&](auto tag) {
-            using T = decltype(tag);
-            const T* ip = reinterpret_cast<const T*>(cs.ptr.get());
-            T* op = reinterpret_cast<T*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = ip[i] < T{} ? T{} : ip[i];
-        };
-        switch (dt) {
-        case Dtype::F32:
-            cpu::vrelu_f32(reinterpret_cast<const float*>(cs.ptr.get()),
-                           reinterpret_cast<float*>(ptr.get()), n);
-            break;
-        case Dtype::F64:
-            cpu::vrelu_f64(reinterpret_cast<const double*>(cs.ptr.get()),
-                           reinterpret_cast<double*>(ptr.get()), n);
-            break;
-        case Dtype::I64:
-            run_int(std::int64_t{});
-            break;
-        case Dtype::I32:
-            run_int(std::int32_t{});
-            break;
-        case Dtype::I16:
-            run_int(std::int16_t{});
-            break;
-        case Dtype::I8:
-            run_int(std::int8_t{});
-            break;
-        case Dtype::Bool:
-            // Already non-negative; relu is the identity on a mask.
-            std::memcpy(ptr.get(), cs.ptr.get(), nb);
-            break;
-        default:
-            ErrorBuilder("cpu_backend::relu").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage erf(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage log2(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vlog2_f32, cpu::vlog2_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::log2(static_cast<float>(ip[i])));
-                        });
-    }
+    Storage erfinv(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage erf(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::verf_f32, cpu::verf_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::erf(static_cast<float>(ip[i])));
-                        });
-    }
+    Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage erfinv(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(erfinv(detail::as_f32(a), shape, Dtype::F32), dt);
-        // erfinv via Winitzki (2008) initial guess + 3 Newton steps.
-        static constexpr double kTwoOverSqrtPi = 1.1283791670955126;
-        static constexpr double kA = 0.147;  // Winitzki constant
+    Storage square(const Storage& a, const Shape& shape, Dtype dt) override;
 
-        auto scalar_erfinv = [&](double x) -> double {
-            // erf maps onto (-1, 1), so only the two endpoints are infinite;
-            // anything outside is undefined and must be NaN.  Collapsing
-            // ``x >= 1`` to +inf swallowed the whole out-of-domain half, and
-            // an inf is more dangerous than a NaN downstream — ``1/inf`` and
-            // ``exp(-inf)`` quietly become finite, so a domain error could
-            // vanish instead of propagating.  (Metal already matched SciPy.)
-            if (std::isnan(x))
-                return x;
-            if (x > 1.0 || x < -1.0)
-                return std::numeric_limits<double>::quiet_NaN();
-            if (x == 1.0)
-                return std::numeric_limits<double>::infinity();
-            if (x == -1.0)
-                return -std::numeric_limits<double>::infinity();
-            if (x == 0.0)
-                return x;
-            double s = (x > 0) ? 1.0 : -1.0;
-            double ax = std::abs(x);
-            double ln1 = std::log(1.0 - ax * ax);
-            double b = 2.0 / (M_PI * kA) + ln1 * 0.5;
-            double y = s * std::sqrt(std::sqrt(b * b - ln1 / kA) - b);
-            // Newton refinement: y_new = y - (erf(y) - x) / ((2/sqrt(pi))*exp(-y^2))
-            for (int k = 0; k < 3; ++k) {
-                double ey = std::erf(y);
-                double dy = (ey - x) / (kTwoOverSqrtPi * std::exp(-y * y));
-                y -= dy;
-            }
-            return y;
-        };
+    Storage cube(const Storage& a, const Shape& shape, Dtype dt) override;
 
-        auto run_f32 = [&](const float* ip, float* op, std::size_t n) {
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = static_cast<float>(scalar_erfinv(static_cast<double>(ip[i])));
-        };
-        auto run_f64 = [&](const double* ip, double* op, std::size_t n) {
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = scalar_erfinv(ip[i]);
-        };
+    Storage cube_root(const Storage& a, const Shape& shape, Dtype dt) override;
 
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32)
-            run_f32(reinterpret_cast<const float*>(cs.ptr.get()),
-                    reinterpret_cast<float*>(ptr.get()), n);
-        else if (dt == Dtype::F64)
-            run_f64(reinterpret_cast<const double*>(cs.ptr.get()),
-                    reinterpret_cast<double*>(ptr.get()), n);
-        else
-            ErrorBuilder("cpu_backend::erfinv").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage tan(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage reciprocal(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernel here; widen at the door and round
-        // once on the way out.  See detail::widen_half.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(
-                reciprocal(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
-                           Dtype::F32),
-                half_n, dt);
-        }
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32)
-            cpu::vrec_f32(reinterpret_cast<const float*>(cs.ptr.get()),
-                          reinterpret_cast<float*>(ptr.get()), n);
-        else if (dt == Dtype::F64)
-            cpu::vrec_f64(reinterpret_cast<const double*>(cs.ptr.get()),
-                          reinterpret_cast<double*>(ptr.get()), n);
-        else
-            ErrorBuilder("cpu_backend::reciprocal").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage asin(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage square(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vsq_f32, cpu::vsq_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] = ip[i] * ip[i];
-                        });
-    }
+    Storage acos(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage cube(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(cube(detail::as_f32(a), shape, Dtype::F32), dt);
-        // x·x·x is arithmetic, not a selection, so it goes through int64 —
-        // exact for every narrower width whose cube fits, and wrapping the
-        // same way a native kernel would for the ones that do not, which is
-        // what naming the width asks for.
-        if (detail::is_narrow_int(dt))
-            return detail::back_to_int(cube(detail::as_i64(a), shape, Dtype::I64), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            auto* p = reinterpret_cast<const float*>(cs.ptr.get());
-            auto* q = reinterpret_cast<float*>(ptr.get());
-            cpu::vsq_f32(p, q, n);
-            cpu::vmul_f32(p, q, q, n);
-        } else if (dt == Dtype::F64) {
-            auto* p = reinterpret_cast<const double*>(cs.ptr.get());
-            auto* q = reinterpret_cast<double*>(ptr.get());
-            cpu::vsq_f64(p, q, n);
-            cpu::vmul_f64(p, q, q, n);
-        } else if (dt == Dtype::I64) {
-            // Written out rather than routed through double: the cube of an
-            // int64 leaves double's exact range at |x| > 2^17, so the widen
-            // that works for a selection would quietly round here.
-            const auto* p = reinterpret_cast<const std::int64_t*>(cs.ptr.get());
-            auto* q = reinterpret_cast<std::int64_t*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = p[i] * p[i] * p[i];
-        } else {
-            ErrorBuilder("cpu_backend::cube").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage atan(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage cube_root(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(
-            a, shape, dt,
-            [](const float* ip, float* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = std::cbrt(ip[i]);
-            },
-            [](const double* ip, double* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = std::cbrt(ip[i]);
-            },
-            [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                for (std::size_t i = 0; i < n; ++i)
-                    op[i] = static_cast<std::int32_t>(std::cbrt(static_cast<float>(ip[i])));
-            });
-    }
+    Storage sinh(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage tan(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vtan_f32, cpu::vtan_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::tan(static_cast<float>(ip[i])));
-                        });
-    }
+    Storage cosh(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage asin(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vasin_f32, cpu::vasin_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::asin(static_cast<float>(ip[i])));
-                        });
-    }
-
-    Storage acos(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vacos_f32, cpu::vacos_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::acos(static_cast<float>(ip[i])));
-                        });
-    }
-
-    Storage atan(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vatan_f32, cpu::vatan_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::atan(static_cast<float>(ip[i])));
-                        });
-    }
-
-    Storage sinh(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vsinh_f32, cpu::vsinh_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::sinh(static_cast<float>(ip[i])));
-                        });
-    }
-
-    Storage cosh(const Storage& a, const Shape& shape, Dtype dt) override {
-        return unary_op(a, shape, dt, cpu::vcosh_f32, cpu::vcosh_f64,
-                        [](const std::int32_t* ip, std::int32_t* op, std::size_t n) {
-                            for (std::size_t i = 0; i < n; ++i)
-                                op[i] =
-                                    static_cast<std::int32_t>(std::cosh(static_cast<float>(ip[i])));
-                        });
-    }
-
-    Storage invert(const Storage& a, const Shape& shape, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::Bool) {
-            const std::uint8_t* ip = reinterpret_cast<const std::uint8_t*>(cs.ptr.get());
-            std::uint8_t* op = reinterpret_cast<std::uint8_t*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = ip[i] ? 0 : 1;
-        } else if (dt == Dtype::I8) {
-            const std::int8_t* ip = reinterpret_cast<const std::int8_t*>(cs.ptr.get());
-            std::int8_t* op = reinterpret_cast<std::int8_t*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = ~ip[i];
-        } else if (dt == Dtype::I16) {
-            const std::int16_t* ip = reinterpret_cast<const std::int16_t*>(cs.ptr.get());
-            std::int16_t* op = reinterpret_cast<std::int16_t*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = ~ip[i];
-        } else if (dt == Dtype::I32) {
-            const std::int32_t* ip = reinterpret_cast<const std::int32_t*>(cs.ptr.get());
-            std::int32_t* op = reinterpret_cast<std::int32_t*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = ~ip[i];
-        } else if (dt == Dtype::I64) {
-            const std::int64_t* ip = reinterpret_cast<const std::int64_t*>(cs.ptr.get());
-            std::int64_t* op = reinterpret_cast<std::int64_t*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = ~ip[i];
-        } else {
-            ErrorBuilder("cpu_backend::invert").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage invert(const Storage& a, const Shape& shape, Dtype dt) override;
 
     // ── Complex viewing (interleaved [re, im, re, im, ...] storage) ────────
 
@@ -1582,25 +301,7 @@ public:
     // lane width follows the storage's own dtype rather than being
     // assumed float32: reading a complex128 buffer as pairs of floats
     // would report the top half of a double's mantissa as a number.
-    static Storage project_lane(const Storage& a, const Shape& shape, std::size_t lane) {
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t n = shape_numel(shape);
-        const Dtype out_dt = real_lane_of(cs.dtype);
-        const std::size_t nb = n * dtype_size(out_dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (out_dt == Dtype::F64) {
-            const auto* ip = reinterpret_cast<const double*>(cs.ptr.get());
-            auto* op = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = ip[2 * i + lane];
-        } else {
-            const auto* ip = reinterpret_cast<const float*>(cs.ptr.get());
-            auto* op = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = ip[2 * i + lane];
-        }
-        return Storage{CpuStorage{ptr, nb, out_dt}};
-    }
+    static Storage project_lane(const Storage& a, const Shape& shape, std::size_t lane);
 
     Storage complex_real(const Storage& a, const Shape& shape) override {
         return project_lane(a, shape, 0);
@@ -1610,804 +311,61 @@ public:
         return project_lane(a, shape, 1);
     }
 
-    Storage complex_combine(const Storage& re, const Storage& im, const Shape& shape) override {
-        const auto& re_s = std::get<CpuStorage>(re);
-        const auto& im_s = std::get<CpuStorage>(im);
-        const std::size_t n = shape_numel(shape);
+    Storage complex_combine(const Storage& re, const Storage& im, const Shape& shape) override;
 
-        // The lane width follows the inputs, and used to not.
-        //
-        // Both halves were read as ``float*`` whatever they were, so a
-        // pair of f64 inputs was interleaved out of the wrong bytes:
-        // ``complex([1., 2.], [3., 4.])`` answered
-        // ``[0+0j, 1.875+2.125j]``.  Not an error, not a NaN — four
-        // plausible numbers assembled from the halves of four doubles.
-        // f16 was the same, differently wrong.  Only f32 ever worked, and
-        // f32 is what every test used.
-        //
-        // The op layer widens the half formats to f32 before dispatch, so
-        // only the two widths that have a complex type reach here.
-        const Dtype out_dt = complex_for(re_s.dtype);
-        const std::size_t nb = n * dtype_size(out_dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+    Storage complex_conj(const Storage& a, const Shape& shape, Dtype dt) override;
 
-        if (out_dt == Dtype::C128) {
-            const auto* rp = reinterpret_cast<const double*>(re_s.ptr.get());
-            const auto* ip = reinterpret_cast<const double*>(im_s.ptr.get());
-            auto* op = reinterpret_cast<double*>(ptr.get());
-            DSPDoubleSplitComplex split{const_cast<double*>(rp), const_cast<double*>(ip)};
-            vDSP_ztocD(&split, 1, reinterpret_cast<DSPDoubleComplex*>(op), 2,
-                       static_cast<vDSP_Length>(n));
-        } else {
-            const auto* rp = reinterpret_cast<const float*>(re_s.ptr.get());
-            const auto* ip = reinterpret_cast<const float*>(im_s.ptr.get());
-            auto* op = reinterpret_cast<float*>(ptr.get());
-            // vDSP's ``vDSP_ztoc`` interleaves from split-complex form
-            // (separate re / im pointers); the inputs match that layout.
-            DSPSplitComplex split{const_cast<float*>(rp), const_cast<float*>(ip)};
-            vDSP_ztoc(&split, 1, reinterpret_cast<DSPComplex*>(op), 2, static_cast<vDSP_Length>(n));
-        }
-        return Storage{CpuStorage{ptr, nb, out_dt}};
-    }
+    Storage silu(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage complex_conj(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Real dtypes: the conjugate is the identity, and returning the
-        // input storage directly avoids a needless allocation and copy.
-        //
-        // The test was ``dt != Dtype::C64`` when C64 was the only complex
-        // type, which made "not C64" and "real" the same statement.  They
-        // stopped being the same the moment C128 existed, and a complex128
-        // tensor took the identity branch: ``conj`` returned its argument
-        // unchanged, with no error and no clue.
-        if (!is_complex(dt))
-            return a;
-
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t n = shape_numel(shape);
-        const std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::C128) {
-            const auto* ip = reinterpret_cast<const double*>(cs.ptr.get());
-            auto* op = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                op[2 * i] = ip[2 * i];
-                op[2 * i + 1] = -ip[2 * i + 1];
-            }
-        } else {
-            cpu::vzconj_c64(reinterpret_cast<const float*>(cs.ptr.get()),
-                            reinterpret_cast<float*>(ptr.get()), n);
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage silu(const Storage& a, const Shape& shape, Dtype dt) override {
-        auto sig = sigmoid(a, shape, dt);
-        return mul(a, sig, shape, dt);
-    }
-
-    Storage gelu(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(gelu(detail::as_f32(a), shape, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        constexpr double kC1 = 0.7978845608028654;
-        constexpr double kC2 = 0.044715;
-        // The tanh runs through vForce a tile at a time, on every core.
-        // This was one scalar ``tanhf`` call per element on one core —
-        // 4.1 ms on 524k elements, ten times the exact GELU it is meant to
-        // be a cheaper stand-in for.
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            const float c1 = static_cast<float>(kC1);
-            const float c2 = static_cast<float>(kC2);
-            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                float tile[kTanhTile];
-                for (std::size_t base = lo; base < hi; base += kTanhTile) {
-                    const std::size_t m = std::min(kTanhTile, hi - base);
-                    for (std::size_t i = 0; i < m; ++i) {
-                        const float x = p[base + i];
-                        tile[i] = c1 * (x + c2 * x * x * x);
-                    }
-                    cpu::vtanh_f32(tile, tile, m);
-                    for (std::size_t i = 0; i < m; ++i)
-                        q[base + i] = 0.5f * p[base + i] * (1.f + tile[i]);
-                }
-            });
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                double tile[kTanhTile];
-                for (std::size_t base = lo; base < hi; base += kTanhTile) {
-                    const std::size_t m = std::min(kTanhTile, hi - base);
-                    for (std::size_t i = 0; i < m; ++i) {
-                        const double x = p[base + i];
-                        tile[i] = kC1 * (x + kC2 * x * x * x);
-                    }
-                    cpu::vtanh_f64(tile, tile, m);
-                    for (std::size_t i = 0; i < m; ++i)
-                        q[base + i] = 0.5 * p[base + i] * (1.0 + tile[i]);
-                }
-            });
-        } else {
-            ErrorBuilder("cpu_backend::gelu").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage gelu(const Storage& a, const Shape& shape, Dtype dt) override;
 
     Storage
-    gelu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                gelu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32), dt);
-        constexpr double kC1 = 0.7978845608028654;
-        constexpr double kC2 = 0.044715;
-        const auto& cs = std::get<CpuStorage>(a);
-        const auto& gs = std::get<CpuStorage>(grad);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* x = reinterpret_cast<const float*>(cs.ptr.get());
-            const float* g = reinterpret_cast<const float*>(gs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            const float c1 = static_cast<float>(kC1);
-            const float c2 = static_cast<float>(kC2);
-            // As the forward: vForce tanh a tile at a time, on every core.
-            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                float tile[kTanhTile];
-                for (std::size_t base = lo; base < hi; base += kTanhTile) {
-                    const std::size_t m = std::min(kTanhTile, hi - base);
-                    for (std::size_t i = 0; i < m; ++i) {
-                        const float xi = x[base + i];
-                        tile[i] = c1 * (xi + c2 * xi * xi * xi);
-                    }
-                    cpu::vtanh_f32(tile, tile, m);
-                    for (std::size_t i = 0; i < m; ++i) {
-                        const float xi = x[base + i];
-                        const float t = tile[i];
-                        const float dinner = c1 * (1.f + 3.f * c2 * xi * xi);
-                        const float dx = 0.5f * (1.f + t) + 0.5f * xi * (1.f - t * t) * dinner;
-                        q[base + i] = dx * g[base + i];
-                    }
-                }
-            });
-        } else if (dt == Dtype::F64) {
-            const double* x = reinterpret_cast<const double*>(cs.ptr.get());
-            const double* g = reinterpret_cast<const double*>(gs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                double tile[kTanhTile];
-                for (std::size_t base = lo; base < hi; base += kTanhTile) {
-                    const std::size_t m = std::min(kTanhTile, hi - base);
-                    for (std::size_t i = 0; i < m; ++i) {
-                        const double xi = x[base + i];
-                        tile[i] = kC1 * (xi + kC2 * xi * xi * xi);
-                    }
-                    cpu::vtanh_f64(tile, tile, m);
-                    for (std::size_t i = 0; i < m; ++i) {
-                        const double xi = x[base + i];
-                        const double t = tile[i];
-                        const double dinner = kC1 * (1.0 + 3.0 * kC2 * xi * xi);
-                        const double dx = 0.5 * (1.0 + t) + 0.5 * xi * (1.0 - t * t) * dinner;
-                        q[base + i] = dx * g[base + i];
-                    }
-                }
-            });
-        } else {
-            ErrorBuilder("cpu_backend::gelu_backward").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    gelu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override;
 
     Storage
-    silu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                silu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        const auto& gs = std::get<CpuStorage>(grad);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* x = reinterpret_cast<const float*>(cs.ptr.get());
-            const float* g = reinterpret_cast<const float*>(gs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const float xi = x[i];
-                const float sx = 1.f / (1.f + std::exp(-xi));
-                const float dx = sx * (1.f + xi * (1.f - sx));
-                q[i] = dx * g[i];
-            }
-        } else if (dt == Dtype::F64) {
-            const double* x = reinterpret_cast<const double*>(cs.ptr.get());
-            const double* g = reinterpret_cast<const double*>(gs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double xi = x[i];
-                const double sx = 1.0 / (1.0 + std::exp(-xi));
-                const double dx = sx * (1.0 + xi * (1.0 - sx));
-                q[i] = dx * g[i];
-            }
-        } else {
-            ErrorBuilder("cpu_backend::silu_backward").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    silu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override;
 
-    Storage gelu_exact(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(gelu_exact(detail::as_f32(a), shape, Dtype::F32), dt);
-        // 0.5 * x * (1 + erf(x / sqrt(2))) — exact Gaussian-CDF GELU.
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        constexpr double kInvSqrt2 = 0.7071067811865476;
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            const float k = static_cast<float>(kInvSqrt2);
-            // Not an approximation: erf_f32 is within 1 ulp of the correctly
-            // rounded erf (see ErfPoly.h) — the GPT training parity holds to
-            // 1.3e-7 over 3,000 steps on an exact erf, and an Abramowitz-
-            // Stegun-class one (1.5e-7) would not do.  Unlike libm's erff
-            // it is branch-free, so this loop vectorises.
-            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                for (std::size_t i = lo; i < hi; ++i) {
-                    const float x = p[i];
-                    q[i] = 0.5f * x * (1.f + cpu::erf_f32(x * k));
-                }
-            });
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                for (std::size_t i = lo; i < hi; ++i) {
-                    const double x = p[i];
-                    q[i] = 0.5 * x * (1.0 + std::erf(x * kInvSqrt2));
-                }
-            });
-        } else {
-            ErrorBuilder("cpu_backend::gelu_exact").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage gelu_exact(const Storage& a, const Shape& shape, Dtype dt) override;
 
     Storage gelu_exact_backward(const Storage& a,
                                 const Storage& grad,
                                 const Shape& shape,
-                                Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                gelu_exact_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32),
-                dt);
-        // dy/dx = 0.5 * (1 + erf(x/sqrt(2))) + x * exp(-x^2/2) / sqrt(2π)
-        const auto& cs = std::get<CpuStorage>(a);
-        const auto& gs = std::get<CpuStorage>(grad);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        constexpr double kInvSqrt2 = 0.7071067811865476;
-        constexpr double kInvSqrt2Pi = 0.3989422804014327;  // 1 / sqrt(2π)
-        if (dt == Dtype::F32) {
-            const float* x = reinterpret_cast<const float*>(cs.ptr.get());
-            const float* g = reinterpret_cast<const float*>(gs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            // Two passes over an L1 tile, neither of which calls out: the
-            // CDF (erf_f32), then the density (normal_pdf_f32), the sum and
-            // the incoming gradient.  See GeluGrad.h for why two.
-            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                float cdf[kTanhTile];
-                for (std::size_t base = lo; base < hi; base += kTanhTile) {
-                    const std::size_t m = std::min(kTanhTile, hi - base);
-                    cpu::gelu_exact_cdf_f32(x + base, cdf, m);
-                    cpu::gelu_exact_grad_f32(x + base, cdf, g + base, q + base, m);
-                }
-            });
-        } else if (dt == Dtype::F64) {
-            const double* x = reinterpret_cast<const double*>(cs.ptr.get());
-            const double* g = reinterpret_cast<const double*>(gs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            cpu::parallel_for(n, kTranscendentalGrain, [&](std::size_t lo, std::size_t hi) {
-                for (std::size_t i = lo; i < hi; ++i) {
-                    const double xi = x[i];
-                    const double cdf = 0.5 * (1.0 + std::erf(xi * kInvSqrt2));
-                    const double pdf = kInvSqrt2Pi * std::exp(-0.5 * xi * xi);
-                    q[i] = (cdf + xi * pdf) * g[i];
-                }
-            });
-        } else {
-            ErrorBuilder("cpu_backend::gelu_exact_backward").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                                Dtype dt) override;
 
-    Storage leaky_relu(const Storage& a, const Shape& shape, Dtype dt, double slope) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(leaky_relu(detail::as_f32(a), shape, Dtype::F32, slope), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            const float fs = static_cast<float>(slope);
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = p[i] >= 0.f ? p[i] : fs * p[i];
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = p[i] >= 0.0 ? p[i] : slope * p[i];
-        } else {
-            ErrorBuilder("cpu_backend::leaky_relu").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage leaky_relu(const Storage& a, const Shape& shape, Dtype dt, double slope) override;
 
-    Storage softplus(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernel here; widen at the door and
-        // round once on the way out.  See detail::widen_half.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            const Storage wide = Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)};
-            return detail::narrow_half(softplus(wide, shape, Dtype::F32), half_n, dt);
-        }
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const float x = p[i];
-                q[i] = std::max(x, 0.f) + std::log1p(std::exp(-std::abs(x)));
-            }
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double x = p[i];
-                q[i] = std::max(x, 0.0) + std::log1p(std::exp(-std::abs(x)));
-            }
-        } else {
-            ErrorBuilder("cpu_backend::softplus").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage softplus(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage elu(const Storage& a, const Shape& shape, Dtype dt, double alpha) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(elu(detail::as_f32(a), shape, Dtype::F32, alpha), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            const float fa = static_cast<float>(alpha);
-            for (std::size_t i = 0; i < n; ++i) {
-                const float x = p[i];
-                q[i] = x >= 0.f ? x : fa * (std::exp(x) - 1.f);
-            }
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double x = p[i];
-                q[i] = x >= 0.0 ? x : alpha * (std::exp(x) - 1.0);
-            }
-        } else {
-            ErrorBuilder("cpu_backend::elu").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage elu(const Storage& a, const Shape& shape, Dtype dt, double alpha) override;
 
-    Storage elu_backward(const Storage& a,
-                         const Storage& grad,
-                         const Shape& shape,
-                         Dtype dt,
-                         double alpha) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                elu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32, alpha),
-                dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        const auto& gs = std::get<CpuStorage>(grad);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* xp = reinterpret_cast<const float*>(cs.ptr.get());
-            const float* gp = reinterpret_cast<const float*>(gs.ptr.get());
-            float* qp = reinterpret_cast<float*>(ptr.get());
-            const float fa = static_cast<float>(alpha);
-            for (std::size_t i = 0; i < n; ++i) {
-                const float x = xp[i];
-                qp[i] = (x > 0.f ? 1.f : fa * std::exp(x)) * gp[i];
-            }
-        } else if (dt == Dtype::F64) {
-            const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
-            const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
-            double* qp = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double x = xp[i];
-                qp[i] = (x > 0.0 ? 1.0 : alpha * std::exp(x)) * gp[i];
-            }
-        } else {
-            ErrorBuilder("cpu_backend::elu_backward").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage elu_backward(
+        const Storage& a, const Storage& grad, const Shape& shape, Dtype dt, double alpha) override;
 
-    Storage selu(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernel here; widen at the door and round
-        // once on the way out.  See detail::widen_half.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(
-                selu(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
-                     Dtype::F32),
-                half_n, dt);
-        }
-        constexpr double kScale = 1.0507009873554805;
-        constexpr double kAlpha = 1.6732632423543772;
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            const float s = static_cast<float>(kScale);
-            const float al = static_cast<float>(kAlpha);
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = s * (p[i] >= 0.f ? p[i] : al * (std::exp(p[i]) - 1.f));
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = kScale * (p[i] >= 0.0 ? p[i] : kAlpha * (std::exp(p[i]) - 1.0));
-        } else {
-            ErrorBuilder("cpu_backend::selu").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage selu(const Storage& a, const Shape& shape, Dtype dt) override;
 
     Storage
-    selu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                selu_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32), dt);
-        constexpr double kScale = 1.0507009873554805;
-        constexpr double kAlpha = 1.6732632423543772;
-        const auto& cs = std::get<CpuStorage>(a);
-        const auto& gs = std::get<CpuStorage>(grad);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* xp = reinterpret_cast<const float*>(cs.ptr.get());
-            const float* gp = reinterpret_cast<const float*>(gs.ptr.get());
-            float* qp = reinterpret_cast<float*>(ptr.get());
-            const float s = static_cast<float>(kScale);
-            const float sa = static_cast<float>(kScale * kAlpha);
-            for (std::size_t i = 0; i < n; ++i)
-                qp[i] = (xp[i] > 0.f ? s : sa * std::exp(xp[i])) * gp[i];
-        } else if (dt == Dtype::F64) {
-            const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
-            const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
-            double* qp = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double dx = xp[i] > 0.0 ? kScale : kScale * kAlpha * std::exp(xp[i]);
-                qp[i] = dx * gp[i];
-            }
-        } else {
-            ErrorBuilder("cpu_backend::selu_backward").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    selu_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override;
 
-    Storage mish(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(mish(detail::as_f32(a), shape, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const float x = p[i];
-                const float sp = std::max(x, 0.f) + std::log1p(std::exp(-std::abs(x)));
-                q[i] = x * std::tanh(sp);
-            }
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double x = p[i];
-                const double sp = std::max(x, 0.0) + std::log1p(std::exp(-std::abs(x)));
-                q[i] = x * std::tanh(sp);
-            }
-        } else {
-            ErrorBuilder("cpu_backend::mish").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage mish(const Storage& a, const Shape& shape, Dtype dt) override;
 
     Storage
-    mish_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                mish_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        const auto& gs = std::get<CpuStorage>(grad);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* xp = reinterpret_cast<const float*>(cs.ptr.get());
-            const float* gp = reinterpret_cast<const float*>(gs.ptr.get());
-            float* qp = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const float x = xp[i];
-                const float sp = std::max(x, 0.f) + std::log1p(std::exp(-std::abs(x)));
-                const float t = std::tanh(sp);
-                const float sig = 1.f / (1.f + std::exp(-x));
-                qp[i] = (t + x * (1.f - t * t) * sig) * gp[i];
-            }
-        } else if (dt == Dtype::F64) {
-            const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
-            const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
-            double* qp = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double x = xp[i];
-                const double sp = std::max(x, 0.0) + std::log1p(std::exp(-std::abs(x)));
-                const double t = std::tanh(sp);
-                const double sig = 1.0 / (1.0 + std::exp(-x));
-                qp[i] = (t + x * (1.0 - t * t) * sig) * gp[i];
-            }
-        } else {
-            ErrorBuilder("cpu_backend::mish_backward").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    mish_backward(const Storage& a, const Storage& grad, const Shape& shape, Dtype dt) override;
 
-    Storage hard_sigmoid(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(hard_sigmoid(detail::as_f32(a), shape, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = std::min(std::max((p[i] + 3.f) / 6.f, 0.f), 1.f);
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = std::min(std::max((p[i] + 3.0) / 6.0, 0.0), 1.0);
-        } else {
-            ErrorBuilder("cpu_backend::hard_sigmoid").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage hard_sigmoid(const Storage& a, const Shape& shape, Dtype dt) override;
 
     Storage hard_sigmoid_backward(const Storage& a,
                                   const Storage& grad,
                                   const Shape& shape,
-                                  Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                hard_sigmoid_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32),
-                dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        const auto& gs = std::get<CpuStorage>(grad);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* xp = reinterpret_cast<const float*>(cs.ptr.get());
-            const float* gp = reinterpret_cast<const float*>(gs.ptr.get());
-            float* qp = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const float g = gp[i] / 6.f;  // loaded first: a select, not a branch
-                qp[i] = (xp[i] > -3.f && xp[i] < 3.f) ? g : 0.f;
-            }
-        } else if (dt == Dtype::F64) {
-            const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
-            const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
-            double* qp = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double g = gp[i] / 6.0;
-                qp[i] = (xp[i] > -3.0 && xp[i] < 3.0) ? g : 0.0;
-            }
-        } else {
-            ErrorBuilder("cpu_backend::hard_sigmoid_backward")
-                .not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                                  Dtype dt) override;
 
-    Storage hard_swish(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(hard_swish(detail::as_f32(a), shape, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = p[i] * std::min(std::max((p[i] + 3.f) / 6.f, 0.f), 1.f);
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = p[i] * std::min(std::max((p[i] + 3.0) / 6.0, 0.0), 1.0);
-        } else {
-            ErrorBuilder("cpu_backend::hard_swish").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage hard_swish(const Storage& a, const Shape& shape, Dtype dt) override;
 
     Storage hard_swish_backward(const Storage& a,
                                 const Storage& grad,
                                 const Shape& shape,
-                                Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                hard_swish_backward(detail::as_f32(a), detail::as_f32(grad), shape, Dtype::F32),
-                dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        const auto& gs = std::get<CpuStorage>(grad);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* xp = reinterpret_cast<const float*>(cs.ptr.get());
-            const float* gp = reinterpret_cast<const float*>(gs.ptr.get());
-            float* qp = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const float x = xp[i];
-                float dx;
-                if (x <= -3.f)
-                    dx = 0.f;
-                else if (x >= 3.f)
-                    dx = 1.f;
-                else
-                    dx = x / 3.f + 0.5f;
-                qp[i] = dx * gp[i];
-            }
-        } else if (dt == Dtype::F64) {
-            const double* xp = reinterpret_cast<const double*>(cs.ptr.get());
-            const double* gp = reinterpret_cast<const double*>(gs.ptr.get());
-            double* qp = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double x = xp[i];
-                double dx;
-                if (x <= -3.0)
-                    dx = 0.0;
-                else if (x >= 3.0)
-                    dx = 1.0;
-                else
-                    dx = x / 3.0 + 0.5;
-                qp[i] = dx * gp[i];
-            }
-        } else {
-            ErrorBuilder("cpu_backend::hard_swish_backward").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                                Dtype dt) override;
 
-    Storage relu6(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(relu6(detail::as_f32(a), shape, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const float* p = reinterpret_cast<const float*>(cs.ptr.get());
-            float* q = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = std::min(std::max(p[i], 0.f), 6.f);
-        } else if (dt == Dtype::F64) {
-            const double* p = reinterpret_cast<const double*>(cs.ptr.get());
-            double* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = std::min(std::max(p[i], 0.0), 6.0);
-        } else if (detail::is_int_like(dt)) {
-            // Clamping to [0, 6] is a pair of comparisons, so each integer
-            // width does it in itself.  The reference framework answers
-            // relu6 on integers and keeps the dtype.
-            detail::for_each_int(dt, cs.ptr.get(), ptr.get(), n, [](auto v) {
-                using T = decltype(v);
-                return v < T{} ? T{} : (v > T{6} ? T{6} : v);
-            });
-        } else {
-            ErrorBuilder("cpu_backend::relu6").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage relu6(const Storage& a, const Shape& shape, Dtype dt) override;
 
     // isinf / isnan / isfinite share one body.  The dtype picks the bit
     // layout and the question is a template argument (see NonFinite.h).
@@ -2416,50 +374,13 @@ public:
     // integer or bool tensor really does hold no NaN and no infinity, so
     // that answer is kept for those dtypes only.
     template <cpu::NonFiniteProbe P>
-    static Storage nonfinite_probe(const Storage& a, const Shape& shape, Dtype dt) {
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t n = shape_numel(shape);
-        auto ptr = allocate_aligned_bytes(n, Device::CPU);
-        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
-        const void* src = cs.ptr.get();
-        switch (dt) {
-        case Dtype::F16:
-            cpu::probe_nonfinite<P, cpu::HalfFormat>(src, dst, n, kStreamGrain);
-            break;
-        case Dtype::BF16:
-            cpu::probe_nonfinite<P, cpu::BrainFormat>(src, dst, n, kStreamGrain);
-            break;
-        case Dtype::F32:
-            cpu::probe_nonfinite<P, cpu::SingleFormat>(src, dst, n, kStreamGrain);
-            break;
-        case Dtype::F64:
-            cpu::probe_nonfinite<P, cpu::DoubleFormat>(src, dst, n, kStreamGrain);
-            break;
-        case Dtype::C64:
-            cpu::probe_nonfinite<P, cpu::SingleFormat, true>(src, dst, n, kStreamGrain);
-            break;
-        case Dtype::C128:
-            cpu::probe_nonfinite<P, cpu::DoubleFormat, true>(src, dst, n, kStreamGrain);
-            break;
-        default:
-            std::fill_n(dst, n,
-                        P == cpu::NonFiniteProbe::IsFinite ? std::uint8_t{1} : std::uint8_t{0});
-            break;
-        }
-        return Storage{CpuStorage{ptr, n, Dtype::Bool}};
-    }
+    static Storage nonfinite_probe(const Storage& a, const Shape& shape, Dtype dt);
 
-    Storage isinf(const Storage& a, const Shape& shape, Dtype dt) override {
-        return nonfinite_probe<cpu::NonFiniteProbe::IsInf>(a, shape, dt);
-    }
+    Storage isinf(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage isnan(const Storage& a, const Shape& shape, Dtype dt) override {
-        return nonfinite_probe<cpu::NonFiniteProbe::IsNan>(a, shape, dt);
-    }
+    Storage isnan(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage isfinite(const Storage& a, const Shape& shape, Dtype dt) override {
-        return nonfinite_probe<cpu::NonFiniteProbe::IsFinite>(a, shape, dt);
-    }
+    Storage isfinite(const Storage& a, const Shape& shape, Dtype dt) override;
 
     // Truth of element ``i`` in its own dtype.  ``any`` / ``all`` handled
     // F32 / F64 / I32 / Bool and sent every other dtype to a byte loop that
@@ -2467,890 +388,71 @@ public:
     // ``all([[1, 2], [3, 4]])`` saw the zero second byte and answered False,
     // and ``any`` looked only at the first n bytes — the first n/8 int64s.
     // Floating zero includes -0.0, so the half types mask off the sign bit.
-    static bool element_nonzero(const std::byte* base, std::size_t i, Dtype dt) {
-        switch (dt) {
-        case Dtype::Bool:
-        case Dtype::I8: {
-            std::int8_t v;
-            std::memcpy(&v, base + i, 1);
-            return v != 0;
-        }
-        case Dtype::I16: {
-            std::int16_t v;
-            std::memcpy(&v, base + i * 2, 2);
-            return v != 0;
-        }
-        case Dtype::I32: {
-            std::int32_t v;
-            std::memcpy(&v, base + i * 4, 4);
-            return v != 0;
-        }
-        case Dtype::I64: {
-            std::int64_t v;
-            std::memcpy(&v, base + i * 8, 8);
-            return v != 0;
-        }
-        case Dtype::F16:
-        case Dtype::BF16: {
-            std::uint16_t v;
-            std::memcpy(&v, base + i * 2, 2);
-            return (v & 0x7FFFu) != 0;
-        }
-        case Dtype::F32: {
-            float v;
-            std::memcpy(&v, base + i * 4, 4);
-            return v != 0.f;
-        }
-        case Dtype::F64: {
-            double v;
-            std::memcpy(&v, base + i * 8, 8);
-            return v != 0.0;
-        }
-        case Dtype::C64: {
-            float v[2];
-            std::memcpy(v, base + i * 8, 8);
-            return v[0] != 0.f || v[1] != 0.f;
-        }
-        case Dtype::C128: {
-            double v[2];
-            std::memcpy(v, base + i * 16, 16);
-            return v[0] != 0.0 || v[1] != 0.0;
-        }
-        }
-        return false;
-    }
+    static bool element_nonzero(const std::byte* base, std::size_t i, Dtype dt);
 
-    Storage any(const Storage& a, const Shape& shape, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t n = shape_numel(shape);
-        auto ptr = allocate_aligned_bytes(1, Device::CPU);
-        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
-        const auto* base = reinterpret_cast<const std::byte*>(cs.ptr.get());
-        bool found = false;
-        for (std::size_t i = 0; i < n && !found; ++i)
-            found = element_nonzero(base, i, dt);
-        dst[0] = found ? 1u : 0u;
-        return Storage{CpuStorage{ptr, 1, Dtype::Bool}};
-    }
+    Storage any(const Storage& a, const Shape& shape, Dtype dt) override;
 
-    Storage all(const Storage& a, const Shape& shape, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t n = shape_numel(shape);
-        auto ptr = allocate_aligned_bytes(1, Device::CPU);
-        auto* dst = reinterpret_cast<std::uint8_t*>(ptr.get());
-        const auto* base = reinterpret_cast<const std::byte*>(cs.ptr.get());
-        bool all_nz = true;
-        for (std::size_t i = 0; i < n && all_nz; ++i)
-            all_nz = element_nonzero(base, i, dt);
-        dst[0] = all_nz ? 1u : 0u;
-        return Storage{CpuStorage{ptr, 1, Dtype::Bool}};
-    }
+    Storage all(const Storage& a, const Shape& shape, Dtype dt) override;
 
     Storage nan_to_num(const Storage& a,
                        const Shape& shape,
                        Dtype dt,
                        double nan_val,
                        double posinf_val,
-                       double neginf_val) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t n = shape_numel(shape);
-        const std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const void* src = cs.ptr.get();
-        void* dst = ptr.get();
-        // Each replacement is rounded into the dtype once, as a cast rounds
-        // it (through float for the 16-bit formats, as the reference
-        // framework's half types do).  A value the dtype cannot hold becomes
-        // its infinity, as an explicit out-of-range replacement does in the
-        // reference framework.  When no replacement is given, the op passes
-        // the dtype's own extremes, which every format holds exactly.
-        //
-        // Only float32 and float64 used to be replaced.  float16 and bfloat16
-        // came back untouched.  A complex tensor is replaced part by part:
-        // its 2n interleaved floats go through the real kernel.
-        auto run = [&](auto format, std::size_t words, auto to_bits) {
-            using Format = decltype(format);
-            cpu::replace_nonfinite<Format>(src, dst, words, to_bits(nan_val), to_bits(posinf_val),
-                                           to_bits(neginf_val), kStreamGrain);
-        };
-        auto half_bits = [](double v) { return detail::float_to_half_bits(static_cast<float>(v)); };
-        auto brain_bits = [](double v) {
-            return detail::float_to_bfloat_bits(static_cast<float>(v));
-        };
-        auto single_bits = [](double v) {
-            return std::bit_cast<std::uint32_t>(static_cast<float>(v));
-        };
-        auto double_bits = [](double v) { return std::bit_cast<std::uint64_t>(v); };
-        switch (dt) {
-        case Dtype::F16:
-            run(cpu::HalfFormat{}, n, half_bits);
-            break;
-        case Dtype::BF16:
-            run(cpu::BrainFormat{}, n, brain_bits);
-            break;
-        case Dtype::F32:
-            run(cpu::SingleFormat{}, n, single_bits);
-            break;
-        case Dtype::F64:
-            run(cpu::DoubleFormat{}, n, double_bits);
-            break;
-        case Dtype::C64:
-            run(cpu::SingleFormat{}, 2 * n, single_bits);
-            break;
-        case Dtype::C128:
-            run(cpu::DoubleFormat{}, 2 * n, double_bits);
-            break;
-        default:
-            // An integer or bool tensor holds nothing to replace.
-            if (nb != 0)
-                std::memcpy(dst, src, nb);
-            break;
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                       double neginf_val) override;
 
     Storage
-    reduce_sum(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override {
-        return reduce_axes(a, in_shape, opts, dt, ReduceOp::Sum);
-    }
-
-    Storage reduce_mean(const Storage& a,
-                        const Shape& in_shape,
-                        const ReduceOpts& opts,
-                        Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(reduce_mean(detail::as_f32(a), in_shape, opts, Dtype::F32),
-                                       dt);
-        return reduce_axes(a, in_shape, opts, dt, ReduceOp::Mean);
-    }
+    reduce_sum(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override;
 
     Storage
-    variance(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(variance(detail::as_f32(a), in_shape, opts, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        auto is_reduced_axis = [&](std::size_t d) {
-            return std::find(opts.axes.begin(), opts.axes.end(), static_cast<int>(d)) !=
-                   opts.axes.end();
-        };
-        Shape out_shape;
-        if (opts.keepdims) {
-            out_shape = in_shape;
-            for (int ax : opts.axes)
-                out_shape[static_cast<std::size_t>(ax)] = 1;
-        } else {
-            for (std::size_t d = 0; d < in_shape.size(); ++d) {
-                if (!is_reduced_axis(d))
-                    out_shape.push_back(in_shape[d]);
-            }
-        }
-
-        const std::size_t in_numel = shape_numel(in_shape);
-        const std::size_t out_numel = shape_numel(out_shape);
-        std::size_t reduced = 1;
-        for (int ax : opts.axes)
-            reduced *= static_cast<std::size_t>(in_shape[static_cast<std::size_t>(ax)]);
-        if (reduced == 0)
-            reduced = 1;
-
-        const std::size_t out_nbytes = out_numel * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-
-        auto compute = [&](auto* out_p, const auto* in_p) {
-            using T = std::remove_pointer_t<decltype(out_p)>;
-            std::vector<double> means(out_numel, 0.0);
-            std::vector<std::int64_t> coords(in_shape.size(), 0);
-
-            Shape kd_shape = in_shape;
-            for (int ax : opts.axes)
-                kd_shape[static_cast<std::size_t>(ax)] = 1;
-
-            Stride kd_stride(kd_shape.size());
-            if (!kd_shape.empty()) {
-                kd_stride.back() = 1;
-                for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(kd_shape.size()) - 2; i >= 0;
-                     --i) {
-                    kd_stride[static_cast<std::size_t>(i)] =
-                        kd_stride[static_cast<std::size_t>(i) + 1] *
-                        kd_shape[static_cast<std::size_t>(i) + 1];
-                }
-            }
-
-            Stride in_stride(in_shape.size());
-            if (!in_shape.empty()) {
-                in_stride.back() = 1;
-                for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(in_shape.size()) - 2; i >= 0;
-                     --i) {
-                    in_stride[static_cast<std::size_t>(i)] =
-                        in_stride[static_cast<std::size_t>(i) + 1] *
-                        in_shape[static_cast<std::size_t>(i) + 1];
-                }
-            }
-
-            auto flat_to_coord = [&](std::size_t flat) {
-                for (std::size_t d = 0; d < in_shape.size(); ++d) {
-                    coords[d] = flat / static_cast<std::size_t>(in_stride[d]);
-                    flat %= static_cast<std::size_t>(in_stride[d]);
-                }
-            };
-
-            auto kd_flat = [&]() {
-                std::size_t f = 0;
-                for (std::size_t d = 0; d < in_shape.size(); ++d) {
-                    std::int64_t c = coords[d];
-                    if (kd_shape[d] == 1)
-                        c = 0;
-                    f += c * static_cast<std::size_t>(kd_stride[d]);
-                }
-                return f;
-            };
-
-            for (std::size_t i = 0; i < in_numel; ++i) {
-                flat_to_coord(i);
-                means[kd_flat()] += static_cast<double>(in_p[i]);
-            }
-            for (auto& m : means)
-                m /= static_cast<double>(reduced);
-
-            std::vector<double> vars(out_numel, 0.0);
-            for (std::size_t i = 0; i < in_numel; ++i) {
-                flat_to_coord(i);
-                const auto kf = kd_flat();
-                const double d = static_cast<double>(in_p[i]) - means[kf];
-                vars[kf] += d * d;
-            }
-            for (std::size_t k = 0; k < out_numel; ++k)
-                out_p[k] = static_cast<T>(vars[k] / static_cast<double>(reduced));
-        };
-
-        if (dt == Dtype::F32)
-            compute(reinterpret_cast<float*>(ptr.get()),
-                    reinterpret_cast<const float*>(cs.ptr.get()));
-        else if (dt == Dtype::F64)
-            compute(reinterpret_cast<double*>(ptr.get()),
-                    reinterpret_cast<const double*>(cs.ptr.get()));
-        else
-            ErrorBuilder("cpu_backend::variance").not_implemented("dtype not supported");
-
-        return Storage{CpuStorage{ptr, out_nbytes, dt}};
-    }
+    reduce_mean(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override;
 
     Storage
-    reduce_max(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override {
-        return reduce_axes(a, in_shape, opts, dt, ReduceOp::Max);
-    }
+    variance(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override;
 
     Storage
-    reduce_min(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override {
-        return reduce_axes(a, in_shape, opts, dt, ReduceOp::Min);
-    }
+    reduce_max(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override;
 
-    Storage cumsum(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(cumsum(detail::as_f32(a), shape, axis, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t nb = cs.nbytes;
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const int ndim = static_cast<int>(shape.size());
-        std::size_t outer = 1, inner = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        for (int d = axis + 1; d < ndim; ++d)
-            inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        // An empty scan axis has nothing to seed the running value with; the
-        // loop below read element 0 of every row anyway, past the end of an
-        // empty buffer, and ``cumsum(zeros(0, 6), 0)`` died of SIGSEGV.
-        if (L == 0)
-            return Storage{CpuStorage{ptr, nb, dt}};
+    Storage
+    reduce_min(const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt) override;
 
-        auto run = [&](auto* dst, const auto* src) {
-            using T = std::remove_pointer_t<decltype(dst)>;
-            for (std::size_t o = 0; o < outer; ++o)
-                for (std::size_t j = 0; j < inner; ++j) {
-                    T acc = src[(o * L) * inner + j];
-                    dst[(o * L) * inner + j] = acc;
-                    for (std::size_t k = 1; k < L; ++k) {
-                        acc = acc + src[(o * L + k) * inner + j];
-                        dst[(o * L + k) * inner + j] = acc;
-                    }
-                }
-        };
+    Storage cumsum(const Storage& a, const Shape& shape, int axis, Dtype dt) override;
 
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
-        else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(ptr.get()),
-                reinterpret_cast<const double*>(cs.ptr.get()));
-        else if (dt == Dtype::I32)
-            run(reinterpret_cast<std::int32_t*>(ptr.get()),
-                reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
-        else if (dt == Dtype::I64)
-            run(reinterpret_cast<std::int64_t*>(ptr.get()),
-                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
-        else
-            ErrorBuilder("cpu_backend::cumsum").not_implemented("dtype not supported");
+    Storage cumprod(const Storage& a, const Shape& shape, int axis, Dtype dt) override;
 
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage cummax(const Storage& a, const Shape& shape, int axis, Dtype dt) override;
 
-    Storage cumprod(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(cumprod(detail::as_f32(a), shape, axis, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t nb = cs.nbytes;
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const int ndim = static_cast<int>(shape.size());
-        std::size_t outer = 1, inner = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        for (int d = axis + 1; d < ndim; ++d)
-            inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        // An empty scan axis has nothing to seed the running value with; the
-        // loop below read element 0 of every row anyway, past the end of an
-        // empty buffer, and ``cumsum(zeros(0, 6), 0)`` died of SIGSEGV.
-        if (L == 0)
-            return Storage{CpuStorage{ptr, nb, dt}};
+    Storage cummin(const Storage& a, const Shape& shape, int axis, Dtype dt) override;
 
-        auto run = [&](auto* dst, const auto* src) {
-            using T = std::remove_pointer_t<decltype(dst)>;
-            for (std::size_t o = 0; o < outer; ++o)
-                for (std::size_t j = 0; j < inner; ++j) {
-                    T acc = src[(o * L) * inner + j];
-                    dst[(o * L) * inner + j] = acc;
-                    for (std::size_t k = 1; k < L; ++k) {
-                        acc = acc * src[(o * L + k) * inner + j];
-                        dst[(o * L + k) * inner + j] = acc;
-                    }
-                }
-        };
+    Storage softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) override;
 
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
-        else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(ptr.get()),
-                reinterpret_cast<const double*>(cs.ptr.get()));
-        else if (dt == Dtype::I32)
-            run(reinterpret_cast<std::int32_t*>(ptr.get()),
-                reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
-        else if (dt == Dtype::I64)
-            run(reinterpret_cast<std::int64_t*>(ptr.get()),
-                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
-        else
-            ErrorBuilder("cpu_backend::cumprod").not_implemented("dtype not supported");
+    Storage softmax_backward(
+        const Storage& z, const Storage& grad_out, const Shape& shape, int axis, Dtype dt) override;
 
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage log_softmax_backward(
+        const Storage& y, const Storage& grad_out, const Shape& shape, int axis, Dtype dt) override;
 
-    Storage cummax(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
-        // Exact through int64: a running extreme over widened values is the
-        // same sequence, narrowed back.  bool travels with them — the
-        // running maximum of a sequence of booleans is a running OR, and 0
-        // and 1 survive the widening unchanged.  It was excluded here, so
-        // Metal answered a bool scan and the CPU refused one.
-        if (detail::is_narrow_int(dt)) {
-            const std::size_t n = shape_numel(shape);
-            return detail::narrow_int(cummax(detail::as_i64(a), shape, axis, Dtype::I64), n, dt);
-        }
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(cummax(detail::as_f32(a), shape, axis, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t nb = cs.nbytes;
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const int ndim = static_cast<int>(shape.size());
-        std::size_t outer = 1, inner = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        for (int d = axis + 1; d < ndim; ++d)
-            inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        // An empty scan axis has nothing to seed the running value with; the
-        // loop below read element 0 of every row anyway, past the end of an
-        // empty buffer, and ``cumsum(zeros(0, 6), 0)`` died of SIGSEGV.
-        if (L == 0)
-            return Storage{CpuStorage{ptr, nb, dt}};
+    Storage log_softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) override;
 
-        auto run = [&](auto* dst, const auto* src) {
-            using T = std::remove_pointer_t<decltype(dst)>;
-            for (std::size_t o = 0; o < outer; ++o)
-                for (std::size_t j = 0; j < inner; ++j) {
-                    T running = src[(o * L) * inner + j];
-                    dst[(o * L) * inner + j] = running;
-                    for (std::size_t k = 1; k < L; ++k) {
-                        T v = src[(o * L + k) * inner + j];
-                        // NaN poisons the rest of the scan, as it does in
-                        // ``max``: once seen it is the running extreme and
-                        // every later element inherits it.  ``v > running``
-                        // is false against a NaN, so the scan skipped it and
-                        // carried on with a plausible running maximum —
-                        // Metal answered nan from that point and the CPU did
-                        // not, and neither matched the reference until now.
-                        if constexpr (std::is_floating_point_v<T>) {
-                            if (std::isnan(running)) {
-                                dst[(o * L + k) * inner + j] = running;
-                                continue;
-                            }
-                            if (std::isnan(v))
-                                running = v;
-                        }
-                        if (v > running)
-                            running = v;
-                        dst[(o * L + k) * inner + j] = running;
-                    }
-                }
-        };
+    Storage reverse_along_axis(const Storage& a, const Shape& shape, int axis, Dtype dt) override;
 
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
-        else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(ptr.get()),
-                reinterpret_cast<const double*>(cs.ptr.get()));
-        else if (dt == Dtype::I32)
-            run(reinterpret_cast<std::int32_t*>(ptr.get()),
-                reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
-        else if (dt == Dtype::I64)
-            run(reinterpret_cast<std::int64_t*>(ptr.get()),
-                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
-        else
-            ErrorBuilder("cpu_backend::cummax").not_implemented("dtype not supported");
+    Storage trace(const Storage& a, const Shape& shape, Dtype dt) override;
 
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage cummin(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
-        // Exact through int64: a running extreme over widened values is the
-        // same sequence, narrowed back.  bool travels with them — the
-        // running maximum of a sequence of booleans is a running OR, and 0
-        // and 1 survive the widening unchanged.  It was excluded here, so
-        // Metal answered a bool scan and the CPU refused one.
-        if (detail::is_narrow_int(dt)) {
-            const std::size_t n = shape_numel(shape);
-            return detail::narrow_int(cummin(detail::as_i64(a), shape, axis, Dtype::I64), n, dt);
-        }
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(cummin(detail::as_f32(a), shape, axis, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t nb = cs.nbytes;
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const int ndim = static_cast<int>(shape.size());
-        std::size_t outer = 1, inner = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        for (int d = axis + 1; d < ndim; ++d)
-            inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        // An empty scan axis has nothing to seed the running value with; the
-        // loop below read element 0 of every row anyway, past the end of an
-        // empty buffer, and ``cumsum(zeros(0, 6), 0)`` died of SIGSEGV.
-        if (L == 0)
-            return Storage{CpuStorage{ptr, nb, dt}};
-
-        auto run = [&](auto* dst, const auto* src) {
-            using T = std::remove_pointer_t<decltype(dst)>;
-            for (std::size_t o = 0; o < outer; ++o)
-                for (std::size_t j = 0; j < inner; ++j) {
-                    T running = src[(o * L) * inner + j];
-                    dst[(o * L) * inner + j] = running;
-                    for (std::size_t k = 1; k < L; ++k) {
-                        T v = src[(o * L + k) * inner + j];
-                        // NaN poisons the rest of the scan, as it does in
-                        // ``max``: once seen it is the running extreme and
-                        // every later element inherits it.  ``v > running``
-                        // is false against a NaN, so the scan skipped it and
-                        // carried on with a plausible running maximum —
-                        // Metal answered nan from that point and the CPU did
-                        // not, and neither matched the reference until now.
-                        if constexpr (std::is_floating_point_v<T>) {
-                            if (std::isnan(running)) {
-                                dst[(o * L + k) * inner + j] = running;
-                                continue;
-                            }
-                            if (std::isnan(v))
-                                running = v;
-                        }
-                        if (v < running)
-                            running = v;
-                        dst[(o * L + k) * inner + j] = running;
-                    }
-                }
-        };
-
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
-        else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(ptr.get()),
-                reinterpret_cast<const double*>(cs.ptr.get()));
-        else if (dt == Dtype::I32)
-            run(reinterpret_cast<std::int32_t*>(ptr.get()),
-                reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
-        else if (dt == Dtype::I64)
-            run(reinterpret_cast<std::int64_t*>(ptr.get()),
-                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
-        else
-            ErrorBuilder("cpu_backend::cummin").not_implemented("dtype not supported");
-
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
-        // Accelerate has no half kernel here; widen at the door and round
-        // once on the way out.  See detail::widen_half.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(
-                softmax(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape, axis,
-                        Dtype::F32),
-                half_n, dt);
-        }
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t nb = cs.nbytes;
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::size_t axis_dim =
-            static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        const auto [outer, inner] = cpu::around_axis(shape, axis);
-        if (dt == Dtype::F32)
-            cpu::softmax_cpu(reinterpret_cast<const float*>(cs.ptr.get()),
-                             reinterpret_cast<float*>(ptr.get()), outer, axis_dim, inner);
-        else if (dt == Dtype::F64)
-            cpu::softmax_cpu(reinterpret_cast<const double*>(cs.ptr.get()),
-                             reinterpret_cast<double*>(ptr.get()), outer, axis_dim, inner);
-        else
-            ErrorBuilder("cpu_backend::softmax").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage softmax_backward(const Storage& z,
-                             const Storage& grad_out,
-                             const Shape& shape,
-                             int axis,
-                             Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(softmax_backward(detail::as_f32(z), detail::as_f32(grad_out),
-                                                        shape, axis, Dtype::F32),
-                                       dt);
-        const auto& z_cpu = std::get<CpuStorage>(z);
-        const auto& g_cpu = std::get<CpuStorage>(grad_out);
-        std::size_t nb = z_cpu.nbytes;
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::size_t axis_dim =
-            static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        const auto [outer, inner] = cpu::around_axis(shape, axis);
-        if (dt == Dtype::F32)
-            cpu::softmax_backward_cpu(reinterpret_cast<const float*>(z_cpu.ptr.get()),
-                                      reinterpret_cast<const float*>(g_cpu.ptr.get()),
-                                      reinterpret_cast<float*>(ptr.get()), outer, axis_dim, inner);
-        else if (dt == Dtype::F64)
-            cpu::softmax_backward_cpu(reinterpret_cast<const double*>(z_cpu.ptr.get()),
-                                      reinterpret_cast<const double*>(g_cpu.ptr.get()),
-                                      reinterpret_cast<double*>(ptr.get()), outer, axis_dim, inner);
-        else
-            ErrorBuilder("cpu_backend::softmax_backward").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage log_softmax_backward(const Storage& y,
-                                 const Storage& grad_out,
-                                 const Shape& shape,
-                                 int axis,
-                                 Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(log_softmax_backward(detail::as_f32(y),
-                                                            detail::as_f32(grad_out), shape, axis,
-                                                            Dtype::F32),
-                                       dt);
-        const auto& yc = std::get<CpuStorage>(y);
-        const auto& gc = std::get<CpuStorage>(grad_out);
-        std::size_t nb = gc.nbytes;
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::size_t axis_dim =
-            static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        const auto [outer, inner] = cpu::around_axis(shape, axis);
-        if (dt == Dtype::F32)
-            cpu::log_softmax_backward_cpu(reinterpret_cast<const float*>(yc.ptr.get()),
-                                          reinterpret_cast<const float*>(gc.ptr.get()),
-                                          reinterpret_cast<float*>(ptr.get()), outer, axis_dim,
-                                          inner);
-        else if (dt == Dtype::F64)
-            cpu::log_softmax_backward_cpu(reinterpret_cast<const double*>(yc.ptr.get()),
-                                          reinterpret_cast<const double*>(gc.ptr.get()),
-                                          reinterpret_cast<double*>(ptr.get()), outer, axis_dim,
-                                          inner);
-        else
-            ErrorBuilder("cpu_backend::log_softmax_backward")
-                .not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage log_softmax(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(
-                log_softmax(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
-                            axis, Dtype::F32),
-                half_n, dt);
-        }
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t nb = cs.nbytes;
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::size_t axis_dim =
-            static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        const auto [outer, inner] = cpu::around_axis(shape, axis);
-        if (dt == Dtype::F32)
-            cpu::log_softmax_cpu(reinterpret_cast<const float*>(cs.ptr.get()),
-                                 reinterpret_cast<float*>(ptr.get()), outer, axis_dim, inner);
-        else if (dt == Dtype::F64)
-            cpu::log_softmax_cpu(reinterpret_cast<const double*>(cs.ptr.get()),
-                                 reinterpret_cast<double*>(ptr.get()), outer, axis_dim, inner);
-        else
-            ErrorBuilder("cpu_backend::log_softmax").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage reverse_along_axis(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        auto ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
-        const std::size_t elem = dtype_size(dt);
-        const int ndim = static_cast<int>(shape.size());
-        std::size_t outer = 1, inner = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        for (int d = axis + 1; d < ndim; ++d)
-            inner *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        for (std::size_t o = 0; o < outer; ++o) {
-            for (std::size_t k = 0; k < L; ++k) {
-                std::memcpy(ptr.get() + ((o * L + k) * inner) * elem,
-                            cs.ptr.get() + ((o * L + (L - 1 - k)) * inner) * elem, inner * elem);
-            }
-        }
-        return Storage{CpuStorage{ptr, cs.nbytes, dt}};
-    }
-
-    Storage trace(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(trace(detail::as_f32(a), shape, Dtype::F32), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::int64_t M = shape[0];
-        const std::int64_t N = shape[1];
-        const std::int64_t L = std::min(M, N);
-        Shape out_shape(shape.begin() + 2, shape.end());
-        const std::size_t out_numel = shape_numel(out_shape);
-        const std::size_t out_nbytes = out_numel * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-        auto run = [&](auto* out_p, const auto* in_p) {
-            using T = std::remove_pointer_t<decltype(out_p)>;
-            for (std::size_t k = 0; k < out_numel; ++k) {
-                T sum{};
-                for (std::int64_t i = 0; i < L; ++i) {
-                    const std::size_t idx = (i * N + i) * out_numel + k;
-                    sum = static_cast<T>(static_cast<double>(sum) + static_cast<double>(in_p[idx]));
-                }
-                out_p[k] = sum;
-            }
-        };
-        // Integers included: the reference framework sums the diagonal of
-        // an integer matrix and keeps its dtype, and so does Metal.  Each
-        // width accumulates in itself, which is what the reference does —
-        // an overflowing trace overflows there too.
-        switch (dt) {
-        case Dtype::F32:
-            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
-            break;
-        case Dtype::F64:
-            run(reinterpret_cast<double*>(ptr.get()),
-                reinterpret_cast<const double*>(cs.ptr.get()));
-            break;
-        case Dtype::I64:
-            run(reinterpret_cast<std::int64_t*>(ptr.get()),
-                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
-            break;
-        case Dtype::I32:
-            run(reinterpret_cast<std::int32_t*>(ptr.get()),
-                reinterpret_cast<const std::int32_t*>(cs.ptr.get()));
-            break;
-        case Dtype::I16:
-            run(reinterpret_cast<std::int16_t*>(ptr.get()),
-                reinterpret_cast<const std::int16_t*>(cs.ptr.get()));
-            break;
-        case Dtype::I8:
-            run(reinterpret_cast<std::int8_t*>(ptr.get()),
-                reinterpret_cast<const std::int8_t*>(cs.ptr.get()));
-            break;
-        default:
-            ErrorBuilder("cpu_backend::trace").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, out_nbytes, dt}};
-    }
-
-    Storage trace_backward(const Storage& grad_out, const Shape& input_shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                trace_backward(detail::as_f32(grad_out), input_shape, Dtype::F32), dt);
-        const auto& cg = std::get<CpuStorage>(grad_out);
-        const std::int64_t M = input_shape[0];
-        const std::int64_t N = input_shape[1];
-        const std::int64_t L = std::min(M, N);
-        const std::size_t total = static_cast<std::size_t>(M * N);
-        const std::size_t nbytes = total * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
-        std::memset(ptr.get(), 0, nbytes);
-        auto fill = [&](auto* dst, const auto* gp) {
-            for (std::int64_t i = 0; i < L; ++i)
-                dst[i * N + i] = *gp;
-        };
-        if (dt == Dtype::F32)
-            fill(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cg.ptr.get()));
-        else if (dt == Dtype::F64)
-            fill(reinterpret_cast<double*>(ptr.get()),
-                 reinterpret_cast<const double*>(cg.ptr.get()));
-        else
-            ErrorBuilder("cpu_backend::trace_backward").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nbytes, dt}};
-    }
+    Storage trace_backward(const Storage& grad_out, const Shape& input_shape, Dtype dt) override;
 
     std::vector<Storage> meshgrid(const std::vector<Storage>& xs,
                                   const Shape& out_shape,
                                   Dtype dt,
-                                  bool indexing_xy) override {
-        const std::size_t N = xs.size();
-        const std::size_t total = shape_numel(out_shape);
-        const std::size_t elem = dtype_size(dt);
-        std::vector<Storage> result;
-        result.reserve(N);
-        for (std::size_t i = 0; i < N; ++i) {
-            const auto& cv = std::get<CpuStorage>(xs[i]);
-            std::size_t out_nbytes = total * elem;
-            auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-            std::size_t carry_axis = i;
-            if (indexing_xy && N >= 2 && i < 2)
-                carry_axis = 1 - i;
-
-            std::vector<std::int64_t> coord(N, 0);
-            for (std::size_t f = 0; f < total; ++f) {
-                const std::int64_t k = coord[carry_axis];
-                std::memcpy(ptr.get() + f * elem, cv.ptr.get() + static_cast<std::size_t>(k) * elem,
-                            elem);
-                for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(N) - 1; d >= 0; --d) {
-                    if (++coord[static_cast<std::size_t>(d)] <
-                        out_shape[static_cast<std::size_t>(d)]) {
-                        break;
-                    }
-                    coord[static_cast<std::size_t>(d)] = 0;
-                }
-            }
-            result.push_back(Storage{CpuStorage{ptr, out_nbytes, dt}});
-        }
-        return result;
-    }
+                                  bool indexing_xy) override;
 
     Storage where_branch(const Storage& grad,
                          const Storage& cond,
                          const Shape& shape,
                          Dtype dt,
-                         bool true_branch) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(where_branch(detail::as_f32(grad), detail::as_f32(cond),
-                                                    shape, Dtype::F32, true_branch),
-                                       dt);
-        const auto& g = std::get<CpuStorage>(grad);
-        const auto& c = std::get<CpuStorage>(cond);
-        auto out = zeros(shape, dt);
-        const std::size_t n = shape_numel(shape);
-        const auto* cp = reinterpret_cast<const std::uint8_t*>(c.ptr.get());
-        // Loaded, then selected — a branch around the load mispredicted on
-        // every mask that is not sorted (see relu_backward).
-        if (dt == Dtype::F32) {
-            const float* __restrict gp = reinterpret_cast<const float*>(g.ptr.get());
-            float* __restrict dst = reinterpret_cast<float*>(std::get<CpuStorage>(out).ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const float v = gp[i];
-                dst[i] = ((cp[i] != 0) == true_branch) ? v : 0.0f;
-            }
-        } else if (dt == Dtype::F64) {
-            const double* __restrict gp = reinterpret_cast<const double*>(g.ptr.get());
-            double* __restrict dst = reinterpret_cast<double*>(std::get<CpuStorage>(out).ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double v = gp[i];
-                dst[i] = ((cp[i] != 0) == true_branch) ? v : 0.0;
-            }
-        } else {
-            ErrorBuilder("cpu_backend::where_branch").not_implemented("dtype not supported");
-        }
-        return out;
-    }
+                         bool true_branch) override;
 
-    Storage masked_fill(const Storage& a,
-                        const Storage& mask,
-                        const Shape& shape,
-                        Dtype dt,
-                        double value) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                masked_fill(detail::as_f32(a), detail::as_f32(mask), shape, Dtype::F32, value), dt);
-        const auto& as = std::get<CpuStorage>(a);
-        const auto& ms = std::get<CpuStorage>(mask);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const auto* mp = reinterpret_cast<const std::uint8_t*>(ms.ptr.get());
-        if (dt == Dtype::F32) {
-            detail::select_fill(reinterpret_cast<const float*>(as.ptr.get()), mp,
-                                static_cast<float>(value), reinterpret_cast<float*>(ptr.get()), n);
-        } else if (dt == Dtype::F64) {
-            detail::select_fill(reinterpret_cast<const double*>(as.ptr.get()), mp, value,
-                                reinterpret_cast<double*>(ptr.get()), n);
-        } else if (detail::is_int_like(dt)) {
-            // Structural, not arithmetic: it selects between an element and
-            // a constant.  Integers keep their dtype in the reference
-            // framework and on Metal.
-            const std::int64_t fill = static_cast<std::int64_t>(value);
-            detail::for_each_int_masked(dt, as.ptr.get(), mp, ptr.get(), n, fill);
-        } else {
-            ErrorBuilder("cpu_backend::masked_fill").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage masked_fill(
+        const Storage& a, const Storage& mask, const Shape& shape, Dtype dt, double value) override;
 
     Storage gather(const Storage& a,
                    const Storage& indices,
@@ -3358,125 +460,7 @@ public:
                    const Shape& output_shape,
                    int axis,
                    Dtype index_dtype,
-                   Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(gather(detail::as_f32(a), detail::as_f32(indices),
-                                              input_shape, output_shape, axis, index_dtype,
-                                              Dtype::F32),
-                                       dt);
-        const auto& as = std::get<CpuStorage>(a);
-        const auto& is = std::get<CpuStorage>(indices);
-        std::size_t nb = shape_numel(output_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::size_t ndim = input_shape.size();
-        const std::size_t elem = dtype_size(dt);
-
-        Stride a_stride(ndim), out_stride(ndim);
-        if (ndim > 0) {
-            a_stride.back() = 1;
-            out_stride.back() = 1;
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
-                a_stride[static_cast<std::size_t>(d)] =
-                    a_stride[static_cast<std::size_t>(d) + 1] *
-                    input_shape[static_cast<std::size_t>(d) + 1];
-                out_stride[static_cast<std::size_t>(d)] =
-                    out_stride[static_cast<std::size_t>(d) + 1] *
-                    output_shape[static_cast<std::size_t>(d) + 1];
-            }
-        }
-        (void)index_dtype;
-        const std::size_t total = shape_numel(output_shape);
-        const auto load_idx = cpu::index_reader("cpu_backend::gather", is);
-
-        const std::int64_t axis_extent =
-            ndim > 0 ? static_cast<std::int64_t>(input_shape[static_cast<std::size_t>(axis)]) : 0;
-        // Checking the index alone is not enough.  Every *other* coordinate
-        // walks the output extent while indexing the input's stride, so an
-        // output wider than the input on any non-gathered axis reads past
-        // the end however valid the indices are.  Gathering a (4, 5) index
-        // along dim 1 of an *empty* (0, 5) operand has indices in [0, 5)
-        // throughout and still walks four rows that do not exist.
-        for (std::size_t d = 0; d < ndim; ++d) {
-            if (static_cast<int>(d) == axis)
-                continue;
-            if (output_shape[d] > input_shape[d])
-                ErrorBuilder("cpu_backend::gather")
-                    .fail("index is larger than the operand on a non-gathered axis");
-        }
-
-        // When every non-gathered axis of the output is as wide as the
-        // input's — the usual case, and the only one ``index_select``
-        // produces — output element (o, j, i) reads input (o, index, i).
-        // That is two multiplies and an add on typed elements, instead of an
-        // ndim-long coordinate walk and a memcpy call per element.  Through
-        // the walk an index_select of a (3, 375, 500) image took 11 ms, and a
-        // bicubic resize is eight of them (CHA-5).
-        if (const auto rows = detail::GatherRows::of(input_shape, output_shape, axis)) {
-            auto run = [&](auto* dst, const auto* src) {
-                for (std::size_t o = 0; o < rows->outer; ++o) {
-                    for (std::size_t j = 0; j < rows->taken; ++j) {
-                        const std::size_t row = (o * rows->taken + j) * rows->inner;
-                        for (std::size_t i = 0; i < rows->inner; ++i) {
-                            const std::int64_t k = cpu::checked_axis(
-                                "cpu_backend::gather", load_idx(row + i), axis_extent,
-                                "index out of range for the gathered axis");
-                            dst[row + i] =
-                                src[(o * rows->extent + static_cast<std::size_t>(k)) * rows->inner +
-                                    i];
-                        }
-                    }
-                }
-            };
-            bool copied = true;
-            switch (elem) {
-            case 1:
-                run(reinterpret_cast<std::uint8_t*>(ptr.get()),
-                    reinterpret_cast<const std::uint8_t*>(as.ptr.get()));
-                break;
-            case 2:
-                run(reinterpret_cast<std::uint16_t*>(ptr.get()),
-                    reinterpret_cast<const std::uint16_t*>(as.ptr.get()));
-                break;
-            case 4:
-                run(reinterpret_cast<std::uint32_t*>(ptr.get()),
-                    reinterpret_cast<const std::uint32_t*>(as.ptr.get()));
-                break;
-            case 8:
-                run(reinterpret_cast<std::uint64_t*>(ptr.get()),
-                    reinterpret_cast<const std::uint64_t*>(as.ptr.get()));
-                break;
-            default:
-                copied = false;  // complex128: the walk below handles any width
-            }
-            if (copied)
-                return Storage{CpuStorage{ptr, nb, dt}};
-        }
-
-        std::vector<std::int64_t> coord(ndim, 0);
-        for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
-            const std::int64_t k =
-                cpu::checked_axis("cpu_backend::gather", load_idx(out_flat), axis_extent,
-                                  "index out of range for the gathered axis");
-            std::size_t a_flat = 0;
-            for (std::size_t d = 0; d < ndim; ++d) {
-                std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
-                a_flat += static_cast<std::size_t>(c) * static_cast<std::size_t>(a_stride[d]);
-            }
-            std::memcpy(ptr.get() + out_flat * elem, as.ptr.get() + a_flat * elem, elem);
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 1; d >= 0; --d) {
-                if (++coord[static_cast<std::size_t>(d)] <
-                    output_shape[static_cast<std::size_t>(d)]) {
-                    break;
-                }
-                coord[static_cast<std::size_t>(d)] = 0;
-            }
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                   Dtype dt) override;
 
     Storage gather_backward(const Storage& grad,
                             const Storage& indices,
@@ -3484,186 +468,14 @@ public:
                             const Shape& output_shape,
                             int axis,
                             Dtype index_dtype,
-                            Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(gather_backward(detail::as_f32(grad),
-                                                       detail::as_f32(indices), input_shape,
-                                                       output_shape, axis, index_dtype, Dtype::F32),
-                                       dt);
-        const auto& g = std::get<CpuStorage>(grad);
-        const auto& idx = std::get<CpuStorage>(indices);
-        auto out = zeros(input_shape, dt);
-        const std::size_t ndim = input_shape.size();
-        Stride input_stride(ndim), output_stride(ndim);
-        if (ndim > 0) {
-            input_stride.back() = 1;
-            output_stride.back() = 1;
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
-                input_stride[static_cast<std::size_t>(d)] =
-                    input_stride[static_cast<std::size_t>(d) + 1] *
-                    input_shape[static_cast<std::size_t>(d) + 1];
-                output_stride[static_cast<std::size_t>(d)] =
-                    output_stride[static_cast<std::size_t>(d) + 1] *
-                    output_shape[static_cast<std::size_t>(d) + 1];
-            }
-        }
-        (void)index_dtype;
-        const auto load_idx = cpu::index_reader("cpu_backend::gather_backward", idx);
-
-        const std::size_t total = shape_numel(output_shape);
-        // The forward pass reads at the index; this one *writes* at it, so
-        // an out-of-range entry corrupts whatever follows the gradient
-        // buffer rather than merely returning a wrong number.
-        const std::int64_t axis_extent =
-            ndim > 0 ? static_cast<std::int64_t>(input_shape[static_cast<std::size_t>(axis)]) : 0;
-        // See the forward pass: the non-gathered coordinates walk the
-        // output extent against the input's stride, so they need the same
-        // shape check the index does.
-        for (std::size_t d = 0; d < ndim; ++d) {
-            if (static_cast<int>(d) == axis)
-                continue;
-            if (output_shape[d] > input_shape[d])
-                ErrorBuilder("cpu_backend::gather_backward")
-                    .fail("index is larger than the operand on a non-gathered axis");
-        }
-
-        // The forward pass's fast case, accumulating instead of reading.
-        if (const auto rows = detail::GatherRows::of(input_shape, output_shape, axis);
-            rows && (dt == Dtype::F32 || dt == Dtype::F64)) {
-            auto run = [&](auto* dst, const auto* gp) {
-                for (std::size_t o = 0; o < rows->outer; ++o) {
-                    for (std::size_t j = 0; j < rows->taken; ++j) {
-                        const std::size_t row = (o * rows->taken + j) * rows->inner;
-                        for (std::size_t i = 0; i < rows->inner; ++i) {
-                            const std::int64_t k = cpu::checked_axis(
-                                "cpu_backend::gather_backward", load_idx(row + i), axis_extent,
-                                "index out of range for the gathered axis");
-                            dst[(o * rows->extent + static_cast<std::size_t>(k)) * rows->inner +
-                                i] += gp[row + i];
-                        }
-                    }
-                }
-            };
-            if (dt == Dtype::F32)
-                run(reinterpret_cast<float*>(std::get<CpuStorage>(out).ptr.get()),
-                    reinterpret_cast<const float*>(g.ptr.get()));
-            else
-                run(reinterpret_cast<double*>(std::get<CpuStorage>(out).ptr.get()),
-                    reinterpret_cast<const double*>(g.ptr.get()));
-            return out;
-        }
-
-        auto walk = [&](auto* dst, const auto* gp) {
-            std::vector<std::int64_t> coord(ndim, 0);
-            for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
-                const std::int64_t k =
-                    cpu::checked_axis("cpu_backend::gather_backward", load_idx(out_flat),
-                                      axis_extent, "index out of range for the gathered axis");
-                std::size_t input_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d) {
-                    const std::int64_t c = (static_cast<int>(d) == axis) ? k : coord[d];
-                    input_flat +=
-                        static_cast<std::size_t>(c) * static_cast<std::size_t>(input_stride[d]);
-                }
-                dst[input_flat] += gp[out_flat];
-                for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 1; d >= 0; --d) {
-                    if (++coord[static_cast<std::size_t>(d)] <
-                        output_shape[static_cast<std::size_t>(d)]) {
-                        break;
-                    }
-                    coord[static_cast<std::size_t>(d)] = 0;
-                }
-            }
-        };
-        if (dt == Dtype::F32) {
-            walk(reinterpret_cast<float*>(std::get<CpuStorage>(out).ptr.get()),
-                 reinterpret_cast<const float*>(g.ptr.get()));
-        } else if (dt == Dtype::F64) {
-            walk(reinterpret_cast<double*>(std::get<CpuStorage>(out).ptr.get()),
-                 reinterpret_cast<const double*>(g.ptr.get()));
-        } else {
-            ErrorBuilder("cpu_backend::gather_backward").not_implemented("dtype not supported");
-        }
-        return out;
-    }
+                            Dtype dt) override;
 
     Storage diagonal(const Storage& a,
                      const Shape& input_shape,
                      int offset,
                      int axis1,
                      int axis2,
-                     Dtype dt) override {
-        const auto& as = std::get<CpuStorage>(a);
-        const std::size_t ndim = input_shape.size();
-        int a1 = axis1;
-        int a2 = axis2;
-        if (a1 > a2)
-            std::swap(a1, a2);
-
-        const std::int64_t M = input_shape[static_cast<std::size_t>(a1)];
-        const std::int64_t N = input_shape[static_cast<std::size_t>(a2)];
-        const std::int64_t r0 = (offset >= 0) ? 0 : -offset;
-        const std::int64_t c0 = (offset >= 0) ? offset : 0;
-        const std::int64_t L = std::max<std::int64_t>(0, std::min(M - r0, N - c0));
-
-        Shape out_shape;
-        for (std::size_t d = 0; d < ndim; ++d) {
-            if (static_cast<int>(d) == a1 || static_cast<int>(d) == a2)
-                continue;
-            out_shape.push_back(input_shape[d]);
-        }
-        out_shape.push_back(L);
-        std::size_t nb = shape_numel(out_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::size_t elem = dtype_size(dt);
-
-        Stride a_stride(ndim);
-        if (ndim > 0) {
-            a_stride.back() = 1;
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d)
-                a_stride[static_cast<std::size_t>(d)] =
-                    a_stride[static_cast<std::size_t>(d) + 1] *
-                    input_shape[static_cast<std::size_t>(d) + 1];
-        }
-
-        std::vector<std::size_t> outer_dims;
-        for (std::size_t d = 0; d < ndim; ++d)
-            if (static_cast<int>(d) != a1 && static_cast<int>(d) != a2)
-                outer_dims.push_back(d);
-
-        std::size_t outer_numel = 1;
-        for (auto d : outer_dims)
-            outer_numel *= static_cast<std::size_t>(input_shape[d]);
-
-        std::vector<std::int64_t> coord(ndim, 0);
-        for (std::size_t o = 0; o < outer_numel; ++o) {
-            std::size_t rem = o;
-            for (auto d : outer_dims) {
-                std::size_t prod = 1;
-                for (std::size_t e : outer_dims)
-                    if (e > d)
-                        prod *= static_cast<std::size_t>(input_shape[e]);
-                coord[d] = static_cast<std::int64_t>(rem / prod);
-                rem %= prod;
-            }
-            for (std::int64_t i = 0; i < L; ++i) {
-                coord[static_cast<std::size_t>(a1)] = r0 + i;
-                coord[static_cast<std::size_t>(a2)] = c0 + i;
-                std::size_t a_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d)
-                    a_flat +=
-                        static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(a_stride[d]);
-                const std::size_t out_flat =
-                    o * static_cast<std::size_t>(L) + static_cast<std::size_t>(i);
-                std::memcpy(ptr.get() + out_flat * elem, as.ptr.get() + a_flat * elem, elem);
-            }
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                     Dtype dt) override;
 
     Storage diagonal_backward(const Storage& grad,
                               const Shape& input_shape,
@@ -3671,512 +483,60 @@ public:
                               int offset,
                               int axis1,
                               int axis2,
-                              Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(diagonal_backward(detail::as_f32(grad), input_shape,
-                                                         output_shape, offset, axis1, axis2,
-                                                         Dtype::F32),
-                                       dt);
-        const auto& g = std::get<CpuStorage>(grad);
-        auto out = zeros(input_shape, dt);
-        const std::size_t ndim = input_shape.size();
-        int a1 = axis1;
-        int a2 = axis2;
-        if (a1 > a2)
-            std::swap(a1, a2);
-
-        const std::int64_t M = input_shape[static_cast<std::size_t>(a1)];
-        const std::int64_t N = input_shape[static_cast<std::size_t>(a2)];
-        const std::int64_t r0 = (offset >= 0) ? 0 : -offset;
-        const std::int64_t c0 = (offset >= 0) ? offset : 0;
-        const std::int64_t L = std::max<std::int64_t>(0, std::min(M - r0, N - c0));
-
-        Stride input_stride(ndim);
-        if (ndim > 0) {
-            input_stride.back() = 1;
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
-                input_stride[static_cast<std::size_t>(d)] =
-                    input_stride[static_cast<std::size_t>(d) + 1] *
-                    input_shape[static_cast<std::size_t>(d) + 1];
-            }
-        }
-
-        std::vector<std::size_t> outer_dims;
-        for (std::size_t d = 0; d < ndim; ++d) {
-            if (static_cast<int>(d) != a1 && static_cast<int>(d) != a2)
-                outer_dims.push_back(d);
-        }
-        std::size_t outer_numel = 1;
-        for (auto d : outer_dims)
-            outer_numel *= static_cast<std::size_t>(input_shape[d]);
-
-        std::vector<std::int64_t> coord(ndim, 0);
-        if (dt == Dtype::F32) {
-            const auto* gp = reinterpret_cast<const float*>(g.ptr.get());
-            auto* dst = reinterpret_cast<float*>(std::get<CpuStorage>(out).ptr.get());
-            for (std::size_t o = 0; o < outer_numel; ++o) {
-                std::size_t rem = o;
-                for (auto d : outer_dims) {
-                    std::size_t prod = 1;
-                    for (std::size_t e : outer_dims)
-                        if (e > d)
-                            prod *= static_cast<std::size_t>(input_shape[e]);
-                    coord[d] = static_cast<std::int64_t>(rem / prod);
-                    rem %= prod;
-                }
-                for (std::int64_t i = 0; i < L; ++i) {
-                    coord[static_cast<std::size_t>(a1)] = r0 + i;
-                    coord[static_cast<std::size_t>(a2)] = c0 + i;
-                    std::size_t input_flat = 0;
-                    for (std::size_t d = 0; d < ndim; ++d)
-                        input_flat += static_cast<std::size_t>(coord[d]) *
-                                      static_cast<std::size_t>(input_stride[d]);
-                    const std::size_t grad_flat =
-                        o * static_cast<std::size_t>(L) + static_cast<std::size_t>(i);
-                    dst[input_flat] += gp[grad_flat];
-                }
-            }
-        } else if (dt == Dtype::F64) {
-            const auto* gp = reinterpret_cast<const double*>(g.ptr.get());
-            auto* dst = reinterpret_cast<double*>(std::get<CpuStorage>(out).ptr.get());
-            for (std::size_t o = 0; o < outer_numel; ++o) {
-                std::size_t rem = o;
-                for (auto d : outer_dims) {
-                    std::size_t prod = 1;
-                    for (std::size_t e : outer_dims)
-                        if (e > d)
-                            prod *= static_cast<std::size_t>(input_shape[e]);
-                    coord[d] = static_cast<std::int64_t>(rem / prod);
-                    rem %= prod;
-                }
-                for (std::int64_t i = 0; i < L; ++i) {
-                    coord[static_cast<std::size_t>(a1)] = r0 + i;
-                    coord[static_cast<std::size_t>(a2)] = c0 + i;
-                    std::size_t input_flat = 0;
-                    for (std::size_t d = 0; d < ndim; ++d)
-                        input_flat += static_cast<std::size_t>(coord[d]) *
-                                      static_cast<std::size_t>(input_stride[d]);
-                    const std::size_t grad_flat =
-                        o * static_cast<std::size_t>(L) + static_cast<std::size_t>(i);
-                    dst[input_flat] += gp[grad_flat];
-                }
-            }
-        } else {
-            ErrorBuilder("cpu_backend::diagonal_backward").not_implemented("dtype not supported");
-        }
-        return out;
-    }
+                              Dtype dt) override;
 
     Storage roll(const Storage& a,
                  const Shape& shape,
                  Dtype dt,
                  const std::vector<std::int64_t>& shifts,
-                 const std::vector<int>& axes) override {
-        const auto& as = std::get<CpuStorage>(a);
-        const std::size_t ndim = shape.size();
-        std::vector<std::int64_t> shift_per_dim(ndim, 0);
-        for (std::size_t i = 0; i < axes.size(); ++i) {
-            int ax = axes[i];
-            if (ax < 0)
-                ax += static_cast<int>(ndim);
-            shift_per_dim[static_cast<std::size_t>(ax)] += shifts[i];
-        }
-        std::size_t nb = shape_numel(shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::size_t elem = dtype_size(dt);
-        Stride stride(ndim);
-        if (ndim > 0) {
-            stride.back() = 1;
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d)
-                stride[static_cast<std::size_t>(d)] = stride[static_cast<std::size_t>(d) + 1] *
-                                                      shape[static_cast<std::size_t>(d) + 1];
-        }
-        const std::size_t total = shape_numel(shape);
-        std::vector<std::int64_t> coord(ndim, 0);
-        for (std::size_t out_flat = 0; out_flat < total; ++out_flat) {
-            std::size_t in_flat = 0;
-            for (std::size_t d = 0; d < ndim; ++d) {
-                std::int64_t c = coord[d] - shift_per_dim[d];
-                std::int64_t L = shape[d];
-                c = ((c % L) + L) % L;
-                in_flat += static_cast<std::size_t>(c) * static_cast<std::size_t>(stride[d]);
-            }
-            std::memcpy(ptr.get() + out_flat * elem, as.ptr.get() + in_flat * elem, elem);
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 1; d >= 0; --d) {
-                if (++coord[static_cast<std::size_t>(d)] < shape[static_cast<std::size_t>(d)])
-                    break;
-                coord[static_cast<std::size_t>(d)] = 0;
-            }
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                 const std::vector<int>& axes) override;
 
-    Storage reshape(const Storage& a, const Shape&, const Shape&, Dtype dt) override {
-        const auto& as = std::get<CpuStorage>(a);
-        auto ptr = allocate_aligned_bytes(as.nbytes, Device::CPU);
-        if (as.nbytes > 0)
-            std::memcpy(ptr.get(), as.ptr.get(), as.nbytes);
-        return Storage{CpuStorage{ptr, as.nbytes, dt}};
-    }
+    Storage reshape(const Storage& a, const Shape&, const Shape&, Dtype dt) override;
 
     Storage slice_axis(const Storage& a,
                        const Shape& src_shape,
                        const Shape& slice_shape,
                        int axis,
                        std::int64_t offset,
-                       Dtype dt) override {
-        const auto& as = std::get<CpuStorage>(a);
-        std::size_t out_nbytes = shape_numel(slice_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-        const std::size_t elem = dtype_size(dt);
-        std::size_t outer = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(src_shape[static_cast<std::size_t>(d)]);
-        std::size_t inner_bytes = elem;
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < src_shape.size(); ++d)
-            inner_bytes *= static_cast<std::size_t>(src_shape[d]);
-        const std::size_t src_axis =
-            static_cast<std::size_t>(src_shape[static_cast<std::size_t>(axis)]);
-        const std::size_t slice_axis =
-            static_cast<std::size_t>(slice_shape[static_cast<std::size_t>(axis)]);
-        const std::size_t copy_bytes = slice_axis * inner_bytes;
-        for (std::size_t o = 0; o < outer; ++o) {
-            const auto* src_ptr =
-                as.ptr.get() + (o * src_axis + static_cast<std::size_t>(offset)) * inner_bytes;
-            auto* dst_ptr = ptr.get() + o * copy_bytes;
-            if (copy_bytes > 0)
-                std::memcpy(dst_ptr, src_ptr, copy_bytes);
-        }
-        return Storage{CpuStorage{ptr, out_nbytes, dt}};
-    }
+                       Dtype dt) override;
 
     Storage insert_axis_slice(const Storage& a,
                               const Shape& src_shape,
                               const Shape& dst_shape,
                               int axis,
                               std::int64_t offset,
-                              Dtype dt) override {
-        const auto& as = std::get<CpuStorage>(a);
-        std::size_t out_nbytes = shape_numel(dst_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-        std::memset(ptr.get(), 0, out_nbytes);
-        const std::size_t elem = dtype_size(dt);
-        std::size_t outer = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(dst_shape[static_cast<std::size_t>(d)]);
-        std::size_t inner_bytes = elem;
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < dst_shape.size(); ++d)
-            inner_bytes *= static_cast<std::size_t>(dst_shape[d]);
-        const std::size_t dst_axis =
-            static_cast<std::size_t>(dst_shape[static_cast<std::size_t>(axis)]);
-        const std::size_t src_axis =
-            static_cast<std::size_t>(src_shape[static_cast<std::size_t>(axis)]);
-        const std::size_t copy_bytes = src_axis * inner_bytes;
-        for (std::size_t o = 0; o < outer; ++o) {
-            const auto* src_ptr = as.ptr.get() + o * copy_bytes;
-            auto* dst_ptr =
-                ptr.get() + (o * dst_axis + static_cast<std::size_t>(offset)) * inner_bytes;
-            if (copy_bytes > 0)
-                std::memcpy(dst_ptr, src_ptr, copy_bytes);
-        }
-        return Storage{CpuStorage{ptr, out_nbytes, dt}};
-    }
+                              Dtype dt) override;
 
     Storage concatenate(const std::vector<Storage>& xs,
                         const std::vector<Shape>& shapes,
                         int axis,
-                        Dtype dt) override {
-        Shape out_shape = shapes.front();
-        std::int64_t cat_dim = 0;
-        for (const auto& shape : shapes)
-            cat_dim += shape[static_cast<std::size_t>(axis)];
-        out_shape[static_cast<std::size_t>(axis)] = cat_dim;
-
-        std::size_t out_nbytes = shape_numel(out_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-        const std::size_t elem = dtype_size(dt);
-        std::size_t outer = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(out_shape[static_cast<std::size_t>(d)]);
-        std::size_t inner_per_unit = elem;
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < out_shape.size(); ++d)
-            inner_per_unit *= static_cast<std::size_t>(out_shape[d]);
-
-        auto* dst = ptr.get();
-        for (std::size_t o = 0; o < outer; ++o) {
-            for (std::size_t i = 0; i < xs.size(); ++i) {
-                const auto& cs = std::get<CpuStorage>(xs[i]);
-                const std::size_t L =
-                    static_cast<std::size_t>(shapes[i][static_cast<std::size_t>(axis)]);
-                const std::size_t bytes = L * inner_per_unit;
-                std::memcpy(dst, cs.ptr.get() + o * bytes, bytes);
-                dst += bytes;
-            }
-        }
-        return Storage{CpuStorage{ptr, out_nbytes, dt}};
-    }
+                        Dtype dt) override;
 
     Storage
-    stack(const std::vector<Storage>& xs, const Shape& input_shape, int axis, Dtype dt) override {
-        Shape out_shape = input_shape;
-        out_shape.insert(out_shape.begin() + axis, static_cast<std::int64_t>(xs.size()));
-        std::size_t out_nbytes = shape_numel(out_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-        const std::size_t elem = dtype_size(dt);
-        std::size_t outer = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(out_shape[static_cast<std::size_t>(d)]);
-        std::size_t inner_bytes = elem;
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < out_shape.size(); ++d)
-            inner_bytes *= static_cast<std::size_t>(out_shape[d]);
-        const std::size_t block_bytes = static_cast<std::size_t>(xs.size()) * inner_bytes;
-        for (std::size_t idx = 0; idx < xs.size(); ++idx) {
-            const auto& cs = std::get<CpuStorage>(xs[idx]);
-            for (std::size_t o = 0; o < outer; ++o) {
-                std::memcpy(ptr.get() + o * block_bytes + idx * inner_bytes,
-                            cs.ptr.get() + o * inner_bytes, inner_bytes);
-            }
-        }
-        return Storage{CpuStorage{ptr, out_nbytes, dt}};
-    }
+    stack(const std::vector<Storage>& xs, const Shape& input_shape, int axis, Dtype dt) override;
 
-    std::vector<Storage> split_equal(const Storage& a,
-                                     const Shape& shape,
-                                     int axis,
-                                     std::int64_t num_splits,
-                                     Dtype dt) override {
-        std::vector<Storage> out;
-        out.reserve(static_cast<std::size_t>(num_splits));
-        Shape piece_shape = shape;
-        const std::int64_t piece = shape[static_cast<std::size_t>(axis)] / num_splits;
-        piece_shape[static_cast<std::size_t>(axis)] = piece;
-        for (std::int64_t k = 0; k < num_splits; ++k) {
-            out.push_back(slice_axis(a, shape, piece_shape, axis, k * piece, dt));
-        }
-        return out;
-    }
+    std::vector<Storage> split_equal(
+        const Storage& a, const Shape& shape, int axis, std::int64_t num_splits, Dtype dt) override;
 
     std::vector<Storage> split_at(const Storage& a,
                                   const Shape& shape,
                                   int axis,
                                   const std::vector<std::int64_t>& indices,
-                                  Dtype dt) override {
-        std::vector<Storage> out;
-        out.reserve(indices.size() + 1);
-        std::int64_t off = 0;
-        for (auto idx : indices) {
-            Shape piece_shape = shape;
-            piece_shape[static_cast<std::size_t>(axis)] = idx - off;
-            out.push_back(slice_axis(a, shape, piece_shape, axis, off, dt));
-            off = idx;
-        }
-        Shape tail_shape = shape;
-        tail_shape[static_cast<std::size_t>(axis)] = shape[static_cast<std::size_t>(axis)] - off;
-        out.push_back(slice_axis(a, shape, tail_shape, axis, off, dt));
-        return out;
-    }
+                                  Dtype dt) override;
 
     Storage repeat_backward(const Storage& grad_out,
                             const Shape& input_shape,
                             const Shape& output_shape,
                             int axis,
                             std::int64_t repeats,
-                            Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(repeat_backward(detail::as_f32(grad_out), input_shape,
-                                                       output_shape, axis, repeats, Dtype::F32),
-                                       dt);
-        const auto& g = std::get<CpuStorage>(grad_out);
-        std::size_t out_nbytes = shape_numel(input_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-        std::memset(ptr.get(), 0, out_nbytes);
-
-        const std::size_t ndim = output_shape.size();
-        Stride out_stride(ndim), in_stride(ndim);
-        if (ndim > 0) {
-            out_stride.back() = 1;
-            in_stride.back() = 1;
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
-                out_stride[static_cast<std::size_t>(d)] =
-                    out_stride[static_cast<std::size_t>(d) + 1] *
-                    output_shape[static_cast<std::size_t>(d) + 1];
-                in_stride[static_cast<std::size_t>(d)] =
-                    in_stride[static_cast<std::size_t>(d) + 1] *
-                    input_shape[static_cast<std::size_t>(d) + 1];
-            }
-        }
-
-        const std::size_t total = shape_numel(output_shape);
-        if (dt == Dtype::F32) {
-            auto* out = reinterpret_cast<float*>(ptr.get());
-            const auto* gp = reinterpret_cast<const float*>(g.ptr.get());
-            for (std::size_t flat = 0; flat < total; ++flat) {
-                std::size_t rem = flat;
-                std::size_t in_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d) {
-                    std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
-                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
-                    if (static_cast<int>(d) == axis)
-                        coord /= static_cast<std::size_t>(repeats);
-                    in_flat += coord * static_cast<std::size_t>(in_stride[d]);
-                }
-                out[in_flat] += gp[flat];
-            }
-        } else if (dt == Dtype::F64) {
-            auto* out = reinterpret_cast<double*>(ptr.get());
-            const auto* gp = reinterpret_cast<const double*>(g.ptr.get());
-            for (std::size_t flat = 0; flat < total; ++flat) {
-                std::size_t rem = flat;
-                std::size_t in_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d) {
-                    std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
-                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
-                    if (static_cast<int>(d) == axis)
-                        coord /= static_cast<std::size_t>(repeats);
-                    in_flat += coord * static_cast<std::size_t>(in_stride[d]);
-                }
-                out[in_flat] += gp[flat];
-            }
-        } else if (dt == Dtype::I32) {
-            auto* out = reinterpret_cast<std::int32_t*>(ptr.get());
-            const auto* gp = reinterpret_cast<const std::int32_t*>(g.ptr.get());
-            for (std::size_t flat = 0; flat < total; ++flat) {
-                std::size_t rem = flat;
-                std::size_t in_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d) {
-                    std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
-                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
-                    if (static_cast<int>(d) == axis)
-                        coord /= static_cast<std::size_t>(repeats);
-                    in_flat += coord * static_cast<std::size_t>(in_stride[d]);
-                }
-                out[in_flat] += gp[flat];
-            }
-        } else if (dt == Dtype::I64) {
-            auto* out = reinterpret_cast<std::int64_t*>(ptr.get());
-            const auto* gp = reinterpret_cast<const std::int64_t*>(g.ptr.get());
-            for (std::size_t flat = 0; flat < total; ++flat) {
-                std::size_t rem = flat;
-                std::size_t in_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d) {
-                    std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
-                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
-                    if (static_cast<int>(d) == axis)
-                        coord /= static_cast<std::size_t>(repeats);
-                    in_flat += coord * static_cast<std::size_t>(in_stride[d]);
-                }
-                out[in_flat] += gp[flat];
-            }
-        } else {
-            ErrorBuilder("cpu_backend::repeat_backward").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, out_nbytes, dt}};
-    }
+                            Dtype dt) override;
 
     Storage tile_backward(const Storage& grad_out,
                           const Shape& input_shape,
                           const Shape& padded_shape,
                           const Shape& output_shape,
                           const std::vector<std::int64_t>& p4_,
-                          Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(tile_backward(detail::as_f32(grad_out), input_shape,
-                                                     padded_shape, output_shape, p4_, Dtype::F32),
-                                       dt);
-        const auto& g = std::get<CpuStorage>(grad_out);
-        std::size_t out_nbytes = shape_numel(input_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-        std::memset(ptr.get(), 0, out_nbytes);
-
-        const std::size_t ndim = output_shape.size();
-        Stride out_stride(ndim), padded_stride(ndim);
-        if (ndim > 0) {
-            out_stride.back() = 1;
-            padded_stride.back() = 1;
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
-                out_stride[static_cast<std::size_t>(d)] =
-                    out_stride[static_cast<std::size_t>(d) + 1] *
-                    output_shape[static_cast<std::size_t>(d) + 1];
-                padded_stride[static_cast<std::size_t>(d)] =
-                    padded_stride[static_cast<std::size_t>(d) + 1] *
-                    padded_shape[static_cast<std::size_t>(d) + 1];
-            }
-        }
-
-        const std::size_t total = shape_numel(output_shape);
-        if (dt == Dtype::F32) {
-            auto* out = reinterpret_cast<float*>(ptr.get());
-            const auto* gp = reinterpret_cast<const float*>(g.ptr.get());
-            for (std::size_t flat = 0; flat < total; ++flat) {
-                std::size_t rem = flat;
-                std::size_t in_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d) {
-                    const std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
-                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
-                    const std::size_t in_coord = coord % static_cast<std::size_t>(padded_shape[d]);
-                    in_flat += in_coord * static_cast<std::size_t>(padded_stride[d]);
-                }
-                out[in_flat] += gp[flat];
-            }
-        } else if (dt == Dtype::F64) {
-            auto* out = reinterpret_cast<double*>(ptr.get());
-            const auto* gp = reinterpret_cast<const double*>(g.ptr.get());
-            for (std::size_t flat = 0; flat < total; ++flat) {
-                std::size_t rem = flat;
-                std::size_t in_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d) {
-                    const std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
-                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
-                    const std::size_t in_coord = coord % static_cast<std::size_t>(padded_shape[d]);
-                    in_flat += in_coord * static_cast<std::size_t>(padded_stride[d]);
-                }
-                out[in_flat] += gp[flat];
-            }
-        } else if (dt == Dtype::I32) {
-            auto* out = reinterpret_cast<std::int32_t*>(ptr.get());
-            const auto* gp = reinterpret_cast<const std::int32_t*>(g.ptr.get());
-            for (std::size_t flat = 0; flat < total; ++flat) {
-                std::size_t rem = flat;
-                std::size_t in_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d) {
-                    const std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
-                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
-                    const std::size_t in_coord = coord % static_cast<std::size_t>(padded_shape[d]);
-                    in_flat += in_coord * static_cast<std::size_t>(padded_stride[d]);
-                }
-                out[in_flat] += gp[flat];
-            }
-        } else if (dt == Dtype::I64) {
-            auto* out = reinterpret_cast<std::int64_t*>(ptr.get());
-            const auto* gp = reinterpret_cast<const std::int64_t*>(g.ptr.get());
-            for (std::size_t flat = 0; flat < total; ++flat) {
-                std::size_t rem = flat;
-                std::size_t in_flat = 0;
-                for (std::size_t d = 0; d < ndim; ++d) {
-                    const std::size_t coord = rem / static_cast<std::size_t>(out_stride[d]);
-                    rem -= coord * static_cast<std::size_t>(out_stride[d]);
-                    const std::size_t in_coord = coord % static_cast<std::size_t>(padded_shape[d]);
-                    in_flat += in_coord * static_cast<std::size_t>(padded_stride[d]);
-                }
-                out[in_flat] += gp[flat];
-            }
-        } else {
-            ErrorBuilder("cpu_backend::tile_backward").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, out_nbytes, dt}};
-    }
+                          Dtype dt) override;
 
     std::pair<Storage, Storage> sort_select_impl(const Storage& a,
                                                  const Shape& input_shape,
@@ -4184,202 +544,30 @@ public:
                                                  int axis,
                                                  Dtype dt,
                                                  bool descending,
-                                                 bool need_values) {
-        // int8, int16, and bool widen to int64; float16 and bfloat16 widen to
-        // float32 at the door and round once on the way out when values are requested.
-        if (detail::is_narrow_int(dt)) {
-            auto wide = sort_select_impl(detail::as_i64(a), input_shape, output_shape, axis,
-                                         Dtype::I64, descending, need_values);
-            if (!need_values)
-                return wide;
-            return {detail::narrow_int(wide.first, shape_numel(output_shape), dt), wide.second};
-        }
-        if (detail::is_half_like(dt)) {
-            auto wide = sort_select_impl(detail::as_f32(a), input_shape, output_shape, axis,
-                                         Dtype::F32, descending, need_values);
-            return need_values ? detail::back_to_f16(std::move(wide), dt) : wide;
-        }
-        const auto& ca = std::get<CpuStorage>(a);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            auto [v, idx] = cpu::sort_select_cpu<T>(ca, input_shape, output_shape, axis, dt,
-                                                    descending, need_values);
-            return std::pair<Storage, Storage>{Storage{std::move(v)}, Storage{std::move(idx)}};
-        };
-        if (dt == Dtype::F32)
-            return run(float{});
-        if (dt == Dtype::F64)
-            return run(double{});
-        if (dt == Dtype::I32)
-            return run(std::int32_t{});
-        if (dt == Dtype::I64)
-            return run(std::int64_t{});
-        ErrorBuilder("cpu_backend::sort_select").not_implemented("dtype not supported");
-    }
+                                                 bool need_values);
 
     std::pair<Storage, Storage> sort_select(const Storage& a,
                                             const Shape& input_shape,
                                             const Shape& output_shape,
                                             int axis,
                                             Dtype dt,
-                                            bool descending) override {
-        return sort_select_impl(a, input_shape, output_shape, axis, dt, descending, true);
-    }
+                                            bool descending) override;
 
-    Storage argsort(const Storage& a, const Shape& shape, int axis, Dtype dt) override {
-        return sort_select_impl(a, shape, shape, axis, dt, false, false).second;
-    }
+    Storage argsort(const Storage& a, const Shape& shape, int axis, Dtype dt) override;
 
     Storage arg_reduce_index(const Storage& a,
                              const Shape& shape,
                              int axis,
                              bool keepdims,
                              Dtype dt,
-                             bool is_min) override {
-        // The result is an index tensor — int64 by contract — so the
-        // operand widens and nothing narrows back.
-        if (detail::is_narrow_int(dt) && dt != Dtype::Bool)
-            return arg_reduce_index(detail::as_i64(a), shape, axis, keepdims, Dtype::I64, is_min);
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                arg_reduce_index(detail::as_f32(a), shape, axis, keepdims, Dtype::F32, is_min), dt);
-        Shape out_shape = shape;
-        if (keepdims)
-            out_shape[static_cast<std::size_t>(axis)] = 1;
-        else
-            out_shape.erase(out_shape.begin() + axis);
-        const std::size_t nbytes = shape_numel(out_shape) * dtype_size(Dtype::I64);
-        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
-        auto* dst = reinterpret_cast<std::int64_t*>(ptr.get());
-        const auto& ca = std::get<CpuStorage>(a);
-
-        std::size_t outer = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        std::size_t inner = 1;
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
-            inner *= static_cast<std::size_t>(shape[d]);
-        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-
-        auto run = [&](const auto* src) {
-            for (std::size_t o = 0; o < outer; ++o) {
-                for (std::size_t j = 0; j < inner; ++j) {
-                    std::int64_t best = 0;
-                    auto best_v = src[o * L * inner + j];
-                    using V = std::remove_cv_t<std::remove_reference_t<decltype(best_v)>>;
-                    for (std::size_t k = 1; k < L; ++k) {
-                        const auto v = src[(o * L + k) * inner + j];
-                        // NaN wins, for both argmax and argmin.
-                        //
-                        // The comparison alone cannot say so — every test
-                        // against a NaN is false, so the first NaN in the
-                        // axis was skipped and the index of some ordinary
-                        // element came back instead.  ``max`` reports nan
-                        // and ``argmax`` reported the position of a number
-                        // that is not the maximum, which is worse than
-                        // either answer alone: the pair disagreed with each
-                        // other.  The reference framework returns the NaN's
-                        // index; once one is seen it cannot be displaced.
-                        if constexpr (std::is_floating_point_v<V>) {
-                            if (std::isnan(best_v))
-                                continue;
-                            if (std::isnan(v)) {
-                                best_v = v;
-                                best = static_cast<std::int64_t>(k);
-                                continue;
-                            }
-                        }
-                        if (is_min ? (v < best_v) : (v > best_v)) {
-                            best_v = v;
-                            best = static_cast<std::int64_t>(k);
-                        }
-                    }
-                    dst[o * inner + j] = best;
-                }
-            }
-        };
-
-        // A contiguous axis: the extreme first, by the vector reduction (NaN
-        // if any), then the first index holding it.  The same answer as the
-        // scan above — the first of equal values, the first NaN — without a
-        // compare-and-branch chained through every element (``argmax`` was
-        // twenty times ``sum``).
-        auto by_rows = [&](const auto* src, auto reduce) {
-            using V = std::remove_cv_t<std::remove_pointer_t<decltype(src)>>;
-            for (std::size_t o = 0; o < outer; ++o) {
-                const V* row = src + o * L;
-                V target;
-                reduce(row, &target, 1, L, 1);
-                std::size_t k = 0;
-                if (std::isnan(target)) {
-                    while (!std::isnan(row[k]))
-                        ++k;
-                } else {
-                    while (row[k] != target)
-                        ++k;
-                }
-                dst[o] = static_cast<std::int64_t>(k);
-            }
-        };
-        const bool rows = inner == 1 && L > 0;
-
-        if (dt == Dtype::F32 && rows) {
-            by_rows(reinterpret_cast<const float*>(ca.ptr.get()),
-                    is_min ? &cpu::min_axis_f32 : &cpu::max_axis_f32);
-        } else if (dt == Dtype::F64 && rows) {
-            by_rows(reinterpret_cast<const double*>(ca.ptr.get()),
-                    is_min ? &cpu::min_axis_f64 : &cpu::max_axis_f64);
-        } else if (dt == Dtype::F32) {
-            run(reinterpret_cast<const float*>(ca.ptr.get()));
-        } else if (dt == Dtype::F64) {
-            run(reinterpret_cast<const double*>(ca.ptr.get()));
-        } else if (dt == Dtype::I32) {
-            run(reinterpret_cast<const std::int32_t*>(ca.ptr.get()));
-        } else if (dt == Dtype::I64) {
-            run(reinterpret_cast<const std::int64_t*>(ca.ptr.get()));
-        } else {
-            ErrorBuilder("cpu_backend::arg_reduce_index").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nbytes, Dtype::I64}};
-    }
+                             bool is_min) override;
 
     Storage scatter_add_axis(const Storage& grad,
                              const Storage& indices,
                              const Shape& output_shape,
                              const Shape& grad_shape,
                              int axis,
-                             Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(scatter_add_axis(detail::as_f32(grad),
-                                                        detail::as_f32(indices), output_shape,
-                                                        grad_shape, axis, Dtype::F32),
-                                       dt);
-        const auto& g = std::get<CpuStorage>(grad);
-        const auto& idx_storage = std::get<CpuStorage>(indices);
-        const std::size_t nbytes = shape_numel(output_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
-        std::memset(ptr.get(), 0, nbytes);
-        auto run = [&](auto* dst, const auto* gp) {
-            cpu::scatter_add_axis_any_index(dst, gp, idx_storage, output_shape, grad_shape, axis);
-        };
-
-        if (dt == Dtype::F32) {
-            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(g.ptr.get()));
-        } else if (dt == Dtype::F64) {
-            run(reinterpret_cast<double*>(ptr.get()), reinterpret_cast<const double*>(g.ptr.get()));
-        } else {
-            ErrorBuilder("cpu_backend::scatter_add_axis").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nbytes, dt}};
-    }
+                             Dtype dt) override;
 
     // User-facing scatter-add: copies base then adds src at positions given by indices.
     Storage scatter_add(const Storage& base,
@@ -4388,93 +576,7 @@ public:
                         const Shape& base_shape,
                         const Shape& idx_shape,
                         int dim,
-                        Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(scatter_add(detail::as_f32(base), detail::as_f32(indices),
-                                                   detail::as_f32(src), base_shape, idx_shape, dim,
-                                                   Dtype::F32),
-                                       dt);
-        // Integers take the same road, through int64.  Selection, movement
-        // and addition are all exact there, so this is the answer a native
-        // kernel would have produced rather than an approximation of it.
-        if (detail::is_narrow_int(dt))
-            return detail::back_to_int(scatter_add(detail::as_i64(base), indices,
-                                                   detail::as_i64(src), base_shape, idx_shape, dim,
-                                                   Dtype::I64),
-                                       dt);
-        const auto& cb = std::get<CpuStorage>(base);
-        const auto& ci = std::get<CpuStorage>(indices);
-        const auto& cs = std::get<CpuStorage>(src);
-
-        const std::size_t base_n = shape_numel(base_shape);
-        const std::size_t nbytes = base_n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
-        // Start from a copy of base
-        std::memcpy(ptr.get(), cb.ptr.get(), std::min(nbytes, cb.nbytes));
-
-        const int ndim = static_cast<int>(base_shape.size());
-        if (dim < 0)
-            dim += ndim;
-
-        // The walk is over the *index's* extents, which may be shorter than
-        // base's on any axis but ``dim`` — see AxisScatterWalk.  It used
-        // base's, and read past the end of an index and a src shorter than
-        // base: out-of-range reads written into the answer.
-        const AxisScatterWalk walk = axis_scatter_walk(base_shape, idx_shape, dim);
-        const std::vector<std::size_t>& outer_off = walk.outer_off;
-        const std::vector<std::size_t>& inner_off = walk.inner_off;
-        const std::size_t outer = outer_off.size();
-        const std::size_t inner = inner_off.size();
-        const std::size_t base_dim = walk.base_dim;
-        const std::size_t dim_stride = walk.dim_stride;
-        const std::size_t idx_dim = walk.idx_dim;
-        // The index buffer used to be read as ``int32`` whatever its actual
-        // dtype.  An int16 index tensor therefore had two of its values
-        // read as one, giving a silently wrong result; an int8 one had
-        // four read as one, producing an index far outside the base and an
-        // out-of-bounds write — a bus error reachable from Python.
-        const auto load_index = cpu::index_reader("cpu_backend::scatter_add", ci);
-
-        auto run = [&](auto* dst, const auto* sp) {
-            const auto len = static_cast<std::int64_t>(base_dim);
-            for (std::size_t o = 0; o < outer; ++o) {
-                for (std::size_t j = 0; j < inner; ++j) {
-                    for (std::size_t k = 0; k < idx_dim; ++k) {
-                        const std::size_t src_flat = (o * idx_dim + k) * inner + j;
-                        const std::int64_t tgt =
-                            cpu::checked_axis("cpu_backend::scatter_add", load_index(src_flat), len,
-                                              "index out of range for the scattered axis");
-                        const std::size_t dst_flat = outer_off[o] +
-                                                     static_cast<std::size_t>(tgt) * dim_stride +
-                                                     inner_off[j];
-                        dst[dst_flat] += sp[src_flat];
-                    }
-                }
-            }
-        };
-
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(cs.ptr.get()));
-        else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(ptr.get()),
-                reinterpret_cast<const double*>(cs.ptr.get()));
-        else if (dt == Dtype::I64)
-            run(reinterpret_cast<std::int64_t*>(ptr.get()),
-                reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
-        else if (dt == Dtype::C64)
-            run(reinterpret_cast<std::complex<float>*>(ptr.get()),
-                reinterpret_cast<const std::complex<float>*>(cs.ptr.get()));
-        else if (dt == Dtype::C128)
-            run(reinterpret_cast<std::complex<double>*>(ptr.get()),
-                reinterpret_cast<const std::complex<double>*>(cs.ptr.get()));
-        else
-            ErrorBuilder("cpu_backend::scatter_add").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nbytes, dt}};
-    }
+                        Dtype dt) override;
 
 private:
     // Where an axis scatter's writes land in ``base``.
@@ -4495,39 +597,7 @@ private:
     };
 
     static AxisScatterWalk
-    axis_scatter_walk(const Shape& base_shape, const Shape& idx_shape, int dim) {
-        const int ndim = static_cast<int>(base_shape.size());
-        const auto ext = [](const Shape& sh, int a) {
-            return static_cast<std::size_t>(sh[static_cast<std::size_t>(a)]);
-        };
-        std::vector<std::size_t> base_stride(static_cast<std::size_t>(ndim), 1);
-        for (int a = ndim - 2; a >= 0; --a)
-            base_stride[static_cast<std::size_t>(a)] =
-                base_stride[static_cast<std::size_t>(a + 1)] * ext(base_shape, a + 1);
-        // Base offset of every coordinate over axes [lo, hi), by mixed-radix
-        // decomposition over the index's extents.
-        const auto offsets = [&](int lo, int hi) {
-            std::size_t count = 1;
-            for (int a = lo; a < hi; ++a)
-                count *= ext(idx_shape, a);
-            std::vector<std::size_t> off(count, 0);
-            for (std::size_t f = 0; f < count; ++f) {
-                std::size_t rem = f;
-                for (int a = hi - 1; a >= lo; --a) {
-                    off[f] += (rem % ext(idx_shape, a)) * base_stride[static_cast<std::size_t>(a)];
-                    rem /= ext(idx_shape, a);
-                }
-            }
-            return off;
-        };
-        AxisScatterWalk w;
-        w.outer_off = offsets(0, dim);
-        w.inner_off = offsets(dim + 1, ndim);
-        w.idx_dim = ext(idx_shape, dim);
-        w.base_dim = ext(base_shape, dim);
-        w.dim_stride = base_stride[static_cast<std::size_t>(dim)];
-        return w;
-    }
+    axis_scatter_walk(const Shape& base_shape, const Shape& idx_shape, int dim);
 
     // The overwrite scatter's loop, for ``W``-byte elements and index type
     // ``I``.  It never does arithmetic on a value, so it moves bytes: one
@@ -4541,25 +611,7 @@ private:
     static void scatter_set_lines(std::byte* dst,
                                   const std::byte* src,
                                   cpu::IndexReader read_idx,
-                                  const AxisScatterWalk& w) {
-        const std::size_t outer = w.outer_off.size();
-        const std::size_t inner = w.inner_off.size();
-        const auto len = static_cast<std::int64_t>(w.base_dim);
-        for (std::size_t o = 0; o < outer; ++o) {
-            for (std::size_t k = 0; k < w.idx_dim; ++k) {
-                const std::size_t row = (o * w.idx_dim + k) * inner;
-                for (std::size_t j = 0; j < inner; ++j) {
-                    const std::int64_t tgt =
-                        cpu::checked_axis("cpu_backend::scatter_set", read_idx(row + j), len,
-                                          "index out of range for the scattered axis");
-                    const std::size_t at = w.outer_off[o] +
-                                           static_cast<std::size_t>(tgt) * w.dim_stride +
-                                           w.inner_off[j];
-                    std::memcpy(dst + at * W, src + (row + j) * W, W);
-                }
-            }
-        }
-    }
+                                  const AxisScatterWalk& w);
 
     // Generic scatter-reduce loop shared by scatter_amax / scatter_amin / scatter_prod.
     // Every dtype at its own width but half, which widens to float32 here;
@@ -4581,61 +633,7 @@ private:
                                 int dim,
                                 Dtype dt,
                                 const char* name,
-                                cpu::ScatterReduce reduce) {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                scatter_reduce_loop(detail::as_f32(base), indices, detail::as_f32(src), base_shape,
-                                    idx_shape, dim, Dtype::F32, name, reduce),
-                dt);
-        const auto& cb = std::get<CpuStorage>(base);
-        const auto& ci = std::get<CpuStorage>(indices);
-        const auto& cs = std::get<CpuStorage>(src);
-
-        const int ndim = static_cast<int>(base_shape.size());
-        if (dim < 0)
-            dim += ndim;
-        // The shape rule is the op's (``axis_scatter_operands`` in
-        // Gfunc.cpp); this only refuses to read a src buffer shorter than
-        // the index, as scatter_set does.
-        const std::size_t count = shape_numel(idx_shape);
-        if (cs.nbytes < count * dtype_size(dt))
-            ErrorBuilder(name).fail("src must hold one element per index position");
-
-        const std::size_t base_n = shape_numel(base_shape);
-        const std::size_t nbytes = base_n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
-        if (nbytes > 0)
-            std::memcpy(ptr.get(), cb.ptr.get(), std::min(nbytes, cb.nbytes));
-        if (count == 0)
-            return Storage{CpuStorage{ptr, nbytes, dt}};
-
-        const auto read_idx = cpu::index_reader(name, ci);
-        const AxisScatterWalk w = axis_scatter_walk(base_shape, idx_shape, dim);
-        const auto len = static_cast<std::int64_t>(w.base_dim);
-
-        auto run = [&](auto* dst, const auto* sp) {
-            const std::size_t inner = w.inner_off.size();
-            for (std::size_t o = 0; o < w.outer_off.size(); ++o)
-                for (std::size_t k = 0; k < w.idx_dim; ++k) {
-                    const std::size_t row = (o * w.idx_dim + k) * inner;
-                    for (std::size_t j = 0; j < inner; ++j) {
-                        const std::int64_t tgt =
-                            cpu::checked_axis(name, read_idx(row + j), len,
-                                              "index out of range for the scattered axis");
-                        const std::size_t at = w.outer_off[o] +
-                                               static_cast<std::size_t>(tgt) * w.dim_stride +
-                                               w.inner_off[j];
-                        cpu::scatter_combine(reduce, dst[at], sp[row + j]);
-                    }
-                }
-        };
-
-        cpu::visit_scatter_reduce_type(dt, reduce, name, [&](auto tag) {
-            using T = decltype(tag);
-            run(reinterpret_cast<T*>(ptr.get()), reinterpret_cast<const T*>(cs.ptr.get()));
-        });
-        return Storage{CpuStorage{ptr, nbytes, dt}};
-    }
+                                cpu::ScatterReduce reduce);
 
 public:
     Storage scatter_amax(const Storage& base,
@@ -4644,10 +642,7 @@ public:
                          const Shape& base_shape,
                          const Shape& idx_shape,
                          int dim,
-                         Dtype dt) override {
-        return scatter_reduce_loop(base, indices, src, base_shape, idx_shape, dim, dt,
-                                   "cpu_backend::scatter_amax", cpu::ScatterReduce::Amax);
-    }
+                         Dtype dt) override;
 
     Storage scatter_amin(const Storage& base,
                          const Storage& indices,
@@ -4655,10 +650,7 @@ public:
                          const Shape& base_shape,
                          const Shape& idx_shape,
                          int dim,
-                         Dtype dt) override {
-        return scatter_reduce_loop(base, indices, src, base_shape, idx_shape, dim, dt,
-                                   "cpu_backend::scatter_amin", cpu::ScatterReduce::Amin);
-    }
+                         Dtype dt) override;
 
     Storage scatter_prod(const Storage& base,
                          const Storage& indices,
@@ -4666,10 +658,7 @@ public:
                          const Shape& base_shape,
                          const Shape& idx_shape,
                          int dim,
-                         Dtype dt) override {
-        return scatter_reduce_loop(base, indices, src, base_shape, idx_shape, dim, dt,
-                                   "cpu_backend::scatter_prod", cpu::ScatterReduce::Prod);
-    }
+                         Dtype dt) override;
 
     // Overwrite scatter: a copy of ``base`` with
     // ``out[..., idx[..., k, ...], ...] = src[..., k, ...]`` along ``dim``.
@@ -4687,189 +676,13 @@ public:
                         const Shape& base_shape,
                         const Shape& idx_shape,
                         int dim,
-                        Dtype dt) override {
-        const auto& cb = std::get<CpuStorage>(base);
-        const auto& ci = std::get<CpuStorage>(indices);
-        const auto& cs = std::get<CpuStorage>(src);
-        // The bytes are moved, not converted: a src of another dtype would be
-        // reinterpreted, and one of another width read out of bounds.
-        if (cs.dtype != dt || cb.dtype != dt)
-            ErrorBuilder("cpu_backend::scatter_set")
-                .fail("source and destination must share a dtype, got " +
-                      std::string(dtype_name(cs.dtype)) + " into " +
-                      std::string(dtype_name(cb.dtype)));
-
-        const std::size_t esz = dtype_size(dt);
-        const std::size_t nbytes = shape_numel(base_shape) * esz;
-        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
-        if (nbytes > 0)
-            std::memcpy(ptr.get(), cb.ptr.get(), std::min(nbytes, cb.nbytes));
-        const std::size_t count = shape_numel(idx_shape);
-        if (count == 0)
-            return Storage{CpuStorage{ptr, nbytes, dt}};
-        if (cs.nbytes < count * esz || ci.nbytes < count * dtype_size(ci.dtype))
-            ErrorBuilder("cpu_backend::scatter_set")
-                .fail("index and source must hold one "
-                      "element per index position");
-
-        const int ndim = static_cast<int>(base_shape.size());
-        if (dim < 0)
-            dim += ndim;
-        const AxisScatterWalk walk = axis_scatter_walk(base_shape, idx_shape, dim);
-        const auto read_idx = cpu::index_reader("cpu_backend::scatter_set", ci);
-        std::byte* dst = ptr.get();
-        const std::byte* sp = cs.ptr.get();
-        switch (esz) {
-        case 1:
-            scatter_set_lines<1>(dst, sp, read_idx, walk);
-            break;
-        case 2:
-            scatter_set_lines<2>(dst, sp, read_idx, walk);
-            break;
-        case 4:
-            scatter_set_lines<4>(dst, sp, read_idx, walk);
-            break;
-        case 8:
-            scatter_set_lines<8>(dst, sp, read_idx, walk);
-            break;
-        case 16:
-            scatter_set_lines<16>(dst, sp, read_idx, walk);
-            break;
-        default:
-            ErrorBuilder("cpu_backend::scatter_set").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nbytes, dt}};
-    }
+                        Dtype dt) override;
 
     // Sliding-window view: out shape is (*in_shape[:dim], L, *in_shape[dim+1:], size)
     Storage unfold_dim(
-        const Storage& a, const Shape& in_shape, int dim, int size, int step, Dtype dt) override {
-        const auto& ca = std::get<CpuStorage>(a);
-        const int ndim = static_cast<int>(in_shape.size());
-        if (dim < 0)
-            dim += ndim;
+        const Storage& a, const Shape& in_shape, int dim, int size, int step, Dtype dt) override;
 
-        const std::size_t dim_size =
-            static_cast<std::size_t>(in_shape[static_cast<std::size_t>(dim)]);
-        const std::size_t L =
-            (dim_size - static_cast<std::size_t>(size)) / static_cast<std::size_t>(step) + 1;
-
-        // out_shape = in_shape[:dim] + [L] + in_shape[dim+1:] + [size]
-        Shape out_shape;
-        for (int d = 0; d < dim; ++d)
-            out_shape.push_back(in_shape[static_cast<std::size_t>(d)]);
-        out_shape.push_back(static_cast<std::int64_t>(L));
-        for (int d = dim + 1; d < ndim; ++d)
-            out_shape.push_back(in_shape[static_cast<std::size_t>(d)]);
-        out_shape.push_back(static_cast<std::int64_t>(size));
-
-        const std::size_t out_n = shape_numel(out_shape);
-        const std::size_t nbytes = out_n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nbytes, Device::CPU);
-
-        // outer = product of dims before dim
-        std::size_t outer = 1;
-        for (int d = 0; d < dim; ++d)
-            outer *= static_cast<std::size_t>(in_shape[static_cast<std::size_t>(d)]);
-        // inner = product of dims after dim (in the original tensor)
-        std::size_t inner = 1;
-        for (int d = dim + 1; d < ndim; ++d)
-            inner *= static_cast<std::size_t>(in_shape[static_cast<std::size_t>(d)]);
-
-        const std::size_t esz = dtype_size(dt);
-        const std::uint8_t* src_ptr =
-            static_cast<const std::uint8_t*>(static_cast<const void*>(ca.ptr.get()));
-        std::uint8_t* dst_ptr = static_cast<std::uint8_t*>(static_cast<void*>(ptr.get()));
-
-        for (std::size_t o = 0; o < outer; ++o) {
-            for (std::size_t l = 0; l < L; ++l) {
-                for (std::size_t j = 0; j < inner; ++j) {
-                    for (std::size_t s = 0; s < static_cast<std::size_t>(size); ++s) {
-                        // Source element: [o, l*step+s, j] in the input
-                        const std::size_t src_dim_pos = l * static_cast<std::size_t>(step) + s;
-                        const std::size_t src_flat = (o * dim_size + src_dim_pos) * inner + j;
-                        // Destination: [o, l, j, s] in the output
-                        const std::size_t dst_flat =
-                            ((o * L + l) * inner + j) * static_cast<std::size_t>(size) + s;
-                        std::memcpy(dst_ptr + dst_flat * esz, src_ptr + src_flat * esz, esz);
-                    }
-                }
-            }
-        }
-        return Storage{CpuStorage{ptr, nbytes, dt}};
-    }
-
-    Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override {
-        // There is no integer BLAS either, and the product of two integer
-        // matrices is an integer matrix — the reference framework and Metal
-        // both answer it, and the CPU raised.  Taken in double and rounded
-        // back: exact as long as each dot product stays inside 2^53, which
-        // covers int32 and below at any realistic K.  int64 operands large
-        // enough to break that would already have overflowed their own
-        // type in a native integer GEMM.
-        if (detail::is_int_like(dt)) {
-            const std::size_t out_n = opts.batch * static_cast<std::size_t>(opts.M) * opts.N;
-            const Storage wide = matmul(detail::as_f64(a), detail::as_f64(b), opts, Dtype::F64);
-            return detail::f64_to_int(wide, out_n, dt);
-        }
-        // No half BLAS to call, so the product is taken in single and
-        // rounded once.  Accumulating in the wider type is what a half
-        // GEMM would do internally anyway.
-        if (detail::is_half_like(dt)) {
-            const std::size_t a_n = opts.batch * static_cast<std::size_t>(opts.M) * opts.K;
-            const std::size_t b_n = opts.batch * static_cast<std::size_t>(opts.K) * opts.N;
-            const std::size_t out_n = opts.batch * static_cast<std::size_t>(opts.M) * opts.N;
-            const Storage wide =
-                matmul(Storage{detail::widen_half(std::get<CpuStorage>(a), a_n)},
-                       Storage{detail::widen_half(std::get<CpuStorage>(b), b_n)}, opts, Dtype::F32);
-            return detail::narrow_half(wide, out_n, dt);
-        }
-        const auto& ca = std::get<CpuStorage>(a);
-        const auto& cb = std::get<CpuStorage>(b);
-        const int M = opts.M, K = opts.K, N = opts.N;
-        const std::size_t batch = opts.batch;
-        std::size_t out_n = batch * static_cast<std::size_t>(M) * static_cast<std::size_t>(N);
-        std::size_t nb = out_n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        std::memset(ptr.get(), 0, nb);
-
-        // Degenerate dims (M / N / K == 0): the zeroed (or empty) output is
-        // already the correct result — a K=0 contraction sums over nothing → 0 —
-        // and cblas_*gemm asserts on these ("lda must be >= MAX(K,1)" for K=0),
-        // so skip the BLAS call entirely.
-        const bool run_gemm = M > 0 && N > 0 && K > 0;
-        if (dt == Dtype::F32) {
-            const float* ap = reinterpret_cast<const float*>(ca.ptr.get());
-            const float* bp = reinterpret_cast<const float*>(cb.ptr.get());
-            float* cp = reinterpret_cast<float*>(ptr.get());
-            if (run_gemm) {
-                for (std::size_t bi = 0; bi < batch; ++bi) {
-                    cpu::sgemm(opts.transA, opts.transB, M, N, K, 1.0f, ap + bi * M * K,
-                               opts.transA ? M : K, bp + bi * K * N, opts.transB ? K : N, 0.0f,
-                               cp + bi * M * N, N);
-                }
-            }
-        } else if (dt == Dtype::F64) {
-            const double* ap = reinterpret_cast<const double*>(ca.ptr.get());
-            const double* bp = reinterpret_cast<const double*>(cb.ptr.get());
-            double* cp = reinterpret_cast<double*>(ptr.get());
-            if (run_gemm) {
-                for (std::size_t bi = 0; bi < batch; ++bi) {
-                    cpu::dgemm(opts.transA, opts.transB, M, N, K, 1.0, ap + bi * M * K,
-                               opts.transA ? M : K, bp + bi * K * N, opts.transB ? K : N, 0.0,
-                               cp + bi * M * N, N);
-                }
-            }
-        } else {
-            ErrorBuilder("cpu_backend::matmul").not_implemented("dtype not supported");
-        }
-        Shape out_shape;
-        if (batch > 1)
-            out_shape.push_back(static_cast<std::int64_t>(batch));
-        out_shape.push_back(M);
-        out_shape.push_back(N);
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage matmul(const Storage& a, const Storage& b, const MatmulOpts& opts, Dtype dt) override;
 
     Storage linear(const Storage& x,
                    const Storage& weight,
@@ -4877,45 +690,7 @@ public:
                    const Shape& x_shape,
                    const Shape& weight_shape,
                    const Shape& out_shape,
-                   Dtype dt) override {
-        // The one that blocks a real half model: nn.Linear is the first
-        // layer of almost everything, so `model.half()` ran on Metal and
-        // raised on the CPU.  No half BLAS exists, so the product is taken
-        // in single and rounded once — what a half GEMM does internally.
-        if (detail::is_half_like(dt)) {
-            const std::size_t x_n = shape_numel(x_shape);
-            const std::size_t w_n = shape_numel(weight_shape);
-            const auto& cb = std::get<CpuStorage>(bias);
-            const bool has_bias = cb.ptr != nullptr && cb.nbytes > 0;
-            const Storage wide =
-                linear(Storage{detail::widen_half(std::get<CpuStorage>(x), x_n)},
-                       Storage{detail::widen_half(std::get<CpuStorage>(weight), w_n)},
-                       has_bias ? Storage{detail::widen_half(cb, cb.nbytes / sizeof(std::uint16_t))}
-                                : bias,
-                       x_shape, weight_shape, out_shape, Dtype::F32);
-            return detail::narrow_half(wide, shape_numel(out_shape), dt);
-        }
-        const auto [M, K] = flatten_linear_x(x_shape);
-        const std::size_t N = static_cast<std::size_t>(weight_shape[0]);
-        CpuStorage out{allocate_aligned_bytes(M * N * dtype_size(dt), Device::CPU),
-                       M * N * dtype_size(dt), dt};
-        if (M > 0 && N > 0 && K > 0) {
-            MatmulOpts opts;
-            opts.transA = false;
-            opts.transB = true;
-            opts.M = static_cast<int>(M);
-            opts.K = static_cast<int>(K);
-            opts.N = static_cast<int>(N);
-            opts.batch = 1;
-            out = std::get<CpuStorage>(matmul(x, weight, opts, dt));
-        } else if (out.nbytes) {
-            std::memset(out.ptr.get(), 0, out.nbytes);
-        }
-        if (M > 0 && N > 0)
-            add_linear_bias(out, std::get<CpuStorage>(bias), M, N, dt);
-        (void)out_shape;
-        return Storage{std::move(out)};
-    }
+                   Dtype dt) override;
 
     std::vector<Storage> linear_backward(const Storage& grad,
                                          const Storage& x,
@@ -4923,51 +698,7 @@ public:
                                          const Shape& x_shape,
                                          const Shape& weight_shape,
                                          const Shape& bias_shape,
-                                         Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(linear_backward(detail::as_f32(grad), detail::as_f32(x),
-                                                       detail::as_f32(weight), x_shape,
-                                                       weight_shape, bias_shape, Dtype::F32),
-                                       dt);
-        const auto [M, K] = flatten_linear_x(x_shape);
-        const std::size_t N = static_cast<std::size_t>(weight_shape[0]);
-        const std::size_t elem = dtype_size(dt);
-        CpuStorage dx{allocate_aligned_bytes(M * K * elem, Device::CPU), M * K * elem, dt};
-        CpuStorage dW{allocate_aligned_bytes(N * K * elem, Device::CPU), N * K * elem, dt};
-        CpuStorage db{allocate_aligned_bytes(shape_numel(bias_shape) * elem, Device::CPU),
-                      shape_numel(bias_shape) * elem, dt};
-
-        if (M > 0 && N > 0 && K > 0) {
-            MatmulOpts dx_opts;
-            dx_opts.M = static_cast<int>(M);
-            dx_opts.K = static_cast<int>(N);
-            dx_opts.N = static_cast<int>(K);
-            dx_opts.batch = 1;
-            dx = std::get<CpuStorage>(matmul(grad, weight, dx_opts, dt));
-
-            MatmulOpts dW_opts;
-            dW_opts.transA = true;
-            dW_opts.M = static_cast<int>(N);
-            dW_opts.K = static_cast<int>(M);
-            dW_opts.N = static_cast<int>(K);
-            dW_opts.batch = 1;
-            dW = std::get<CpuStorage>(matmul(grad, x, dW_opts, dt));
-
-            sum_linear_rows(std::get<CpuStorage>(grad), db, M, N, dt);
-        } else {
-            if (dx.nbytes)
-                std::memset(dx.ptr.get(), 0, dx.nbytes);
-            if (dW.nbytes)
-                std::memset(dW.ptr.get(), 0, dW.nbytes);
-            if (db.nbytes)
-                std::memset(db.ptr.get(), 0, db.nbytes);
-        }
-        return {Storage{std::move(dx)}, Storage{std::move(dW)}, Storage{std::move(db)}};
-    }
+                                         Dtype dt) override;
 
     StoragePair rms_norm_forward(const Storage& x,
                                  const Storage& gamma,
@@ -4975,44 +706,7 @@ public:
                                  std::size_t normalized_size,
                                  double eps,
                                  const Shape& p5_,
-                                 Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(rms_norm_forward(detail::as_f32(x), detail::as_f32(gamma),
-                                                        outer, normalized_size, eps, p5_,
-                                                        Dtype::F32),
-                                       dt);
-        const std::size_t y_nbytes = outer * normalized_size * dtype_size(dt);
-        const std::size_t rstd_nbytes = outer * dtype_size(dt);
-        auto y_ptr = allocate_aligned_bytes(y_nbytes, Device::CPU);
-        auto rstd_ptr = allocate_aligned_bytes(rstd_nbytes, Device::CPU);
-        const auto& x_cpu = std::get<CpuStorage>(x);
-        const auto& g_cpu = std::get<CpuStorage>(gamma);
-
-        if (outer * normalized_size > 0) {
-            if (dt == Dtype::F32) {
-                cpu::rms_norm_forward_f32(reinterpret_cast<const float*>(x_cpu.ptr.get()),
-                                          reinterpret_cast<const float*>(g_cpu.ptr.get()),
-                                          reinterpret_cast<float*>(y_ptr.get()),
-                                          reinterpret_cast<float*>(rstd_ptr.get()), outer,
-                                          normalized_size, eps);
-            } else if (dt == Dtype::F64) {
-                cpu::rms_norm_forward_f64(reinterpret_cast<const double*>(x_cpu.ptr.get()),
-                                          reinterpret_cast<const double*>(g_cpu.ptr.get()),
-                                          reinterpret_cast<double*>(y_ptr.get()),
-                                          reinterpret_cast<double*>(rstd_ptr.get()), outer,
-                                          normalized_size, eps);
-            } else {
-                ErrorBuilder("cpu_backend::rms_norm_forward")
-                    .not_implemented("dtype not supported");
-            }
-        }
-        return {Storage{CpuStorage{y_ptr, y_nbytes, dt}},
-                Storage{CpuStorage{rstd_ptr, rstd_nbytes, dt}}};
-    }
+                                 Dtype dt) override;
 
     StoragePair rms_norm_backward(const Storage& x,
                                   const Storage& gamma,
@@ -5022,56 +716,7 @@ public:
                                   std::size_t normalized_size,
                                   const Shape& p6_,
                                   const Shape& p7_,
-                                  Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(rms_norm_backward(detail::as_f32(x), detail::as_f32(gamma),
-                                                         detail::as_f32(saved_rstd),
-                                                         detail::as_f32(grad), outer,
-                                                         normalized_size, p6_, p7_, Dtype::F32),
-                                       dt);
-        const std::size_t dx_nbytes = outer * normalized_size * dtype_size(dt);
-        const std::size_t dgamma_nbytes = normalized_size * dtype_size(dt);
-        auto dx_ptr = allocate_aligned_bytes(dx_nbytes, Device::CPU);
-        auto dgamma_ptr = allocate_aligned_bytes(dgamma_nbytes, Device::CPU);
-
-        if (outer * normalized_size > 0) {
-            const auto& x_cpu = std::get<CpuStorage>(x);
-            const auto& gamma_cpu = std::get<CpuStorage>(gamma);
-            const auto& rstd_cpu = std::get<CpuStorage>(saved_rstd);
-            const auto& grad_cpu = std::get<CpuStorage>(grad);
-            if (dt == Dtype::F32) {
-                cpu::rms_norm_backward_f32(reinterpret_cast<const float*>(x_cpu.ptr.get()),
-                                           reinterpret_cast<const float*>(gamma_cpu.ptr.get()),
-                                           reinterpret_cast<const float*>(rstd_cpu.ptr.get()),
-                                           reinterpret_cast<const float*>(grad_cpu.ptr.get()),
-                                           reinterpret_cast<float*>(dx_ptr.get()),
-                                           reinterpret_cast<float*>(dgamma_ptr.get()), outer,
-                                           normalized_size);
-            } else if (dt == Dtype::F64) {
-                cpu::rms_norm_backward_f64(reinterpret_cast<const double*>(x_cpu.ptr.get()),
-                                           reinterpret_cast<const double*>(gamma_cpu.ptr.get()),
-                                           reinterpret_cast<const double*>(rstd_cpu.ptr.get()),
-                                           reinterpret_cast<const double*>(grad_cpu.ptr.get()),
-                                           reinterpret_cast<double*>(dx_ptr.get()),
-                                           reinterpret_cast<double*>(dgamma_ptr.get()), outer,
-                                           normalized_size);
-            } else {
-                ErrorBuilder("cpu_backend::rms_norm_backward")
-                    .not_implemented("dtype not supported");
-            }
-        } else {
-            if (dx_nbytes)
-                std::memset(dx_ptr.get(), 0, dx_nbytes);
-            if (dgamma_nbytes)
-                std::memset(dgamma_ptr.get(), 0, dgamma_nbytes);
-        }
-        return {Storage{CpuStorage{dx_ptr, dx_nbytes, dt}},
-                Storage{CpuStorage{dgamma_ptr, dgamma_nbytes, dt}}};
-    }
+                                  Dtype dt) override;
 
     std::vector<Storage> layer_norm_forward(const Storage& x,
                                             const Storage& gamma,
@@ -5080,50 +725,7 @@ public:
                                             std::size_t normalized_size,
                                             double eps,
                                             const Shape& p6_,
-                                            Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(layer_norm_forward(detail::as_f32(x), detail::as_f32(gamma),
-                                                          detail::as_f32(beta), outer,
-                                                          normalized_size, eps, p6_, Dtype::F32),
-                                       dt);
-        const std::size_t y_nbytes = outer * normalized_size * dtype_size(dt);
-        const std::size_t saved_nbytes = outer * dtype_size(dt);
-        auto y_ptr = allocate_aligned_bytes(y_nbytes, Device::CPU);
-        auto mean_ptr = allocate_aligned_bytes(saved_nbytes, Device::CPU);
-        auto rstd_ptr = allocate_aligned_bytes(saved_nbytes, Device::CPU);
-        const auto& x_cpu = std::get<CpuStorage>(x);
-        const auto& g_cpu = std::get<CpuStorage>(gamma);
-        const auto& b_cpu = std::get<CpuStorage>(beta);
-
-        if (outer * normalized_size > 0) {
-            if (dt == Dtype::F32) {
-                cpu::layer_norm_forward_f32(
-                    reinterpret_cast<const float*>(x_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(g_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(b_cpu.ptr.get()),
-                    reinterpret_cast<float*>(y_ptr.get()), reinterpret_cast<float*>(mean_ptr.get()),
-                    reinterpret_cast<float*>(rstd_ptr.get()), outer, normalized_size, eps);
-            } else if (dt == Dtype::F64) {
-                cpu::layer_norm_forward_f64(reinterpret_cast<const double*>(x_cpu.ptr.get()),
-                                            reinterpret_cast<const double*>(g_cpu.ptr.get()),
-                                            reinterpret_cast<const double*>(b_cpu.ptr.get()),
-                                            reinterpret_cast<double*>(y_ptr.get()),
-                                            reinterpret_cast<double*>(mean_ptr.get()),
-                                            reinterpret_cast<double*>(rstd_ptr.get()), outer,
-                                            normalized_size, eps);
-            } else {
-                ErrorBuilder("cpu_backend::layer_norm_forward")
-                    .not_implemented("dtype not supported");
-            }
-        }
-        return {Storage{CpuStorage{y_ptr, y_nbytes, dt}},
-                Storage{CpuStorage{mean_ptr, saved_nbytes, dt}},
-                Storage{CpuStorage{rstd_ptr, saved_nbytes, dt}}};
-    }
+                                            Dtype dt) override;
 
     std::vector<Storage> layer_norm_backward(const Storage& x,
                                              const Storage& gamma,
@@ -5135,66 +737,7 @@ public:
                                              const Shape& p7_,
                                              const Shape& p8_,
                                              const Shape& p9_,
-                                             Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                layer_norm_backward(detail::as_f32(x), detail::as_f32(gamma),
-                                    detail::as_f32(saved_mean), detail::as_f32(saved_rstd),
-                                    detail::as_f32(grad), outer, normalized_size, p7_, p8_, p9_,
-                                    Dtype::F32),
-                dt);
-        const std::size_t dx_nbytes = outer * normalized_size * dtype_size(dt);
-        const std::size_t param_nbytes = normalized_size * dtype_size(dt);
-        auto dx_ptr = allocate_aligned_bytes(dx_nbytes, Device::CPU);
-        auto dgamma_ptr = allocate_aligned_bytes(param_nbytes, Device::CPU);
-        auto dbeta_ptr = allocate_aligned_bytes(param_nbytes, Device::CPU);
-
-        if (outer * normalized_size > 0) {
-            const auto& x_cpu = std::get<CpuStorage>(x);
-            const auto& gamma_cpu = std::get<CpuStorage>(gamma);
-            const auto& mean_cpu = std::get<CpuStorage>(saved_mean);
-            const auto& rstd_cpu = std::get<CpuStorage>(saved_rstd);
-            const auto& g_cpu = std::get<CpuStorage>(grad);
-            if (dt == Dtype::F32) {
-                cpu::layer_norm_backward_f32(reinterpret_cast<const float*>(x_cpu.ptr.get()),
-                                             reinterpret_cast<const float*>(gamma_cpu.ptr.get()),
-                                             reinterpret_cast<const float*>(mean_cpu.ptr.get()),
-                                             reinterpret_cast<const float*>(rstd_cpu.ptr.get()),
-                                             reinterpret_cast<const float*>(g_cpu.ptr.get()),
-                                             reinterpret_cast<float*>(dx_ptr.get()),
-                                             reinterpret_cast<float*>(dgamma_ptr.get()),
-                                             reinterpret_cast<float*>(dbeta_ptr.get()), outer,
-                                             normalized_size);
-            } else if (dt == Dtype::F64) {
-                cpu::layer_norm_backward_f64(reinterpret_cast<const double*>(x_cpu.ptr.get()),
-                                             reinterpret_cast<const double*>(gamma_cpu.ptr.get()),
-                                             reinterpret_cast<const double*>(mean_cpu.ptr.get()),
-                                             reinterpret_cast<const double*>(rstd_cpu.ptr.get()),
-                                             reinterpret_cast<const double*>(g_cpu.ptr.get()),
-                                             reinterpret_cast<double*>(dx_ptr.get()),
-                                             reinterpret_cast<double*>(dgamma_ptr.get()),
-                                             reinterpret_cast<double*>(dbeta_ptr.get()), outer,
-                                             normalized_size);
-            } else {
-                ErrorBuilder("cpu_backend::layer_norm_backward")
-                    .not_implemented("dtype not supported");
-            }
-        } else {
-            if (dx_nbytes)
-                std::memset(dx_ptr.get(), 0, dx_nbytes);
-            if (param_nbytes) {
-                std::memset(dgamma_ptr.get(), 0, param_nbytes);
-                std::memset(dbeta_ptr.get(), 0, param_nbytes);
-            }
-        }
-        return {Storage{CpuStorage{dx_ptr, dx_nbytes, dt}},
-                Storage{CpuStorage{dgamma_ptr, param_nbytes, dt}},
-                Storage{CpuStorage{dbeta_ptr, param_nbytes, dt}}};
-    }
+                                             Dtype dt) override;
 
     std::vector<Storage> batch_norm_forward(const Storage& x,
                                             const Storage& gamma,
@@ -5205,54 +748,7 @@ public:
                                             int p6_,
                                             double eps,
                                             const Shape& p8_,
-                                            Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(batch_norm_forward(detail::as_f32(x), detail::as_f32(gamma),
-                                                          detail::as_f32(beta), batch, channels,
-                                                          spatial, p6_, eps, p8_, Dtype::F32),
-                                       dt);
-        const std::size_t total = static_cast<std::size_t>(batch) * channels * spatial;
-        auto y_ptr = allocate_aligned_bytes(total * dtype_size(dt), Device::CPU);
-        auto mean_ptr = allocate_aligned_bytes(static_cast<std::size_t>(channels) * dtype_size(dt),
-                                               Device::CPU);
-        auto rstd_ptr = allocate_aligned_bytes(static_cast<std::size_t>(channels) * dtype_size(dt),
-                                               Device::CPU);
-        if (total > 0) {
-            const auto& x_cpu = std::get<CpuStorage>(x);
-            const auto& g_cpu = std::get<CpuStorage>(gamma);
-            const auto& b_cpu = std::get<CpuStorage>(beta);
-            if (dt == Dtype::F32) {
-                batch_norm_forward_f32_fast(
-                    reinterpret_cast<const float*>(x_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(g_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(b_cpu.ptr.get()),
-                    reinterpret_cast<float*>(y_ptr.get()), reinterpret_cast<float*>(mean_ptr.get()),
-                    reinterpret_cast<float*>(rstd_ptr.get()), batch, channels, spatial, eps);
-            } else if (dt == Dtype::F64) {
-                batch_norm_forward_typed<double>(reinterpret_cast<const double*>(x_cpu.ptr.get()),
-                                                 reinterpret_cast<const double*>(g_cpu.ptr.get()),
-                                                 reinterpret_cast<const double*>(b_cpu.ptr.get()),
-                                                 reinterpret_cast<double*>(y_ptr.get()),
-                                                 reinterpret_cast<double*>(mean_ptr.get()),
-                                                 reinterpret_cast<double*>(rstd_ptr.get()), batch,
-                                                 channels, spatial, eps);
-            } else {
-                ErrorBuilder("cpu_backend::batch_norm_forward")
-                    .not_implemented("dtype not supported");
-            }
-        }
-        const std::size_t param_nbytes = static_cast<std::size_t>(channels) * dtype_size(dt);
-        // 3.4+ Phase A.4: 4th slot is empty — CPU backward recomputes
-        // xnorm inline (per-element loop cost is negligible).  Only the
-        // MLX-path GPU backend benefits from saving the full xnorm.
-        return {Storage{CpuStorage{y_ptr, total * dtype_size(dt), dt}},
-                Storage{CpuStorage{mean_ptr, param_nbytes, dt}},
-                Storage{CpuStorage{rstd_ptr, param_nbytes, dt}}, Storage{CpuStorage{}}};
-    }
+                                            Dtype dt) override;
 
     std::vector<Storage> batch_norm_backward(const Storage& x,
                                              const Storage& gamma,
@@ -5266,72 +762,7 @@ public:
                                              int p9_,
                                              const Shape& p10_,
                                              Dtype dt,
-                                             double eps_unused) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                batch_norm_backward(detail::as_f32(x), detail::as_f32(gamma),
-                                    detail::as_f32(saved_mean), detail::as_f32(saved_rstd),
-                                    detail::as_f32(saved_xnorm), detail::as_f32(grad), batch,
-                                    channels, spatial, p9_, p10_, Dtype::F32, eps_unused),
-                dt);
-        // CPU backward uses saved_rstd directly via the chain-rule formula;
-        // no need for eps reconstruction.  The signature carries eps for
-        // GPU backend symmetry.
-        // 3.4+ Phase A.4: CPU path ignores saved_xnorm — the typed C kernel
-        // recomputes inline since the inner loop's per-element xnorm is free.
-        (void)eps_unused;
-        (void)saved_xnorm;
-        const std::size_t total = static_cast<std::size_t>(batch) * channels * spatial;
-        const std::size_t param_nbytes = static_cast<std::size_t>(channels) * dtype_size(dt);
-        auto dx_ptr = allocate_aligned_bytes(total * dtype_size(dt), Device::CPU);
-        auto dgamma_ptr = allocate_aligned_bytes(param_nbytes, Device::CPU);
-        auto dbeta_ptr = allocate_aligned_bytes(param_nbytes, Device::CPU);
-        if (dx_ptr && total > 0) {
-            const auto& x_cpu = std::get<CpuStorage>(x);
-            const auto& gamma_cpu = std::get<CpuStorage>(gamma);
-            const auto& mean_cpu = std::get<CpuStorage>(saved_mean);
-            const auto& rstd_cpu = std::get<CpuStorage>(saved_rstd);
-            const auto& g_cpu = std::get<CpuStorage>(grad);
-            if (dt == Dtype::F32) {
-                batch_norm_backward_typed<float>(
-                    reinterpret_cast<const float*>(x_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(gamma_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(mean_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(rstd_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(g_cpu.ptr.get()),
-                    reinterpret_cast<float*>(dx_ptr.get()),
-                    reinterpret_cast<float*>(dgamma_ptr.get()),
-                    reinterpret_cast<float*>(dbeta_ptr.get()), batch, channels, spatial);
-            } else if (dt == Dtype::F64) {
-                batch_norm_backward_typed<double>(
-                    reinterpret_cast<const double*>(x_cpu.ptr.get()),
-                    reinterpret_cast<const double*>(gamma_cpu.ptr.get()),
-                    reinterpret_cast<const double*>(mean_cpu.ptr.get()),
-                    reinterpret_cast<const double*>(rstd_cpu.ptr.get()),
-                    reinterpret_cast<const double*>(g_cpu.ptr.get()),
-                    reinterpret_cast<double*>(dx_ptr.get()),
-                    reinterpret_cast<double*>(dgamma_ptr.get()),
-                    reinterpret_cast<double*>(dbeta_ptr.get()), batch, channels, spatial);
-            } else {
-                ErrorBuilder("cpu_backend::batch_norm_backward")
-                    .not_implemented("dtype not supported");
-            }
-        } else {
-            if (total)
-                std::memset(dx_ptr.get(), 0, total * dtype_size(dt));
-            if (param_nbytes) {
-                std::memset(dgamma_ptr.get(), 0, param_nbytes);
-                std::memset(dbeta_ptr.get(), 0, param_nbytes);
-            }
-        }
-        return {Storage{CpuStorage{dx_ptr, total * dtype_size(dt), dt}},
-                Storage{CpuStorage{dgamma_ptr, param_nbytes, dt}},
-                Storage{CpuStorage{dbeta_ptr, param_nbytes, dt}}};
-    }
+                                             double eps_unused) override;
 
     std::vector<Storage> group_norm_forward(const Storage& x,
                                             const Storage& gamma,
@@ -5343,50 +774,7 @@ public:
                                             const std::vector<int>& p7_,
                                             double eps,
                                             const Shape& p9_,
-                                            Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                group_norm_forward(detail::as_f32(x), detail::as_f32(gamma), detail::as_f32(beta),
-                                   batch, channels, spatial, groups, p7_, eps, p9_, Dtype::F32),
-                dt);
-        const std::size_t total = static_cast<std::size_t>(batch) * channels * spatial;
-        const std::size_t saved_numel = static_cast<std::size_t>(batch) * groups;
-        auto y_ptr = allocate_aligned_bytes(total * dtype_size(dt), Device::CPU);
-        auto mean_ptr = allocate_aligned_bytes(saved_numel * dtype_size(dt), Device::CPU);
-        auto rstd_ptr = allocate_aligned_bytes(saved_numel * dtype_size(dt), Device::CPU);
-        if (total > 0) {
-            const auto& x_cpu = std::get<CpuStorage>(x);
-            const auto& g_cpu = std::get<CpuStorage>(gamma);
-            const auto& b_cpu = std::get<CpuStorage>(beta);
-            if (dt == Dtype::F32) {
-                group_norm_forward_typed<float>(reinterpret_cast<const float*>(x_cpu.ptr.get()),
-                                                reinterpret_cast<const float*>(g_cpu.ptr.get()),
-                                                reinterpret_cast<const float*>(b_cpu.ptr.get()),
-                                                reinterpret_cast<float*>(y_ptr.get()),
-                                                reinterpret_cast<float*>(mean_ptr.get()),
-                                                reinterpret_cast<float*>(rstd_ptr.get()), batch,
-                                                channels, spatial, groups, eps);
-            } else if (dt == Dtype::F64) {
-                group_norm_forward_typed<double>(reinterpret_cast<const double*>(x_cpu.ptr.get()),
-                                                 reinterpret_cast<const double*>(g_cpu.ptr.get()),
-                                                 reinterpret_cast<const double*>(b_cpu.ptr.get()),
-                                                 reinterpret_cast<double*>(y_ptr.get()),
-                                                 reinterpret_cast<double*>(mean_ptr.get()),
-                                                 reinterpret_cast<double*>(rstd_ptr.get()), batch,
-                                                 channels, spatial, groups, eps);
-            } else {
-                ErrorBuilder("cpu_backend::group_norm_forward")
-                    .not_implemented("dtype not supported");
-            }
-        }
-        return {Storage{CpuStorage{y_ptr, total * dtype_size(dt), dt}},
-                Storage{CpuStorage{mean_ptr, saved_numel * dtype_size(dt), dt}},
-                Storage{CpuStorage{rstd_ptr, saved_numel * dtype_size(dt), dt}}};
-    }
+                                            Dtype dt) override;
 
     std::vector<Storage> group_norm_backward(const Storage& x,
                                              const Storage& gamma,
@@ -5399,354 +787,36 @@ public:
                                              int groups,
                                              const std::vector<int>& p9_,
                                              const Shape& p10_,
-                                             Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(group_norm_backward(detail::as_f32(x), detail::as_f32(gamma),
-                                                           detail::as_f32(saved_mean),
-                                                           detail::as_f32(saved_rstd),
-                                                           detail::as_f32(grad), batch, channels,
-                                                           spatial, groups, p9_, p10_, Dtype::F32),
-                                       dt);
-        const std::size_t total = static_cast<std::size_t>(batch) * channels * spatial;
-        const std::size_t param_nbytes = static_cast<std::size_t>(channels) * dtype_size(dt);
-        auto dx_ptr = allocate_aligned_bytes(total * dtype_size(dt), Device::CPU);
-        auto dgamma_ptr = allocate_aligned_bytes(param_nbytes, Device::CPU);
-        auto dbeta_ptr = allocate_aligned_bytes(param_nbytes, Device::CPU);
-        if (dx_ptr && total > 0) {
-            const auto& x_cpu = std::get<CpuStorage>(x);
-            const auto& gamma_cpu = std::get<CpuStorage>(gamma);
-            const auto& mean_cpu = std::get<CpuStorage>(saved_mean);
-            const auto& rstd_cpu = std::get<CpuStorage>(saved_rstd);
-            const auto& g_cpu = std::get<CpuStorage>(grad);
-            if (dt == Dtype::F32) {
-                group_norm_backward_typed<float>(
-                    reinterpret_cast<const float*>(x_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(gamma_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(mean_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(rstd_cpu.ptr.get()),
-                    reinterpret_cast<const float*>(g_cpu.ptr.get()),
-                    reinterpret_cast<float*>(dx_ptr.get()),
-                    reinterpret_cast<float*>(dgamma_ptr.get()),
-                    reinterpret_cast<float*>(dbeta_ptr.get()), batch, channels, spatial, groups);
-            } else if (dt == Dtype::F64) {
-                group_norm_backward_typed<double>(
-                    reinterpret_cast<const double*>(x_cpu.ptr.get()),
-                    reinterpret_cast<const double*>(gamma_cpu.ptr.get()),
-                    reinterpret_cast<const double*>(mean_cpu.ptr.get()),
-                    reinterpret_cast<const double*>(rstd_cpu.ptr.get()),
-                    reinterpret_cast<const double*>(g_cpu.ptr.get()),
-                    reinterpret_cast<double*>(dx_ptr.get()),
-                    reinterpret_cast<double*>(dgamma_ptr.get()),
-                    reinterpret_cast<double*>(dbeta_ptr.get()), batch, channels, spatial, groups);
-            } else {
-                ErrorBuilder("cpu_backend::group_norm_backward")
-                    .not_implemented("dtype not supported");
-            }
-        } else if (param_nbytes) {
-            std::memset(dgamma_ptr.get(), 0, param_nbytes);
-            std::memset(dbeta_ptr.get(), 0, param_nbytes);
-        }
-        return {Storage{CpuStorage{dx_ptr, total * dtype_size(dt), dt}},
-                Storage{CpuStorage{dgamma_ptr, param_nbytes, dt}},
-                Storage{CpuStorage{dbeta_ptr, param_nbytes, dt}}};
-    }
+                                             Dtype dt) override;
 
     Storage linalg_norm(const Storage& a,
                         const Shape& shape,
                         double ord,
                         const std::vector<int>& axes,
                         bool keepdims,
-                        Dtype dt) override {
-        Shape out_shape = reduced_norm_shape(shape, axes, keepdims);
-        const std::size_t out_nbytes = shape_numel(out_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-        const auto& cs = std::get<CpuStorage>(a);
-        if (dt == Dtype::F32) {
-            norm_typed(reinterpret_cast<const float*>(cs.ptr.get()),
-                       reinterpret_cast<float*>(ptr.get()), shape, axes, ord, out_shape);
-        } else if (dt == Dtype::F64) {
-            norm_typed(reinterpret_cast<const double*>(cs.ptr.get()),
-                       reinterpret_cast<double*>(ptr.get()), shape, axes, ord, out_shape);
-        } else {
-            ErrorBuilder("cpu_backend::linalg_norm").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, out_nbytes, dt}};
-    }
+                        Dtype dt) override;
 
-    Storage linalg_cholesky(const Storage& a, const Shape& shape, bool upper, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        auto ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
-        if (cs.nbytes > 0)
-            std::memcpy(ptr.get(), cs.ptr.get(), cs.nbytes);
-        const int n = static_cast<int>(shape[shape.size() - 1]);
-        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
-        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
-        const bool lower = !upper;
-        int info = 0;
-        if (dt == Dtype::F32) {
-            auto* p = reinterpret_cast<float*>(ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                cpu::lapack_cholesky_f32(p + b * per_mat, n, lower, &info);
-                check_lapack_info(info, "cholesky", b, batch);
-            }
-        } else if (dt == Dtype::F64) {
-            auto* p = reinterpret_cast<double*>(ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                cpu::lapack_cholesky_f64(p + b * per_mat, n, lower, &info);
-                check_lapack_info(info, "cholesky", b, batch);
-            }
-        } else {
-            ErrorBuilder("cpu_backend::linalg_cholesky").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, cs.nbytes, dt}};
-    }
+    Storage linalg_cholesky(const Storage& a, const Shape& shape, bool upper, Dtype dt) override;
 
-    Storage linalg_inv(const Storage& a, const Shape& shape, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        auto ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
-        if (cs.nbytes > 0)
-            std::memcpy(ptr.get(), cs.ptr.get(), cs.nbytes);
-        const int n = static_cast<int>(shape[shape.size() - 1]);
-        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
-        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
-        int info = 0;
-        if (dt == Dtype::F32) {
-            auto* p = reinterpret_cast<float*>(ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                cpu::lapack_inv_f32(p + b * per_mat, n, &info);
-                check_lapack_info(info, "inv", b, batch);
-            }
-        } else if (dt == Dtype::F64) {
-            auto* p = reinterpret_cast<double*>(ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                cpu::lapack_inv_f64(p + b * per_mat, n, &info);
-                check_lapack_info(info, "inv", b, batch);
-            }
-        } else {
-            ErrorBuilder("cpu_backend::linalg_inv").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, cs.nbytes, dt}};
-    }
+    Storage linalg_inv(const Storage& a, const Shape& shape, Dtype dt) override;
 
     Storage linalg_solve(const Storage& a,
                          const Storage& b,
                          const Shape& a_shape,
                          const Shape& b_shape,
-                         Dtype dt) override {
-        const auto& a_cpu = std::get<CpuStorage>(a);
-        const auto& b_cpu = std::get<CpuStorage>(b);
-        auto out_ptr = allocate_aligned_bytes(b_cpu.nbytes, Device::CPU);
-        if (b_cpu.nbytes > 0)
-            std::memcpy(out_ptr.get(), b_cpu.ptr.get(), b_cpu.nbytes);
+                         Dtype dt) override;
 
-        const int n = static_cast<int>(a_shape[a_shape.size() - 1]);
-        const bool b_is_vec = (b_shape.size() == a_shape.size() - 1);
-        const int nrhs = b_is_vec ? 1 : static_cast<int>(b_shape[b_shape.size() - 1]);
-        const std::int64_t batch = leading_matrix_batch_count(a_shape, 2);
-        const std::size_t a_per = static_cast<std::size_t>(n) * n;
-        const std::size_t b_per = static_cast<std::size_t>(n) * nrhs;
-        int info = 0;
-        if (dt == Dtype::F32) {
-            std::vector<float> A_local(a_per);
-            const auto* a_p = reinterpret_cast<const float*>(a_cpu.ptr.get());
-            auto* x_p = reinterpret_cast<float*>(out_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi) {
-                std::memcpy(A_local.data(), a_p + bi * a_per, a_per * sizeof(float));
-                cpu::lapack_solve_f32(A_local.data(), x_p + bi * b_per, n, nrhs, &info);
-                check_lapack_info(info, "solve", bi, batch);
-            }
-        } else if (dt == Dtype::F64) {
-            std::vector<double> A_local(a_per);
-            const auto* a_p = reinterpret_cast<const double*>(a_cpu.ptr.get());
-            auto* x_p = reinterpret_cast<double*>(out_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi) {
-                std::memcpy(A_local.data(), a_p + bi * a_per, a_per * sizeof(double));
-                cpu::lapack_solve_f64(A_local.data(), x_p + bi * b_per, n, nrhs, &info);
-                check_lapack_info(info, "solve", bi, batch);
-            }
-        } else {
-            ErrorBuilder("cpu_backend::linalg_solve").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{out_ptr, b_cpu.nbytes, dt}};
-    }
+    Storage linalg_matrix_power(const Storage& a, const Shape& shape, int power, Dtype dt) override;
 
-    Storage
-    linalg_matrix_power(const Storage& a, const Shape& shape, int power, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        auto ptr = allocate_aligned_bytes(cs.nbytes, Device::CPU);
-        const int n = static_cast<int>(shape[shape.size() - 1]);
-        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
-        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
-        const int reps = std::abs(power);
+    Storage linalg_pinv(const Storage& a, const Shape& shape, Dtype dt) override;
 
-        auto run = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const T* in_p = reinterpret_cast<const T*>(cs.ptr.get());
-            T* out_p = reinterpret_cast<T*>(ptr.get());
-            std::vector<T> base(per_mat), tmp(per_mat);
-            for (std::int64_t b = 0; b < batch; ++b) {
-                T* result = out_p + b * per_mat;
-                if (power == 0) {
-                    set_matrix_identity(result, n);
-                    continue;
-                }
-                std::memcpy(base.data(), in_p + b * per_mat, per_mat * sizeof(T));
-                if (power < 0) {
-                    int info = 0;
-                    if constexpr (std::is_same_v<T, float>)
-                        cpu::lapack_inv_f32(base.data(), n, &info);
-                    else
-                        cpu::lapack_inv_f64(base.data(), n, &info);
-                    check_lapack_info(info, "matrix_power");
-                }
-                std::memcpy(result, base.data(), per_mat * sizeof(T));
-                for (int i = 1; i < reps; ++i) {
-                    if constexpr (std::is_same_v<T, float>)
-                        cpu::sgemm(false, false, n, n, n, 1.0f, result, n, base.data(), n, 0.0f,
-                                   tmp.data(), n);
-                    else
-                        cpu::dgemm(false, false, n, n, n, 1.0, result, n, base.data(), n, 0.0,
-                                   tmp.data(), n);
-                    std::memcpy(result, tmp.data(), per_mat * sizeof(T));
-                }
-            }
-        };
-
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("cpu_backend::linalg_matrix_power").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, cs.nbytes, dt}};
-    }
-
-    Storage linalg_pinv(const Storage& a, const Shape& shape, Dtype dt) override {
-        const int m = static_cast<int>(shape[shape.size() - 2]);
-        const int n = static_cast<int>(shape[shape.size() - 1]);
-        Shape out_shape(shape.begin(), shape.end() - 2);
-        out_shape.push_back(n);
-        out_shape.push_back(m);
-
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t out_nbytes = shape_numel(out_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
-        const std::size_t in_per = static_cast<std::size_t>(m) * n;
-        const std::size_t out_per = static_cast<std::size_t>(n) * m;
-
-        if (dt == Dtype::F32) {
-            const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
-            auto* out_p = reinterpret_cast<float*>(ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b)
-                pinv_one(in_p + b * in_per, m, n, out_p + b * out_per);
-        } else if (dt == Dtype::F64) {
-            const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
-            auto* out_p = reinterpret_cast<double*>(ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b)
-                pinv_one(in_p + b * in_per, m, n, out_p + b * out_per);
-        } else {
-            ErrorBuilder("cpu_backend::linalg_pinv").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, out_nbytes, dt}};
-    }
-
-    Storage linalg_det(const Storage& a, const Shape& shape, Dtype dt) override {
-        const int n = static_cast<int>(shape[shape.size() - 1]);
-        Shape out_shape(shape.begin(), shape.end() - 2);
-        const std::size_t out_nbytes = shape_numel(out_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(out_nbytes, Device::CPU);
-
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
-        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
-        std::vector<int> ipiv(n);
-        int info = 0;
-
-        // A singular matrix (info > 0) still factors to the end, with an exact
-        // zero on U's diagonal: the product through it is a signed zero, as on
-        // Metal, where a literal 0 was not.  (The reference factors Aᵀ, so an
-        // asymmetric singular matrix can take the other sign there.)
-        if (dt == Dtype::F32) {
-            std::vector<float> l(per_mat), u(per_mat);
-            const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
-            auto* out_p = reinterpret_cast<float*>(ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                cpu::lapack_lu_f32(in_p + b * per_mat, n, ipiv.data(), l.data(), u.data(), &info);
-                if (info < 0)
-                    check_lapack_info(info, "det");
-                float det = ipiv_sign(ipiv.data(), n);
-                for (int i = 0; i < n; ++i)
-                    det *= u[i * n + i];
-                out_p[b] = det;
-            }
-        } else if (dt == Dtype::F64) {
-            std::vector<double> l(per_mat), u(per_mat);
-            const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
-            auto* out_p = reinterpret_cast<double*>(ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                cpu::lapack_lu_f64(in_p + b * per_mat, n, ipiv.data(), l.data(), u.data(), &info);
-                if (info < 0)
-                    check_lapack_info(info, "det");
-                double det = ipiv_sign(ipiv.data(), n);
-                for (int i = 0; i < n; ++i)
-                    det *= u[i * n + i];
-                out_p[b] = det;
-            }
-        } else {
-            ErrorBuilder("cpu_backend::linalg_det").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, out_nbytes, dt}};
-    }
+    Storage linalg_det(const Storage& a, const Shape& shape, Dtype dt) override;
 
     StoragePair linalg_qr(const Storage& a,
                           const Shape& shape,
                           const Shape& q_shape,
                           const Shape& r_shape,
-                          Dtype dt) override {
-        const int m = static_cast<int>(shape[shape.size() - 2]);
-        const int n = static_cast<int>(shape[shape.size() - 1]);
-        const int k = std::min(m, n);
-        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
-        const std::size_t in_per = static_cast<std::size_t>(m) * n;
-        const std::size_t q_per = static_cast<std::size_t>(m) * k;
-        const std::size_t r_per = static_cast<std::size_t>(k) * n;
-
-        const std::size_t q_nbytes = shape_numel(q_shape) * dtype_size(dt);
-        const std::size_t r_nbytes = shape_numel(r_shape) * dtype_size(dt);
-        auto q_ptr = allocate_aligned_bytes(q_nbytes, Device::CPU);
-        auto r_ptr = allocate_aligned_bytes(r_nbytes, Device::CPU);
-        const auto& cs = std::get<CpuStorage>(a);
-
-        int info = 0;
-        if (dt == Dtype::F32) {
-            const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
-            auto* q_p = reinterpret_cast<float*>(q_ptr.get());
-            auto* r_p = reinterpret_cast<float*>(r_ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                cpu::lapack_qr_f32(in_p + b * in_per, m, n, q_p + b * q_per, r_p + b * r_per,
-                                   &info);
-                check_lapack_info(info, "qr");
-            }
-        } else if (dt == Dtype::F64) {
-            const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
-            auto* q_p = reinterpret_cast<double*>(q_ptr.get());
-            auto* r_p = reinterpret_cast<double*>(r_ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                cpu::lapack_qr_f64(in_p + b * in_per, m, n, q_p + b * q_per, r_p + b * r_per,
-                                   &info);
-                check_lapack_info(info, "qr");
-            }
-        } else {
-            ErrorBuilder("cpu_backend::linalg_qr").not_implemented("dtype not supported");
-        }
-
-        return {Storage{CpuStorage{q_ptr, q_nbytes, dt}}, Storage{CpuStorage{r_ptr, r_nbytes, dt}}};
-    }
+                          Dtype dt) override;
 
     // Unpack one matrix's worth of LAPACK ``?geev`` output into complex.
     //
@@ -5776,130 +846,20 @@ public:
     // out), so eigenvector j is still column j, read with stride n.
     template <typename T>
     static void
-    unpack_eig(const T* wr, const T* wi, const T* vr, int n, T* values_out, T* vectors_out) {
-        for (int j = 0; j < n; ++j) {
-            values_out[2 * j] = wr[j];
-            values_out[2 * j + 1] = wi[j];
-        }
-        if (vectors_out == nullptr)
-            return;
-
-        const auto at = [&](int i, int col) { return vr[static_cast<std::size_t>(i) * n + col]; };
-        const auto put = [&](int i, int col, T re, T im) {
-            const std::size_t k = 2 * (static_cast<std::size_t>(i) * n + col);
-            vectors_out[k] = re;
-            vectors_out[k + 1] = im;
-        };
-
-        int j = 0;
-        while (j < n) {
-            if (wi[j] == T{0}) {
-                for (int i = 0; i < n; ++i)
-                    put(i, j, at(i, j), T{0});
-                ++j;
-                continue;
-            }
-            // A conjugate pair: two real columns, four real numbers per
-            // row, becoming two complex entries that are each other's
-            // conjugate.  ``j + 1 < n`` is guaranteed by LAPACK, and
-            // checked rather than assumed because reading past the last
-            // column would be silent.
-            if (j + 1 >= n) {
-                for (int i = 0; i < n; ++i)
-                    put(i, j, at(i, j), T{0});
-                ++j;
-                continue;
-            }
-            for (int i = 0; i < n; ++i) {
-                const T re = at(i, j);
-                const T im = at(i, j + 1);
-                put(i, j, re, im);
-                put(i, j + 1, re, -im);
-            }
-            j += 2;
-        }
-    }
+    unpack_eig(const T* wr, const T* wi, const T* vr, int n, T* values_out, T* vectors_out);
 
     StoragePair linalg_eig(const Storage& a,
                            const Shape& shape,
                            const Shape& values_shape,
                            const Shape& vectors_shape,
-                           Dtype dt) override {
-        const int n = static_cast<int>(shape[shape.size() - 1]);
-        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
-        const std::size_t per_mat = static_cast<std::size_t>(n) * n;
-        const std::size_t per_w = static_cast<std::size_t>(n);
-
-        // The eigenvalues of a real matrix are complex, so the output
-        // dtype is not the input's.  ``complex_for`` keeps the lane width:
-        // an f64 matrix whose spectrum came back as complex64 would shed
-        // eight decimal digits, which is the same class of quiet loss as
-        // dropping the imaginary part outright.
-        const Dtype out_dt = complex_for(dt);
-        const std::size_t values_nbytes = shape_numel(values_shape) * dtype_size(out_dt);
-        const std::size_t vectors_nbytes = shape_numel(vectors_shape) * dtype_size(out_dt);
-        auto values_ptr = allocate_aligned_bytes(values_nbytes, Device::CPU);
-        auto vectors_ptr = allocate_aligned_bytes(vectors_nbytes, Device::CPU);
-        const auto& cs = std::get<CpuStorage>(a);
-
-        int info = 0;
-        auto run_eig = [&](auto tag, auto fn) {
-            using T = decltype(tag);
-            const auto* in_p = reinterpret_cast<const T*>(cs.ptr.get());
-            auto* w_p = reinterpret_cast<T*>(values_ptr.get());
-            auto* v_p = reinterpret_cast<T*>(vectors_ptr.get());
-            std::vector<T> wr(n), wi(n), vr(per_mat);
-            for (std::int64_t b = 0; b < batch; ++b) {
-                require_finite_eig(in_p + b * per_mat, per_mat);
-                fn(in_p + b * per_mat, n, wr.data(), wi.data(), vr.data(), &info);
-                check_lapack_info(info, "eig");
-                unpack_eig<T>(wr.data(), wi.data(), vr.data(), n, w_p + 2 * b * per_w,
-                              v_p + 2 * b * per_mat);
-            }
-        };
-        if (dt == Dtype::F32)
-            run_eig(float{}, cpu::lapack_eig_f32);
-        else if (dt == Dtype::F64)
-            run_eig(double{}, cpu::lapack_eig_f64);
-        else
-            ErrorBuilder("cpu_backend::linalg_eig").not_implemented("dtype not supported");
-
-        return {Storage{CpuStorage{values_ptr, values_nbytes, out_dt}},
-                Storage{CpuStorage{vectors_ptr, vectors_nbytes, out_dt}}};
-    }
+                           Dtype dt) override;
 
     StoragePair linalg_eigh(const Storage& a,
                             const Shape& shape,
                             const Shape& values_shape,
                             const Shape& vectors_shape,
                             Dtype dt,
-                            bool upper = false) override {
-        const int n = static_cast<int>(shape[shape.size() - 1]);
-        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
-        const std::size_t per_mat = static_cast<std::size_t>(n) * n,
-                          per_w = static_cast<std::size_t>(n);
-        auto w_cpu = alloc_cpu(shape_numel(values_shape), dt);
-        auto v_cpu = alloc_cpu(shape_numel(vectors_shape), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        const char uplo = upper ? 'U' : 'L';
-        int info = 0;
-        auto run_eigh = [&](auto tag, auto fn) {
-            using T = decltype(tag);
-            const auto* in = reinterpret_cast<const T*>(cs.ptr.get());
-            auto* wp = reinterpret_cast<T*>(w_cpu.ptr.get());
-            auto* vp = reinterpret_cast<T*>(v_cpu.ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b)
-                fn(in + b * per_mat, n, wp + b * per_w, vp + b * per_mat, &info, uplo);
-        };
-        if (dt == Dtype::F32)
-            run_eigh(float{}, cpu::lapack_eigh_f32);
-        else if (dt == Dtype::F64)
-            run_eigh(double{}, cpu::lapack_eigh_f64);
-        else
-            ErrorBuilder("cpu_backend::linalg_eigh").not_implemented("dtype not supported");
-        check_lapack_info(info, "eigh");
-        return {Storage{std::move(w_cpu)}, Storage{std::move(v_cpu)}};
-    }
+                            bool upper = false) override;
 
     std::vector<Storage> linalg_svd(const Storage& a,
                                     const Shape& shape,
@@ -5907,112 +867,11 @@ public:
                                     const Shape& u_shape,
                                     const Shape& s_shape,
                                     const Shape& vt_shape,
-                                    Dtype dt) override {
-        const int m = static_cast<int>(shape[shape.size() - 2]);
-        const int n = static_cast<int>(shape[shape.size() - 1]);
-        const int k = std::min(m, n);
-        const std::int64_t batch = leading_matrix_batch_count(shape, 2);
-        const std::size_t in_per = static_cast<std::size_t>(m) * n;
-        const std::size_t s_per = static_cast<std::size_t>(k);
-        const std::size_t u_per = static_cast<std::size_t>(m) * k;
-        const std::size_t vt_per = static_cast<std::size_t>(k) * n;
-        const std::size_t s_nbytes = shape_numel(s_shape) * dtype_size(dt);
-        auto s_ptr = allocate_aligned_bytes(s_nbytes, Device::CPU);
-        const auto& cs = std::get<CpuStorage>(a);
-
-        // A matrix holding a NaN or an infinity has an all-NaN decomposition
-        // (the reference result, and the Metal stream's).  It is not handed
-        // to LAPACK, whose gesdd rejects a NaN as an illegal argument — that
-        // used to surface as "LAPACK invalid argument", which blames the
-        // caller's argument marshalling for the caller's data.
-        if (!compute_uv) {
-            int info = 0;
-            if (dt == Dtype::F32) {
-                std::vector<float> u(u_per), vt(vt_per);
-                const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
-                auto* s_p = reinterpret_cast<float*>(s_ptr.get());
-                for (std::int64_t b = 0; b < batch; ++b) {
-                    if (!all_finite(in_p + b * in_per, in_per)) {
-                        fill_nan(s_p + b * s_per, s_per);
-                        continue;
-                    }
-                    cpu::lapack_svd_f32(in_p + b * in_per, m, n, false, u.data(), s_p + b * s_per,
-                                        vt.data(), &info);
-                    check_lapack_info(info, "svd");
-                }
-            } else if (dt == Dtype::F64) {
-                std::vector<double> u(u_per), vt(vt_per);
-                const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
-                auto* s_p = reinterpret_cast<double*>(s_ptr.get());
-                for (std::int64_t b = 0; b < batch; ++b) {
-                    if (!all_finite(in_p + b * in_per, in_per)) {
-                        fill_nan(s_p + b * s_per, s_per);
-                        continue;
-                    }
-                    cpu::lapack_svd_f64(in_p + b * in_per, m, n, false, u.data(), s_p + b * s_per,
-                                        vt.data(), &info);
-                    check_lapack_info(info, "svd");
-                }
-            } else {
-                ErrorBuilder("cpu_backend::linalg_svd").not_implemented("dtype not supported");
-            }
-            return {Storage{CpuStorage{s_ptr, s_nbytes, dt}}};
-        }
-
-        const std::size_t u_nbytes = shape_numel(u_shape) * dtype_size(dt);
-        const std::size_t vt_nbytes = shape_numel(vt_shape) * dtype_size(dt);
-        auto u_ptr = allocate_aligned_bytes(u_nbytes, Device::CPU);
-        auto vt_ptr = allocate_aligned_bytes(vt_nbytes, Device::CPU);
-        int info = 0;
-        if (dt == Dtype::F32) {
-            const auto* in_p = reinterpret_cast<const float*>(cs.ptr.get());
-            auto* u_p = reinterpret_cast<float*>(u_ptr.get());
-            auto* s_p = reinterpret_cast<float*>(s_ptr.get());
-            auto* vt_p = reinterpret_cast<float*>(vt_ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                if (!all_finite(in_p + b * in_per, in_per)) {
-                    fill_nan(u_p + b * u_per, u_per);
-                    fill_nan(s_p + b * s_per, s_per);
-                    fill_nan(vt_p + b * vt_per, vt_per);
-                    continue;
-                }
-                cpu::lapack_svd_f32(in_p + b * in_per, m, n, false, u_p + b * u_per,
-                                    s_p + b * s_per, vt_p + b * vt_per, &info);
-                check_lapack_info(info, "svd");
-            }
-        } else if (dt == Dtype::F64) {
-            const auto* in_p = reinterpret_cast<const double*>(cs.ptr.get());
-            auto* u_p = reinterpret_cast<double*>(u_ptr.get());
-            auto* s_p = reinterpret_cast<double*>(s_ptr.get());
-            auto* vt_p = reinterpret_cast<double*>(vt_ptr.get());
-            for (std::int64_t b = 0; b < batch; ++b) {
-                if (!all_finite(in_p + b * in_per, in_per)) {
-                    fill_nan(u_p + b * u_per, u_per);
-                    fill_nan(s_p + b * s_per, s_per);
-                    fill_nan(vt_p + b * vt_per, vt_per);
-                    continue;
-                }
-                cpu::lapack_svd_f64(in_p + b * in_per, m, n, false, u_p + b * u_per,
-                                    s_p + b * s_per, vt_p + b * vt_per, &info);
-                check_lapack_info(info, "svd");
-            }
-        } else {
-            ErrorBuilder("cpu_backend::linalg_svd").not_implemented("dtype not supported");
-        }
-        return {Storage{CpuStorage{u_ptr, u_nbytes, dt}}, Storage{CpuStorage{s_ptr, s_nbytes, dt}},
-                Storage{CpuStorage{vt_ptr, vt_nbytes, dt}}};
-    }
+                                    Dtype dt) override;
 
     // ``{LU, pivots, info}`` — getrf completes on a singular matrix, so its
     // ``info`` is returned, not raised (``LinalgFactor.h``).
-    std::vector<Storage> linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) override {
-        if (dt != Dtype::F32 && dt != Dtype::F64)
-            ErrorBuilder("cpu_backend::linalg_lu_factor").not_implemented("only F32/F64 supported");
-        if (shape.size() < 2)
-            ErrorBuilder("cpu_backend::linalg_lu_factor")
-                .invalid_argument("input must be at least 2-D");
-        return cpu::lu_factor(std::get<CpuStorage>(a), shape, dt);
-    }
+    std::vector<Storage> linalg_lu_factor(const Storage& a, const Shape& shape, Dtype dt) override;
 
     // Substitution through BLAS ``trsm``, not the LAPACK driver ``trtrs``.
     // ``trtrs`` checks the diagonal first and refuses a singular triangle
@@ -6026,187 +885,29 @@ public:
                                     const Shape& b_shape,
                                     bool upper,
                                     bool unitriangular,
-                                    Dtype dt) override {
-        if (dt != Dtype::F32 && dt != Dtype::F64)
-            ErrorBuilder("cpu_backend::linalg_solve_triangular").not_implemented("only F32/F64");
-        const auto& a_cpu = std::get<CpuStorage>(a);
-        const auto& b_cpu = std::get<CpuStorage>(b);
-        const int n = static_cast<int>(a_shape[a_shape.size() - 1]);
-        const bool b_is_vec = (b_shape.size() == a_shape.size() - 1);
-        const int nrhs = b_is_vec ? 1 : static_cast<int>(b_shape[b_shape.size() - 1]);
-        const std::int64_t batch = leading_matrix_batch_count(a_shape, 2);
-        const std::size_t a_per = static_cast<std::size_t>(n) * n;
-        const std::size_t b_per = static_cast<std::size_t>(n) * nrhs;
-        // trsm solves in place, so the solution starts as a copy of B.
-        auto out_ptr = allocate_aligned_bytes(b_cpu.nbytes, Device::CPU);
-        if (b_cpu.nbytes > 0)
-            std::memcpy(out_ptr.get(), b_cpu.ptr.get(), b_cpu.nbytes);
-        if (dt == Dtype::F32) {
-            const auto* a_p = reinterpret_cast<const float*>(a_cpu.ptr.get());
-            auto* x_p = reinterpret_cast<float*>(out_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi)
-                cpu::strsm(upper, unitriangular, n, nrhs, a_p + bi * a_per, n, x_p + bi * b_per,
-                           nrhs);
-        } else {
-            const auto* a_p = reinterpret_cast<const double*>(a_cpu.ptr.get());
-            auto* x_p = reinterpret_cast<double*>(out_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi)
-                cpu::dtrsm(upper, unitriangular, n, nrhs, a_p + bi * a_per, n, x_p + bi * b_per,
-                           nrhs);
-        }
-        return Storage{CpuStorage{out_ptr, b_cpu.nbytes, dt}};
-    }
+                                    Dtype dt) override;
 
     std::vector<Storage> linalg_lstsq(const Storage& a,
                                       const Storage& b,
                                       const Shape& a_shape,
                                       const Shape& b_shape,
-                                      Dtype dt) override {
-        if (dt != Dtype::F32 && dt != Dtype::F64)
-            ErrorBuilder("cpu_backend::linalg_lstsq").not_implemented("only F32/F64");
-        // Rank first: ``a_shape.size() - 2`` is unsigned, so a rank-1 A wraps to a
-        // colossal index, reads past the shape, and hands the garbage on as ``m`` —
-        // which then sizes every buffer here.  Seen as both a 1.8e19-byte allocation
-        // request and a SIGSEGV, depending on what the garbage happened to be.
-        if (a_shape.size() < 2)
-            ErrorBuilder("cpu_backend::linalg_lstsq").invalid_argument("A must be at least 2-D");
-        const auto& a_cpu = std::get<CpuStorage>(a);
-        const auto& b_cpu = std::get<CpuStorage>(b);
-        const int m = static_cast<int>(a_shape[a_shape.size() - 2]);
-        const int n = static_cast<int>(a_shape[a_shape.size() - 1]);
-        const int nrhs = (b_shape.size() > 1) ? static_cast<int>(b_shape[b_shape.size() - 1]) : 1;
-        const int ldb = std::max(m, n);
-
-        // A copy (sgels overwrites A)
-        std::size_t a_nb = static_cast<std::size_t>(m) * n * dtype_size(dt);
-        std::size_t b_nb = static_cast<std::size_t>(ldb) * nrhs * dtype_size(dt);
-        auto a_ptr = allocate_aligned_bytes(a_nb, Device::CPU);
-        // The copy below takes ``m`` rows out of B without asking how many B has.
-        // When B was shorter the read ran off the end — returning a plausible answer
-        // whenever it landed on mapped memory, and segfaulting inside ``memmove``
-        // when it did not.
-        if (b_cpu.nbytes < static_cast<std::size_t>(m) * nrhs * dtype_size(dt))
-            ErrorBuilder("cpu_backend::linalg_lstsq").fail("B has fewer rows than A");
-
-        auto b_ptr = allocate_aligned_bytes(b_nb, Device::CPU);
-        std::memset(b_ptr.get(), 0, b_nb);  // zero-pad to max(m,n)
-
-        int info = 0;
-        if (dt == Dtype::F32) {
-            std::memcpy(a_ptr.get(), a_cpu.ptr.get(), a_nb);
-            // Copy B into first m rows
-            auto* bp = reinterpret_cast<float*>(b_ptr.get());
-            const auto* bsrc = reinterpret_cast<const float*>(b_cpu.ptr.get());
-            for (int r = 0; r < m; ++r)
-                for (int c = 0; c < nrhs; ++c)
-                    bp[r * nrhs + c] = bsrc[r * nrhs + c];
-            cpu::lapack_lstsq_f32(reinterpret_cast<float*>(a_ptr.get()), bp, m, n, nrhs, &info);
-        } else {
-            std::memcpy(a_ptr.get(), a_cpu.ptr.get(), a_nb);
-            auto* bp = reinterpret_cast<double*>(b_ptr.get());
-            const auto* bsrc = reinterpret_cast<const double*>(b_cpu.ptr.get());
-            for (int r = 0; r < m; ++r)
-                for (int c = 0; c < nrhs; ++c)
-                    bp[r * nrhs + c] = bsrc[r * nrhs + c];
-            cpu::lapack_lstsq_f64(reinterpret_cast<double*>(a_ptr.get()), bp, m, n, nrhs, &info);
-        }
-        check_lapack_info(info, "lstsq");
-
-        // Solution shape: (n, nrhs) — first n rows of B
-        std::size_t sol_nb = static_cast<std::size_t>(n) * nrhs * dtype_size(dt);
-        auto sol_ptr = allocate_aligned_bytes(sol_nb, Device::CPU);
-        std::memcpy(sol_ptr.get(), b_ptr.get(), sol_nb);
-
-        return {Storage{CpuStorage{sol_ptr, sol_nb, dt}}};
-    }
+                                      Dtype dt) override;
 
     Storage linalg_lu_solve(const Storage& LU,
                             const Storage& pivots,
                             const Storage& b,
                             const Shape& lu_shape,
                             const Shape& b_shape,
-                            Dtype dt) override {
-        if (dt != Dtype::F32 && dt != Dtype::F64)
-            ErrorBuilder("cpu_backend::linalg_lu_solve").not_implemented("only F32/F64");
-        const auto& lu_cpu = std::get<CpuStorage>(LU);
-        const auto& piv_cpu = std::get<CpuStorage>(pivots);
-        const auto& b_cpu = std::get<CpuStorage>(b);
-        const int n = static_cast<int>(lu_shape[lu_shape.size() - 1]);
-        const int nrhs = (b_shape.size() > 1) ? static_cast<int>(b_shape[b_shape.size() - 1]) : 1;
-        const std::int64_t batch = leading_matrix_batch_count(lu_shape, 2);
-
-        auto out_ptr = allocate_aligned_bytes(b_cpu.nbytes, Device::CPU);
-        std::memcpy(out_ptr.get(), b_cpu.ptr.get(), b_cpu.nbytes);
-
-        const std::size_t lu_per = static_cast<std::size_t>(n) * n;
-        const std::size_t b_per = static_cast<std::size_t>(n) * nrhs;
-        const auto* ipiv = reinterpret_cast<const int*>(piv_cpu.ptr.get());
-        int info = 0;
-        if (dt == Dtype::F32) {
-            const auto* lup = reinterpret_cast<const float*>(lu_cpu.ptr.get());
-            auto* xp = reinterpret_cast<float*>(out_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi) {
-                cpu::lapack_lu_solve_f32(lup + bi * lu_per, ipiv + bi * n, xp + bi * b_per, n, nrhs,
-                                         &info);
-                check_lapack_info(info, "lu_solve", bi, batch);
-            }
-        } else {
-            const auto* lup = reinterpret_cast<const double*>(lu_cpu.ptr.get());
-            auto* xp = reinterpret_cast<double*>(out_ptr.get());
-            for (std::int64_t bi = 0; bi < batch; ++bi) {
-                cpu::lapack_lu_solve_f64(lup + bi * lu_per, ipiv + bi * n, xp + bi * b_per, n, nrhs,
-                                         &info);
-                check_lapack_info(info, "lu_solve", bi, batch);
-            }
-        }
-        return Storage{CpuStorage{out_ptr, b_cpu.nbytes, dt}};
-    }
+                            Dtype dt) override;
 
     Storage linalg_householder_product(const Storage& H,
                                        const Storage& tau,
                                        const Shape& h_shape,
-                                       Dtype dt) override {
-        if (dt != Dtype::F32 && dt != Dtype::F64)
-            ErrorBuilder("cpu_backend::linalg_householder_product").not_implemented("only F32/F64");
-        // Same unsigned wrap as ``linalg_lstsq``: a rank-1 H indexed at
-        // ``size() - 2`` reads past the shape, and what it finds becomes the row
-        // count every buffer here is sized from.
-        if (h_shape.size() < 2)
-            ErrorBuilder("cpu_backend::linalg_householder_product")
-                .invalid_argument("H must be at least 2-D");
-        const auto& h_cpu = std::get<CpuStorage>(H);
-        const auto& tau_cpu = std::get<CpuStorage>(tau);
-        const int m = static_cast<int>(h_shape[h_shape.size() - 2]);
-        const int n = static_cast<int>(h_shape[h_shape.size() - 1]);
-        const int k = std::min(m, n);
-
-        // Q shape: m × k
-        const std::size_t q_nb = static_cast<std::size_t>(m) * k * dtype_size(dt);
-        auto q_ptr = allocate_aligned_bytes(q_nb, Device::CPU);
-        int info = 0;
-        if (dt == Dtype::F32) {
-            cpu::lapack_householder_product_f32(reinterpret_cast<const float*>(h_cpu.ptr.get()),
-                                                reinterpret_cast<const float*>(tau_cpu.ptr.get()),
-                                                reinterpret_cast<float*>(q_ptr.get()), m, n, k,
-                                                &info);
-        } else {
-            cpu::lapack_householder_product_f64(reinterpret_cast<const double*>(h_cpu.ptr.get()),
-                                                reinterpret_cast<const double*>(tau_cpu.ptr.get()),
-                                                reinterpret_cast<double*>(q_ptr.get()), m, n, k,
-                                                &info);
-        }
-        check_lapack_info(info, "householder_product");
-        return Storage{CpuStorage{q_ptr, q_nb, dt}};
-    }
+                                       Dtype dt) override;
 
     // ``{LD, pivots, info}`` — sytrf completes when D is singular, so its
     // ``info`` is returned, not raised (``LinalgFactor.h``).
-    std::vector<Storage>
-    linalg_ldl_factor(const Storage& a, const Shape& shape, Dtype dt) override {
-        if (dt != Dtype::F32 && dt != Dtype::F64)
-            ErrorBuilder("cpu_backend::linalg_ldl_factor").not_implemented("only F32/F64");
-        return cpu::ldl_factor(std::get<CpuStorage>(a), shape, dt);
-    }
+    std::vector<Storage> linalg_ldl_factor(const Storage& a, const Shape& shape, Dtype dt) override;
 
     // fold (col2im): scatter-add (N, C*kH*kW, L) → (N, C, outH, outW)
     Storage nn_fold(const Storage& x,
@@ -6216,81 +917,7 @@ public:
                     const std::vector<int>& stride,
                     const std::vector<int>& padding,
                     const std::vector<int>& dilation,
-                    Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(nn_fold(detail::as_f32(x), x_shape, out_shape, kernel_size,
-                                               stride, padding, dilation, Dtype::F32),
-                                       dt);
-        // Integers take the same road, through int64.  Selection, movement
-        // and addition are all exact there, so this is the answer a native
-        // kernel would have produced rather than an approximation of it.
-        if (detail::is_narrow_int(dt))
-            return detail::back_to_int(nn_fold(detail::as_i64(x), x_shape, out_shape, kernel_size,
-                                               stride, padding, dilation, Dtype::I64),
-                                       dt);
-        const auto& cx = std::get<CpuStorage>(x);
-        const int N = static_cast<int>(x_shape[0]);
-        const int CKK = static_cast<int>(x_shape[1]);
-        const int L = static_cast<int>(x_shape[2]);
-        const int kH = kernel_size[0], kW = kernel_size[1];
-        const int sH = stride[0], sW = stride[1];
-        const int pH = padding[0], pW = padding[1];
-        const int dH = dilation[0], dW = dilation[1];
-        const int C = CKK / (kH * kW);
-        const int outH = static_cast<int>(out_shape[2]);
-        const int outW = static_cast<int>(out_shape[3]);
-
-        // Number of output positions
-        const int H_pad = outH + 2 * pH;
-        const int W_pad = outW + 2 * pW;
-        const std::size_t total_out = static_cast<std::size_t>(N) * C * outH * outW;
-        auto out_ptr = allocate_aligned_bytes(total_out * dtype_size(dt), Device::CPU);
-        std::memset(out_ptr.get(), 0, total_out * dtype_size(dt));
-
-        // Block counts must use the *effective* (dilated) kernel extent.  Using
-        // the raw kernel size overcounts blocks whenever dilation > 1, which
-        // both mis-maps l_idx and reads past the end of the column buffer.
-        const int effH = dH * (kH - 1) + 1;
-        const int effW = dW * (kW - 1) + 1;
-        auto run = [&](auto* op, const auto* xp) {
-            int l_idx = 0;
-            for (int oh = 0; oh < (H_pad - effH) / sH + 1; ++oh) {
-                for (int ow = 0; ow < (W_pad - effW) / sW + 1; ++ow) {
-                    for (int n = 0; n < N; ++n) {
-                        for (int c = 0; c < C; ++c) {
-                            for (int ki = 0; ki < kH; ++ki) {
-                                for (int kj = 0; kj < kW; ++kj) {
-                                    const int ri = oh * sH + ki * dH - pH;
-                                    const int ci = ow * sW + kj * dW - pW;
-                                    if (ri < 0 || ri >= outH || ci < 0 || ci >= outW)
-                                        continue;
-                                    const int src_c = c * kH * kW + ki * kW + kj;
-                                    const int src_flat = n * CKK * L + src_c * L + l_idx;
-                                    const int dst_flat =
-                                        n * C * outH * outW + c * outH * outW + ri * outW + ci;
-                                    op[dst_flat] += xp[src_flat];
-                                }
-                            }
-                        }
-                    }
-                    ++l_idx;
-                }
-            }
-        };
-
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(out_ptr.get()),
-                reinterpret_cast<const float*>(cx.ptr.get()));
-        else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(out_ptr.get()),
-                reinterpret_cast<const double*>(cx.ptr.get()));
-        else if (dt == Dtype::I64)
-            run(reinterpret_cast<std::int64_t*>(out_ptr.get()),
-                reinterpret_cast<const std::int64_t*>(cx.ptr.get()));
-        else
-            ErrorBuilder("nn_fold").not_implemented("only F32/F64");
-        return Storage{CpuStorage{out_ptr, total_out * dtype_size(dt), dt}};
-    }
+                    Dtype dt) override;
 
     // EmbeddingBag: gather + reduce per bag
     Storage embedding_bag_forward(const Storage& weight,
@@ -6301,86 +928,7 @@ public:
                                   int mode,
                                   int padding_idx,
                                   bool include_last_offset,
-                                  Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(embedding_bag_forward(detail::as_f32(weight), indices,
-                                                             offsets, weight_shape, indices_shape,
-                                                             mode, padding_idx, include_last_offset,
-                                                             Dtype::F32),
-                                       dt);
-        const auto& cw = std::get<CpuStorage>(weight);
-        const auto& ci = std::get<CpuStorage>(indices);
-        const auto& co = std::get<CpuStorage>(offsets);
-
-        const std::int64_t num_emb = weight_shape[0];
-        const int D = static_cast<int>(weight_shape[1]);
-        constexpr const char* kOp = "cpu_backend::embedding_bag";
-        // Indices and offsets are each read at their own width.  This path
-        // cast an int64 index to int, so an index of 2^32 + 1 read row 1.
-        const auto read_idx = cpu::index_reader(kOp, ci);
-        const auto bags =
-            cpu::embedding_bags(kOp, co, shape_numel(indices_shape), include_last_offset);
-        const int B = static_cast<int>(bags.start.size());
-
-        std::size_t out_nb = static_cast<std::size_t>(B) * D * dtype_size(dt);
-        auto out_ptr = allocate_aligned_bytes(out_nb, Device::CPU);
-        std::memset(out_ptr.get(), 0, out_nb);
-
-        const std::size_t esz = dtype_size(dt);
-        const std::uint8_t* wp =
-            static_cast<const std::uint8_t*>(static_cast<const void*>(cw.ptr.get()));
-
-        auto run = [&](auto* op) {
-            using T = std::remove_pointer_t<decltype(op)>;
-            for (int b = 0; b < B; ++b) {
-                const std::size_t s = bags.start[static_cast<std::size_t>(b)];
-                const std::size_t e = bags.end[static_cast<std::size_t>(b)];
-                T* row = op + b * D;
-                if (mode == 2) {  // max: seed with the lowest value so an
-                    // all-negative bag isn't masked by the 0 memset init.
-                    for (int d = 0; d < D; ++d)
-                        row[d] = std::numeric_limits<T>::lowest();
-                }
-                int count = 0;
-                for (std::size_t k = s; k < e; ++k) {
-                    const std::int64_t emb = read_idx(k);
-                    if (padding_idx >= 0 && emb == padding_idx)
-                        continue;
-                    // Refused, as the reference refuses it.  It used to be
-                    // skipped, so a bad index silently left its bag short.
-                    // Metal reads a row of NaN instead (policy B).
-                    cpu::checked_row(kOp, emb, num_emb);
-                    const T* src = reinterpret_cast<const T*>(
-                        wp + static_cast<std::size_t>(emb) * static_cast<std::size_t>(D) * esz);
-                    if (mode == 2) {  // max
-                        for (int d = 0; d < D; ++d)
-                            if (src[d] > row[d])
-                                row[d] = src[d];
-                    } else {  // sum / mean
-                        for (int d = 0; d < D; ++d)
-                            row[d] += src[d];
-                    }
-                    ++count;
-                }
-                if (mode == 2 && count == 0) {  // empty bag → 0 (match reference)
-                    for (int d = 0; d < D; ++d)
-                        row[d] = T(0);
-                }
-                if (mode == 1 && count > 0) {  // mean
-                    for (int d = 0; d < D; ++d)
-                        row[d] /= static_cast<T>(count);
-                }
-            }
-        };
-
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(out_ptr.get()));
-        else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(out_ptr.get()));
-        else
-            ErrorBuilder("embedding_bag").not_implemented("only F32/F64");
-        return Storage{CpuStorage{out_ptr, out_nb, dt}};
-    }
+                                  Dtype dt) override;
 
     Storage embedding_bag_backward(const Storage& grad_out,
                                    const Storage& weight,
@@ -6391,101 +939,7 @@ public:
                                    int mode,
                                    int padding_idx,
                                    bool include_last_offset,
-                                   Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                embedding_bag_backward(detail::as_f32(grad_out), detail::as_f32(weight), indices,
-                                       offsets, weight_shape, indices_shape, mode, padding_idx,
-                                       include_last_offset, Dtype::F32),
-                dt);
-
-        const auto& cg = std::get<CpuStorage>(grad_out);
-        const auto& cw = std::get<CpuStorage>(weight);
-        const auto& ci = std::get<CpuStorage>(indices);
-        const auto& co = std::get<CpuStorage>(offsets);
-
-        const std::int64_t num_emb = weight_shape[0];
-        const int D = static_cast<int>(weight_shape[1]);
-        constexpr const char* kOp = "cpu_backend::embedding_bag_backward";
-        const auto read_idx = cpu::index_reader(kOp, ci);
-        // The same bag boundaries the forward computed, derived by the same
-        // helper so the two cannot disagree about which rows a bag owns.
-        const auto bags =
-            cpu::embedding_bags(kOp, co, shape_numel(indices_shape), include_last_offset);
-        const int B = static_cast<int>(bags.start.size());
-        // An index outside the table sends nothing back.  The CPU forward
-        // refuses one, so on the CPU only an index changed in place since
-        // then is skipped here.  Metal's backward runs through this kernel,
-        // and there the skip is policy B's drop: the forward answered NaN
-        // for that row, and nothing was read from the table.
-        const auto usable = [&](std::int64_t emb) {
-            return emb != padding_idx && emb >= 0 && emb < num_emb;
-        };
-
-        const std::size_t gw_nb = static_cast<std::size_t>(num_emb) * D * dtype_size(dt);
-        auto gw_ptr = allocate_aligned_bytes(gw_nb, Device::CPU);
-        std::memset(gw_ptr.get(), 0, gw_nb);
-
-        auto run = [&](auto* tag) {
-            using T = std::remove_pointer_t<decltype(tag)>;
-            const T* gp = reinterpret_cast<const T*>(cg.ptr.get());
-            const T* wp = reinterpret_cast<const T*>(cw.ptr.get());
-            T* gwp = reinterpret_cast<T*>(gw_ptr.get());
-            for (int b = 0; b < B; ++b) {
-                const std::size_t s = bags.start[static_cast<std::size_t>(b)];
-                const std::size_t e = bags.end[static_cast<std::size_t>(b)];
-                const T* grow = gp + static_cast<std::size_t>(b) * D;
-
-                int count = 0;
-                for (std::size_t k = s; k < e; ++k)
-                    count += usable(read_idx(k)) ? 1 : 0;
-                if (count == 0)
-                    continue;
-
-                if (mode == 2) {
-                    // max: only the row that won each column receives
-                    // anything.  Recomputed rather than saved, because the
-                    // forward records no argmax; ties go to the first,
-                    // matching the forward's strict ``>``.
-                    for (int d = 0; d < D; ++d) {
-                        std::int64_t best = -1;
-                        T best_val = std::numeric_limits<T>::lowest();
-                        for (std::size_t k = s; k < e; ++k) {
-                            const std::int64_t emb = read_idx(k);
-                            if (!usable(emb))
-                                continue;
-                            const T v = wp[static_cast<std::size_t>(emb) * D + d];
-                            if (best < 0 || v > best_val) {
-                                best = emb;
-                                best_val = v;
-                            }
-                        }
-                        if (best >= 0)
-                            gwp[static_cast<std::size_t>(best) * D + d] += grow[d];
-                    }
-                    continue;
-                }
-
-                const T scale = mode == 1 ? T(1) / static_cast<T>(count) : T(1);
-                for (std::size_t k = s; k < e; ++k) {
-                    const std::int64_t emb = read_idx(k);
-                    if (!usable(emb))
-                        continue;
-                    T* dst = gwp + static_cast<std::size_t>(emb) * D;
-                    for (int d = 0; d < D; ++d)
-                        dst[d] += grow[d] * scale;
-                }
-            }
-        };
-
-        if (dt == Dtype::F32)
-            run(static_cast<float*>(nullptr));
-        else if (dt == Dtype::F64)
-            run(static_cast<double*>(nullptr));
-        else
-            ErrorBuilder("embedding_bag_backward").not_implemented("only F32/F64");
-        return Storage{CpuStorage{gw_ptr, gw_nb, dt}};
-    }
+                                   Dtype dt) override;
 
     // ── astype ────────────────────────────────────────────────────────────────
     //
@@ -6498,271 +952,21 @@ public:
     // and BF16 are handled outside the table, through float32, because their
     // host representation isn't a simple ``static_cast``-able scalar (F16 uses the IEEE half decoder from
     // ``item()`` indirectly via the F32 path — handled with a small helper).
-    Storage astype(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) override {
-        const auto& ca = std::get<CpuStorage>(a);
-        const std::size_t n = shape_numel(shape);
-        const std::size_t dsz = dtype_size(dst_dt);
-        auto out_ptr = allocate_aligned_bytes(n * dsz, Device::CPU);
-
-        using I8 = std::int8_t;
-        using I16 = std::int16_t;
-        using I32 = std::int32_t;
-        using I64 = std::int64_t;
-
-        // Generic static_cast loop — used for every (From, To) pair where both
-        // sides have a 1-to-1 C++ scalar type.  ``bool`` is supported as From
-        // and To by C++ static_cast rules (0 / 1 conversion at both ends).
-        auto run = [&]<typename From, typename To>() {
-            // Restrict locals, the count among them: through the closure, a
-            // store of int64 or of a byte may alias ``n`` (same-width and
-            // char aliasing), so the bound was reloaded every element and
-            // the loop stayed scalar — bool to int64 cost three adds.
-            const From* __restrict src = reinterpret_cast<const From*>(ca.ptr.get());
-            To* __restrict dst = reinterpret_cast<To*>(out_ptr.get());
-            const std::size_t n = shape_numel(shape);
-            if constexpr (std::is_floating_point_v<From> && std::is_integral_v<To> &&
-                          !std::is_same_v<To, bool>) {
-                // Float to integer saturates and sends NaN to 0 — what the
-                // hardware conversion does and what the other device matches
-                // (unit/ops/test_float_to_int_casts.py).  Spelled out because
-                // a ``static_cast`` of NaN, ±inf or anything out of range is
-                // undefined: the UBSan build halted on it.
-                //
-                // Clamp first, convert, then select: no branch, so the loop
-                // is a vector one (an if-chain per element was 14 times an
-                // add).  ``top`` is the largest From that converts in range —
-                // To's max itself when representable, else the From below
-                // 2^(bits-1) — and the selects restore max and 0 exactly.
-                constexpr auto lo = static_cast<From>(std::numeric_limits<To>::lowest());
-                constexpr auto hi = static_cast<From>(std::numeric_limits<To>::max());
-                const From top = hi < -lo ? hi : std::nextafter(-lo, From(0));
-                for (std::size_t i = 0; i < n; ++i) {
-                    const From v = src[i];
-                    // fmax answers lo for a NaN, so c is always in range.
-                    const From c = std::fmin(std::fmax(v, lo), top);
-                    To r = static_cast<To>(c);
-                    r = v >= hi ? std::numeric_limits<To>::max() : r;
-                    dst[i] = v != v ? To(0) : r;
-                }
-            } else {
-                for (std::size_t i = 0; i < n; ++i)
-                    dst[i] = static_cast<To>(src[i]);
-            }
-        };
-
-#define CPU_CAST(F, T) run.template operator()<F, T>()
-
-        // F16 has no ``static_cast``-able host scalar, so the main table below
-        // cannot express it.  The legs are converted explicitly here.
-        //
-        // The previous version delegated both legs back into ``astype`` and
-        // claimed the recursion would land in the main switch — it never did:
-        // every recursive call still had F16 on one side, so it re-entered this
-        // same branch and the process died of stack exhaustion.  CPU F16 casts
-        // (``.half()``, ``.to(float16)``, and the way back) therefore SIGSEGV'd
-        // in both directions and had never worked.  Recurse only on the
-        // F16-free leg, which the main table does handle.
-        // Both 16-bit float formats take this route, and for the same
-        // reason: neither has a host scalar the Cartesian table below can
-        // ``static_cast`` through.  bfloat16 joined F16 here rather than
-        // getting its own branch because the shape is identical — decode to
-        // float32, recurse on the leg that has no 16-bit float in it, encode
-        // — and two copies of that would be two places to get the recursion
-        // wrong.
-        const bool src_half = detail::is_half_like(src_dt);
-        const bool dst_half = detail::is_half_like(dst_dt);
-        if (src_dt != dst_dt && (src_half || dst_half)) {
-            if (src_half) {
-                if (dst_dt == Dtype::F32) {
-                    detail::half_or_bfloat16_to_float_bulk(
-                        reinterpret_cast<const std::uint16_t*>(ca.ptr.get()),
-                        reinterpret_cast<float*>(out_ptr.get()), n, src_dt == Dtype::BF16);
-                    return Storage{CpuStorage{out_ptr, n * dsz, Dtype::F32}};
-                }
-                return astype(Storage{detail::widen_half(ca, n)}, shape, Dtype::F32, dst_dt);
-            }
-            Storage as_f32 = (src_dt == Dtype::F32) ? a : astype(a, shape, src_dt, Dtype::F32);
-            const auto& cf = std::get<CpuStorage>(as_f32);
-            detail::float_to_half_or_bfloat16_bulk(reinterpret_cast<const float*>(cf.ptr.get()),
-                                                   reinterpret_cast<std::uint16_t*>(out_ptr.get()),
-                                                   n, dst_dt == Dtype::BF16);
-            return Storage{CpuStorage{out_ptr, n * dsz, dst_dt}};
-        }
-
-        // Cast complex lanes separately. Routing C128 through F32 loses
-        // precision; routing complex-to-complex through a real tensor loses
-        // its imaginary component entirely. Recursion below is real-only.
-        if (src_dt != dst_dt && (is_complex(src_dt) || is_complex(dst_dt))) {
-            if (is_complex(src_dt) && dst_dt == Dtype::Bool) {
-                auto truth = [&]<typename T>() {
-                    const auto* values = reinterpret_cast<const std::complex<T>*>(ca.ptr.get());
-                    auto* output = reinterpret_cast<std::uint8_t*>(out_ptr.get());
-                    for (std::size_t i = 0; i < n; ++i)
-                        output[i] = values[i].real() != T{} || values[i].imag() != T{};
-                };
-                if (src_dt == Dtype::C128)
-                    truth.template operator()<double>();
-                else
-                    truth.template operator()<float>();
-                return Storage{CpuStorage{out_ptr, n * dsz, dst_dt}};
-            }
-            const auto src_lane = is_complex(src_dt) ? real_lane_of(src_dt) : src_dt;
-            Storage re = is_complex(src_dt) ? complex_real(a, shape) : a;
-            if (!is_complex(dst_dt))
-                return src_lane == dst_dt ? re : astype(re, shape, src_lane, dst_dt);
-            const auto dst_lane = real_lane_of(dst_dt);
-            Storage im = is_complex(src_dt) ? complex_imag(a, shape) : zeros(shape, src_lane);
-            if (src_lane != dst_lane) {
-                re = astype(re, shape, src_lane, dst_lane);
-                im = astype(im, shape, src_lane, dst_lane);
-            }
-            return complex_combine(re, im, shape);
-        }
-
-        // Main Cartesian dispatch.  Outer = src, inner = dst.  Every
-        // {F32, F64, I8, I16, I32, I64, Bool} × {same} pair is enumerated;
-        // diagonal (src == dst) is handled at the op layer (no-op share).
-        bool ok = true;
-#define HANDLE_DST(F)                                                                              \
-    switch (dst_dt) {                                                                              \
-    case Dtype::F32:                                                                               \
-        CPU_CAST(F, float);                                                                        \
-        break;                                                                                     \
-    case Dtype::F64:                                                                               \
-        CPU_CAST(F, double);                                                                       \
-        break;                                                                                     \
-    case Dtype::I8:                                                                                \
-        CPU_CAST(F, I8);                                                                           \
-        break;                                                                                     \
-    case Dtype::I16:                                                                               \
-        CPU_CAST(F, I16);                                                                          \
-        break;                                                                                     \
-    case Dtype::I32:                                                                               \
-        CPU_CAST(F, I32);                                                                          \
-        break;                                                                                     \
-    case Dtype::I64:                                                                               \
-        CPU_CAST(F, I64);                                                                          \
-        break;                                                                                     \
-    case Dtype::Bool:                                                                              \
-        CPU_CAST(F, bool);                                                                         \
-        break;                                                                                     \
-    default:                                                                                       \
-        ok = false;                                                                                \
-    }
-
-        switch (src_dt) {
-        case Dtype::F32:
-            HANDLE_DST(float);
-            break;
-        case Dtype::F64:
-            HANDLE_DST(double);
-            break;
-        case Dtype::I8:
-            HANDLE_DST(I8);
-            break;
-        case Dtype::I16:
-            HANDLE_DST(I16);
-            break;
-        case Dtype::I32:
-            HANDLE_DST(I32);
-            break;
-        case Dtype::I64:
-            HANDLE_DST(I64);
-            break;
-        case Dtype::Bool:
-            HANDLE_DST(bool);
-            break;
-        default:
-            ok = false;
-        }
-
-#undef HANDLE_DST
-#undef CPU_CAST
-        if (!ok)
-            ErrorBuilder("astype").not_implemented(std::string(dtype_name(src_dt)) + " -> " +
-                                                   std::string(dtype_name(dst_dt)));
-        return Storage{CpuStorage{out_ptr, n * dsz, dst_dt}};
-    }
+    Storage astype(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) override;
 
     // ── flip ──────────────────────────────────────────────────────────────────
     Storage
-    flip(const Storage& a, const Shape& shape, const std::vector<int>& dims, Dtype dt) override {
-        const auto& ca = std::get<CpuStorage>(a);
-        const std::size_t n = shape_numel(shape);
-        const std::size_t esz = dtype_size(dt);
-        const std::size_t nb = n * esz;
-        auto out_ptr = allocate_aligned_bytes(nb, Device::CPU);
-
-        // Compute strides (row-major).
-        const int ndim = static_cast<int>(shape.size());
-        std::vector<std::size_t> strides(ndim, 1);
-        for (int d = ndim - 2; d >= 0; --d)
-            strides[d] = strides[d + 1] * static_cast<std::size_t>(shape[d + 1]);
-
-        // Build a set of dims to flip.
-        std::vector<bool> flip_dim(ndim, false);
-        for (int d : dims)
-            flip_dim[d] = true;
-
-        const std::uint8_t* src =
-            static_cast<const std::uint8_t*>(static_cast<const void*>(ca.ptr.get()));
-        std::uint8_t* dst = static_cast<std::uint8_t*>(static_cast<void*>(out_ptr.get()));
-
-        // Iterate over all elements; for each, compute destination index after flipping.
-        for (std::size_t flat = 0; flat < n; ++flat) {
-            std::size_t rem = flat;
-            std::size_t src_idx = 0;
-            for (int d = 0; d < ndim; ++d) {
-                std::size_t coord = rem / strides[d];
-                rem %= strides[d];
-                std::size_t flipped =
-                    flip_dim[d] ? static_cast<std::size_t>(shape[d]) - 1 - coord : coord;
-                src_idx += flipped * strides[d];
-            }
-            std::memcpy(dst + flat * esz, src + src_idx * esz, esz);
-        }
-        return Storage{CpuStorage{out_ptr, nb, dt}};
-    }
+    flip(const Storage& a, const Shape& shape, const std::vector<int>& dims, Dtype dt) override;
 
     // ── masked_select ─────────────────────────────────────────────────────────
-    Storage masked_select_count(const Storage& mask, const Shape& shape, Dtype /*dt*/) override {
-        const auto& cm = std::get<CpuStorage>(mask);
-        const std::size_t n = shape_numel(shape);
-        const bool* mp = reinterpret_cast<const bool*>(cm.ptr.get());
-        std::int64_t count = 0;
-        for (std::size_t i = 0; i < n; ++i)
-            if (mp[i])
-                ++count;
-        auto out_ptr = allocate_aligned_bytes(sizeof(std::int64_t), Device::CPU);
-        std::memcpy(out_ptr.get(), &count, sizeof(std::int64_t));
-        return Storage{CpuStorage{out_ptr, sizeof(std::int64_t), Dtype::I64}};
-    }
+    Storage masked_select_count(const Storage& mask, const Shape& shape, Dtype /*dt*/) override;
 
     Storage masked_select(const Storage& a,
                           const Storage& mask,
                           const Shape& a_shape,
                           const Shape& /*mask_shape*/,
                           std::int64_t n_true,
-                          Dtype dt) override {
-        const auto& ca = std::get<CpuStorage>(a);
-        const auto& cm = std::get<CpuStorage>(mask);
-        const std::size_t n = shape_numel(a_shape);
-        const std::size_t esz = dtype_size(dt);
-        const std::size_t nb = static_cast<std::size_t>(n_true) * esz;
-        auto out_ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::uint8_t* src =
-            static_cast<const std::uint8_t*>(static_cast<const void*>(ca.ptr.get()));
-        const bool* mp = reinterpret_cast<const bool*>(cm.ptr.get());
-        std::uint8_t* dst = static_cast<std::uint8_t*>(static_cast<void*>(out_ptr.get()));
-        std::size_t out_idx = 0;
-        for (std::size_t i = 0; i < n; ++i) {
-            if (mp[i]) {
-                std::memcpy(dst + out_idx * esz, src + i * esz, esz);
-                ++out_idx;
-            }
-        }
-        return Storage{CpuStorage{out_ptr, nb, dt}};
-    }
+                          Dtype dt) override;
 
     // ── ctc_loss ──────────────────────────────────────────────────────────────
     Storage ctc_loss_forward(const Storage& log_probs,
@@ -6772,23 +976,7 @@ public:
                              const Shape& lp_shape,
                              int blank,
                              bool zero_infinity,
-                             Dtype dt) override {
-        const std::size_t out_nb = static_cast<std::size_t>(lp_shape[1]) * dtype_size(dt);
-        auto out_ptr = allocate_aligned_bytes(out_nb, Device::CPU);
-        auto lp = [dt](const CpuStorage& clp, std::size_t idx) -> double {
-            if (dt == Dtype::F32)
-                return static_cast<double>(reinterpret_cast<const float*>(clp.ptr.get())[idx]);
-            return reinterpret_cast<const double*>(clp.ptr.get())[idx];
-        };
-        auto store = [&](std::size_t b, double v) {
-            if (dt == Dtype::F32)
-                reinterpret_cast<float*>(out_ptr.get())[b] = static_cast<float>(v);
-            else
-                reinterpret_cast<double*>(out_ptr.get())[b] = v;
-        };
-        return cpu::ctc::forward(log_probs, targets, input_lengths, target_lengths, lp_shape, blank,
-                                 zero_infinity, dt, CpuStorage{out_ptr, out_nb, dt}, lp, store);
-    }
+                             Dtype dt) override;
 
     Storage ctc_loss_backward(const Storage& log_probs,
                               const Storage& targets,
@@ -6798,516 +986,56 @@ public:
                               const Shape& lp_shape,
                               int blank,
                               bool zero_infinity,
-                              Dtype dt) override {
-        const std::size_t nb = static_cast<std::size_t>(lp_shape[0]) *
-                               static_cast<std::size_t>(lp_shape[1]) *
-                               static_cast<std::size_t>(lp_shape[2]) * dtype_size(dt);
-        auto out_ptr = allocate_aligned_bytes(nb, Device::CPU);
-        std::memset(out_ptr.get(), 0, nb);
-        auto read = [dt](const CpuStorage& s, std::size_t i) -> double {
-            if (dt == Dtype::F32)
-                return static_cast<double>(reinterpret_cast<const float*>(s.ptr.get())[i]);
-            return reinterpret_cast<const double*>(s.ptr.get())[i];
-        };
-        auto put = [&](std::size_t i, double v) {
-            if (dt == Dtype::F32)
-                reinterpret_cast<float*>(out_ptr.get())[i] = static_cast<float>(v);
-            else
-                reinterpret_cast<double*>(out_ptr.get())[i] = v;
-        };
-        return cpu::ctc::backward(log_probs, targets, input_lengths, target_lengths, grad_out,
-                                  lp_shape, blank, zero_infinity, dt, CpuStorage{out_ptr, nb, dt},
-                                  read, put);
-    }
+                              Dtype dt) override;
 
     Storage
-    broadcast(const Storage& a, const Shape& src_shape, const Shape& dst_shape, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t out_n = shape_numel(dst_shape);
-        std::size_t nb = out_n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const BroadcastPlan plan = plan_broadcast(src_shape, dst_shape);
+    broadcast(const Storage& a, const Shape& src_shape, const Shape& dst_shape, Dtype dt) override;
 
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            broadcast_runs(plan, reinterpret_cast<const T*>(cs.ptr.get()),
-                           reinterpret_cast<T*>(ptr.get()));
-        };
-
-        switch (dt) {
-        case Dtype::F32:
-            run(float{});
-            break;
-        case Dtype::F64:
-            run(double{});
-            break;
-        case Dtype::I32:
-            run(std::int32_t{});
-            break;
-        case Dtype::I64:
-            run(std::int64_t{});
-            break;
-        case Dtype::I16:
-            run(std::int16_t{});
-            break;
-        case Dtype::I8:
-        case Dtype::Bool:
-            run(std::uint8_t{});
-            break;
-        case Dtype::F16:
-        case Dtype::BF16:
-            // Broadcasting replicates elements without reading them, so both
-            // 16-bit floats ride the 16-bit path and complex64 the 64-bit one.
-            run(std::uint16_t{});
-            break;
-        case Dtype::C64:
-            run(std::uint64_t{});
-            break;
-        case Dtype::C128:
-            run(std::complex<double>{});
-            break;
-        default:
-            ErrorBuilder("cpu_backend::broadcast").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage repeat(
-        const Storage& a, const Shape& shape, Dtype dt, std::int64_t repeats, int axis) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        Shape out_shape = shape;
-        out_shape[static_cast<std::size_t>(axis)] *= repeats;
-        std::size_t nb = shape_numel(out_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::size_t elem = dtype_size(dt);
-        std::size_t outer = 1;
-        for (int d = 0; d < axis; ++d)
-            outer *= static_cast<std::size_t>(shape[static_cast<std::size_t>(d)]);
-        std::size_t inner = elem;
-        for (std::size_t d = static_cast<std::size_t>(axis) + 1; d < shape.size(); ++d)
-            inner *= static_cast<std::size_t>(shape[d]);
-        const std::size_t L = static_cast<std::size_t>(shape[static_cast<std::size_t>(axis)]);
-        auto* dst = ptr.get();
-        for (std::size_t o = 0; o < outer; ++o) {
-            for (std::size_t k = 0; k < L; ++k) {
-                const auto* src = cs.ptr.get() + (o * L + k) * inner;
-                for (std::int64_t r = 0; r < repeats; ++r) {
-                    std::memcpy(dst, src, inner);
-                    dst += inner;
-                }
-            }
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage
+    repeat(const Storage& a, const Shape& shape, Dtype dt, std::int64_t repeats, int axis) override;
 
     Storage tile(const Storage& a,
                  const Shape& shape,
                  Dtype dt,
-                 const std::vector<std::int64_t>& reps) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t nout = reps.size();
-        Shape padded(nout, 1);
-        const std::size_t lead = nout - shape.size();
-        for (std::size_t d = 0; d < shape.size(); ++d)
-            padded[lead + d] = shape[d];
-        Shape out_shape(nout);
-        for (std::size_t d = 0; d < nout; ++d)
-            out_shape[d] = padded[d] * reps[d];
-
-        std::size_t nb = shape_numel(out_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::size_t elem = dtype_size(dt);
-        Stride in_stride(nout);
-        if (nout > 0) {
-            in_stride.back() = 1;
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(nout) - 2; d >= 0; --d)
-                in_stride[static_cast<std::size_t>(d)] =
-                    in_stride[static_cast<std::size_t>(d) + 1] *
-                    padded[static_cast<std::size_t>(d) + 1];
-        }
-        const std::size_t total = shape_numel(out_shape);
-        std::vector<std::int64_t> coord(nout, 0);
-        for (std::size_t f = 0; f < total; ++f) {
-            std::size_t in_flat = 0;
-            for (std::size_t d = 0; d < nout; ++d)
-                in_flat += static_cast<std::size_t>(coord[d] % padded[d]) *
-                           static_cast<std::size_t>(in_stride[d]);
-            std::memcpy(ptr.get() + f * elem, cs.ptr.get() + in_flat * elem, elem);
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(nout) - 1; d >= 0; --d) {
-                if (++coord[static_cast<std::size_t>(d)] < out_shape[static_cast<std::size_t>(d)])
-                    break;
-                coord[static_cast<std::size_t>(d)] = 0;
-            }
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                 const std::vector<std::int64_t>& reps) override;
 
     Storage
-    permute(const Storage& a, const Shape& shape, const std::vector<int>& perm, Dtype dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        Shape out_shape;
-        out_shape.reserve(perm.size());
-        for (int p : perm)
-            out_shape.push_back(shape[static_cast<std::size_t>(p)]);
-        std::size_t nb = shape_numel(out_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (nb == 0)
-            return Storage{CpuStorage{ptr, nb, dt}};
-        cpu::permute_copy(cs.ptr.get(), ptr.get(), shape, perm, dtype_size(dt));
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    permute(const Storage& a, const Shape& shape, const std::vector<int>& perm, Dtype dt) override;
 
     Storage pad(const Storage& a,
                 const Shape& shape,
                 Dtype dt,
                 const std::vector<std::pair<std::int64_t, std::int64_t>>& pad_width,
-                double constant) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                pad(detail::as_f32(a), shape, Dtype::F32, pad_width, constant), dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t ndim = shape.size();
-        Shape out_shape(ndim);
-        for (std::size_t d = 0; d < ndim; ++d)
-            out_shape[d] = shape[d] + pad_width[d].first + pad_width[d].second;
+                double constant) override;
 
-        std::size_t nb = shape_numel(out_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        auto fill = [&](auto* dst, std::size_t n, double value) {
-            using T = std::remove_pointer_t<decltype(dst)>;
-            const T v = static_cast<T>(value);
-            for (std::size_t i = 0; i < n; ++i)
-                dst[i] = v;
-        };
-        const std::size_t out_numel = shape_numel(out_shape);
-        if (constant == 0.0) {
-            std::memset(ptr.get(), 0, nb);
-        } else {
-            switch (dt) {
-            case Dtype::F32:
-                fill(reinterpret_cast<float*>(ptr.get()), out_numel, constant);
-                break;
-            case Dtype::F64:
-                fill(reinterpret_cast<double*>(ptr.get()), out_numel, constant);
-                break;
-            case Dtype::I32:
-                fill(reinterpret_cast<std::int32_t*>(ptr.get()), out_numel, constant);
-                break;
-            case Dtype::I64:
-                fill(reinterpret_cast<std::int64_t*>(ptr.get()), out_numel, constant);
-                break;
-            default:
-                ErrorBuilder("cpu_backend::pad").not_implemented("dtype not supported");
-            }
-        }
+    Storage pow_scalar(const Storage& a, const Shape& shape, Dtype dt, double exp) override;
 
-        const std::size_t elem = dtype_size(dt);
-        Stride in_stride(ndim), out_stride(ndim);
-        if (ndim > 0) {
-            in_stride.back() = 1;
-            out_stride.back() = 1;
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
-                in_stride[static_cast<std::size_t>(d)] =
-                    in_stride[static_cast<std::size_t>(d) + 1] *
-                    shape[static_cast<std::size_t>(d) + 1];
-                out_stride[static_cast<std::size_t>(d)] =
-                    out_stride[static_cast<std::size_t>(d) + 1] *
-                    out_shape[static_cast<std::size_t>(d) + 1];
-            }
-        }
-        const std::size_t row_in = static_cast<std::size_t>(shape.back());
-        const std::size_t row_bytes = row_in * elem;
-        const std::size_t in_numel = shape_numel(shape);
-        const std::size_t rows = in_numel / row_in;
-
-        std::vector<std::int64_t> coord(ndim - 1, 0);
-        for (std::size_t r = 0; r < rows; ++r) {
-            std::size_t out_off = static_cast<std::size_t>(pad_width.back().first);
-            for (std::size_t d = 0; d + 1 < ndim; ++d)
-                out_off += static_cast<std::size_t>(coord[d] + pad_width[d].first) *
-                           static_cast<std::size_t>(out_stride[d]);
-            std::size_t in_off = 0;
-            for (std::size_t d = 0; d + 1 < ndim; ++d)
-                in_off +=
-                    static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(in_stride[d]);
-            std::memcpy(ptr.get() + out_off * elem, cs.ptr.get() + in_off * elem, row_bytes);
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d) {
-                if (++coord[static_cast<std::size_t>(d)] < shape[static_cast<std::size_t>(d)])
-                    break;
-                coord[static_cast<std::size_t>(d)] = 0;
-            }
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage pow_scalar(const Storage& a, const Shape& shape, Dtype dt, double exp) override {
-        // Accelerate's scalar/vector primitives are f32 and f64 only.  Widen at
-        // the door, reuse, round once.  Reached constantly from backward, where
-        // chain-rule constants arrive as scalars.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(
-                pow_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
-                           Dtype::F32, exp),
-                half_n, dt);
-        }
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t numel = shape_numel(shape);
-        std::size_t nb = numel * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        switch (dt) {
-        case Dtype::F32:
-            detail::pow_by_scalar(reinterpret_cast<const float*>(cs.ptr.get()),
-                                  static_cast<float>(exp), reinterpret_cast<float*>(ptr.get()),
-                                  numel);
-            break;
-        case Dtype::F64:
-            detail::pow_by_scalar(reinterpret_cast<const double*>(cs.ptr.get()), exp,
-                                  reinterpret_cast<double*>(ptr.get()), numel);
-            break;
-        default:
-            ErrorBuilder("cpu_backend::pow_scalar").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage rpow_scalar(const Storage& a, const Shape& shape, Dtype dt, double base) override {
-        // Accelerate's scalar/vector primitives are f32 and f64 only.  Widen at
-        // the door, reuse, round once.  Reached constantly from backward, where
-        // chain-rule constants arrive as scalars.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(
-                rpow_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
-                            Dtype::F32, base),
-                half_n, dt);
-        }
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t numel = shape_numel(shape);
-        std::size_t nb = numel * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        switch (dt) {
-        case Dtype::F32: {
-            std::vector<float> base_buf(numel, static_cast<float>(base));
-            cpu::vpow_f32(base_buf.data(), reinterpret_cast<const float*>(cs.ptr.get()),
-                          reinterpret_cast<float*>(ptr.get()), numel);
-            break;
-        }
-        case Dtype::F64: {
-            std::vector<double> base_buf(numel, base);
-            cpu::vpow_f64(base_buf.data(), reinterpret_cast<const double*>(cs.ptr.get()),
-                          reinterpret_cast<double*>(ptr.get()), numel);
-            break;
-        }
-        default:
-            ErrorBuilder("cpu_backend::rpow_scalar").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage rpow_scalar(const Storage& a, const Shape& shape, Dtype dt, double base) override;
 
     Storage
-    clip(const Storage& a, const Shape& shape, Dtype dt, double min_v, double max_v) override {
-        // Clamping an integer tensor keeps its dtype in the reference
-        // framework, and Metal already did it.  Exact through int64.
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(clip(detail::as_f32(a), shape, Dtype::F32, min_v, max_v),
-                                       dt);
-        const auto& cs = std::get<CpuStorage>(a);
-        const std::size_t numel = shape_numel(shape);
-        std::size_t nb = numel * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        switch (dt) {
-        case Dtype::F32: {
-            const auto* src = reinterpret_cast<const float*>(cs.ptr.get());
-            auto* dst = reinterpret_cast<float*>(ptr.get());
-            const float lo = static_cast<float>(min_v);
-            const float hi = static_cast<float>(max_v);
-            for (std::size_t i = 0; i < numel; ++i) {
-                float v = src[i];
-                if (v < lo)
-                    v = lo;
-                else if (v > hi)
-                    v = hi;
-                dst[i] = v;
-            }
-            break;
-        }
-        case Dtype::F64: {
-            const auto* src = reinterpret_cast<const double*>(cs.ptr.get());
-            auto* dst = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < numel; ++i) {
-                double v = src[i];
-                if (v < min_v)
-                    v = min_v;
-                else if (v > max_v)
-                    v = max_v;
-                dst[i] = v;
-            }
-            break;
-        }
-        default:
-            if (detail::is_int_like(dt)) {
-                // Clamping keeps the dtype for integers.  The bounds arrive
-                // as doubles; they are compared in int64 so a bound outside
-                // the caller's width still clamps rather than wrapping.
-                const std::int64_t lo = static_cast<std::int64_t>(min_v);
-                const std::int64_t hi = static_cast<std::int64_t>(max_v);
-                detail::for_each_int(dt, cs.ptr.get(), ptr.get(), numel, [lo, hi](auto v) {
-                    using T = decltype(v);
-                    const std::int64_t w = static_cast<std::int64_t>(v);
-                    return static_cast<T>(w < lo ? lo : (w > hi ? hi : w));
-                });
-                break;
-            }
-            ErrorBuilder("cpu_backend::clip").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    clip(const Storage& a, const Shape& shape, Dtype dt, double min_v, double max_v) override;
 
-    Storage cast(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) override {
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dst_dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        cast_impl(cs.ptr.get(), ptr.get(), n, src_dt, dst_dt);
-        return Storage{CpuStorage{ptr, nb, dst_dt}};
-    }
+    Storage cast(const Storage& a, const Shape& shape, Dtype src_dt, Dtype dst_dt) override;
 
     Storage mse_loss(const Storage& input,
                      const Storage& target,
                      const Shape& shape,
                      Dtype dt,
-                     int reduction) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(mse_loss(detail::as_f32(input), detail::as_f32(target),
-                                                shape, Dtype::F32, reduction),
-                                       dt);
-        const std::size_t n = shape_numel(shape);
-        if (reduction == 0) {
-            const std::size_t nb = n * dtype_size(dt);
-            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-            compute_mse_loss_values(input, target, ptr.get(), n, dt);
-            return Storage{CpuStorage{ptr, nb, dt}};
-        }
-
-        auto scalar = allocate_aligned_bytes(dtype_size(dt), Device::CPU);
-        if (dt == Dtype::F32) {
-            float sum = mse_loss_sum<float>(input, target, n);
-            if (reduction == 1)
-                sum /= static_cast<float>(n);
-            *reinterpret_cast<float*>(scalar.get()) = sum;
-        } else if (dt == Dtype::F64) {
-            double sum = mse_loss_sum<double>(input, target, n);
-            if (reduction == 1)
-                sum /= static_cast<double>(n);
-            *reinterpret_cast<double*>(scalar.get()) = sum;
-        } else {
-            ErrorBuilder("cpu_backend::mse_loss").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{scalar, dtype_size(dt), dt}};
-    }
+                     int reduction) override;
 
     std::pair<Storage, Storage> mse_loss_backward(const Storage& input,
                                                   const Storage& target,
                                                   const Storage& grad,
                                                   const Shape& shape,
                                                   Dtype dt,
-                                                  int reduction) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                mse_loss_backward(detail::as_f32(input), detail::as_f32(target),
-                                  detail::as_f32(grad), shape, Dtype::F32, reduction),
-                dt);
-        const std::size_t n = shape_numel(shape);
-        const std::size_t nb = n * dtype_size(dt);
-        auto dx = allocate_aligned_bytes(nb, Device::CPU);
-        auto dtarget = allocate_aligned_bytes(nb, Device::CPU);
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto& gs = std::get<CpuStorage>(grad);
-
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-            const auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            auto* dxp = reinterpret_cast<T*>(dx.get());
-            auto* dtp = reinterpret_cast<T*>(dtarget.get());
-            const bool elem = reduction == 0;
-            const T mean_scale = static_cast<T>(n);
-            for (std::size_t i = 0; i < n; ++i) {
-                const T go = elem ? gp[i] : gp[0];
-                const T scale = (reduction == 1) ? (go / mean_scale) : go;
-                const T d = xp[i] - tp[i];
-                dxp[i] = static_cast<T>(2) * d * scale;
-                dtp[i] = -dxp[i];
-            }
-        };
-
-        if (dt == Dtype::F32)
-            compute(float{});
-        else if (dt == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("cpu_backend::mse_loss_backward").not_implemented("dtype not supported");
-
-        return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}}};
-    }
+                                                  int reduction) override;
 
     Storage huber_loss(const Storage& input,
                        const Storage& target,
                        const Shape& shape,
                        Dtype dt,
                        double delta,
-                       int reduction) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(huber_loss(detail::as_f32(input), detail::as_f32(target),
-                                                  shape, Dtype::F32, delta, reduction),
-                                       dt);
-        const std::size_t n = shape_numel(shape);
-        if (reduction == 0) {
-            const std::size_t nb = n * dtype_size(dt);
-            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-            compute_huber_loss_values(input, target, ptr.get(), n, dt, delta);
-            return Storage{CpuStorage{ptr, nb, dt}};
-        }
-
-        auto scalar = allocate_aligned_bytes(dtype_size(dt), Device::CPU);
-        if (dt == Dtype::F32) {
-            float sum = huber_loss_sum<float>(input, target, n, static_cast<float>(delta));
-            if (reduction == 1)
-                sum /= static_cast<float>(n);
-            *reinterpret_cast<float*>(scalar.get()) = sum;
-        } else if (dt == Dtype::F64) {
-            double sum = huber_loss_sum<double>(input, target, n, delta);
-            if (reduction == 1)
-                sum /= static_cast<double>(n);
-            *reinterpret_cast<double*>(scalar.get()) = sum;
-        } else {
-            ErrorBuilder("cpu_backend::huber_loss").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{scalar, dtype_size(dt), dt}};
-    }
+                       int reduction) override;
 
     std::pair<Storage, Storage> huber_loss_backward(const Storage& input,
                                                     const Storage& target,
@@ -7315,57 +1043,7 @@ public:
                                                     const Shape& shape,
                                                     Dtype dt,
                                                     double delta,
-                                                    int reduction) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                huber_loss_backward(detail::as_f32(input), detail::as_f32(target),
-                                    detail::as_f32(grad), shape, Dtype::F32, delta, reduction),
-                dt);
-        const std::size_t n = shape_numel(shape);
-        const std::size_t nb = n * dtype_size(dt);
-        auto dx = allocate_aligned_bytes(nb, Device::CPU);
-        auto dtarget = allocate_aligned_bytes(nb, Device::CPU);
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto& gs = std::get<CpuStorage>(grad);
-
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-            const auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            auto* dxp = reinterpret_cast<T*>(dx.get());
-            auto* dtp = reinterpret_cast<T*>(dtarget.get());
-            const T d = static_cast<T>(delta);
-            const bool elem = reduction == 0;
-            const T mean_scale = static_cast<T>(n);
-            for (std::size_t i = 0; i < n; ++i) {
-                const T go = elem ? gp[i] : gp[0];
-                const T scale = (reduction == 1) ? (go / mean_scale) : go;
-                const T r = xp[i] - tp[i];
-                T dr;
-                if (std::abs(r) <= d)
-                    dr = r;
-                else
-                    dr = (r > T{0}) ? d : -d;
-                dxp[i] = dr * scale;
-                dtp[i] = -dxp[i];
-            }
-        };
-
-        if (dt == Dtype::F32)
-            compute(float{});
-        else if (dt == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("cpu_backend::huber_loss_backward").not_implemented("dtype not supported");
-
-        return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}}};
-    }
+                                                    int reduction) override;
 
     Storage bce_loss(const Storage& input,
                      const Storage& target,
@@ -7373,40 +1051,7 @@ public:
                      const Shape& shape,
                      Dtype dt,
                      double eps,
-                     int reduction) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(bce_loss(detail::as_f32(input), detail::as_f32(target),
-                                                detail::as_f32(weight), shape, Dtype::F32, eps,
-                                                reduction),
-                                       dt);
-        const std::size_t n = shape_numel(shape);
-        if (reduction == 0) {
-            const std::size_t nb = n * dtype_size(dt);
-            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-            compute_bce_loss_values(input, target, weight, ptr.get(), n, dt, eps);
-            return Storage{CpuStorage{ptr, nb, dt}};
-        }
-
-        auto scalar = allocate_aligned_bytes(dtype_size(dt), Device::CPU);
-        if (dt == Dtype::F32) {
-            float sum = bce_loss_sum<float>(input, target, weight, n, static_cast<float>(eps));
-            if (reduction == 1)
-                sum /= static_cast<float>(n);
-            *reinterpret_cast<float*>(scalar.get()) = sum;
-        } else if (dt == Dtype::F64) {
-            double sum = bce_loss_sum<double>(input, target, weight, n, eps);
-            if (reduction == 1)
-                sum /= static_cast<double>(n);
-            *reinterpret_cast<double*>(scalar.get()) = sum;
-        } else {
-            ErrorBuilder("cpu_backend::bce_loss").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{scalar, dtype_size(dt), dt}};
-    }
+                     int reduction) override;
 
     std::vector<Storage> bce_loss_backward(const Storage& input,
                                            const Storage& target,
@@ -7415,65 +1060,7 @@ public:
                                            const Shape& shape,
                                            Dtype dt,
                                            double eps,
-                                           int reduction) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                bce_loss_backward(detail::as_f32(input), detail::as_f32(target),
-                                  detail::as_f32(weight), detail::as_f32(grad), shape, Dtype::F32,
-                                  eps, reduction),
-                dt);
-        const std::size_t n = shape_numel(shape);
-        const std::size_t nb = n * dtype_size(dt);
-        auto dx = allocate_aligned_bytes(nb, Device::CPU);
-        auto dtarget = allocate_aligned_bytes(nb, Device::CPU);
-        auto dweight = allocate_aligned_bytes(nb, Device::CPU);
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto& ws = std::get<CpuStorage>(weight);
-        const auto& gs = std::get<CpuStorage>(grad);
-
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-            const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
-            const auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            auto* dxp = reinterpret_cast<T*>(dx.get());
-            auto* dtp = reinterpret_cast<T*>(dtarget.get());
-            auto* dwp = reinterpret_cast<T*>(dweight.get());
-            const T e = static_cast<T>(eps);
-            const bool elem = reduction == 0;
-            const T mean_scale = static_cast<T>(n);
-            for (std::size_t i = 0; i < n; ++i) {
-                const T go = elem ? gp[i] : gp[0];
-                const T scale = (reduction == 1) ? (go / mean_scale) : go;
-                const T p = std::min(std::max(xp[i], e), static_cast<T>(1) - e);
-                const T y = tp[i];
-                const T w = wp[i];
-                const T one = static_cast<T>(1);
-                const T dlp = -y / p + (one - y) / (one - p);
-                dxp[i] = w * dlp * scale;
-                const T dly = -std::log(p) + std::log(one - p);
-                dtp[i] = w * dly * scale;
-                const T l = -(y * std::log(p) + (one - y) * std::log(one - p));
-                dwp[i] = l * scale;
-            }
-        };
-
-        if (dt == Dtype::F32)
-            compute(float{});
-        else if (dt == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("cpu_backend::bce_loss_backward").not_implemented("dtype not supported");
-
-        return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}},
-                Storage{CpuStorage{dweight, nb, dt}}};
-    }
+                                           int reduction) override;
 
     Storage bce_with_logits_loss(const Storage& input,
                                  const Storage& target,
@@ -7483,49 +1070,7 @@ public:
                                  const Shape& weight_shape,
                                  const Shape& pos_weight_shape,
                                  Dtype dt,
-                                 int reduction) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                bce_with_logits_loss(detail::as_f32(input), detail::as_f32(target),
-                                     detail::as_f32(weight), detail::as_f32(pos_weight), shape,
-                                     weight_shape, pos_weight_shape, Dtype::F32, reduction),
-                dt);
-        const std::size_t n = shape_numel(shape);
-        Storage weight_storage =
-            weight_shape == shape ? weight : broadcast(weight, weight_shape, shape, dt);
-        Storage pos_weight_storage = pos_weight_shape == shape
-                                         ? pos_weight
-                                         : broadcast(pos_weight, pos_weight_shape, shape, dt);
-        if (reduction == 0) {
-            const std::size_t nb = n * dtype_size(dt);
-            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-            compute_bce_logits_values(input, target, weight_storage, pos_weight_storage, ptr.get(),
-                                      n, dt);
-            return Storage{CpuStorage{ptr, nb, dt}};
-        }
-
-        auto scalar = allocate_aligned_bytes(dtype_size(dt), Device::CPU);
-        if (dt == Dtype::F32) {
-            float sum = bce_logits_sum<float>(input, target, weight_storage, pos_weight_storage, n);
-            if (reduction == 1)
-                sum /= static_cast<float>(n);
-            *reinterpret_cast<float*>(scalar.get()) = sum;
-        } else if (dt == Dtype::F64) {
-            double sum =
-                bce_logits_sum<double>(input, target, weight_storage, pos_weight_storage, n);
-            if (reduction == 1)
-                sum /= static_cast<double>(n);
-            *reinterpret_cast<double*>(scalar.get()) = sum;
-        } else {
-            ErrorBuilder("cpu_backend::bce_with_logits_loss")
-                .not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{scalar, dtype_size(dt), dt}};
-    }
+                                 int reduction) override;
 
     std::vector<Storage> bce_with_logits_backward(const Storage& input,
                                                   const Storage& target,
@@ -7534,72 +1079,7 @@ public:
                                                   const Storage& grad,
                                                   const Shape& shape,
                                                   Dtype dt,
-                                                  int reduction) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                bce_with_logits_backward(detail::as_f32(input), detail::as_f32(target),
-                                         detail::as_f32(weight), detail::as_f32(pos_weight),
-                                         detail::as_f32(grad), shape, Dtype::F32, reduction),
-                dt);
-        const std::size_t n = shape_numel(shape);
-        const std::size_t nb = n * dtype_size(dt);
-        auto dx = allocate_aligned_bytes(nb, Device::CPU);
-        auto dtarget = allocate_aligned_bytes(nb, Device::CPU);
-        auto dweight = allocate_aligned_bytes(nb, Device::CPU);
-        auto dpos_weight = allocate_aligned_bytes(nb, Device::CPU);
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto& ws = std::get<CpuStorage>(weight);
-        const auto& pws = std::get<CpuStorage>(pos_weight);
-        const auto& gs = std::get<CpuStorage>(grad);
-
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-            const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
-            const auto* pwp = reinterpret_cast<const T*>(pws.ptr.get());
-            const auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            auto* dxp = reinterpret_cast<T*>(dx.get());
-            auto* dtp = reinterpret_cast<T*>(dtarget.get());
-            auto* dwp = reinterpret_cast<T*>(dweight.get());
-            auto* dpwp = reinterpret_cast<T*>(dpos_weight.get());
-            const bool elem = reduction == 0;
-            const T mean_scale = static_cast<T>(n);
-            const T one = static_cast<T>(1);
-            for (std::size_t i = 0; i < n; ++i) {
-                const T go = elem ? gp[i] : gp[0];
-                const T scale = (reduction == 1) ? (go / mean_scale) : go;
-                const T x = xp[i];
-                const T y = tp[i];
-                const T pw = pwp[i];
-                const T sigm = one / (one + std::exp(-x));
-                const T log_weight = (pw - one) * y + one;
-                const T log1pexp = std::log1p(std::exp(-std::abs(x)));
-                const T loss = std::max(x, T{0}) - x * y + log_weight * log1pexp;
-                const T w = wp[i];
-                dxp[i] = w * (log_weight * sigm - y) * scale;
-                dtp[i] = w * (-x + (pw - one) * log1pexp) * scale;
-                dwp[i] = loss * scale;
-                dpwp[i] = w * y * log1pexp * scale;
-            }
-        };
-
-        if (dt == Dtype::F32)
-            compute(float{});
-        else if (dt == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("cpu_backend::bce_with_logits_backward")
-                .not_implemented("dtype not supported");
-
-        return {Storage{CpuStorage{dx, nb, dt}}, Storage{CpuStorage{dtarget, nb, dt}},
-                Storage{CpuStorage{dweight, nb, dt}}, Storage{CpuStorage{dpos_weight, nb, dt}}};
-    }
+                                                  int reduction) override;
 
     ClassLossForwardResult cross_entropy_loss(const Storage& input,
                                               const Storage& target,
@@ -7609,67 +1089,7 @@ public:
                                               Dtype dt,
                                               double eps,
                                               int ignore_index,
-                                              int reduction) override {
-        const int n_batch = static_cast<int>(input_shape[0]);
-        const int channels = static_cast<int>(input_shape[1]);
-        const int spatial = class_loss_spatial(input_shape);
-        const std::size_t samples = static_cast<std::size_t>(n_batch) * spatial;
-        const std::size_t input_numel = samples * static_cast<std::size_t>(channels);
-        CpuStorage softmax{allocate_aligned_bytes(input_numel * dtype_size(dt), Device::CPU),
-                           input_numel * dtype_size(dt), dt};
-        CpuStorage losses{allocate_aligned_bytes(samples * dtype_size(dt), Device::CPU),
-                          samples * dtype_size(dt), dt};
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const CpuStorage* ws = weight ? &std::get<CpuStorage>(*weight) : nullptr;
-        std::size_t valid_count = 0;
-
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            auto* sp = reinterpret_cast<T*>(softmax.ptr.get());
-            auto* lp = reinterpret_cast<T*>(losses.ptr.get());
-            const T* wp = ws ? reinterpret_cast<const T*>(ws->ptr.get()) : nullptr;
-            for (int n = 0; n < n_batch; ++n) {
-                for (int s = 0; s < spatial; ++s) {
-                    T mx = -std::numeric_limits<T>::infinity();
-                    for (int c = 0; c < channels; ++c)
-                        mx = std::max(mx, xp[(n * channels + c) * spatial + s]);
-                    T sum = T{0};
-                    for (int c = 0; c < channels; ++c) {
-                        const T e = std::exp(xp[(n * channels + c) * spatial + s] - mx);
-                        sp[(n * channels + c) * spatial + s] = e;
-                        sum += e;
-                    }
-                    const T inv = T{1} / sum;
-                    for (int c = 0; c < channels; ++c)
-                        sp[(n * channels + c) * spatial + s] *= inv;
-                    const std::int64_t y = class_target("cpu_backend::cross_entropy_loss", ts,
-                                                        n * spatial + s, ignore_index, channels);
-                    if (y < 0) {
-                        lp[n * spatial + s] = T{0};
-                        continue;
-                    }
-                    ++valid_count;
-                    const T pred = sp[(n * channels + static_cast<int>(y)) * spatial + s];
-                    const T w = wp ? wp[static_cast<int>(y)] : T{1};
-                    lp[n * spatial + s] = -w * std::log(pred + static_cast<T>(eps));
-                }
-            }
-        };
-        if (dt == Dtype::F32)
-            compute(float{});
-        else if (dt == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("cpu_backend::cross_entropy_loss").not_implemented("dtype not supported");
-        if (valid_count == 0)
-            valid_count = 1;
-
-        return {reduce_class_losses(losses, samples, valid_count, dt, reduction),
-                Storage{std::move(softmax)},
-                Storage{make_cpu_scalar(static_cast<double>(valid_count), dt)}};
-    }
+                                              int reduction) override;
 
     Storage cross_entropy_backward(const Storage& saved_softmax,
                                    const Storage& target,
@@ -7679,69 +1099,7 @@ public:
                                    const Shape& input_shape,
                                    Dtype dt,
                                    int ignore_index,
-                                   int reduction) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt)) {
-            std::optional<Storage> weight32;
-            return detail::back_to_f16(
-                cross_entropy_backward(detail::as_f32(saved_softmax), detail::as_f32(target),
-                                       detail::as_f32(weight, weight32),
-                                       detail::as_f32(valid_count), detail::as_f32(grad),
-                                       input_shape, Dtype::F32, ignore_index, reduction),
-                dt);
-        }
-        const int n_batch = static_cast<int>(input_shape[0]);
-        const int channels = static_cast<int>(input_shape[1]);
-        const int spatial = class_loss_spatial(input_shape);
-        const std::size_t numel = static_cast<std::size_t>(n_batch) * channels * spatial;
-        CpuStorage dx{allocate_aligned_bytes(numel * dtype_size(dt), Device::CPU),
-                      numel * dtype_size(dt), dt};
-        if (dx.nbytes)
-            std::memset(dx.ptr.get(), 0, dx.nbytes);
-        const auto& sm = std::get<CpuStorage>(saved_softmax);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto& gs = std::get<CpuStorage>(grad);
-        const auto& vc = std::get<CpuStorage>(valid_count);
-        const CpuStorage* ws = weight ? &std::get<CpuStorage>(*weight) : nullptr;
-
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const auto* sp = reinterpret_cast<const T*>(sm.ptr.get());
-            const auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            auto* dxp = reinterpret_cast<T*>(dx.ptr.get());
-            const T* wp = ws ? reinterpret_cast<const T*>(ws->ptr.get()) : nullptr;
-            const T valid = *reinterpret_cast<const T*>(vc.ptr.get());
-            const bool elem = reduction == 0;
-            for (int n = 0; n < n_batch; ++n) {
-                for (int s = 0; s < spatial; ++s) {
-                    const std::int64_t y = class_target("cpu_backend::cross_entropy_backward", ts,
-                                                        n * spatial + s, ignore_index, channels);
-                    if (y < 0)
-                        continue;
-                    const T go = elem ? gp[n * spatial + s] : gp[0];
-                    const T scale = (reduction == 1) ? (go / valid) : go;
-                    const T w = wp ? wp[static_cast<int>(y)] : T{1};
-                    for (int c = 0; c < channels; ++c) {
-                        T v = sp[(n * channels + c) * spatial + s];
-                        if (c == static_cast<int>(y))
-                            v -= T{1};
-                        dxp[(n * channels + c) * spatial + s] = w * v * scale;
-                    }
-                }
-            }
-        };
-        if (dt == Dtype::F32)
-            compute(float{});
-        else if (dt == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("cpu_backend::cross_entropy_backward")
-                .not_implemented("dtype not supported");
-        return Storage{std::move(dx)};
-    }
+                                   int reduction) override;
 
     ClassLossForwardResult nll_loss(const Storage& input,
                                     const Storage& target,
@@ -7750,49 +1108,7 @@ public:
                                     const Shape&,
                                     Dtype dt,
                                     int ignore_index,
-                                    int reduction) override {
-        const int n_batch = static_cast<int>(input_shape[0]);
-        const int channels = static_cast<int>(input_shape[1]);
-        const int spatial = class_loss_spatial(input_shape);
-        const std::size_t samples = static_cast<std::size_t>(n_batch) * spatial;
-        CpuStorage losses{allocate_aligned_bytes(samples * dtype_size(dt), Device::CPU),
-                          samples * dtype_size(dt), dt};
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const CpuStorage* ws = weight ? &std::get<CpuStorage>(*weight) : nullptr;
-        std::size_t valid_count = 0;
-
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            auto* lp = reinterpret_cast<T*>(losses.ptr.get());
-            const T* wp = ws ? reinterpret_cast<const T*>(ws->ptr.get()) : nullptr;
-            for (int n = 0; n < n_batch; ++n) {
-                for (int s = 0; s < spatial; ++s) {
-                    const std::int64_t y = class_target("cpu_backend::nll_loss", ts,
-                                                        n * spatial + s, ignore_index, channels);
-                    if (y < 0) {
-                        lp[n * spatial + s] = T{0};
-                        continue;
-                    }
-                    ++valid_count;
-                    const T w = wp ? wp[static_cast<int>(y)] : T{1};
-                    lp[n * spatial + s] =
-                        -w * xp[(n * channels + static_cast<int>(y)) * spatial + s];
-                }
-            }
-        };
-        if (dt == Dtype::F32)
-            compute(float{});
-        else if (dt == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("cpu_backend::nll_loss").not_implemented("dtype not supported");
-        if (valid_count == 0)
-            valid_count = 1;
-        return {reduce_class_losses(losses, samples, valid_count, dt, reduction), Storage{},
-                Storage{make_cpu_scalar(static_cast<double>(valid_count), dt)}};
-    }
+                                    int reduction) override;
 
     Storage nll_loss_backward(const Storage& target,
                               const Storage* weight,
@@ -7801,62 +1117,9 @@ public:
                               const Shape& input_shape,
                               Dtype dt,
                               int ignore_index,
-                              int reduction) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt)) {
-            std::optional<Storage> weight32;
-            return detail::back_to_f16(
-                nll_loss_backward(detail::as_f32(target), detail::as_f32(weight, weight32),
-                                  detail::as_f32(valid_count), detail::as_f32(grad), input_shape,
-                                  Dtype::F32, ignore_index, reduction),
-                dt);
-        }
-        const int n_batch = static_cast<int>(input_shape[0]);
-        const int channels = static_cast<int>(input_shape[1]);
-        const int spatial = class_loss_spatial(input_shape);
-        const std::size_t numel = static_cast<std::size_t>(n_batch) * channels * spatial;
-        CpuStorage dx{allocate_aligned_bytes(numel * dtype_size(dt), Device::CPU),
-                      numel * dtype_size(dt), dt};
-        if (dx.nbytes)
-            std::memset(dx.ptr.get(), 0, dx.nbytes);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto& gs = std::get<CpuStorage>(grad);
-        const auto& vc = std::get<CpuStorage>(valid_count);
-        const CpuStorage* ws = weight ? &std::get<CpuStorage>(*weight) : nullptr;
+                              int reduction) override;
 
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const auto* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            auto* dxp = reinterpret_cast<T*>(dx.ptr.get());
-            const T* wp = ws ? reinterpret_cast<const T*>(ws->ptr.get()) : nullptr;
-            const T valid = *reinterpret_cast<const T*>(vc.ptr.get());
-            const bool elem = reduction == 0;
-            for (int n = 0; n < n_batch; ++n) {
-                for (int s = 0; s < spatial; ++s) {
-                    const std::int64_t y = class_target("cpu_backend::nll_loss_backward", ts,
-                                                        n * spatial + s, ignore_index, channels);
-                    if (y < 0)
-                        continue;
-                    const T go = elem ? gp[n * spatial + s] : gp[0];
-                    const T scale = (reduction == 1) ? (go / valid) : go;
-                    const T w = wp ? wp[static_cast<int>(y)] : T{1};
-                    dxp[(n * channels + static_cast<int>(y)) * spatial + s] = -w * scale;
-                }
-            }
-        };
-        if (dt == Dtype::F32)
-            compute(float{});
-        else if (dt == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("cpu_backend::nll_loss_backward").not_implemented("dtype not supported");
-        return Storage{std::move(dx)};
-    }
-
-    CpuStorage to_cpu(const Storage& a, const Shape&) override { return std::get<CpuStorage>(a); }
+    CpuStorage to_cpu(const Storage& a, const Shape&) override;
 
     std::vector<Storage> sdpa_forward(const Storage& q,
                                       const Storage& k,
@@ -7870,165 +1133,7 @@ public:
                                       double scale,
                                       bool is_causal,
                                       bool need_weights,
-                                      Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so a bool mask
-        // travels through untouched and an additive one widens with q/k/v.
-        if (detail::is_half_like(dt)) {
-            std::optional<Storage> mask32;
-            return detail::back_to_f16(
-                sdpa_forward(detail::as_f32(q), detail::as_f32(k), detail::as_f32(v),
-                             detail::as_f32(attn_mask, mask32), q_shape, k_shape, v_shape,
-                             mask_dtype, mask_numel, scale, is_causal, need_weights, Dtype::F32),
-                dt);
-        }
-        // The Accelerate reference always rolls the full softmax weight matrix
-        // (its backward reuses it), so ``need_weights`` is a no-op here.
-        (void)need_weights;
-        // The mask's dtype and extent come from its storage: trusting these
-        // two is how a half mask was read as float.  See cpu::SdpaMask.
-        (void)mask_dtype;
-        (void)mask_numel;
-        std::size_t B = 1;
-        for (std::size_t i = 0; i + 2 < q_shape.size(); ++i)
-            B *= static_cast<std::size_t>(q_shape[i]);
-        const std::size_t Lq = static_cast<std::size_t>(q_shape[q_shape.size() - 2]);
-        const std::size_t Dk = static_cast<std::size_t>(q_shape.back());
-        const std::size_t Lk = static_cast<std::size_t>(k_shape[k_shape.size() - 2]);
-        const std::size_t Dv = static_cast<std::size_t>(v_shape.back());
-
-        const std::size_t weights_numel = B * Lq * Lk;
-        const std::size_t output_numel = B * Lq * Dv;
-
-        CpuStorage weights_cpu = alloc_cpu(weights_numel, dt);
-        CpuStorage output_cpu = alloc_cpu(output_numel, dt);
-
-        const auto& qs = std::get<CpuStorage>(q);
-        const auto& ks = std::get<CpuStorage>(k);
-        const auto& vs = std::get<CpuStorage>(v);
-        const CpuStorage* ms = attn_mask ? &std::get<CpuStorage>(*attn_mask) : nullptr;
-        const cpu::SdpaMask mask =
-            ms ? cpu::sdpa_mask_layout(*ms, dt, Lq * Lk, B) : cpu::SdpaMask{};
-
-        // The masks for slice ``b`` alone — what one parallel task may touch.
-        // A keep-mask's ``true`` attends: this kernel once read it as "mask
-        // out" while MLX read it as "keep", inverting between devices.
-        auto apply_masks_to = [&](auto* Wb, std::size_t b) {
-            using T = std::remove_pointer_t<decltype(Wb)>;
-            const T neg_inf = -std::numeric_limits<T>::infinity();
-            const std::size_t pb = Lq * Lk;
-            if (ms != nullptr) {
-                const std::size_t offset = b * mask.slice_step;
-                if (mask.keep) {
-                    const auto* mp = reinterpret_cast<const std::uint8_t*>(ms->ptr.get()) + offset;
-                    for (std::size_t i = 0; i < pb; ++i)
-                        if (!mp[i])
-                            Wb[i] = neg_inf;
-                } else {
-                    const auto* mp = reinterpret_cast<const T*>(ms->ptr.get()) + offset;
-                    for (std::size_t i = 0; i < pb; ++i)
-                        Wb[i] += mp[i];
-                }
-            }
-            if (is_causal) {
-                for (std::size_t i = 0; i < Lq; ++i) {
-                    T* row = Wb + i * Lk;
-                    for (std::size_t j = i + 1; j < Lk; ++j)
-                        row[j] = neg_inf;
-                }
-            }
-        };
-
-        if (dt == Dtype::F32) {
-            const float* Qp = reinterpret_cast<const float*>(qs.ptr.get());
-            const float* Kp = reinterpret_cast<const float*>(ks.ptr.get());
-            const float* Vp = reinterpret_cast<const float*>(vs.ptr.get());
-            float* Wp = reinterpret_cast<float*>(weights_cpu.ptr.get());
-            float* Op = reinterpret_cast<float*>(output_cpu.ptr.get());
-            const float sc = static_cast<float>(scale);
-
-            // One task per (batch x head) slice, which owns its rows of W and
-            // O outright: a small transformer's 128 heads ran one after
-            // another, each GEMM too small for Accelerate to thread, 3 ms a
-            // call.  Each slice does exactly what the serial loop did, so the
-            // result is the same bits.
-            cpu::parallel_for(B, 1, [&](std::size_t lo, std::size_t hi) {
-                for (std::size_t b = lo; b < hi; ++b) {
-                    float* Wb = Wp + b * Lq * Lk;
-                    cpu::sgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
-                               static_cast<int>(Dk), sc, Qp + b * Lq * Dk, static_cast<int>(Dk),
-                               Kp + b * Lk * Dk, static_cast<int>(Dk), 0.0f, Wb,
-                               static_cast<int>(Lk));
-                    apply_masks_to(Wb, b);
-                    for (std::size_t r = 0; r < Lq; ++r) {
-                        float* row = Wb + r * Lk;
-                        const float m = cpu::vmaxval_f32(row, Lk);
-                        if (!std::isfinite(m)) {
-                            std::memset(row, 0, Lk * sizeof(float));
-                            continue;
-                        }
-                        cpu::vsadd_f32(row, -m, row, Lk);
-                        cpu::vexp_f32(row, row, Lk);
-                        const float s = cpu::vsum_f32(row, Lk);
-                        cpu::vsmul_f32(row, s > 0.f ? 1.f / s : 0.f, row, Lk);
-                    }
-                    cpu::sgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dv),
-                               static_cast<int>(Lk), 1.0f, Wb, static_cast<int>(Lk),
-                               Vp + b * Lk * Dv, static_cast<int>(Dv), 0.0f, Op + b * Lq * Dv,
-                               static_cast<int>(Dv));
-                }
-            });
-        } else if (dt == Dtype::F64) {
-            const double* Qp = reinterpret_cast<const double*>(qs.ptr.get());
-            const double* Kp = reinterpret_cast<const double*>(ks.ptr.get());
-            const double* Vp = reinterpret_cast<const double*>(vs.ptr.get());
-            double* Wp = reinterpret_cast<double*>(weights_cpu.ptr.get());
-            double* Op = reinterpret_cast<double*>(output_cpu.ptr.get());
-            const double sc = scale;
-            for (std::size_t b = 0; b < B; ++b)
-                cpu::dgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
-                           static_cast<int>(Dk), sc, Qp + b * Lq * Dk, static_cast<int>(Dk),
-                           Kp + b * Lk * Dk, static_cast<int>(Dk), 0.0, Wp + b * Lq * Lk,
-                           static_cast<int>(Lk));
-            for (std::size_t b = 0; b < B; ++b)
-                apply_masks_to(Wp + b * Lq * Lk, b);
-
-            // With no keys there are no weights to normalise — and no
-            // ``row[0]`` to seed the max with; the product below then writes
-            // the zero output.
-            for (std::size_t r = 0; r < B * Lq && Lk > 0; ++r) {
-                double* row = Wp + r * Lk;
-                double m = row[0];
-                for (std::size_t j = 1; j < Lk; ++j)
-                    if (row[j] > m)
-                        m = row[j];
-                if (!std::isfinite(m)) {
-                    for (std::size_t j = 0; j < Lk; ++j)
-                        row[j] = 0.0;
-                    continue;
-                }
-                double s = 0.0;
-                for (std::size_t j = 0; j < Lk; ++j) {
-                    row[j] = std::exp(row[j] - m);
-                    s += row[j];
-                }
-                const double inv = s > 0.0 ? 1.0 / s : 0.0;
-                for (std::size_t j = 0; j < Lk; ++j)
-                    row[j] *= inv;
-            }
-            for (std::size_t b = 0; b < B; ++b)
-                cpu::dgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dv),
-                           static_cast<int>(Lk), 1.0, Wp + b * Lq * Lk, static_cast<int>(Lk),
-                           Vp + b * Lk * Dv, static_cast<int>(Dv), 0.0, Op + b * Lq * Dv,
-                           static_cast<int>(Dv));
-        } else {
-            ErrorBuilder("cpu_backend::sdpa_forward")
-                .not_implemented("dtype not supported (F32/F64 only)");
-        }
-
-        return {Storage{std::move(weights_cpu)}, Storage{std::move(output_cpu)}};
-    }
+                                      Dtype dt) override;
 
     std::vector<Storage> sdpa_backward(const Storage& grad_out,
                                        const Storage& q,
@@ -8042,154 +1147,7 @@ public:
                                        Dtype mask_dtype,
                                        double scale,
                                        bool is_causal,
-                                       Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so a bool mask
-        // travels through untouched and an additive one widens with q/k/v.
-        if (detail::is_half_like(dt)) {
-            std::optional<Storage> mask32;
-            return detail::back_to_f16(
-                sdpa_backward(detail::as_f32(grad_out), detail::as_f32(q), detail::as_f32(k),
-                              detail::as_f32(v), detail::as_f32(saved_weights),
-                              detail::as_f32(attn_mask, mask32), q_shape, k_shape, v_shape,
-                              mask_dtype, scale, is_causal, Dtype::F32),
-                dt);
-        }
-        // The Accelerate forward saves the genuine (already masked/causal)
-        // weight matrix W, so the backward is fully determined by ``saved_weights``
-        // and needs no mask/causal replay — the extra args exist only to match
-        // the interface the MLX VJP path requires.  Whether the mask is
-        // additive is read off its storage, as the forward does.
-        (void)is_causal;
-        (void)mask_dtype;
-        std::size_t B = 1;
-        for (std::size_t i = 0; i + 2 < q_shape.size(); ++i)
-            B *= static_cast<std::size_t>(q_shape[i]);
-        const std::size_t Lq = static_cast<std::size_t>(q_shape[q_shape.size() - 2]);
-        const std::size_t Dk = static_cast<std::size_t>(q_shape.back());
-        const std::size_t Lk = static_cast<std::size_t>(k_shape[k_shape.size() - 2]);
-        const std::size_t Dv = static_cast<std::size_t>(v_shape.back());
-
-        CpuStorage dQ_cpu = alloc_cpu(B * Lq * Dk, dt);
-        CpuStorage dK_cpu = alloc_cpu(B * Lk * Dk, dt);
-        CpuStorage dV_cpu = alloc_cpu(B * Lk * Dv, dt);
-
-        // dL/dM == dL/dS, since S = QK^T·s + M.  ``dscores`` below is already
-        // that quantity, so an additive mask costs one extra buffer, not extra
-        // arithmetic.  Emitted at full score shape; the node reduces it back
-        // through whatever broadcast the caller's mask used.
-        // Always emitted so the returned vector matches the node's edge count
-        // (the same contract ``conv_nd_backward`` keeps for a null bias); the
-        // engine drops this slot when the mask edge is null.
-        const bool want_mask_grad =
-            attn_mask != nullptr &&
-            !cpu::sdpa_mask_layout(std::get<CpuStorage>(*attn_mask), dt, Lq * Lk, B).keep;
-        CpuStorage dM_cpu = alloc_cpu(want_mask_grad ? B * Lq * Lk : 1, dt);
-
-        const auto& qs = std::get<CpuStorage>(q);
-        const auto& ks = std::get<CpuStorage>(k);
-        const auto& vs = std::get<CpuStorage>(v);
-        const auto& ws = std::get<CpuStorage>(saved_weights);
-        const auto& gs = std::get<CpuStorage>(grad_out);
-
-        auto do_backward = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const T sc = static_cast<T>(scale);
-            const T* Qp = reinterpret_cast<const T*>(qs.ptr.get());
-            const T* Kp = reinterpret_cast<const T*>(ks.ptr.get());
-            const T* Vp = reinterpret_cast<const T*>(vs.ptr.get());
-            const T* Wp = reinterpret_cast<const T*>(ws.ptr.get());
-            const T* Gp = reinterpret_cast<const T*>(gs.ptr.get());
-            T* dQp = reinterpret_cast<T*>(dQ_cpu.ptr.get());
-            T* dKp = reinterpret_cast<T*>(dK_cpu.ptr.get());
-            T* dVp = reinterpret_cast<T*>(dV_cpu.ptr.get());
-            T* dMp = want_mask_grad ? reinterpret_cast<T*>(dM_cpu.ptr.get()) : nullptr;
-
-            // One task per chunk of (batch x head) slices, as in the forward;
-            // the two scratch matrices are the chunk's own.
-            cpu::parallel_for(B, 1, [&](std::size_t lo, std::size_t hi) {
-                std::vector<T> dweights(Lq * Lk), dscores(Lq * Lk);
-                for (std::size_t b = lo; b < hi; ++b) {
-                    const T* Qb = Qp + b * Lq * Dk;
-                    const T* Kb = Kp + b * Lk * Dk;
-                    const T* Vb = Vp + b * Lk * Dv;
-                    const T* Wb = Wp + b * Lq * Lk;
-                    const T* Gb = Gp + b * Lq * Dv;
-                    T* dQb = dQp + b * Lq * Dk;
-                    T* dKb = dKp + b * Lk * Dk;
-                    T* dVb = dVp + b * Lk * Dv;
-
-                    if constexpr (std::is_same_v<T, float>) {
-                        cpu::sgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dv),
-                                   static_cast<int>(Lq), 1.0f, Wb, static_cast<int>(Lk), Gb,
-                                   static_cast<int>(Dv), 0.0f, dVb, static_cast<int>(Dv));
-
-                        cpu::sgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
-                                   static_cast<int>(Dv), 1.0f, Gb, static_cast<int>(Dv), Vb,
-                                   static_cast<int>(Dv), 0.0f, dweights.data(),
-                                   static_cast<int>(Lk));
-
-                        for (std::size_t r = 0; r < Lq; ++r) {
-                            const float* wr = Wb + r * Lk;
-                            const float* dwr = dweights.data() + r * Lk;
-                            float sum = 0.f;
-                            for (std::size_t j = 0; j < Lk; ++j)
-                                sum += wr[j] * dwr[j];
-                            float* dr = dscores.data() + r * Lk;
-                            for (std::size_t j = 0; j < Lk; ++j)
-                                dr[j] = wr[j] * (dwr[j] - sum);
-                        }
-
-                        cpu::sgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dk),
-                                   static_cast<int>(Lk), sc, dscores.data(), static_cast<int>(Lk),
-                                   Kb, static_cast<int>(Dk), 0.0f, dQb, static_cast<int>(Dk));
-
-                        cpu::sgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dk),
-                                   static_cast<int>(Lq), sc, dscores.data(), static_cast<int>(Lk),
-                                   Qb, static_cast<int>(Dk), 0.0f, dKb, static_cast<int>(Dk));
-                    } else {
-                        cpu::dgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dv),
-                                   static_cast<int>(Lq), 1.0, Wb, static_cast<int>(Lk), Gb,
-                                   static_cast<int>(Dv), 0.0, dVb, static_cast<int>(Dv));
-                        cpu::dgemm(false, true, static_cast<int>(Lq), static_cast<int>(Lk),
-                                   static_cast<int>(Dv), 1.0, Gb, static_cast<int>(Dv), Vb,
-                                   static_cast<int>(Dv), 0.0, dweights.data(),
-                                   static_cast<int>(Lk));
-                        for (std::size_t r = 0; r < Lq; ++r) {
-                            const double* wr = Wb + r * Lk;
-                            const double* dwr = dweights.data() + r * Lk;
-                            double sum = 0.0;
-                            for (std::size_t j = 0; j < Lk; ++j)
-                                sum += wr[j] * dwr[j];
-                            double* dr = dscores.data() + r * Lk;
-                            for (std::size_t j = 0; j < Lk; ++j)
-                                dr[j] = wr[j] * (dwr[j] - sum);
-                        }
-                        cpu::dgemm(false, false, static_cast<int>(Lq), static_cast<int>(Dk),
-                                   static_cast<int>(Lk), sc, dscores.data(), static_cast<int>(Lk),
-                                   Kb, static_cast<int>(Dk), 0.0, dQb, static_cast<int>(Dk));
-                        cpu::dgemm(true, false, static_cast<int>(Lk), static_cast<int>(Dk),
-                                   static_cast<int>(Lq), sc, dscores.data(), static_cast<int>(Lk),
-                                   Qb, static_cast<int>(Dk), 0.0, dKb, static_cast<int>(Dk));
-                    }
-
-                    if (dMp != nullptr)
-                        std::copy(dscores.begin(), dscores.end(), dMp + b * Lq * Lk);
-                }
-            });
-        };
-
-        if (dt == Dtype::F32)
-            do_backward(float{});
-        else if (dt == Dtype::F64)
-            do_backward(double{});
-        else
-            ErrorBuilder("cpu_backend::sdpa_backward").not_implemented("dtype not supported");
-
-        return {Storage{std::move(dQ_cpu)}, Storage{std::move(dK_cpu)}, Storage{std::move(dV_cpu)},
-                Storage{std::move(dM_cpu)}};
-    }
+                                       Dtype dt) override;
 
     Storage conv_transpose_nd_forward(const Storage& x,
                                       const Storage& W,
@@ -8202,82 +1160,7 @@ public:
                                       const int* O,
                                       const IBackend::ConvTransposeNdOpts& opts,
                                       const Shape& out_shape,
-                                      Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                conv_transpose_nd_forward(detail::as_f32(x), detail::as_f32(W), detail::as_f32(b),
-                                          B, Cin, Cout, S, K, O, opts, out_shape, Dtype::F32),
-                dt);
-        const int N = opts.N;
-        const int G = opts.groups;
-        int S_total = 1, K_total = 1, O_total = 1;
-        for (int i = 0; i < N; ++i) {
-            S_total *= S[i];
-            K_total *= K[i];
-            O_total *= O[i];
-        }
-        // Grouping splits both channel axes.  The transposed weight is
-        // ``(Cin, Cout / G, K...)``, so its *rows* carry the group (row
-        // ``ci`` belongs to group ``ci / Cin_g``) and its row length is
-        // already the per-group column height — unlike a forward conv,
-        // where the divided axis is the second one.
-        const int Cin_g = Cin / G;
-        const int Cout_g = Cout / G;
-        const int K_flat_g = Cout_g * K_total;
-
-        CpuStorage out_cpu = alloc_cpu(static_cast<std::size_t>(B) * Cout * O_total, dt);
-        CpuStorage cols_cpu = alloc_cpu(static_cast<std::size_t>(K_flat_g) * S_total, dt);
-        if (out_cpu.nbytes)
-            std::memset(out_cpu.ptr.get(), 0, out_cpu.nbytes);
-
-        const auto& x_cpu = std::get<CpuStorage>(x);
-        const auto& W_cpu = std::get<CpuStorage>(W);
-        const auto& b_cpu = std::get<CpuStorage>(b);
-
-        // One body for F32 and F64: the two used to be copy-pasted, which is
-        // how a fix to one silently missed the other.
-        const auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const T* xp0 = reinterpret_cast<const T*>(x_cpu.ptr.get());
-            const T* Wp0 = reinterpret_cast<const T*>(W_cpu.ptr.get());
-            const T* bp = reinterpret_cast<const T*>(b_cpu.ptr.get());
-            T* cp = reinterpret_cast<T*>(cols_cpu.ptr.get());
-            T* yp0 = reinterpret_cast<T*>(out_cpu.ptr.get());
-
-            for (int bi = 0; bi < B; ++bi) {
-                const T* xp = xp0 + static_cast<std::size_t>(bi) * Cin * S_total;
-                T* yp = yp0 + static_cast<std::size_t>(bi) * Cout * O_total;
-                for (int g = 0; g < G; ++g) {
-                    const T* Wg = Wp0 + static_cast<std::size_t>(g) * Cin_g * K_flat_g;
-                    const T* xg = xp + static_cast<std::size_t>(g) * Cin_g * S_total;
-                    T* yg = yp + static_cast<std::size_t>(g) * Cout_g * O_total;
-                    ctnd_gemm(true, false, K_flat_g, S_total, Cin_g, T(1), Wg, K_flat_g, xg,
-                              S_total, T(0), cp, S_total);
-                    ctnd_col2im(cp, yg, Cout_g, O, K, S, opts.stride, opts.pad, opts.dilation, N);
-                }
-                for (int c = 0; c < Cout; ++c) {
-                    T* row = yp + static_cast<std::size_t>(c) * O_total;
-                    const T bv = bp[c];
-                    for (int i = 0; i < O_total; ++i)
-                        row[i] += bv;
-                }
-            }
-        };
-
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("cpu_backend::conv_transpose_nd_forward")
-                .not_implemented("dtype not supported (F32/F64)");
-
-        return Storage{std::move(out_cpu)};
-    }
+                                      Dtype dt) override;
 
     std::vector<Storage> conv_transpose_nd_backward(const Storage& grad_out,
                                                     const Storage& x,
@@ -8289,91 +1172,7 @@ public:
                                                     const int* K,
                                                     const int* O,
                                                     const IBackend::ConvTransposeNdOpts& opts,
-                                                    Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(conv_transpose_nd_backward(detail::as_f32(grad_out),
-                                                                  detail::as_f32(x),
-                                                                  detail::as_f32(W), B, Cin, Cout,
-                                                                  S, K, O, opts, Dtype::F32),
-                                       dt);
-        const int N = opts.N;
-        const int G = opts.groups;
-        int S_total = 1, K_total = 1, O_total = 1;
-        for (int i = 0; i < N; ++i) {
-            S_total *= S[i];
-            K_total *= K[i];
-            O_total *= O[i];
-        }
-        const int Cin_g = Cin / G;
-        const int Cout_g = Cout / G;
-        const int K_flat_g = Cout_g * K_total;
-
-        CpuStorage dx_cpu = alloc_cpu(static_cast<std::size_t>(B) * Cin * S_total, dt);
-        CpuStorage dW_cpu = alloc_cpu(static_cast<std::size_t>(Cin) * K_flat_g, dt);
-        CpuStorage db_cpu = alloc_cpu(static_cast<std::size_t>(Cout), dt);
-        CpuStorage cols_cpu = alloc_cpu(static_cast<std::size_t>(K_flat_g) * S_total, dt);
-        if (dx_cpu.nbytes)
-            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
-        if (dW_cpu.nbytes)
-            std::memset(dW_cpu.ptr.get(), 0, dW_cpu.nbytes);
-        if (db_cpu.nbytes)
-            std::memset(db_cpu.ptr.get(), 0, db_cpu.nbytes);
-
-        const auto& x_cpu = std::get<CpuStorage>(x);
-        const auto& W_cpu = std::get<CpuStorage>(W);
-        const auto& g_cpu = std::get<CpuStorage>(grad_out);
-
-        const auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const T* xp0 = reinterpret_cast<const T*>(x_cpu.ptr.get());
-            const T* Wp0 = reinterpret_cast<const T*>(W_cpu.ptr.get());
-            const T* gp0 = reinterpret_cast<const T*>(g_cpu.ptr.get());
-            T* dxp0 = reinterpret_cast<T*>(dx_cpu.ptr.get());
-            T* dWp0 = reinterpret_cast<T*>(dW_cpu.ptr.get());
-            T* dbp = reinterpret_cast<T*>(db_cpu.ptr.get());
-            T* cp = reinterpret_cast<T*>(cols_cpu.ptr.get());
-
-            for (int bi = 0; bi < B; ++bi) {
-                const T* xp = xp0 + static_cast<std::size_t>(bi) * Cin * S_total;
-                const T* gp = gp0 + static_cast<std::size_t>(bi) * Cout * O_total;
-                T* dxp = dxp0 + static_cast<std::size_t>(bi) * Cin * S_total;
-                for (int g = 0; g < G; ++g) {
-                    const T* Wg = Wp0 + static_cast<std::size_t>(g) * Cin_g * K_flat_g;
-                    const T* xg = xp + static_cast<std::size_t>(g) * Cin_g * S_total;
-                    const T* gg = gp + static_cast<std::size_t>(g) * Cout_g * O_total;
-                    T* dxg = dxp + static_cast<std::size_t>(g) * Cin_g * S_total;
-                    T* dWg = dWp0 + static_cast<std::size_t>(g) * Cin_g * K_flat_g;
-
-                    ctnd_im2col(gg, cp, Cout_g, O, K, S, opts.stride, opts.pad, opts.dilation, N);
-                    ctnd_gemm(false, false, Cin_g, S_total, K_flat_g, T(1), Wg, K_flat_g, cp,
-                              S_total, T(0), dxg, S_total);
-                    ctnd_gemm(false, true, Cin_g, K_flat_g, S_total, T(1), xg, S_total, cp, S_total,
-                              T(1), dWg, K_flat_g);
-                }
-                for (int co = 0; co < Cout; ++co) {
-                    const T* row = gp + static_cast<std::size_t>(co) * O_total;
-                    T s = T(0);
-                    for (int j = 0; j < O_total; ++j)
-                        s += row[j];
-                    dbp[co] += s;
-                }
-            }
-        };
-
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("cpu_backend::conv_transpose_nd_backward")
-                .not_implemented("dtype not supported (F32/F64)");
-
-        return {Storage{std::move(dx_cpu)}, Storage{std::move(dW_cpu)}, Storage{std::move(db_cpu)}};
-    }
+                                                    Dtype dt) override;
 
     Storage conv_nd_forward(const Storage& x,
                             const Storage& W,
@@ -8388,109 +1187,7 @@ public:
                             const int* O,
                             const IBackend::ConvNdOpts& opts,
                             const Shape& out_shape,
-                            Dtype dt) override {
-        // Half is not threaded through im2col and GEMM — there is no
-        // half BLAS to call — so it widens at the door and rounds once on
-        // the way out.  Metal accepted F16 convolutions and the CPU did
-        // not, which made the same model run on one device and raise on
-        // the other.  It widened with a loop of its own that read every
-        // 16-bit float as IEEE half and rounded back to it, so a bfloat16
-        // convolution came back as float16 bits; as_f32 / back_to_f16 read
-        // each storage as what it is.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                conv_nd_forward(detail::as_f32(x), detail::as_f32(W), detail::as_f32(b), B, Cin,
-                                Cout, Cin_g, Cout_g, S, K, O, opts, out_shape, Dtype::F32),
-                dt);
-
-        const int N = opts.N;
-        const int O_total = checked_extent(O, N, "output positions");
-        const int K_total = checked_extent(K, N, "kernel taps");
-        const int S_total = checked_extent(S, N, "input positions");
-
-        const int K_flat = Cin_g * K_total;
-        const int M_out = O_total;
-        const int W_per_group = Cout_g * K_flat;
-
-        CpuStorage out_cpu = alloc_cpu(static_cast<std::size_t>(B) * Cout * O_total, dt);
-        const int slab = column_slab(O, N, K_flat);
-        CpuStorage cols_cpu = alloc_cpu(column_slab_elements(O, N, K_flat, slab), dt);
-        const auto& x_cpu = std::get<CpuStorage>(x);
-        const auto& W_cpu = std::get<CpuStorage>(W);
-        const auto& b_cpu = std::get<CpuStorage>(b);
-
-        for (int bi = 0; bi < B; ++bi) {
-            for (int g = 0; g < opts.groups; ++g) {
-                if (dt == Dtype::F32) {
-                    const float* xp =
-                        reinterpret_cast<const float*>(x_cpu.ptr.get()) +
-                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
-                            S_total;
-                    float* cp = reinterpret_cast<float*>(cols_cpu.ptr.get());
-                    const float* wp = reinterpret_cast<const float*>(W_cpu.ptr.get()) +
-                                      static_cast<std::size_t>(g) * W_per_group;
-                    float* yp = reinterpret_cast<float*>(out_cpu.ptr.get()) +
-                                (static_cast<std::size_t>(bi) * Cout +
-                                 static_cast<std::size_t>(g) * Cout_g) *
-                                    O_total;
-                    for_each_column_slab(
-                        O, opts, N, slab,
-                        [&](const int* Os, const int* pads, std::size_t begin, int ms) {
-                            conv_nd_im2col_f32(xp, cp, Cin_g, S, K, Os, opts.stride, pads,
-                                               opts.dilation, N);
-                            cpu::sgemm(false, false, Cout_g, ms, K_flat, 1.0f, wp, K_flat, cp, ms,
-                                       0.0f, yp + begin, M_out);
-                        });
-                } else if (dt == Dtype::F64) {
-                    const double* xp =
-                        reinterpret_cast<const double*>(x_cpu.ptr.get()) +
-                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
-                            S_total;
-                    double* cp = reinterpret_cast<double*>(cols_cpu.ptr.get());
-                    const double* wp = reinterpret_cast<const double*>(W_cpu.ptr.get()) +
-                                       static_cast<std::size_t>(g) * W_per_group;
-                    double* yp = reinterpret_cast<double*>(out_cpu.ptr.get()) +
-                                 (static_cast<std::size_t>(bi) * Cout +
-                                  static_cast<std::size_t>(g) * Cout_g) *
-                                     O_total;
-                    for_each_column_slab(
-                        O, opts, N, slab,
-                        [&](const int* Os, const int* pads, std::size_t begin, int ms) {
-                            conv_nd_im2col_f64(xp, cp, Cin_g, S, K, Os, opts.stride, pads,
-                                               opts.dilation, N);
-                            cpu::dgemm(false, false, Cout_g, ms, K_flat, 1.0, wp, K_flat, cp, ms,
-                                       0.0, yp + begin, M_out);
-                        });
-                } else {
-                    ErrorBuilder("cpu_backend::conv_nd_forward")
-                        .not_implemented("dtype not supported (F32/F64)");
-                }
-            }
-
-            if (dt == Dtype::F32) {
-                float* yp = reinterpret_cast<float*>(out_cpu.ptr.get()) +
-                            static_cast<std::size_t>(bi) * Cout * O_total;
-                const float* bp = reinterpret_cast<const float*>(b_cpu.ptr.get());
-                for (int c = 0; c < Cout; ++c) {
-                    const float bv = bp[c];
-                    float* row = yp + static_cast<std::size_t>(c) * O_total;
-                    for (int i = 0; i < O_total; ++i)
-                        row[i] += bv;
-                }
-            } else if (dt == Dtype::F64) {
-                double* yp = reinterpret_cast<double*>(out_cpu.ptr.get()) +
-                             static_cast<std::size_t>(bi) * Cout * O_total;
-                const double* bp = reinterpret_cast<const double*>(b_cpu.ptr.get());
-                for (int c = 0; c < Cout; ++c) {
-                    const double bv = bp[c];
-                    double* row = yp + static_cast<std::size_t>(c) * O_total;
-                    for (int i = 0; i < O_total; ++i)
-                        row[i] += bv;
-                }
-            }
-        }
-        return Storage{std::move(out_cpu)};
-    }
+                            Dtype dt) override;
 
     std::vector<Storage> conv_nd_backward(const Storage& grad_out,
                                           const Storage& x,
@@ -8504,133 +1201,7 @@ public:
                                           const int* K,
                                           const int* O,
                                           const IBackend::ConvNdOpts& opts,
-                                          Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(conv_nd_backward(detail::as_f32(grad_out), detail::as_f32(x),
-                                                        detail::as_f32(W), B, Cin, Cout, Cin_g,
-                                                        Cout_g, S, K, O, opts, Dtype::F32),
-                                       dt);
-        const int N = opts.N;
-        const int G = opts.groups;
-        const int O_total = checked_extent(O, N, "output positions");
-        const int K_total = checked_extent(K, N, "kernel taps");
-        const int S_total = checked_extent(S, N, "input positions");
-
-        const int K_flat = Cin_g * K_total;
-        const int M_out = O_total;
-        const int W_per_group = Cout_g * K_flat;
-
-        CpuStorage dx_cpu = alloc_cpu(static_cast<std::size_t>(B) * Cin * S_total, dt);
-        CpuStorage dW_cpu = alloc_cpu(static_cast<std::size_t>(Cout) * K_flat, dt);
-        CpuStorage db_cpu = alloc_cpu(static_cast<std::size_t>(Cout), dt);
-        if (dx_cpu.nbytes)
-            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
-        if (dW_cpu.nbytes)
-            std::memset(dW_cpu.ptr.get(), 0, dW_cpu.nbytes);
-        if (db_cpu.nbytes)
-            std::memset(db_cpu.ptr.get(), 0, db_cpu.nbytes);
-        const int slab = column_slab(O, N, K_flat);
-        CpuStorage cols_cpu = alloc_cpu(column_slab_elements(O, N, K_flat, slab), dt);
-        CpuStorage col_grad_cpu = alloc_cpu(column_slab_elements(O, N, K_flat, slab), dt);
-
-        const auto& x_cpu = std::get<CpuStorage>(x);
-        const auto& W_cpu = std::get<CpuStorage>(W);
-        const auto& g_cpu = std::get<CpuStorage>(grad_out);
-
-        for (int bi = 0; bi < B; ++bi) {
-            for (int g = 0; g < G; ++g) {
-                if (dt == Dtype::F32) {
-                    const float* xp =
-                        reinterpret_cast<const float*>(x_cpu.ptr.get()) +
-                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
-                            S_total;
-                    const float* gp = reinterpret_cast<const float*>(g_cpu.ptr.get()) +
-                                      (static_cast<std::size_t>(bi) * Cout +
-                                       static_cast<std::size_t>(g) * Cout_g) *
-                                          O_total;
-                    float* dxp =
-                        reinterpret_cast<float*>(dx_cpu.ptr.get()) +
-                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
-                            S_total;
-                    const float* wp = reinterpret_cast<const float*>(W_cpu.ptr.get()) +
-                                      static_cast<std::size_t>(g) * W_per_group;
-                    float* dwp = reinterpret_cast<float*>(dW_cpu.ptr.get()) +
-                                 static_cast<std::size_t>(g) * W_per_group;
-                    float* cp = reinterpret_cast<float*>(cols_cpu.ptr.get());
-                    float* cgp = reinterpret_cast<float*>(col_grad_cpu.ptr.get());
-                    for_each_column_slab(
-                        O, opts, N, slab,
-                        [&](const int* Os, const int* pads, std::size_t begin, int ms) {
-                            conv_nd_im2col_f32(xp, cp, Cin_g, S, K, Os, opts.stride, pads,
-                                               opts.dilation, N);
-                            cpu::sgemm(false, true, Cout_g, K_flat, ms, 1.0f, gp + begin, M_out, cp,
-                                       ms, 1.0f, dwp, K_flat);
-                            cpu::sgemm(true, false, K_flat, ms, Cout_g, 1.0f, wp, K_flat,
-                                       gp + begin, M_out, 0.0f, cgp, ms);
-                            conv_nd_col2im_f32(cgp, dxp, Cin_g, S, K, Os, opts.stride, pads,
-                                               opts.dilation, N);
-                        });
-                    float* dbp = reinterpret_cast<float*>(db_cpu.ptr.get()) +
-                                 static_cast<std::size_t>(g) * Cout_g;
-                    for (int co = 0; co < Cout_g; ++co) {
-                        const float* row = gp + static_cast<std::size_t>(co) * O_total;
-                        float s = 0.f;
-                        for (int j = 0; j < O_total; ++j)
-                            s += row[j];
-                        dbp[co] += s;
-                    }
-                } else if (dt == Dtype::F64) {
-                    const double* xp =
-                        reinterpret_cast<const double*>(x_cpu.ptr.get()) +
-                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
-                            S_total;
-                    const double* gp = reinterpret_cast<const double*>(g_cpu.ptr.get()) +
-                                       (static_cast<std::size_t>(bi) * Cout +
-                                        static_cast<std::size_t>(g) * Cout_g) *
-                                           O_total;
-                    double* dxp =
-                        reinterpret_cast<double*>(dx_cpu.ptr.get()) +
-                        (static_cast<std::size_t>(bi) * Cin + static_cast<std::size_t>(g) * Cin_g) *
-                            S_total;
-                    const double* wp = reinterpret_cast<const double*>(W_cpu.ptr.get()) +
-                                       static_cast<std::size_t>(g) * W_per_group;
-                    double* dwp = reinterpret_cast<double*>(dW_cpu.ptr.get()) +
-                                  static_cast<std::size_t>(g) * W_per_group;
-                    double* cp = reinterpret_cast<double*>(cols_cpu.ptr.get());
-                    double* cgp = reinterpret_cast<double*>(col_grad_cpu.ptr.get());
-                    for_each_column_slab(
-                        O, opts, N, slab,
-                        [&](const int* Os, const int* pads, std::size_t begin, int ms) {
-                            conv_nd_im2col_f64(xp, cp, Cin_g, S, K, Os, opts.stride, pads,
-                                               opts.dilation, N);
-                            cpu::dgemm(false, true, Cout_g, K_flat, ms, 1.0, gp + begin, M_out, cp,
-                                       ms, 1.0, dwp, K_flat);
-                            cpu::dgemm(true, false, K_flat, ms, Cout_g, 1.0, wp, K_flat, gp + begin,
-                                       M_out, 0.0, cgp, ms);
-                            conv_nd_col2im_f64(cgp, dxp, Cin_g, S, K, Os, opts.stride, pads,
-                                               opts.dilation, N);
-                        });
-                    double* dbp = reinterpret_cast<double*>(db_cpu.ptr.get()) +
-                                  static_cast<std::size_t>(g) * Cout_g;
-                    for (int co = 0; co < Cout_g; ++co) {
-                        const double* row = gp + static_cast<std::size_t>(co) * O_total;
-                        double s = 0.0;
-                        for (int j = 0; j < O_total; ++j)
-                            s += row[j];
-                        dbp[co] += s;
-                    }
-                } else {
-                    ErrorBuilder("cpu_backend::conv_nd_backward")
-                        .not_implemented("dtype not supported");
-                }
-            }
-        }
-        return {Storage{std::move(dx_cpu)}, Storage{std::move(dW_cpu)}, Storage{std::move(db_cpu)}};
-    }
+                                          Dtype dt) override;
 
     Storage unfold_forward(const Storage& x,
                            int B,
@@ -8642,55 +1213,7 @@ public:
                            const std::vector<int>& pad,
                            const std::vector<int>& dilation,
                            const Shape& p9_,
-                           Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(unfold_forward(detail::as_f32(x), B, C, S, K, O, stride, pad,
-                                                      dilation, p9_, Dtype::F32),
-                                       dt);
-        // Integers ride the double path.  ``im2col`` is written out for
-        // float and double with no template behind it, and unfold only
-        // *copies* — so a double holds every value exactly, for every
-        // integer dtype except an int64 magnitude above 2^53.
-        if (detail::is_int_like(dt))
-            return detail::f64_back_to_int(unfold_forward(detail::as_f64(x), B, C, S, K, O, stride,
-                                                          pad, dilation, p9_, Dtype::F64),
-                                           dt);
-        const int N = static_cast<int>(K.size());
-        int K_total = 1, O_total = 1, S_total = 1;
-        for (int i = 0; i < N; ++i) {
-            K_total *= K[i];
-            O_total *= O[i];
-            S_total *= S[i];
-        }
-
-        CpuStorage out_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * K_total * O_total, dt);
-        const auto& x_cpu = std::get<CpuStorage>(x);
-
-        for (int bi = 0; bi < B; ++bi) {
-            if (dt == Dtype::F32) {
-                const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get()) +
-                                  static_cast<std::size_t>(bi) * C * S_total;
-                float* yp = reinterpret_cast<float*>(out_cpu.ptr.get()) +
-                            static_cast<std::size_t>(bi) * C * K_total * O_total;
-                unfold_im2col_f32(xp, yp, C, S.data(), K.data(), O.data(), stride.data(),
-                                  pad.data(), dilation.data(), N);
-            } else if (dt == Dtype::F64) {
-                const double* xp = reinterpret_cast<const double*>(x_cpu.ptr.get()) +
-                                   static_cast<std::size_t>(bi) * C * S_total;
-                double* yp = reinterpret_cast<double*>(out_cpu.ptr.get()) +
-                             static_cast<std::size_t>(bi) * C * K_total * O_total;
-                unfold_im2col_f64(xp, yp, C, S.data(), K.data(), O.data(), stride.data(),
-                                  pad.data(), dilation.data(), N);
-            } else {
-                ErrorBuilder("cpu_backend::unfold_forward").not_implemented("dtype not supported");
-            }
-        }
-        return Storage{std::move(out_cpu)};
-    }
+                           Dtype dt) override;
 
     Storage unfold_backward(const Storage& grad_out,
                             int B,
@@ -8701,513 +1224,44 @@ public:
                             const std::vector<int>& stride,
                             const std::vector<int>& pad,
                             const std::vector<int>& dilation,
-                            Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(unfold_backward(detail::as_f32(grad_out), B, C, S, K, O,
-                                                       stride, pad, dilation, Dtype::F32),
-                                       dt);
-        const int N = static_cast<int>(K.size());
-        int K_total = 1, O_total = 1, S_total = 1;
-        for (int i = 0; i < N; ++i) {
-            K_total *= K[i];
-            O_total *= O[i];
-            S_total *= S[i];
-        }
-
-        CpuStorage dx_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * S_total, dt);
-        if (dx_cpu.nbytes)
-            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
-        const auto& g_cpu = std::get<CpuStorage>(grad_out);
-
-        for (int bi = 0; bi < B; ++bi) {
-            if (dt == Dtype::F32) {
-                const float* gp = reinterpret_cast<const float*>(g_cpu.ptr.get()) +
-                                  static_cast<std::size_t>(bi) * C * K_total * O_total;
-                float* dxp = reinterpret_cast<float*>(dx_cpu.ptr.get()) +
-                             static_cast<std::size_t>(bi) * C * S_total;
-                unfold_col2im_f32(gp, dxp, C, S.data(), K.data(), O.data(), stride.data(),
-                                  pad.data(), dilation.data(), N);
-            } else if (dt == Dtype::F64) {
-                const double* gp = reinterpret_cast<const double*>(g_cpu.ptr.get()) +
-                                   static_cast<std::size_t>(bi) * C * K_total * O_total;
-                double* dxp = reinterpret_cast<double*>(dx_cpu.ptr.get()) +
-                              static_cast<std::size_t>(bi) * C * S_total;
-                unfold_col2im_f64(gp, dxp, C, S.data(), K.data(), O.data(), stride.data(),
-                                  pad.data(), dilation.data(), N);
-            } else {
-                ErrorBuilder("cpu_backend::unfold_backward").not_implemented("dtype not supported");
-            }
-        }
-        return Storage{std::move(dx_cpu)};
-    }
+                            Dtype dt) override;
 
     std::pair<Storage, Storage> expand_and_multiply(const Storage& mask,
                                                     const Storage& x,
                                                     const Shape& mask_shape,
                                                     const Shape& x_shape,
-                                                    Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(expand_and_multiply(detail::as_f32(mask), detail::as_f32(x),
-                                                           mask_shape, x_shape, Dtype::F32),
-                                       dt);
-        const std::size_t B_sz = static_cast<std::size_t>(x_shape[0]);
-
-        const bool is_channel_mask = (mask_shape.size() >= 2 && mask_shape[1] > 1);
-        const std::size_t C_sz = is_channel_mask ? static_cast<std::size_t>(mask_shape[1])
-                                                 : static_cast<std::size_t>(x_shape[1]);
-        std::size_t spatial = 1;
-        for (std::size_t i = 2; i < x_shape.size(); ++i)
-            spatial *= static_cast<std::size_t>(x_shape[i]);
-
-        const std::size_t numel = shape_numel(x_shape);
-        CpuStorage exp_out = alloc_cpu(numel, dt);
-        const auto& m_cpu = std::get<CpuStorage>(mask);
-        const auto& x_cpu = std::get<CpuStorage>(x);
-        CpuStorage y_out = alloc_cpu(numel, dt);
-
-        if (is_channel_mask) {
-            if (dt == Dtype::F32) {
-                const float* mp = reinterpret_cast<const float*>(m_cpu.ptr.get());
-                const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get());
-                float* ep = reinterpret_cast<float*>(exp_out.ptr.get());
-                float* yp = reinterpret_cast<float*>(y_out.ptr.get());
-                for (std::size_t b = 0; b < B_sz; ++b)
-                    for (std::size_t c = 0; c < C_sz; ++c) {
-                        const float v = mp[b * C_sz + c];
-                        for (std::size_t s = 0; s < spatial; ++s) {
-                            const std::size_t idx = (b * C_sz + c) * spatial + s;
-                            ep[idx] = v;
-                            yp[idx] = xp[idx] * v;
-                        }
-                    }
-            } else if (dt == Dtype::F64) {
-                const double* mp = reinterpret_cast<const double*>(m_cpu.ptr.get());
-                const double* xp = reinterpret_cast<const double*>(x_cpu.ptr.get());
-                double* ep = reinterpret_cast<double*>(exp_out.ptr.get());
-                double* yp = reinterpret_cast<double*>(y_out.ptr.get());
-                for (std::size_t b = 0; b < B_sz; ++b)
-                    for (std::size_t c = 0; c < C_sz; ++c) {
-                        const double v = mp[b * C_sz + c];
-                        for (std::size_t s = 0; s < spatial; ++s) {
-                            const std::size_t idx = (b * C_sz + c) * spatial + s;
-                            ep[idx] = v;
-                            yp[idx] = xp[idx] * v;
-                        }
-                    }
-            } else {
-                ErrorBuilder("cpu_backend::expand_and_multiply")
-                    .not_implemented("dtype not supported");
-            }
-        } else {
-            const std::size_t per = numel / B_sz;
-            if (dt == Dtype::F32) {
-                const float* mp = reinterpret_cast<const float*>(m_cpu.ptr.get());
-                const float* xp = reinterpret_cast<const float*>(x_cpu.ptr.get());
-                float* ep = reinterpret_cast<float*>(exp_out.ptr.get());
-                float* yp = reinterpret_cast<float*>(y_out.ptr.get());
-                for (std::size_t b = 0; b < B_sz; ++b) {
-                    const float v = mp[b];
-                    for (std::size_t s = 0; s < per; ++s) {
-                        const std::size_t idx = b * per + s;
-                        ep[idx] = v;
-                        yp[idx] = xp[idx] * v;
-                    }
-                }
-            } else if (dt == Dtype::F64) {
-                const double* mp = reinterpret_cast<const double*>(m_cpu.ptr.get());
-                const double* xp = reinterpret_cast<const double*>(x_cpu.ptr.get());
-                double* ep = reinterpret_cast<double*>(exp_out.ptr.get());
-                double* yp = reinterpret_cast<double*>(y_out.ptr.get());
-                for (std::size_t b = 0; b < B_sz; ++b) {
-                    const double v = mp[b];
-                    for (std::size_t s = 0; s < per; ++s) {
-                        const std::size_t idx = b * per + s;
-                        ep[idx] = v;
-                        yp[idx] = xp[idx] * v;
-                    }
-                }
-            } else {
-                ErrorBuilder("cpu_backend::expand_and_multiply")
-                    .not_implemented("dtype not supported");
-            }
-        }
-        return {Storage{std::move(exp_out)}, Storage{std::move(y_out)}};
-    }
+                                                    Dtype dt) override;
 
     Storage drop_block_mask(const Storage& seed,
                             double drop_prob,
                             std::int64_t block_size,
                             const Shape& x_shape,
-                            Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                drop_block_mask(detail::as_f32(seed), drop_prob, block_size, x_shape, Dtype::F32),
-                dt);
-        const std::size_t B = static_cast<std::size_t>(x_shape[0]);
-        const std::size_t C = static_cast<std::size_t>(x_shape[1]);
-        const std::size_t H = static_cast<std::size_t>(x_shape[2]);
-        const std::size_t W = static_cast<std::size_t>(x_shape[3]);
-        const std::size_t total = B * C * H * W;
-        const std::int64_t bsz = block_size;
-        const std::int64_t pad_h = bsz / 2;
-
-        const auto& s_cpu = std::get<CpuStorage>(seed);
-        CpuStorage block_mask = alloc_cpu(total, dt);
-
-        if (dt == Dtype::F32) {
-            const float* sp = reinterpret_cast<const float*>(s_cpu.ptr.get());
-            float* mp = reinterpret_cast<float*>(block_mask.ptr.get());
-            for (std::size_t b = 0; b < B; ++b)
-                for (std::size_t c = 0; c < C; ++c) {
-                    const float* s = sp + (b * C + c) * H * W;
-                    float* m = mp + (b * C + c) * H * W;
-                    for (std::size_t y = 0; y < H; ++y)
-                        for (std::size_t x = 0; x < W; ++x) {
-                            float mx = 0.f;
-                            for (std::int64_t dy = 0; dy < bsz; ++dy) {
-                                const std::int64_t yy = static_cast<std::int64_t>(y) + dy - pad_h;
-                                if (yy < 0 || yy >= static_cast<std::int64_t>(H))
-                                    continue;
-                                for (std::int64_t dx = 0; dx < bsz; ++dx) {
-                                    const std::int64_t xx =
-                                        static_cast<std::int64_t>(x) + dx - pad_h;
-                                    if (xx < 0 || xx >= static_cast<std::int64_t>(W))
-                                        continue;
-                                    const float v = s[yy * W + xx];
-                                    if (v > mx)
-                                        mx = v;
-                                }
-                            }
-                            m[y * W + x] = mx;
-                        }
-                }
-            const float fs = static_cast<float>(1.0 / (1.0 - drop_prob));
-            for (std::size_t i = 0; i < total; ++i)
-                mp[i] = (1.f - mp[i]) * fs;
-        } else if (dt == Dtype::F64) {
-            const double* sp = reinterpret_cast<const double*>(s_cpu.ptr.get());
-            double* mp = reinterpret_cast<double*>(block_mask.ptr.get());
-            for (std::size_t b = 0; b < B; ++b)
-                for (std::size_t c = 0; c < C; ++c) {
-                    const double* s = sp + (b * C + c) * H * W;
-                    double* m = mp + (b * C + c) * H * W;
-                    for (std::size_t y = 0; y < H; ++y)
-                        for (std::size_t x = 0; x < W; ++x) {
-                            double mx = 0.0;
-                            for (std::int64_t dy = 0; dy < bsz; ++dy) {
-                                const std::int64_t yy = static_cast<std::int64_t>(y) + dy - pad_h;
-                                if (yy < 0 || yy >= static_cast<std::int64_t>(H))
-                                    continue;
-                                for (std::int64_t dx = 0; dx < bsz; ++dx) {
-                                    const std::int64_t xx =
-                                        static_cast<std::int64_t>(x) + dx - pad_h;
-                                    if (xx < 0 || xx >= static_cast<std::int64_t>(W))
-                                        continue;
-                                    const double v = s[yy * W + xx];
-                                    if (v > mx)
-                                        mx = v;
-                                }
-                            }
-                            m[y * W + x] = mx;
-                        }
-                }
-            const double scale = 1.0 / (1.0 - drop_prob);
-            for (std::size_t i = 0; i < total; ++i)
-                mp[i] = (1.0 - mp[i]) * scale;
-        } else {
-            ErrorBuilder("cpu_backend::drop_block_mask").not_implemented("dtype not supported");
-        }
-        return Storage{std::move(block_mask)};
-    }
+                            Dtype dt) override;
 
     std::vector<Storage> max_pool_nd_forward(const Storage& x,
                                              const Shape& x_shape,
                                              const Shape& out_shape,
                                              const PoolOpts& opts,
-                                             Dtype dt) override {
-        const int N = opts.N;
-        const int B = static_cast<int>(x_shape[0]);
-        const int C = static_cast<int>(x_shape[1]);
-        int S[3], O[3];
-        int O_total = 1;
-        for (int i = 0; i < N; ++i) {
-            S[i] = static_cast<int>(x_shape[2 + i]);
-            O[i] = static_cast<int>(out_shape[2 + i]);
-            O_total *= O[i];
-        }
-        // Pooling is a *selection*, so every dtype the caller can name has
-        // a right answer even though Accelerate only has float kernels for
-        // it.  Half widens to float32 (exact — every half is a float32);
-        // an integer widens to double, which is exact for bool, int8,
-        // int16 and int32 outright and for int64 up to 2^53.  The argmax
-        // is an index either way and travels through untouched, which is
-        // why the narrowing helpers key off each storage's own dtype.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                max_pool_nd_forward(detail::as_f32(x), x_shape, out_shape, opts, Dtype::F32), dt);
-        if (detail::is_int_like(dt))
-            return detail::f64_back_to_int(
-                max_pool_nd_forward(detail::as_f64(x), x_shape, out_shape, opts, Dtype::F64), dt);
-        const auto& xc = std::get<CpuStorage>(x);
-        auto y_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * O_total, dt);
-        auto am_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * O_total, Dtype::I32);
-        auto dispatch = [&](auto tag) {
-            using T = decltype(tag);
-            const T* xp = reinterpret_cast<const T*>(xc.ptr.get());
-            T* yp = reinterpret_cast<T*>(y_cpu.ptr.get());
-            auto* ap = reinterpret_cast<std::int32_t*>(am_cpu.ptr.get());
-            if constexpr (std::is_same_v<T, float>) {
-                if (N == 1)
-                    cpu::max_pool1d_forward_f32(xp, yp, ap, B, C, S[0], opts.K[0], O[0],
-                                                opts.stride[0], opts.pad[0]);
-                else if (N == 2)
-                    cpu::max_pool2d_forward_f32(xp, yp, ap, B, C, S[0], S[1], opts.K[0], opts.K[1],
-                                                O[0], O[1], opts.stride[0], opts.stride[1],
-                                                opts.pad[0], opts.pad[1]);
-                else
-                    cpu::max_pool3d_forward_f32(xp, yp, ap, B, C, S[0], S[1], S[2], opts.K[0],
-                                                opts.K[1], opts.K[2], O[0], O[1], O[2],
-                                                opts.stride[0], opts.stride[1], opts.stride[2],
-                                                opts.pad[0], opts.pad[1], opts.pad[2]);
-            } else {
-                if (N == 1)
-                    cpu::max_pool1d_forward_f64(xp, yp, ap, B, C, S[0], opts.K[0], O[0],
-                                                opts.stride[0], opts.pad[0]);
-                else if (N == 2)
-                    cpu::max_pool2d_forward_f64(xp, yp, ap, B, C, S[0], S[1], opts.K[0], opts.K[1],
-                                                O[0], O[1], opts.stride[0], opts.stride[1],
-                                                opts.pad[0], opts.pad[1]);
-                else
-                    cpu::max_pool3d_forward_f64(xp, yp, ap, B, C, S[0], S[1], S[2], opts.K[0],
-                                                opts.K[1], opts.K[2], O[0], O[1], O[2],
-                                                opts.stride[0], opts.stride[1], opts.stride[2],
-                                                opts.pad[0], opts.pad[1], opts.pad[2]);
-            }
-        };
-        if (dt == Dtype::F32)
-            dispatch(float{});
-        else if (dt == Dtype::F64)
-            dispatch(double{});
-        else
-            ErrorBuilder("max_pool_nd_forward").not_implemented("dtype");
-        return {Storage{std::move(y_cpu)}, Storage{std::move(am_cpu)}};
-    }
+                                             Dtype dt) override;
 
     Storage max_pool_nd_backward(const Storage& grad_out,
                                  const Storage& saved_argmax,
                                  const Shape& x_shape,
                                  const Shape& out_shape,
                                  const PoolOpts& opts,
-                                 Dtype dt) override {
-        const int N = opts.N;
-        const int B = static_cast<int>(x_shape[0]);
-        const int C = static_cast<int>(x_shape[1]);
-        int S[3], O[3];
-        int S_total = 1, O_total = 1;
-        for (int i = 0; i < N; ++i) {
-            S[i] = static_cast<int>(x_shape[2 + i]);
-            O[i] = static_cast<int>(out_shape[2 + i]);
-            S_total *= S[i];
-            O_total *= O[i];
-        }
-        (void)O_total;
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(max_pool_nd_backward(detail::as_f32(grad_out), saved_argmax,
-                                                            x_shape, out_shape, opts, Dtype::F32),
-                                       dt);
-        if (detail::is_int_like(dt))
-            return detail::f64_back_to_int(max_pool_nd_backward(detail::as_f64(grad_out),
-                                                                saved_argmax, x_shape, out_shape,
-                                                                opts, Dtype::F64),
-                                           dt);
-        const auto& gc = std::get<CpuStorage>(grad_out);
-        const auto& ac = std::get<CpuStorage>(saved_argmax);
-        auto dx_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * S_total, dt);
-        if (dx_cpu.nbytes)
-            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
-        auto dispatch = [&](auto tag) {
-            using T = decltype(tag);
-            const T* gp = reinterpret_cast<const T*>(gc.ptr.get());
-            const auto* ap = reinterpret_cast<const std::int32_t*>(ac.ptr.get());
-            T* dxp = reinterpret_cast<T*>(dx_cpu.ptr.get());
-            if constexpr (std::is_same_v<T, float>) {
-                if (N == 1)
-                    cpu::max_pool1d_backward_f32(gp, ap, dxp, B, C, S[0], O[0]);
-                else if (N == 2)
-                    cpu::max_pool2d_backward_f32(gp, ap, dxp, B, C, S[0], S[1], O[0], O[1]);
-                else
-                    cpu::max_pool3d_backward_f32(gp, ap, dxp, B, C, S[0], S[1], S[2], O[0], O[1],
-                                                 O[2]);
-            } else {
-                if (N == 1)
-                    cpu::max_pool1d_backward_f64(gp, ap, dxp, B, C, S[0], O[0]);
-                else if (N == 2)
-                    cpu::max_pool2d_backward_f64(gp, ap, dxp, B, C, S[0], S[1], O[0], O[1]);
-                else
-                    cpu::max_pool3d_backward_f64(gp, ap, dxp, B, C, S[0], S[1], S[2], O[0], O[1],
-                                                 O[2]);
-            }
-        };
-        if (dt == Dtype::F32)
-            dispatch(float{});
-        else if (dt == Dtype::F64)
-            dispatch(double{});
-        else
-            ErrorBuilder("max_pool_nd_backward").not_implemented("dtype");
-        return Storage{std::move(dx_cpu)};
-    }
+                                 Dtype dt) override;
 
     Storage avg_pool_nd_forward(const Storage& x,
                                 const Shape& x_shape,
                                 const Shape& out_shape,
                                 const PoolOpts& opts,
-                                Dtype dt) override {
-        const int N = opts.N;
-        const int B = static_cast<int>(x_shape[0]);
-        const int C = static_cast<int>(x_shape[1]);
-        int S[3], O[3];
-        int O_total = 1;
-        for (int i = 0; i < N; ++i) {
-            S[i] = static_cast<int>(x_shape[2 + i]);
-            O[i] = static_cast<int>(out_shape[2 + i]);
-            O_total *= O[i];
-        }
-        // Same route as max_pool above.  The average of integers rounds to
-        // the caller's integer width on the way out, which is what an
-        // integer-typed mean means.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                avg_pool_nd_forward(detail::as_f32(x), x_shape, out_shape, opts, Dtype::F32), dt);
-        if (detail::is_int_like(dt))
-            return detail::f64_back_to_int(
-                avg_pool_nd_forward(detail::as_f64(x), x_shape, out_shape, opts, Dtype::F64), dt,
-                detail::IntRounding::TowardZero);
-        const auto& xc = std::get<CpuStorage>(x);
-        auto y_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * O_total, dt);
-        auto dispatch = [&](auto tag) {
-            using T = decltype(tag);
-            const T* xp = reinterpret_cast<const T*>(xc.ptr.get());
-            T* yp = reinterpret_cast<T*>(y_cpu.ptr.get());
-            if constexpr (std::is_same_v<T, float>) {
-                if (N == 1)
-                    cpu::avg_pool1d_forward_f32(xp, yp, B, C, S[0], opts.K[0], O[0], opts.stride[0],
-                                                opts.pad[0], opts.count_include_pad);
-                else if (N == 2)
-                    cpu::avg_pool2d_forward_f32(xp, yp, B, C, S[0], S[1], opts.K[0], opts.K[1],
-                                                O[0], O[1], opts.stride[0], opts.stride[1],
-                                                opts.pad[0], opts.pad[1], opts.count_include_pad);
-                else
-                    cpu::avg_pool3d_forward_f32(
-                        xp, yp, B, C, S[0], S[1], S[2], opts.K[0], opts.K[1], opts.K[2], O[0], O[1],
-                        O[2], opts.stride[0], opts.stride[1], opts.stride[2], opts.pad[0],
-                        opts.pad[1], opts.pad[2], opts.count_include_pad);
-            } else {
-                if (N == 1)
-                    cpu::avg_pool1d_forward_f64(xp, yp, B, C, S[0], opts.K[0], O[0], opts.stride[0],
-                                                opts.pad[0], opts.count_include_pad);
-                else if (N == 2)
-                    cpu::avg_pool2d_forward_f64(xp, yp, B, C, S[0], S[1], opts.K[0], opts.K[1],
-                                                O[0], O[1], opts.stride[0], opts.stride[1],
-                                                opts.pad[0], opts.pad[1], opts.count_include_pad);
-                else
-                    cpu::avg_pool3d_forward_f64(
-                        xp, yp, B, C, S[0], S[1], S[2], opts.K[0], opts.K[1], opts.K[2], O[0], O[1],
-                        O[2], opts.stride[0], opts.stride[1], opts.stride[2], opts.pad[0],
-                        opts.pad[1], opts.pad[2], opts.count_include_pad);
-            }
-        };
-        if (dt == Dtype::F32)
-            dispatch(float{});
-        else if (dt == Dtype::F64)
-            dispatch(double{});
-        else
-            ErrorBuilder("avg_pool_nd_forward").not_implemented("dtype");
-        return Storage{std::move(y_cpu)};
-    }
+                                Dtype dt) override;
 
     Storage avg_pool_nd_backward(const Storage& grad_out,
                                  const Shape& x_shape,
                                  const Shape& out_shape,
                                  const PoolOpts& opts,
-                                 Dtype dt) override {
-        const int N = opts.N;
-        const int B = static_cast<int>(x_shape[0]);
-        const int C = static_cast<int>(x_shape[1]);
-        int S[3], O[3];
-        int S_total = 1, O_total = 1;
-        for (int i = 0; i < N; ++i) {
-            S[i] = static_cast<int>(x_shape[2 + i]);
-            O[i] = static_cast<int>(out_shape[2 + i]);
-            S_total *= S[i];
-            O_total *= O[i];
-        }
-        (void)O_total;
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(avg_pool_nd_backward(detail::as_f32(grad_out), x_shape,
-                                                            out_shape, opts, Dtype::F32),
-                                       dt);
-        if (detail::is_int_like(dt))
-            return detail::f64_back_to_int(avg_pool_nd_backward(detail::as_f64(grad_out), x_shape,
-                                                                out_shape, opts, Dtype::F64),
-                                           dt, detail::IntRounding::TowardZero);
-        const auto& gc = std::get<CpuStorage>(grad_out);
-        auto dx_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * S_total, dt);
-        if (dx_cpu.nbytes)
-            std::memset(dx_cpu.ptr.get(), 0, dx_cpu.nbytes);
-        auto dispatch = [&](auto tag) {
-            using T = decltype(tag);
-            const T* gp = reinterpret_cast<const T*>(gc.ptr.get());
-            T* dxp = reinterpret_cast<T*>(dx_cpu.ptr.get());
-            if constexpr (std::is_same_v<T, float>) {
-                if (N == 1)
-                    cpu::avg_pool1d_backward_f32(gp, dxp, B, C, S[0], opts.K[0], O[0],
-                                                 opts.stride[0], opts.pad[0],
-                                                 opts.count_include_pad);
-                else if (N == 2)
-                    cpu::avg_pool2d_backward_f32(gp, dxp, B, C, S[0], S[1], opts.K[0], opts.K[1],
-                                                 O[0], O[1], opts.stride[0], opts.stride[1],
-                                                 opts.pad[0], opts.pad[1], opts.count_include_pad);
-                else
-                    cpu::avg_pool3d_backward_f32(
-                        gp, dxp, B, C, S[0], S[1], S[2], opts.K[0], opts.K[1], opts.K[2], O[0],
-                        O[1], O[2], opts.stride[0], opts.stride[1], opts.stride[2], opts.pad[0],
-                        opts.pad[1], opts.pad[2], opts.count_include_pad);
-            } else {
-                if (N == 1)
-                    cpu::avg_pool1d_backward_f64(gp, dxp, B, C, S[0], opts.K[0], O[0],
-                                                 opts.stride[0], opts.pad[0],
-                                                 opts.count_include_pad);
-                else if (N == 2)
-                    cpu::avg_pool2d_backward_f64(gp, dxp, B, C, S[0], S[1], opts.K[0], opts.K[1],
-                                                 O[0], O[1], opts.stride[0], opts.stride[1],
-                                                 opts.pad[0], opts.pad[1], opts.count_include_pad);
-                else
-                    cpu::avg_pool3d_backward_f64(
-                        gp, dxp, B, C, S[0], S[1], S[2], opts.K[0], opts.K[1], opts.K[2], O[0],
-                        O[1], O[2], opts.stride[0], opts.stride[1], opts.stride[2], opts.pad[0],
-                        opts.pad[1], opts.pad[2], opts.count_include_pad);
-            }
-        };
-        if (dt == Dtype::F32)
-            dispatch(float{});
-        else if (dt == Dtype::F64)
-            dispatch(double{});
-        else
-            ErrorBuilder("avg_pool_nd_backward").not_implemented("dtype");
-        return Storage{std::move(dx_cpu)};
-    }
+                                 Dtype dt) override;
 
     Storage embedding_forward(const Storage& weight,
                               const Storage& indices,
@@ -9215,201 +1269,24 @@ public:
                               const Shape& indices_shape,
                               const Shape& out_shape,
                               int padding_idx,
-                              Dtype dt) override {
-        const std::int64_t N = weight_shape[0];
-        const std::int64_t D = weight_shape[1];
-        std::size_t M = 1;
-        for (auto d : indices_shape)
-            M *= static_cast<std::size_t>(d);
-        (void)out_shape;
-        const auto& ws = std::get<CpuStorage>(weight);
-        const auto& is = std::get<CpuStorage>(indices);
-        auto out_cpu = alloc_cpu(M * static_cast<std::size_t>(D), dt);
-        const std::size_t row_bytes = static_cast<std::size_t>(D) * dtype_size(dt);
-        const auto read_idx = cpu::index_reader("cpu_backend::embedding_forward", is);
-        // padding_idx does not mask the lookup.  The convention it comes
-        // from zeroes that row at initialisation and stops its gradient,
-        // so the row holds whatever training left there — and a loaded
-        // checkpoint carries a real vector in it.  BERT's [PAD] is the
-        // usual case: masking here returned zeros where the reference
-        // returns the trained embedding, and bert_base drifted 4.14 from
-        // the implementation its weights came from.  The gradient block
-        // lives in embedding_backward, which is the whole of the
-        // contract.
-        (void)padding_idx;
-        for (std::size_t i = 0; i < M; ++i) {
-            // Refuse rather than copy a row from outside the table.  Nothing
-            // checked this: the Python wrapper's host-side range check was
-            // the only guard, and the engine op read past the allocation.
-            const std::int64_t id =
-                cpu::checked_row("cpu_backend::embedding_forward", read_idx(i), N);
-            std::byte* dst = out_cpu.ptr.get() + i * row_bytes;
-            const std::byte* src = ws.ptr.get() + static_cast<std::size_t>(id) * row_bytes;
-            std::memcpy(dst, src, row_bytes);
-        }
-        return Storage{std::move(out_cpu)};
-    }
+                              Dtype dt) override;
 
     Storage embedding_backward(const Storage& grad_out,
                                const Storage& indices,
                                const Shape& weight_shape,
                                const Shape& indices_shape,
                                int padding_idx,
-                               Dtype dt) override {
-        // Accelerate has no half kernels, so half widens at the door, sums in
-        // float32 and rounds once on the way out.  The dispatch below used to
-        // name F32 and hand every other dtype to a bare ``else`` that walked
-        // the buffer in ``double`` lanes: a half gradient was summed four
-        // elements to a lane, into rows no index named and, from the last
-        // row, past the end of the allocation.  It now refuses what it does
-        // not name.  tools/check_dtype_dispatch.py keeps it that way.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(embedding_backward(detail::as_f32(grad_out), indices,
-                                                          weight_shape, indices_shape, padding_idx,
-                                                          Dtype::F32),
-                                       dt);
-        const std::int64_t N = weight_shape[0];
-        const std::int64_t D = weight_shape[1];
-        std::size_t M = 1;
-        for (auto d : indices_shape)
-            M *= static_cast<std::size_t>(d);
-        const auto& gs = std::get<CpuStorage>(grad_out);
-        const auto& is = std::get<CpuStorage>(indices);
-        // The index buffer is read at its own width, so any other integer
-        // width would be misread the same way.
-        const auto read_idx = cpu::index_reader("cpu_backend::embedding_backward", is);
-        auto dW = alloc_cpu(static_cast<std::size_t>(N) * static_cast<std::size_t>(D), dt);
-        std::memset(dW.ptr.get(), 0, dW.nbytes);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            T* wp = reinterpret_cast<T*>(dW.ptr.get());
-            const std::size_t width = static_cast<std::size_t>(D);
-            for (std::size_t i = 0; i < M; ++i) {
-                // Refuse rather than add into memory past the gradient.  The
-                // forward refuses the same index, so only indices changed in
-                // place since then can reach here.
-                const std::int64_t id =
-                    cpu::checked_row("cpu_backend::embedding_backward", read_idx(i), N);
-                if (padding_idx >= 0 && id == static_cast<std::int64_t>(padding_idx))
-                    continue;
-                const T* sp = gp + i * width;
-                T* dp = wp + static_cast<std::size_t>(id) * width;
-                for (std::size_t d = 0; d < width; ++d)
-                    dp[d] += sp[d];
-            }
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("cpu_backend::embedding_backward").not_implemented("dtype not supported");
-        return Storage{std::move(dW)};
-    }
+                               Dtype dt) override;
 
     Storage
-    sinusoidal_pos_embedding(std::int64_t seq_len, std::int64_t embed_dim, Dtype dt) override {
-        const std::size_t L = static_cast<std::size_t>(seq_len);
-        const std::size_t D = static_cast<std::size_t>(embed_dim);
-        const std::size_t Dh = D / 2;
-        auto out = alloc_cpu(L * D, dt);
-        if (L * D == 0)
-            return Storage{std::move(out)};
-        const double inv_d = -std::log(10000.0) / static_cast<double>(D);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            T* op = reinterpret_cast<T*>(out.ptr.get());
-            for (std::size_t i = 0; i < L; ++i)
-                for (std::size_t k = 0; k < Dh; ++k) {
-                    const double angle =
-                        static_cast<double>(i) * std::exp(2.0 * static_cast<double>(k) * inv_d);
-                    op[i * D + 2 * k] = static_cast<T>(std::sin(angle));
-                    if (2 * k + 1 < D)
-                        op[i * D + 2 * k + 1] = static_cast<T>(std::cos(angle));
-                }
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("sinusoidal_pos_embedding").not_implemented("dtype");
-        return Storage{std::move(out)};
-    }
+    sinusoidal_pos_embedding(std::int64_t seq_len, std::int64_t embed_dim, Dtype dt) override;
 
     std::vector<Storage> rope_forward(const Storage& x,
                                       const Storage* position_ids,
                                       const Shape& x_shape,
                                       bool interleaved,
                                       Dtype pos_dtype,
-                                      Dtype dt) override {
-        (void)pos_dtype;
-        const std::size_t ndim = x_shape.size();
-        const std::size_t L = static_cast<std::size_t>(x_shape[ndim - 2]);
-        const std::size_t D = static_cast<std::size_t>(x_shape.back());
-        const std::size_t Dh = D / 2;
-        std::size_t batch = 1;
-        for (std::size_t i = 0; i + 2 < ndim; ++i)
-            batch *= static_cast<std::size_t>(x_shape[i]);
-        const auto& xs = std::get<CpuStorage>(x);
-        auto out = alloc_cpu(batch * L * D, dt);
-        auto cos_t = alloc_cpu(L * Dh, dt);
-        auto sin_t = alloc_cpu(L * Dh, dt);
-        std::vector<double> pos(L);
-        if (position_ids) {
-            const auto& ps = std::get<CpuStorage>(*position_ids);
-            for (std::size_t i = 0; i < L; ++i)
-                pos[i] =
-                    static_cast<double>(reinterpret_cast<const std::int64_t*>(ps.ptr.get())[i]);
-        } else {
-            for (std::size_t i = 0; i < L; ++i)
-                pos[i] = static_cast<double>(i);
-        }
-        std::vector<double> theta(Dh);
-        const double base = std::log(10000.0);
-        for (std::size_t k = 0; k < Dh; ++k)
-            theta[k] = std::exp(-2.0 * static_cast<double>(k) * base / static_cast<double>(D));
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            T* cp = reinterpret_cast<T*>(cos_t.ptr.get());
-            T* sp = reinterpret_cast<T*>(sin_t.ptr.get());
-            for (std::size_t i = 0; i < L; ++i)
-                for (std::size_t k = 0; k < Dh; ++k) {
-                    const double a = pos[i] * theta[k];
-                    cp[i * Dh + k] = static_cast<T>(std::cos(a));
-                    sp[i * Dh + k] = static_cast<T>(std::sin(a));
-                }
-            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            T* op = reinterpret_cast<T*>(out.ptr.get());
-            for (std::size_t b = 0; b < batch; ++b)
-                for (std::size_t i = 0; i < L; ++i) {
-                    const T* xrow = xp + (b * L + i) * D;
-                    T* orow = op + (b * L + i) * D;
-                    const T* crow = cp + i * Dh;
-                    const T* srow = sp + i * Dh;
-                    if (interleaved) {
-                        for (std::size_t k = 0; k < Dh; ++k) {
-                            const T xe = xrow[2 * k], xo = xrow[2 * k + 1];
-                            orow[2 * k] = xe * crow[k] - xo * srow[k];
-                            orow[2 * k + 1] = xo * crow[k] + xe * srow[k];
-                        }
-                    } else {
-                        for (std::size_t k = 0; k < Dh; ++k) {
-                            orow[k] = xrow[k] * crow[k] - xrow[k + Dh] * srow[k];
-                            orow[k + Dh] = xrow[k + Dh] * crow[k] + xrow[k] * srow[k];
-                        }
-                    }
-                }
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("rope_forward").not_implemented("dtype");
-        return {Storage{std::move(out)}, Storage{std::move(cos_t)}, Storage{std::move(sin_t)}};
-    }
+                                      Dtype dt) override;
 
     std::vector<Storage> batch_norm_eval_forward(const Storage& x,
                                                  const Storage& mean,
@@ -9420,34 +1297,7 @@ public:
                                                  int C,
                                                  int spatial,
                                                  double eps,
-                                                 Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                batch_norm_eval_forward(detail::as_f32(x), detail::as_f32(mean),
-                                        detail::as_f32(var), detail::as_f32(gamma),
-                                        detail::as_f32(beta), x_shape, C, spatial, eps, Dtype::F32),
-                dt);
-        const int B = static_cast<int>(x_shape[0]);
-        auto rstd_cpu = alloc_cpu(static_cast<std::size_t>(C), dt);
-        auto out_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            auto in = [](const Storage& s) {
-                return reinterpret_cast<const T*>(std::get<CpuStorage>(s).ptr.get());
-            };
-            cpu::batch_norm_eval_forward_typed(in(x), in(mean), in(var), in(gamma), in(beta),
-                                               reinterpret_cast<T*>(out_cpu.ptr.get()),
-                                               reinterpret_cast<T*>(rstd_cpu.ptr.get()), B, C,
-                                               spatial, eps);
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("batch_norm_eval_forward").not_implemented("dtype");
-        return {Storage{std::move(out_cpu)}, Storage{std::move(rstd_cpu)}};
-    }
+                                                 Dtype dt) override;
 
     std::vector<Storage> batch_norm_eval_backward(const Storage& x,
                                                   const Storage& mean,
@@ -9457,105 +1307,14 @@ public:
                                                   const Shape& x_shape,
                                                   int C,
                                                   int spatial,
-                                                  Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                batch_norm_eval_backward(detail::as_f32(x), detail::as_f32(mean),
-                                         detail::as_f32(gamma), detail::as_f32(rstd),
-                                         detail::as_f32(grad_out), x_shape, C, spatial, Dtype::F32),
-                dt);
-        const int B = static_cast<int>(x_shape[0]);
-        auto dx = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
-        auto dm = alloc_cpu(static_cast<std::size_t>(C), dt);
-        auto dv = alloc_cpu(static_cast<std::size_t>(C), dt);
-        auto dg = alloc_cpu(static_cast<std::size_t>(C), dt);
-        auto db = alloc_cpu(static_cast<std::size_t>(C), dt);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            auto in = [](const Storage& s) {
-                return reinterpret_cast<const T*>(std::get<CpuStorage>(s).ptr.get());
-            };
-            auto out = [](CpuStorage& s) { return reinterpret_cast<T*>(s.ptr.get()); };
-            cpu::batch_norm_eval_backward_typed(in(x), in(mean), in(gamma), in(rstd), in(grad_out),
-                                                out(dx), out(dm), out(dv), out(dg), out(db), B, C,
-                                                spatial);
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("batch_norm_eval_backward").not_implemented("dtype");
-        return {Storage{std::move(dx)}, Storage{std::move(dm)}, Storage{std::move(dv)},
-                Storage{std::move(dg)}, Storage{std::move(db)}};
-    }
+                                                  Dtype dt) override;
 
     std::vector<Storage> lp_normalize_forward(const Storage& x,
                                               const Shape& x_shape,
                                               double ord,
                                               int axis,
                                               double eps,
-                                              Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                lp_normalize_forward(detail::as_f32(x), x_shape, ord, axis, eps, Dtype::F32), dt);
-        const auto& xs = std::get<CpuStorage>(x);
-        const std::size_t numel = shape_numel(x_shape);
-        int outer = 1, inner = 1;
-        const int rank = static_cast<int>(x_shape.size());
-        for (int i = 0; i < axis; ++i)
-            outer *= static_cast<int>(x_shape[i]);
-        for (int i = axis + 1; i < rank; ++i)
-            inner *= static_cast<int>(x_shape[i]);
-        const int axis_len = static_cast<int>(x_shape[axis]);
-        auto y_cpu = alloc_cpu(numel, dt);
-        auto norm_cpu = alloc_cpu(static_cast<std::size_t>(outer) * inner, dt);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            T* yp = reinterpret_cast<T*>(y_cpu.ptr.get());
-            T* np = reinterpret_cast<T*>(norm_cpu.ptr.get());
-            for (int o = 0; o < outer; ++o)
-                for (int n = 0; n < inner; ++n) {
-                    T acc = T{0};
-                    for (int a = 0; a < axis_len; ++a)
-                        acc += static_cast<T>(std::pow(
-                            std::abs(static_cast<double>(xp[(o * axis_len + a) * inner + n])),
-                            ord));
-                    const T nm = static_cast<T>(std::pow(static_cast<double>(acc), 1.0 / ord));
-                    // ``max(nm, eps)``, written so a NaN norm survives it.
-                    //
-                    // ``nm > eps`` is *false* when ``nm`` is NaN — every
-                    // comparison against NaN is — so the ternary quietly
-                    // took the other branch and the denominator became
-                    // ``eps``.  A row containing one NaN then normalised to
-                    // ``x / 1e-12``:
-                    //
-                    //     normalize([nan, inf, -inf, -1])
-                    //       cpu       [nan, inf, -inf, -1e12]
-                    //       metal     [nan, nan,  nan,   nan]
-                    //
-                    // The norm of a vector with a NaN in it is NaN, so every
-                    // output is NaN; Metal and the reference both say so.
-                    // ``std::fmax`` would not help — it is specified to
-                    // return the non-NaN operand.
-                    const T nan_safe_eps = static_cast<T>(eps);
-                    const T denom = (nm > nan_safe_eps || nm != nm) ? nm : nan_safe_eps;
-                    np[o * inner + n] = denom;
-                    for (int a = 0; a < axis_len; ++a) {
-                        const std::size_t idx = (o * axis_len + a) * inner + n;
-                        yp[idx] = xp[idx] / denom;
-                    }
-                }
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("lp_normalize_forward").not_implemented("dtype");
-        return {Storage{std::move(y_cpu)}, Storage{std::move(norm_cpu)}};
-    }
+                                              Dtype dt) override;
 
     Storage lp_normalize_backward(const Storage& x,
                                   const Storage& saved_norm,
@@ -9563,91 +1322,14 @@ public:
                                   const Shape& x_shape,
                                   double ord,
                                   int axis,
-                                  Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                lp_normalize_backward(detail::as_f32(x), detail::as_f32(saved_norm),
-                                      detail::as_f32(grad_out), x_shape, ord, axis, Dtype::F32),
-                dt);
-        const auto& xs = std::get<CpuStorage>(x);
-        const auto& ns = std::get<CpuStorage>(saved_norm);
-        const auto& gs = std::get<CpuStorage>(grad_out);
-        const std::size_t numel = shape_numel(x_shape);
-        int outer = 1, inner = 1;
-        const int rank = static_cast<int>(x_shape.size());
-        for (int i = 0; i < axis; ++i)
-            outer *= static_cast<int>(x_shape[i]);
-        for (int i = axis + 1; i < rank; ++i)
-            inner *= static_cast<int>(x_shape[i]);
-        const int axis_len = static_cast<int>(x_shape[axis]);
-        auto dx_cpu = alloc_cpu(numel, dt);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const T* np = reinterpret_cast<const T*>(ns.ptr.get());
-            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            T* dxp = reinterpret_cast<T*>(dx_cpu.ptr.get());
-            for (int o = 0; o < outer; ++o)
-                for (int n = 0; n < inner; ++n) {
-                    const T N = np[o * inner + n];
-                    T proj = T{0};
-                    for (int a = 0; a < axis_len; ++a) {
-                        const std::size_t idx = (o * axis_len + a) * inner + n;
-                        proj += gp[idx] * xp[idx];
-                    }
-                    const T N_pp1 = static_cast<T>(std::pow(static_cast<double>(N), ord + 1.0));
-                    for (int a = 0; a < axis_len; ++a) {
-                        const std::size_t idx = (o * axis_len + a) * inner + n;
-                        const T xi = xp[idx];
-                        const T sgn = (xi > T{0}) ? T{1} : (xi < T{0} ? T{-1} : T{0});
-                        const T abs_pm1 =
-                            static_cast<T>(std::pow(std::abs(static_cast<double>(xi)), ord - 1.0));
-                        dxp[idx] = gp[idx] / N - sgn * abs_pm1 * proj / N_pp1;
-                    }
-                }
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("lp_normalize_backward").not_implemented("dtype");
-        return Storage{std::move(dx_cpu)};
-    }
+                                  Dtype dt) override;
 
     std::vector<Storage> global_response_norm_forward(const Storage& x,
                                                       const Storage& gamma,
                                                       const Storage& beta,
                                                       const Shape& x_shape,
                                                       double eps,
-                                                      Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                global_response_norm_forward(detail::as_f32(x), detail::as_f32(gamma),
-                                             detail::as_f32(beta), x_shape, eps, Dtype::F32),
-                dt);
-        const int B = static_cast<int>(x_shape[0]);
-        const int C = static_cast<int>(x_shape[1]);
-        const int spatial = static_cast<int>(x_shape[2] * x_shape[3]);
-        auto y_cpu = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
-        auto nx_cpu = alloc_cpu(static_cast<std::size_t>(B) * C, dt);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            auto in = [](const Storage& s) {
-                return reinterpret_cast<const T*>(std::get<CpuStorage>(s).ptr.get());
-            };
-            cpu::global_response_norm_forward_typed(
-                in(x), in(gamma), in(beta), reinterpret_cast<T*>(y_cpu.ptr.get()),
-                reinterpret_cast<T*>(nx_cpu.ptr.get()), B, C, spatial, eps);
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("grn_forward").not_implemented("dtype");
-        return {Storage{std::move(y_cpu)}, Storage{std::move(nx_cpu)}};
-    }
+                                                      Dtype dt) override;
 
     std::vector<Storage> global_response_norm_backward(const Storage& x,
                                                        const Storage& gamma,
@@ -9656,105 +1338,41 @@ public:
                                                        const Storage& grad_out,
                                                        const Shape& x_shape,
                                                        double eps,
-                                                       Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                global_response_norm_backward(detail::as_f32(x), detail::as_f32(gamma),
-                                              detail::as_f32(beta), detail::as_f32(saved_Nx),
-                                              detail::as_f32(grad_out), x_shape, eps, Dtype::F32),
-                dt);
-        const int B = static_cast<int>(x_shape[0]);
-        const int C = static_cast<int>(x_shape[1]);
-        const int spatial = static_cast<int>(x_shape[2] * x_shape[3]);
-        auto dx = alloc_cpu(static_cast<std::size_t>(B) * C * spatial, dt);
-        auto dg = alloc_cpu(static_cast<std::size_t>(C), dt);
-        auto db = alloc_cpu(static_cast<std::size_t>(C), dt);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            auto in = [](const Storage& s) {
-                return reinterpret_cast<const T*>(std::get<CpuStorage>(s).ptr.get());
-            };
-            auto out = [](CpuStorage& s) { return reinterpret_cast<T*>(s.ptr.get()); };
-            cpu::global_response_norm_backward_typed(in(x), in(gamma), in(beta), in(saved_Nx),
-                                                     in(grad_out), out(dx), out(dg), out(db), B, C,
-                                                     spatial, eps);
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("grn_backward").not_implemented("dtype");
-        return {Storage{std::move(dx)}, Storage{std::move(dg)}, Storage{std::move(db)}};
-    }
+                                                       Dtype dt) override;
 
     Storage interpolate_nearest_2d_forward(
-        const Storage& input, const Shape& in_shape, int H_out, int W_out, Dtype dt) override {
-        return cpu::interp::resample(*this, input,
-                                     cpu::interp::make_request(cpu::interp::Filter::Nearest,
-                                                               in_shape, 1, H_out, W_out, false),
-                                     dt, false);
-    }
+        const Storage& input, const Shape& in_shape, int H_out, int W_out, Dtype dt) override;
 
     Storage interpolate_nearest_3d_forward(const Storage& input,
                                            const Shape& in_shape,
                                            int D_out,
                                            int H_out,
                                            int W_out,
-                                           Dtype dt) override {
-        return cpu::interp::resample(*this, input,
-                                     cpu::interp::make_request(cpu::interp::Filter::Nearest,
-                                                               in_shape, D_out, H_out, W_out,
-                                                               false),
-                                     dt, false);
-    }
+                                           Dtype dt) override;
 
     Storage interpolate_nearest_2d_backward(
-        const Storage& grad_out, const Shape& in_shape, int H_out, int W_out, Dtype dt) override {
-        return cpu::interp::resample(*this, grad_out,
-                                     cpu::interp::make_request(cpu::interp::Filter::Nearest,
-                                                               in_shape, 1, H_out, W_out, false),
-                                     dt, true);
-    }
+        const Storage& grad_out, const Shape& in_shape, int H_out, int W_out, Dtype dt) override;
 
     Storage interpolate_nearest_3d_backward(const Storage& grad_out,
                                             const Shape& in_shape,
                                             int D_out,
                                             int H_out,
                                             int W_out,
-                                            Dtype dt) override {
-        return cpu::interp::resample(*this, grad_out,
-                                     cpu::interp::make_request(cpu::interp::Filter::Nearest,
-                                                               in_shape, D_out, H_out, W_out,
-                                                               false),
-                                     dt, true);
-    }
+                                            Dtype dt) override;
 
     Storage interpolate_bilinear_forward(const Storage& input,
                                          const Shape& in_shape,
                                          int H_out,
                                          int W_out,
                                          bool align_corners,
-                                         Dtype dt) override {
-        return cpu::interp::resample(*this, input,
-                                     cpu::interp::make_request(cpu::interp::Filter::Linear,
-                                                               in_shape, 1, H_out, W_out,
-                                                               align_corners),
-                                     dt, false);
-    }
+                                         Dtype dt) override;
 
     Storage interpolate_bilinear_backward(const Storage& grad_out,
                                           const Shape& in_shape,
                                           int H_out,
                                           int W_out,
                                           bool align_corners,
-                                          Dtype dt) override {
-        return cpu::interp::resample(*this, grad_out,
-                                     cpu::interp::make_request(cpu::interp::Filter::Linear,
-                                                               in_shape, 1, H_out, W_out,
-                                                               align_corners),
-                                     dt, true);
-    }
+                                          Dtype dt) override;
 
     Storage interpolate_trilinear_forward(const Storage& input,
                                           const Shape& in_shape,
@@ -9762,13 +1380,7 @@ public:
                                           int H_out,
                                           int W_out,
                                           bool align_corners,
-                                          Dtype dt) override {
-        return cpu::interp::resample(*this, input,
-                                     cpu::interp::make_request(cpu::interp::Filter::Linear,
-                                                               in_shape, D_out, H_out, W_out,
-                                                               align_corners),
-                                     dt, false);
-    }
+                                          Dtype dt) override;
 
     Storage interpolate_trilinear_backward(const Storage& grad_out,
                                            const Shape& in_shape,
@@ -9776,113 +1388,13 @@ public:
                                            int H_out,
                                            int W_out,
                                            bool align_corners,
-                                           Dtype dt) override {
-        return cpu::interp::resample(*this, grad_out,
-                                     cpu::interp::make_request(cpu::interp::Filter::Linear,
-                                                               in_shape, D_out, H_out, W_out,
-                                                               align_corners),
-                                     dt, true);
-    }
+                                           Dtype dt) override;
 
     Storage affine_grid_forward(
-        const Storage& theta, int N, int H, int W, bool align_corners, Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                affine_grid_forward(detail::as_f32(theta), N, H, W, align_corners, Dtype::F32), dt);
-        const auto& th = std::get<CpuStorage>(theta);
-        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N) * H * W * 2, dt);
-
-        auto x_norm_fn = [](int w, int W2, bool align, auto T_tag) {
-            using T = decltype(T_tag);
-            if (align)
-                return W2 > 1 ? T{-1} + (T{2} * static_cast<T>(w)) / static_cast<T>(W2 - 1) : T{0};
-            return T{-1} + (T{2} * static_cast<T>(w) + T{1}) / static_cast<T>(W2);
-        };
-
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const T* tp = reinterpret_cast<const T*>(th.ptr.get());
-            T* op = reinterpret_cast<T*>(out_cpu.ptr.get());
-            for (int n = 0; n < N; ++n) {
-                const T t00 = tp[n * 6 + 0], t01 = tp[n * 6 + 1], t02 = tp[n * 6 + 2];
-                const T t10 = tp[n * 6 + 3], t11 = tp[n * 6 + 4], t12 = tp[n * 6 + 5];
-                for (int h = 0; h < H; ++h) {
-                    const T y = x_norm_fn(h, H, align_corners, T{});
-                    for (int w = 0; w < W; ++w) {
-                        const T x = x_norm_fn(w, W, align_corners, T{});
-                        const std::size_t base =
-                            ((static_cast<std::size_t>(n) * H + h) * W + w) * 2;
-                        op[base + 0] = t00 * x + t01 * y + t02;
-                        op[base + 1] = t10 * x + t11 * y + t12;
-                    }
-                }
-            }
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("cpu::affine_grid_forward").not_implemented("dtype must be F32/F64");
-        return Storage{std::move(out_cpu)};
-    }
+        const Storage& theta, int N, int H, int W, bool align_corners, Dtype dt) override;
 
     Storage affine_grid_backward(
-        const Storage& grad_grid, int N, int H, int W, bool align_corners, Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                affine_grid_backward(detail::as_f32(grad_grid), N, H, W, align_corners, Dtype::F32),
-                dt);
-        const auto& gs = std::get<CpuStorage>(grad_grid);
-        auto dtheta = alloc_cpu(static_cast<std::size_t>(N) * 2 * 3, dt);
-        std::memset(dtheta.ptr.get(), 0, dtheta.nbytes);
-
-        auto x_norm_fn = [](int w, int W2, bool align, auto T_tag) {
-            using T = decltype(T_tag);
-            if (align)
-                return W2 > 1 ? T{-1} + (T{2} * static_cast<T>(w)) / static_cast<T>(W2 - 1) : T{0};
-            return T{-1} + (T{2} * static_cast<T>(w) + T{1}) / static_cast<T>(W2);
-        };
-
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            T* dp = reinterpret_cast<T*>(dtheta.ptr.get());
-            for (int n = 0; n < N; ++n) {
-                T s00 = T{0}, s01 = T{0}, s02 = T{0};
-                T s10 = T{0}, s11 = T{0}, s12 = T{0};
-                for (int h = 0; h < H; ++h) {
-                    const T y = x_norm_fn(h, H, align_corners, T{});
-                    for (int w = 0; w < W; ++w) {
-                        const T x = x_norm_fn(w, W, align_corners, T{});
-                        const std::size_t base =
-                            ((static_cast<std::size_t>(n) * H + h) * W + w) * 2;
-                        const T gx = gp[base + 0];
-                        const T gy = gp[base + 1];
-                        s00 += gx * x;
-                        s01 += gx * y;
-                        s02 += gx;
-                        s10 += gy * x;
-                        s11 += gy * y;
-                        s12 += gy;
-                    }
-                }
-                dp[n * 6 + 0] = s00;
-                dp[n * 6 + 1] = s01;
-                dp[n * 6 + 2] = s02;
-                dp[n * 6 + 3] = s10;
-                dp[n * 6 + 4] = s11;
-                dp[n * 6 + 5] = s12;
-            }
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("cpu::affine_grid_backward").not_implemented("dtype must be F32/F64");
-        return Storage{std::move(dtheta)};
-    }
+        const Storage& grad_grid, int N, int H, int W, bool align_corners, Dtype dt) override;
 
     Storage grid_sample_forward(const Storage& input,
                                 const Storage& grid,
@@ -9891,28 +1403,7 @@ public:
                                 int mode,
                                 int padding_mode,
                                 bool align_corners,
-                                Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                grid_sample_forward(detail::as_f32(input), detail::as_f32(grid), in_shape,
-                                    grid_shape, mode, padding_mode, align_corners, Dtype::F32),
-                dt);
-        const auto g = cpu::grid::geometry(in_shape, grid_shape, mode, padding_mode, align_corners);
-        auto out = alloc_cpu(static_cast<std::size_t>(g.N * g.C) * g.out_plane(), dt);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            cpu::grid::forward(reinterpret_cast<const T*>(std::get<CpuStorage>(input).ptr.get()),
-                               reinterpret_cast<const T*>(std::get<CpuStorage>(grid).ptr.get()),
-                               reinterpret_cast<T*>(out.ptr.get()), g);
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("cpu::grid_sample_forward").not_implemented("dtype must be F32/F64");
-        return Storage{std::move(out)};
-    }
+                                Dtype dt) override;
 
     std::vector<Storage> grid_sample_backward(const Storage& grad_out,
                                               const Storage& input,
@@ -9922,33 +1413,7 @@ public:
                                               int mode,
                                               int padding_mode,
                                               bool align_corners,
-                                              Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                grid_sample_backward(detail::as_f32(grad_out), detail::as_f32(input),
-                                     detail::as_f32(grid), in_shape, grid_shape, mode, padding_mode,
-                                     align_corners, Dtype::F32),
-                dt);
-        const auto g = cpu::grid::geometry(in_shape, grid_shape, mode, padding_mode, align_corners);
-        auto dx = alloc_cpu(static_cast<std::size_t>(g.N * g.C) * g.in_plane(), dt);
-        auto dg = alloc_cpu(static_cast<std::size_t>(g.N) * g.out_plane() * 2, dt);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            auto in = [](const Storage& s) {
-                return reinterpret_cast<const T*>(std::get<CpuStorage>(s).ptr.get());
-            };
-            cpu::grid::backward(in(grad_out), in(input), in(grid),
-                                reinterpret_cast<T*>(dx.ptr.get()),
-                                reinterpret_cast<T*>(dg.ptr.get()), g);
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("cpu::grid_sample_backward").not_implemented("dtype must be F32/F64");
-        return {Storage{std::move(dx)}, Storage{std::move(dg)}};
-    }
+                                              Dtype dt) override;
 
     Storage bilinear_layer_forward(const Storage& x1,
                                    const Storage& x2,
@@ -9958,56 +1423,7 @@ public:
                                    const Shape& x1_shape,
                                    const Shape& x2_shape,
                                    const Shape& w_shape,
-                                   Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                bilinear_layer_forward(detail::as_f32(x1), detail::as_f32(x2),
-                                       detail::as_f32(weight), detail::as_f32(bias), has_bias,
-                                       x1_shape, x2_shape, w_shape, Dtype::F32),
-                dt);
-        std::size_t B = 1;
-        for (std::size_t i = 0; i + 1 < x1_shape.size(); ++i)
-            B *= static_cast<std::size_t>(x1_shape[i]);
-        const std::size_t D1 = static_cast<std::size_t>(x1_shape.back());
-        const std::size_t D2 = static_cast<std::size_t>(x2_shape.back());
-        const std::size_t Dout = static_cast<std::size_t>(w_shape[0]);
-        const auto& xs1 = std::get<CpuStorage>(x1);
-        const auto& xs2 = std::get<CpuStorage>(x2);
-        const auto& ws = std::get<CpuStorage>(weight);
-        const CpuStorage* bs = has_bias ? &std::get<CpuStorage>(bias) : nullptr;
-        auto out_cpu = alloc_cpu(B * Dout, dt);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const T* x1p = reinterpret_cast<const T*>(xs1.ptr.get());
-            const T* x2p = reinterpret_cast<const T*>(xs2.ptr.get());
-            const T* wp = reinterpret_cast<const T*>(ws.ptr.get());
-            const T* bp = bs ? reinterpret_cast<const T*>(bs->ptr.get()) : nullptr;
-            T* yp = reinterpret_cast<T*>(out_cpu.ptr.get());
-            for (std::size_t bi = 0; bi < B; ++bi) {
-                const T* x1b = x1p + bi * D1;
-                const T* x2b = x2p + bi * D2;
-                T* yb = yp + bi * Dout;
-                for (std::size_t k = 0; k < Dout; ++k) {
-                    const T* Wk = wp + k * D1 * D2;
-                    T acc = T{0};
-                    for (std::size_t i = 0; i < D1; ++i) {
-                        T row = T{0};
-                        for (std::size_t j = 0; j < D2; ++j)
-                            row += Wk[i * D2 + j] * x2b[j];
-                        acc += x1b[i] * row;
-                    }
-                    yb[k] = acc + (bp ? bp[k] : T{0});
-                }
-            }
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("cpu::bilinear_layer_forward").not_implemented("dtype");
-        return Storage{std::move(out_cpu)};
-    }
+                                   Dtype dt) override;
 
     std::vector<Storage> bilinear_layer_backward(const Storage& grad_out,
                                                  const Storage& x1,
@@ -10017,231 +1433,26 @@ public:
                                                  const Shape& x2_shape,
                                                  const Shape& w_shape,
                                                  bool has_bias,
-                                                 Dtype dt) override {
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                bilinear_layer_backward(detail::as_f32(grad_out), detail::as_f32(x1),
-                                        detail::as_f32(x2), detail::as_f32(weight), x1_shape,
-                                        x2_shape, w_shape, has_bias, Dtype::F32),
-                dt);
-        std::size_t B = 1;
-        for (std::size_t i = 0; i + 1 < x1_shape.size(); ++i)
-            B *= static_cast<std::size_t>(x1_shape[i]);
-        const std::size_t D1 = static_cast<std::size_t>(x1_shape.back());
-        const std::size_t D2 = static_cast<std::size_t>(x2_shape.back());
-        const std::size_t Dout = static_cast<std::size_t>(w_shape[0]);
-        const auto& xs1 = std::get<CpuStorage>(x1);
-        const auto& xs2 = std::get<CpuStorage>(x2);
-        const auto& ws = std::get<CpuStorage>(weight);
-        const auto& gys = std::get<CpuStorage>(grad_out);
-        auto dx1_cpu = alloc_cpu(B * D1, dt);
-        auto dx2_cpu = alloc_cpu(B * D2, dt);
-        auto dW_cpu = alloc_cpu(Dout * D1 * D2, dt);
-        auto db_cpu = has_bias ? alloc_cpu(Dout, dt) : CpuStorage{};
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const T* x1p = reinterpret_cast<const T*>(xs1.ptr.get());
-            const T* x2p = reinterpret_cast<const T*>(xs2.ptr.get());
-            const T* wp = reinterpret_cast<const T*>(ws.ptr.get());
-            const T* gyp = reinterpret_cast<const T*>(gys.ptr.get());
-            T* dx1p = reinterpret_cast<T*>(dx1_cpu.ptr.get());
-            T* dx2p = reinterpret_cast<T*>(dx2_cpu.ptr.get());
-            T* dwp = reinterpret_cast<T*>(dW_cpu.ptr.get());
-            T* dbp = has_bias ? reinterpret_cast<T*>(db_cpu.ptr.get()) : nullptr;
-            std::memset(dx1p, 0, sizeof(T) * B * D1);
-            std::memset(dx2p, 0, sizeof(T) * B * D2);
-            std::memset(dwp, 0, sizeof(T) * Dout * D1 * D2);
-            if (dbp)
-                std::memset(dbp, 0, sizeof(T) * Dout);
-            for (std::size_t bi = 0; bi < B; ++bi) {
-                const T* x1b = x1p + bi * D1;
-                const T* x2b = x2p + bi * D2;
-                const T* gb = gyp + bi * Dout;
-                T* dx1b = dx1p + bi * D1;
-                T* dx2b = dx2p + bi * D2;
-                for (std::size_t k = 0; k < Dout; ++k) {
-                    const T g = gb[k];
-                    if (dbp)
-                        dbp[k] += g;
-                    const T* Wk = wp + k * D1 * D2;
-                    T* dWk = dwp + k * D1 * D2;
-                    for (std::size_t i = 0; i < D1; ++i) {
-                        T row = T{0};
-                        for (std::size_t j = 0; j < D2; ++j) {
-                            row += Wk[i * D2 + j] * x2b[j];
-                            dx2b[j] += g * x1b[i] * Wk[i * D2 + j];
-                            dWk[i * D2 + j] += g * x1b[i] * x2b[j];
-                        }
-                        dx1b[i] += g * row;
-                    }
-                }
-            }
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("cpu::bilinear_layer_backward").not_implemented("dtype");
-        std::vector<Storage> out;
-        out.push_back(Storage{std::move(dx1_cpu)});
-        out.push_back(Storage{std::move(dx2_cpu)});
-        out.push_back(Storage{std::move(dW_cpu)});
-        if (has_bias)
-            out.push_back(Storage{std::move(db_cpu)});
-        else {
-            CpuStorage empty;
-            empty.dtype = dt;
-            empty.nbytes = 0;
-            out.push_back(Storage{std::move(empty)});
-        }
-        return out;
-    }
+                                                 Dtype dt) override;
 
     Storage one_hot_forward(const Storage& indices,
                             const Shape& indices_shape,
                             int num_classes,
-                            Dtype out_dtype) override {
-        // A half index is read the way Metal reads it: widened, then
-        // truncated toward zero.
-        if (detail::is_half_like(std::get<CpuStorage>(indices).dtype))
-            return one_hot_forward(detail::as_f32(indices), indices_shape, num_classes, out_dtype);
-        const std::size_t M = shape_numel(indices_shape);
-        const auto& is_ = std::get<CpuStorage>(indices);
-        auto out_cpu = alloc_cpu(M * static_cast<std::size_t>(num_classes), out_dtype);
-        std::memset(out_cpu.ptr.get(), 0, out_cpu.nbytes);
-        const auto read_idx = cpu::real_index_reader("cpu_backend::one_hot", is_);
-        for (std::size_t i = 0; i < M; ++i) {
-            // A class outside [0, num_classes) is refused, as the reference
-            // refuses it.  It used to leave its row zero, the same answer as
-            // Metal, so a bad label vanished silently on both devices.  Metal
-            // still answers a zero row (policy B, see GpuBackend's
-            // ``gpu_axis_index``), because refusing there needs a host sync.
-            const auto cls = static_cast<std::size_t>(
-                cpu::checked_row("cpu_backend::one_hot", read_idx(i), num_classes));
-            const std::size_t pos = i * static_cast<std::size_t>(num_classes) + cls;
-            switch (out_dtype) {
-            case Dtype::F32:
-                reinterpret_cast<float*>(out_cpu.ptr.get())[pos] = 1.f;
-                break;
-            case Dtype::F64:
-                reinterpret_cast<double*>(out_cpu.ptr.get())[pos] = 1.0;
-                break;
-            case Dtype::I8:
-            case Dtype::Bool:
-                reinterpret_cast<std::uint8_t*>(out_cpu.ptr.get())[pos] = 1;
-                break;
-            case Dtype::I16:
-                reinterpret_cast<std::int16_t*>(out_cpu.ptr.get())[pos] = 1;
-                break;
-            case Dtype::I32:
-                reinterpret_cast<std::int32_t*>(out_cpu.ptr.get())[pos] = 1;
-                break;
-            case Dtype::I64:
-                reinterpret_cast<std::int64_t*>(out_cpu.ptr.get())[pos] = 1;
-                break;
-            default:
-                ErrorBuilder("one_hot").not_implemented("out dtype not supported");
-            }
-        }
-        return Storage{std::move(out_cpu)};
-    }
+                            Dtype out_dtype) override;
 
     Storage rotate_forward(const Storage& input,
                            const Shape& shape,
                            double angle_rad_neg,
                            double cx,
                            double cy,
-                           Dtype dt) override {
-        const int N = static_cast<int>(shape[0]);
-        const int C = static_cast<int>(shape[1]);
-        const int H = static_cast<int>(shape[2]);
-        const int W = static_cast<int>(shape[3]);
-        const auto& xs = std::get<CpuStorage>(input);
-        auto out_cpu = alloc_cpu(static_cast<std::size_t>(N) * C * H * W, dt);
-        const double cosv = std::cos(angle_rad_neg);
-        const double sinv = std::sin(angle_rad_neg);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const T* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            T* op = reinterpret_cast<T*>(out_cpu.ptr.get());
-            for (int n = 0; n < N; ++n)
-                for (int ch = 0; ch < C; ++ch) {
-                    const T* base = xp + (n * C + ch) * H * W;
-                    T* obase = op + (n * C + ch) * H * W;
-                    for (int y = 0; y < H; ++y)
-                        for (int x = 0; x < W; ++x) {
-                            const double xsd = cosv * (x - cx) - sinv * (y - cy) + cx;
-                            const double ysd = sinv * (x - cx) + cosv * (y - cy) + cy;
-                            const auto xs2 = resample::index_of(std::floor(xsd + 0.5));
-                            const auto ys2 = resample::index_of(std::floor(ysd + 0.5));
-                            if (xs2 < 0 || xs2 >= W || ys2 < 0 || ys2 >= H)
-                                obase[y * W + x] = T{0};
-                            else
-                                obase[y * W + x] = base[ys2 * W + xs2];
-                        }
-                }
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("cpu::rotate_forward").not_implemented("dtype");
-        return Storage{std::move(out_cpu)};
-    }
+                           Dtype dt) override;
 
     Storage rope_backward(const Storage& grad_out,
                           const Storage& saved_cos,
                           const Storage& saved_sin,
                           const Shape& x_shape,
                           bool interleaved,
-                          Dtype dt) override {
-        const std::size_t ndim = x_shape.size();
-        const std::size_t L = static_cast<std::size_t>(x_shape[ndim - 2]);
-        const std::size_t D = static_cast<std::size_t>(x_shape.back());
-        const std::size_t Dh = D / 2;
-        std::size_t batch = 1;
-        for (std::size_t i = 0; i + 2 < ndim; ++i)
-            batch *= static_cast<std::size_t>(x_shape[i]);
-        const auto& gs = std::get<CpuStorage>(grad_out);
-        const auto& cs = std::get<CpuStorage>(saved_cos);
-        const auto& ss = std::get<CpuStorage>(saved_sin);
-        auto dx = alloc_cpu(batch * L * D, dt);
-        auto run = [&](auto tag) {
-            using T = decltype(tag);
-            const T* gp = reinterpret_cast<const T*>(gs.ptr.get());
-            const T* cp = reinterpret_cast<const T*>(cs.ptr.get());
-            const T* sp = reinterpret_cast<const T*>(ss.ptr.get());
-            T* dxp = reinterpret_cast<T*>(dx.ptr.get());
-            for (std::size_t b = 0; b < batch; ++b)
-                for (std::size_t i = 0; i < L; ++i) {
-                    const T* grow = gp + (b * L + i) * D;
-                    T* drow = dxp + (b * L + i) * D;
-                    const T* crow = cp + i * Dh;
-                    const T* srow = sp + i * Dh;
-                    if (interleaved) {
-                        for (std::size_t k = 0; k < Dh; ++k) {
-                            const T ge = grow[2 * k], go = grow[2 * k + 1];
-                            drow[2 * k] = ge * crow[k] + go * srow[k];
-                            drow[2 * k + 1] = go * crow[k] - ge * srow[k];
-                        }
-                    } else {
-                        for (std::size_t k = 0; k < Dh; ++k) {
-                            drow[k] = grow[k] * crow[k] + grow[k + Dh] * srow[k];
-                            drow[k + Dh] = grow[k + Dh] * crow[k] - grow[k] * srow[k];
-                        }
-                    }
-                }
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else
-            ErrorBuilder("rope_backward").not_implemented("dtype");
-        return Storage{std::move(dx)};
-    }
+                          Dtype dt) override;
 
 private:
     // Dispatches im2col to the 1-D, 2-D, or 3-D variant based on N.
@@ -10258,64 +1469,19 @@ private:
 
     // ``LUCID_CONV_COLUMN_BUDGET`` lowers the budget so tests can drive the
     // slab path on small inputs; it is not a tuning knob.
-    static std::int64_t column_budget() {
-        static const std::int64_t budget = [] {
-            const char* env = std::getenv("LUCID_CONV_COLUMN_BUDGET");
-            const long long v = env ? std::atoll(env) : 0;
-            return v > 0 ? static_cast<std::int64_t>(v) : kColumnBudget;
-        }();
-        return budget;
-    }
+    static std::int64_t column_budget();
 
-    static int checked_extent(const int* dims, int n, const char* what) {
-        std::int64_t total = 1;
-        for (int i = 0; i < n; ++i)
-            total *= dims[i];
-        if (total > std::numeric_limits<int>::max())
-            ErrorBuilder("cpu_backend::conv_nd")
-                .fail(std::string("too many ") + what +
-                      " for one convolution: " + std::to_string(total));
-        return static_cast<int>(total);
-    }
+    static int checked_extent(const int* dims, int n, const char* what);
 
-    static std::int64_t column_inner(const int* O, int N) {
-        std::int64_t inner = 1;
-        for (int i = 1; i < N; ++i)
-            inner *= O[i];
-        return inner;
-    }
+    static std::int64_t column_inner(const int* O, int N);
 
-    static int column_slab(const int* O, int N, int K_flat) {
-        const std::int64_t per_step =
-            std::max<std::int64_t>(1, std::int64_t{K_flat} * column_inner(O, N));
-        const std::int64_t steps = std::max<std::int64_t>(1, column_budget() / per_step);
-        return static_cast<int>(std::min<std::int64_t>(steps, std::max(1, O[0])));
-    }
+    static int column_slab(const int* O, int N, int K_flat);
 
-    static std::size_t column_slab_elements(const int* O, int N, int K_flat, int slab) {
-        return static_cast<std::size_t>(K_flat) * static_cast<std::size_t>(slab) *
-               static_cast<std::size_t>(column_inner(O, N));
-    }
+    static std::size_t column_slab_elements(const int* O, int N, int K_flat, int slab);
 
     template <typename Fn>
     static void
-    for_each_column_slab(const int* O, const IBackend::ConvNdOpts& opts, int N, int slab, Fn&& fn) {
-        const std::int64_t inner = column_inner(O, N);
-        for (int o0 = 0; o0 < O[0]; o0 += slab) {
-            const int count = std::min(slab, O[0] - o0);
-            int Os[3] = {0, 0, 0};
-            int pads[3] = {0, 0, 0};
-            for (int i = 0; i < N; ++i) {
-                Os[i] = O[i];
-                pads[i] = opts.pad[i];
-            }
-            Os[0] = count;
-            pads[0] = opts.pad[0] - o0 * opts.stride[0];
-            fn(static_cast<const int*>(Os), static_cast<const int*>(pads),
-               static_cast<std::size_t>(o0) * static_cast<std::size_t>(inner),
-               static_cast<int>(count * inner));
-        }
-    }
+    for_each_column_slab(const int* O, const IBackend::ConvNdOpts& opts, int N, int slab, Fn&& fn);
 
     static void conv_nd_im2col_f32(const float* x,
                                    float* cols,
@@ -10326,17 +1492,7 @@ private:
                                    const int* stride,
                                    const int* pad,
                                    const int* dilation,
-                                   int N) {
-        if (N == 1)
-            cpu::im2col_1d_f32(x, cols, C, S[0], K[0], O[0], stride[0], pad[0], dilation[0]);
-        else if (N == 2)
-            cpu::im2col_f32(x, cols, C, S[0], S[1], K[0], K[1], O[0], O[1], stride[0], stride[1],
-                            pad[0], pad[1], dilation[0], dilation[1]);
-        else
-            cpu::im2col_3d_f32(x, cols, C, S[0], S[1], S[2], K[0], K[1], K[2], O[0], O[1], O[2],
-                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dilation[0],
-                               dilation[1], dilation[2]);
-    }
+                                   int N);
     static void conv_nd_im2col_f64(const double* x,
                                    double* cols,
                                    int C,
@@ -10346,17 +1502,7 @@ private:
                                    const int* stride,
                                    const int* pad,
                                    const int* dilation,
-                                   int N) {
-        if (N == 1)
-            cpu::im2col_1d_f64(x, cols, C, S[0], K[0], O[0], stride[0], pad[0], dilation[0]);
-        else if (N == 2)
-            cpu::im2col_f64(x, cols, C, S[0], S[1], K[0], K[1], O[0], O[1], stride[0], stride[1],
-                            pad[0], pad[1], dilation[0], dilation[1]);
-        else
-            cpu::im2col_3d_f64(x, cols, C, S[0], S[1], S[2], K[0], K[1], K[2], O[0], O[1], O[2],
-                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dilation[0],
-                               dilation[1], dilation[2]);
-    }
+                                   int N);
     static void conv_nd_col2im_f32(const float* cols,
                                    float* dx,
                                    int C,
@@ -10366,17 +1512,7 @@ private:
                                    const int* stride,
                                    const int* pad,
                                    const int* dilation,
-                                   int N) {
-        if (N == 1)
-            cpu::col2im_1d_f32(cols, dx, C, S[0], K[0], O[0], stride[0], pad[0], dilation[0]);
-        else if (N == 2)
-            cpu::col2im_f32(cols, dx, C, S[0], S[1], K[0], K[1], O[0], O[1], stride[0], stride[1],
-                            pad[0], pad[1], dilation[0], dilation[1]);
-        else
-            cpu::col2im_3d_f32(cols, dx, C, S[0], S[1], S[2], K[0], K[1], K[2], O[0], O[1], O[2],
-                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dilation[0],
-                               dilation[1], dilation[2]);
-    }
+                                   int N);
     static void conv_nd_col2im_f64(const double* cols,
                                    double* dx,
                                    int C,
@@ -10386,17 +1522,7 @@ private:
                                    const int* stride,
                                    const int* pad,
                                    const int* dilation,
-                                   int N) {
-        if (N == 1)
-            cpu::col2im_1d_f64(cols, dx, C, S[0], K[0], O[0], stride[0], pad[0], dilation[0]);
-        else if (N == 2)
-            cpu::col2im_f64(cols, dx, C, S[0], S[1], K[0], K[1], O[0], O[1], stride[0], stride[1],
-                            pad[0], pad[1], dilation[0], dilation[1]);
-        else
-            cpu::col2im_3d_f64(cols, dx, C, S[0], S[1], S[2], K[0], K[1], K[2], O[0], O[1], O[2],
-                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dilation[0],
-                               dilation[1], dilation[2]);
-    }
+                                   int N);
     static void unfold_im2col_f32(const float* x,
                                   float* y,
                                   int C,
@@ -10406,9 +1532,7 @@ private:
                                   const int* stride,
                                   const int* pad,
                                   const int* dilation,
-                                  int N) {
-        conv_nd_im2col_f32(x, y, C, S, K, O, stride, pad, dilation, N);
-    }
+                                  int N);
     static void unfold_im2col_f64(const double* x,
                                   double* y,
                                   int C,
@@ -10418,9 +1542,7 @@ private:
                                   const int* stride,
                                   const int* pad,
                                   const int* dilation,
-                                  int N) {
-        conv_nd_im2col_f64(x, y, C, S, K, O, stride, pad, dilation, N);
-    }
+                                  int N);
     static void unfold_col2im_f32(const float* cols,
                                   float* dx,
                                   int C,
@@ -10430,9 +1552,7 @@ private:
                                   const int* stride,
                                   const int* pad,
                                   const int* dilation,
-                                  int N) {
-        conv_nd_col2im_f32(cols, dx, C, S, K, O, stride, pad, dilation, N);
-    }
+                                  int N);
     static void unfold_col2im_f64(const double* cols,
                                   double* dx,
                                   int C,
@@ -10442,91 +1562,23 @@ private:
                                   const int* stride,
                                   const int* pad,
                                   const int* dilation,
-                                  int N) {
-        conv_nd_col2im_f64(cols, dx, C, S, K, O, stride, pad, dilation, N);
-    }
+                                  int N);
 
     void compute_mse_loss_values(
-        const Storage& input, const Storage& target, std::byte* out, std::size_t n, Dtype dt) {
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        if (dt == Dtype::F32) {
-            const auto* xp = reinterpret_cast<const float*>(xs.ptr.get());
-            const auto* tp = reinterpret_cast<const float*>(ts.ptr.get());
-            auto* lp = reinterpret_cast<float*>(out);
-            for (std::size_t i = 0; i < n; ++i) {
-                const float d = xp[i] - tp[i];
-                lp[i] = d * d;
-            }
-        } else if (dt == Dtype::F64) {
-            const auto* xp = reinterpret_cast<const double*>(xs.ptr.get());
-            const auto* tp = reinterpret_cast<const double*>(ts.ptr.get());
-            auto* lp = reinterpret_cast<double*>(out);
-            for (std::size_t i = 0; i < n; ++i) {
-                const double d = xp[i] - tp[i];
-                lp[i] = d * d;
-            }
-        } else {
-            ErrorBuilder("cpu_backend::mse_loss").not_implemented("dtype not supported");
-        }
-    }
+        const Storage& input, const Storage& target, std::byte* out, std::size_t n, Dtype dt);
 
     template <typename T>
-    T mse_loss_sum(const Storage& input, const Storage& target, std::size_t n) {
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-        const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-        T sum = T{0};
-        for (std::size_t i = 0; i < n; ++i) {
-            const T d = xp[i] - tp[i];
-            sum += d * d;
-        }
-        return sum;
-    }
+    T mse_loss_sum(const Storage& input, const Storage& target, std::size_t n);
 
     void compute_huber_loss_values(const Storage& input,
                                    const Storage& target,
                                    std::byte* out,
                                    std::size_t n,
                                    Dtype dt,
-                                   double delta) {
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-            auto* lp = reinterpret_cast<T*>(out);
-            const T d = static_cast<T>(delta);
-            for (std::size_t i = 0; i < n; ++i) {
-                const T r = xp[i] - tp[i];
-                const T ar = std::abs(r);
-                lp[i] = (ar <= d) ? T{0.5} * r * r : d * (ar - T{0.5} * d);
-            }
-        };
-        if (dt == Dtype::F32)
-            compute(float{});
-        else if (dt == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("cpu_backend::huber_loss").not_implemented("dtype not supported");
-    }
+                                   double delta);
 
     template <typename T>
-    T huber_loss_sum(const Storage& input, const Storage& target, std::size_t n, T delta) {
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-        const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-        T sum = T{0};
-        for (std::size_t i = 0; i < n; ++i) {
-            const T r = xp[i] - tp[i];
-            const T ar = std::abs(r);
-            sum += (ar <= delta) ? T{0.5} * r * r : delta * (ar - T{0.5} * delta);
-        }
-        return sum;
-    }
+    T huber_loss_sum(const Storage& input, const Storage& target, std::size_t n, T delta);
 
     void compute_bce_loss_values(const Storage& input,
                                  const Storage& target,
@@ -10534,50 +1586,11 @@ private:
                                  std::byte* out,
                                  std::size_t n,
                                  Dtype dt,
-                                 double eps) {
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto& ws = std::get<CpuStorage>(weight);
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-            const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
-            auto* lp = reinterpret_cast<T*>(out);
-            const T e = static_cast<T>(eps);
-            const T one = static_cast<T>(1);
-            for (std::size_t i = 0; i < n; ++i) {
-                const T p = std::min(std::max(xp[i], e), one - e);
-                const T l = -(tp[i] * std::log(p) + (one - tp[i]) * std::log(one - p));
-                lp[i] = wp[i] * l;
-            }
-        };
-        if (dt == Dtype::F32)
-            compute(float{});
-        else if (dt == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("cpu_backend::bce_loss").not_implemented("dtype not supported");
-    }
+                                 double eps);
 
     template <typename T>
     T bce_loss_sum(
-        const Storage& input, const Storage& target, const Storage& weight, std::size_t n, T eps) {
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto& ws = std::get<CpuStorage>(weight);
-        const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-        const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-        const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
-        const T one = static_cast<T>(1);
-        T sum = T{0};
-        for (std::size_t i = 0; i < n; ++i) {
-            const T p = std::min(std::max(xp[i], eps), one - eps);
-            const T l = -(tp[i] * std::log(p) + (one - tp[i]) * std::log(one - p));
-            sum += wp[i] * l;
-        }
-        return sum;
-    }
+        const Storage& input, const Storage& target, const Storage& weight, std::size_t n, T eps);
 
     void compute_bce_logits_values(const Storage& input,
                                    const Storage& target,
@@ -10585,81 +1598,18 @@ private:
                                    const Storage& pos_weight,
                                    std::byte* out,
                                    std::size_t n,
-                                   Dtype dt) {
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto& ws = std::get<CpuStorage>(weight);
-        const auto& pws = std::get<CpuStorage>(pos_weight);
-        auto compute = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-            const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-            const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
-            const auto* pwp = reinterpret_cast<const T*>(pws.ptr.get());
-            auto* lp = reinterpret_cast<T*>(out);
-            const T one = static_cast<T>(1);
-            for (std::size_t i = 0; i < n; ++i) {
-                const T x = xp[i];
-                const T y = tp[i];
-                const T log_weight = (pwp[i] - one) * y + one;
-                const T log1pexp = std::log1p(std::exp(-std::abs(x)));
-                const T loss = std::max(x, T{0}) - x * y + log_weight * log1pexp;
-                lp[i] = wp[i] * loss;
-            }
-        };
-        if (dt == Dtype::F32)
-            compute(float{});
-        else if (dt == Dtype::F64)
-            compute(double{});
-        else
-            ErrorBuilder("cpu_backend::bce_with_logits_loss")
-                .not_implemented("dtype not supported");
-    }
+                                   Dtype dt);
 
     template <typename T>
     T bce_logits_sum(const Storage& input,
                      const Storage& target,
                      const Storage& weight,
                      const Storage& pos_weight,
-                     std::size_t n) {
-        const auto& xs = std::get<CpuStorage>(input);
-        const auto& ts = std::get<CpuStorage>(target);
-        const auto& ws = std::get<CpuStorage>(weight);
-        const auto& pws = std::get<CpuStorage>(pos_weight);
-        const auto* xp = reinterpret_cast<const T*>(xs.ptr.get());
-        const auto* tp = reinterpret_cast<const T*>(ts.ptr.get());
-        const auto* wp = reinterpret_cast<const T*>(ws.ptr.get());
-        const auto* pwp = reinterpret_cast<const T*>(pws.ptr.get());
-        const T one = static_cast<T>(1);
-        T sum = T{0};
-        for (std::size_t i = 0; i < n; ++i) {
-            const T x = xp[i];
-            const T y = tp[i];
-            const T log_weight = (pwp[i] - one) * y + one;
-            const T log1pexp = std::log1p(std::exp(-std::abs(x)));
-            const T loss = std::max(x, T{0}) - x * y + log_weight * log1pexp;
-            sum += wp[i] * loss;
-        }
-        return sum;
-    }
+                     std::size_t n);
 
-    static int class_loss_spatial(const Shape& input_shape) {
-        int spatial = 1;
-        for (std::size_t i = 2; i < input_shape.size(); ++i)
-            spatial *= static_cast<int>(input_shape[i]);
-        return spatial;
-    }
+    static int class_loss_spatial(const Shape& input_shape);
 
-    static CpuStorage make_cpu_scalar(double value, Dtype dt) {
-        CpuStorage out{allocate_aligned_bytes(dtype_size(dt), Device::CPU), dtype_size(dt), dt};
-        if (dt == Dtype::F32)
-            *reinterpret_cast<float*>(out.ptr.get()) = static_cast<float>(value);
-        else if (dt == Dtype::F64)
-            *reinterpret_cast<double*>(out.ptr.get()) = value;
-        else
-            ErrorBuilder("cpu_backend::class_loss_scalar").not_implemented("dtype not supported");
-        return out;
-    }
+    static CpuStorage make_cpu_scalar(double value, Dtype dt);
 
     // The class of target ``i``, or -1 where the target is ``ignore_index``.
     // A class outside [0, channels) is refused with IndexError, as the
@@ -10670,179 +1620,40 @@ private:
     // taken for the default -100 and skipped.  Metal answers NaN for such a
     // target instead (policy B, GpuBackend's ``gpu_axis_index``).
     static std::int64_t class_target(
-        const char* op, const CpuStorage& target, std::size_t i, int ignore_index, int channels) {
-        const std::int64_t y = cpu::real_index_reader(op, target)(i);
-        if (y == ignore_index)
-            return -1;
-        return cpu::checked_row(op, y, channels);
-    }
+        const char* op, const CpuStorage& target, std::size_t i, int ignore_index, int channels);
 
     template <typename T>
-    static T sum_values(const T* values, std::size_t n) {
-        T sum = T{0};
-        for (std::size_t i = 0; i < n; ++i)
-            sum += values[i];
-        return sum;
-    }
+    static T sum_values(const T* values, std::size_t n);
 
     static Storage reduce_class_losses(const CpuStorage& losses,
                                        std::size_t samples,
                                        std::size_t valid_count,
                                        Dtype dt,
-                                       int reduction) {
-        if (reduction == 0) {
-            CpuStorage out{allocate_aligned_bytes(samples * dtype_size(dt), Device::CPU),
-                           samples * dtype_size(dt), dt};
-            std::memcpy(out.ptr.get(), losses.ptr.get(), out.nbytes);
-            return Storage{std::move(out)};
-        }
-        if (dt == Dtype::F32) {
-            const auto* lp = reinterpret_cast<const float*>(losses.ptr.get());
-            float sum = sum_values(lp, samples);
-            if (reduction == 1)
-                sum /= static_cast<float>(valid_count);
-            return Storage{make_cpu_scalar(static_cast<double>(sum), dt)};
-        }
-        if (dt == Dtype::F64) {
-            const auto* lp = reinterpret_cast<const double*>(losses.ptr.get());
-            double sum = sum_values(lp, samples);
-            if (reduction == 1)
-                sum /= static_cast<double>(valid_count);
-            return Storage{make_cpu_scalar(sum, dt)};
-        }
-        ErrorBuilder("cpu_backend::class_loss_reduce").not_implemented("dtype not supported");
-    }
+                                       int reduction);
 
-    static std::pair<std::size_t, std::size_t> flatten_linear_x(const Shape& x_shape) {
-        std::size_t M = 1;
-        for (std::size_t d = 0; d + 1 < x_shape.size(); ++d)
-            M *= static_cast<std::size_t>(x_shape[d]);
-        return {M, static_cast<std::size_t>(x_shape.back())};
-    }
+    static std::pair<std::size_t, std::size_t> flatten_linear_x(const Shape& x_shape);
 
     template <typename T>
-    static void add_linear_bias_typed(T* y, const T* b, std::size_t M, std::size_t N) {
-        for (std::size_t m = 0; m < M; ++m) {
-            for (std::size_t n = 0; n < N; ++n)
-                y[m * N + n] += b[n];
-        }
-    }
+    static void add_linear_bias_typed(T* y, const T* b, std::size_t M, std::size_t N);
 
     static void
-    add_linear_bias(CpuStorage& y, const CpuStorage& bias, std::size_t M, std::size_t N, Dtype dt) {
-        if (dt == Dtype::F32)
-            add_linear_bias_typed(reinterpret_cast<float*>(y.ptr.get()),
-                                  reinterpret_cast<const float*>(bias.ptr.get()), M, N);
-        else if (dt == Dtype::F64)
-            add_linear_bias_typed(reinterpret_cast<double*>(y.ptr.get()),
-                                  reinterpret_cast<const double*>(bias.ptr.get()), M, N);
-        else
-            ErrorBuilder("cpu_backend::linear").not_implemented("dtype not supported");
-    }
+    add_linear_bias(CpuStorage& y, const CpuStorage& bias, std::size_t M, std::size_t N, Dtype dt);
 
     template <typename T>
-    static void sum_linear_rows_typed(const T* grad, T* db, std::size_t M, std::size_t N) {
-        for (std::size_t n = 0; n < N; ++n)
-            db[n] = T{};
-        for (std::size_t m = 0; m < M; ++m) {
-            for (std::size_t n = 0; n < N; ++n)
-                db[n] += grad[m * N + n];
-        }
-    }
+    static void sum_linear_rows_typed(const T* grad, T* db, std::size_t M, std::size_t N);
 
-    static void sum_linear_rows(
-        const CpuStorage& grad, CpuStorage& db, std::size_t M, std::size_t N, Dtype dt) {
-        if (dt == Dtype::F32)
-            sum_linear_rows_typed(reinterpret_cast<const float*>(grad.ptr.get()),
-                                  reinterpret_cast<float*>(db.ptr.get()), M, N);
-        else if (dt == Dtype::F64)
-            sum_linear_rows_typed(reinterpret_cast<const double*>(grad.ptr.get()),
-                                  reinterpret_cast<double*>(db.ptr.get()), M, N);
-        else
-            ErrorBuilder("cpu_backend::linear_backward").not_implemented("dtype not supported");
-    }
+    static void
+    sum_linear_rows(const CpuStorage& grad, CpuStorage& db, std::size_t M, std::size_t N, Dtype dt);
 
     static Shape
-    reduced_norm_shape(const Shape& shape, const std::vector<int>& axes, bool keepdims) {
-        if (axes.empty()) {
-            if (keepdims)
-                return Shape(shape.size(), 1);
-            return Shape{};
-        }
-        std::vector<bool> mask(shape.size(), false);
-        for (int axis : axes) {
-            const int wrapped = axis < 0 ? axis + static_cast<int>(shape.size()) : axis;
-            mask[static_cast<std::size_t>(wrapped)] = true;
-        }
-        Shape out;
-        for (std::size_t d = 0; d < shape.size(); ++d) {
-            if (mask[d]) {
-                if (keepdims)
-                    out.push_back(1);
-            } else {
-                out.push_back(shape[d]);
-            }
-        }
-        return out;
-    }
+    reduced_norm_shape(const Shape& shape, const std::vector<int>& axes, bool keepdims);
 
     template <typename T, typename Fn>
     static void norm_elementwise_loop(const T* in,
                                       const Shape& shape,
                                       const std::vector<bool>& reduce_mask,
                                       const Shape& out_shape,
-                                      Fn fn) {
-        const std::size_t nd = shape.size();
-        Stride in_stride(nd), out_stride(out_shape.size());
-        if (nd > 0) {
-            in_stride[nd - 1] = 1;
-            for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(nd) - 2; i >= 0; --i)
-                in_stride[static_cast<std::size_t>(i)] =
-                    in_stride[static_cast<std::size_t>(i) + 1] *
-                    shape[static_cast<std::size_t>(i) + 1];
-        }
-        if (!out_shape.empty()) {
-            const std::size_t ond = out_shape.size();
-            out_stride[ond - 1] = 1;
-            for (std::ptrdiff_t i = static_cast<std::ptrdiff_t>(ond) - 2; i >= 0; --i)
-                out_stride[static_cast<std::size_t>(i)] =
-                    out_stride[static_cast<std::size_t>(i) + 1] *
-                    out_shape[static_cast<std::size_t>(i) + 1];
-        }
-
-        // ``out_shape`` keeps the reduced axes as size-1 under keepdims and drops
-        // them otherwise.  A surviving input axis therefore maps to output axis
-        // ``d`` in the keepdims layout, but to "number of surviving axes before
-        // d" when they were dropped.  Using the packed counter for BOTH (the
-        // previous behaviour) over-counted the stride under keepdims and wrote
-        // past ``acc`` — e.g. (2,3,4) reduced over dim 1 with keepdims indexes up
-        // to 16 into an 8-element buffer: a heap overflow that segfaulted.  A 2-D
-        // input happened to survive because the mis-picked stride equals 1 there.
-        const bool keepdims_layout = out_shape.size() == nd;
-        std::vector<std::int64_t> coord(nd, 0);
-        const std::size_t in_numel = shape_numel(shape);
-        for (std::size_t f = 0; f < in_numel; ++f) {
-            std::size_t in_flat = 0;
-            std::size_t out_flat = 0;
-            std::size_t out_axis = 0;
-            for (std::size_t d = 0; d < nd; ++d) {
-                in_flat +=
-                    static_cast<std::size_t>(coord[d]) * static_cast<std::size_t>(in_stride[d]);
-                if (!reduce_mask[d]) {
-                    const std::size_t oa = keepdims_layout ? d : out_axis;
-                    out_flat += static_cast<std::size_t>(coord[d]) *
-                                static_cast<std::size_t>(out_stride[oa]);
-                    ++out_axis;
-                }
-            }
-            fn(in[in_flat], out_flat);
-            for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(nd) - 1; d >= 0; --d) {
-                if (++coord[static_cast<std::size_t>(d)] < shape[static_cast<std::size_t>(d)])
-                    break;
-                coord[static_cast<std::size_t>(d)] = 0;
-            }
-        }
-    }
+                                      Fn fn);
 
     template <typename T>
     static void norm_typed(const T* in,
@@ -10850,76 +1661,17 @@ private:
                            const Shape& shape,
                            const std::vector<int>& axes,
                            double ord,
-                           const Shape& out_shape) {
-        std::vector<bool> reduce_mask(shape.size(), false);
-        if (axes.empty()) {
-            for (std::size_t i = 0; i < shape.size(); ++i)
-                reduce_mask[i] = true;
-        } else {
-            for (int axis : axes) {
-                const int wrapped = axis < 0 ? axis + static_cast<int>(shape.size()) : axis;
-                reduce_mask[static_cast<std::size_t>(wrapped)] = true;
-            }
-        }
-        const std::size_t out_numel = std::max<std::size_t>(1, shape_numel(out_shape));
-        if (std::isinf(ord)) {
-            const bool positive = ord > 0;
-            std::vector<T> acc(out_numel, positive ? T{0} : std::numeric_limits<T>::infinity());
-            norm_elementwise_loop<T>(in, shape, reduce_mask, out_shape, [&](T v, std::size_t o) {
-                const T av = std::abs(v);
-                acc[o] = positive ? std::max(acc[o], av) : std::min(acc[o], av);
-            });
-            std::memcpy(out, acc.data(), out_numel * sizeof(T));
-            return;
-        }
-        if (ord == 0.0) {
-            std::vector<T> acc(out_numel, T{0});
-            norm_elementwise_loop<T>(in, shape, reduce_mask, out_shape, [&](T v, std::size_t o) {
-                if (v != T{0})
-                    acc[o] += T{1};
-            });
-            std::memcpy(out, acc.data(), out_numel * sizeof(T));
-            return;
-        }
-        std::vector<T> acc(out_numel, T{0});
-        norm_elementwise_loop<T>(in, shape, reduce_mask, out_shape, [&](T v, std::size_t o) {
-            const T av = std::abs(v);
-            if (ord == 2.0)
-                acc[o] += v * v;
-            else if (ord == 1.0)
-                acc[o] += av;
-            else
-                acc[o] += std::pow(av, static_cast<T>(ord));
-        });
-        if (ord == 2.0) {
-            for (std::size_t i = 0; i < out_numel; ++i)
-                acc[i] = std::sqrt(acc[i]);
-        } else if (ord != 1.0) {
-            const T inv_ord = static_cast<T>(1.0 / ord);
-            for (std::size_t i = 0; i < out_numel; ++i)
-                acc[i] = std::pow(acc[i], inv_ord);
-        }
-        std::memcpy(out, acc.data(), out_numel * sizeof(T));
-    }
+                           const Shape& out_shape);
 
-    static std::int64_t leading_matrix_batch_count(const Shape& shape, std::size_t mat_dims) {
-        std::int64_t batch = 1;
-        for (std::size_t i = 0; i + mat_dims < shape.size(); ++i)
-            batch *= shape[i];
-        return batch;
-    }
+    static std::int64_t leading_matrix_batch_count(const Shape& shape, std::size_t mat_dims);
 
     // Whether every one of the ``n`` values is finite.  LAPACK's drivers
     // reject a NaN as an illegal argument, so the linalg kernels ask first.
     template <typename T>
-    static bool all_finite(const T* p, std::size_t n) {
-        return std::all_of(p, p + n, [](T v) { return std::isfinite(v); });
-    }
+    static bool all_finite(const T* p, std::size_t n);
 
     template <typename T>
-    static void fill_nan(T* p, std::size_t n) {
-        std::fill(p, p + n, std::numeric_limits<T>::quiet_NaN());
-    }
+    static void fill_nan(T* p, std::size_t n);
 
     // geev has no answer for a non-finite matrix: its balancing step turns
     // the NaN into an illegal argument for the Hessenberg solver (and the
@@ -10927,64 +1679,15 @@ private:
     // raises for it too, so this raises before LAPACK is reached, with the
     // message the Metal stream uses.
     template <typename T>
-    static void require_finite_eig(const T* p, std::size_t n) {
-        if (!all_finite(p, n))
-            ErrorBuilder("eig").fail("input should not contain infs or NaNs");
-    }
+    static void require_finite_eig(const T* p, std::size_t n);
 
     template <typename T>
-    static void set_matrix_identity(T* out, int n) {
-        const std::size_t total = static_cast<std::size_t>(n) * n;
-        std::memset(out, 0, total * sizeof(T));
-        for (int i = 0; i < n; ++i)
-            out[i * n + i] = T{1};
-    }
+    static void set_matrix_identity(T* out, int n);
 
     template <typename T>
-    static void pinv_one(const T* a, int m, int n, T* aplus) {
-        // A NaN makes gesdd report an illegal argument; infinities go through.
-        if (std::any_of(a, a + static_cast<std::size_t>(m) * n,
-                        [](T v) { return std::isnan(v); })) {
-            fill_nan(aplus, static_cast<std::size_t>(n) * m);
-            return;
-        }
-        const int k = std::min(m, n);
-        std::vector<T> u(static_cast<std::size_t>(m) * k);
-        std::vector<T> s(k);
-        std::vector<T> vt(static_cast<std::size_t>(k) * n);
-        int info = 0;
-        if constexpr (std::is_same_v<T, float>)
-            cpu::lapack_svd_f32(a, m, n, false, u.data(), s.data(), vt.data(), &info);
-        else
-            cpu::lapack_svd_f64(a, m, n, false, u.data(), s.data(), vt.data(), &info);
-        check_lapack_info(info, "pinv");
+    static void pinv_one(const T* a, int m, int n, T* aplus);
 
-        const T smax = (k > 0) ? *std::max_element(s.begin(), s.end()) : T{0};
-        const T rcond = std::numeric_limits<T>::epsilon() * static_cast<T>(std::max(m, n));
-        const T cutoff = rcond * smax;
-
-        std::vector<T> s_inv_ut(static_cast<std::size_t>(k) * m);
-        for (int i = 0; i < k; ++i) {
-            const T inv = (s[i] > cutoff) ? T{1} / s[i] : T{0};
-            for (int j = 0; j < m; ++j)
-                s_inv_ut[i * m + j] = inv * u[j * k + i];
-        }
-
-        if constexpr (std::is_same_v<T, float>) {
-            cpu::sgemm(true, false, n, m, k, 1.0f, vt.data(), n, s_inv_ut.data(), m, 0.0f, aplus,
-                       m);
-        } else {
-            cpu::dgemm(true, false, n, m, k, 1.0, vt.data(), n, s_inv_ut.data(), m, 0.0, aplus, m);
-        }
-    }
-
-    static float ipiv_sign(const int* ipiv, int n) {
-        int swaps = 0;
-        for (int i = 0; i < n; ++i)
-            if (ipiv[i] != i + 1)
-                ++swaps;
-        return (swaps % 2 == 0) ? 1.0f : -1.0f;
-    }
+    static float ipiv_sign(const int* ipiv, int n);
 
     static void batch_norm_forward_f32_fast(const float* x,
                                             const float* gamma,
@@ -10995,40 +1698,7 @@ private:
                                             int batch,
                                             int channels,
                                             int spatial,
-                                            double eps) {
-        // Centred before anything is squared or scaled.  The variance used
-        // to be E[x²] − mean² and the output x·scale + (β − mean·scale):
-        // both subtract two large, nearly equal numbers once the mean
-        // outgrows the spread, and at a mean of 100× the spread the
-        // input gradient was off by 1e-3 while Metal's held 1e-5.
-        const std::size_t S = static_cast<std::size_t>(spatial);
-        const float inv_M = 1.0f / static_cast<float>(batch * spatial);
-        for (int c = 0; c < channels; ++c) {
-            float sum = 0.f;
-            for (int b = 0; b < batch; ++b)
-                sum += cpu::vsum_f32(x + (static_cast<std::size_t>(b) * channels + c) * S, S);
-            const float mean = sum * inv_M;
-            mean_per_c[c] = mean;
-
-            // y holds x − mean until the scale is known.
-            float sumsq = 0.f;
-            for (int b = 0; b < batch; ++b) {
-                const std::size_t at = (static_cast<std::size_t>(b) * channels + c) * S;
-                cpu::vsadd_f32(x + at, -mean, y + at, S);
-                sumsq += cpu::vdotpr_f32(y + at, y + at, S);
-            }
-            const float var = sumsq * inv_M;
-            const float rstd = 1.0f / std::sqrt(var + static_cast<float>(eps));
-            rstd_per_c[c] = rstd;
-
-            const float scale = gamma[c] * rstd;
-            for (int b = 0; b < batch; ++b) {
-                float* yb = y + (static_cast<std::size_t>(b) * channels + c) * S;
-                cpu::vsmul_f32(yb, scale, yb, S);
-                cpu::vsadd_f32(yb, beta[c], yb, S);
-            }
-        }
-    }
+                                            double eps);
 
     template <typename T>
     static void batch_norm_forward_typed(const T* x,
@@ -11040,42 +1710,7 @@ private:
                                          int batch,
                                          int channels,
                                          int spatial,
-                                         double eps) {
-        using Acc = NormAcc<T>;
-        const std::size_t M = static_cast<std::size_t>(batch) * spatial;
-        const Acc inv_M = Acc{1} / static_cast<Acc>(M);
-        for (int c = 0; c < channels; ++c) {
-            Acc mean_acc = Acc{};
-            for (int b = 0; b < batch; ++b) {
-                const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                for (int i = 0; i < spatial; ++i)
-                    mean_acc += static_cast<Acc>(xb[i]);
-            }
-            mean_acc *= inv_M;
-            const T mean = static_cast<T>(mean_acc);
-
-            Acc var_acc = Acc{};
-            for (int b = 0; b < batch; ++b) {
-                const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                for (int i = 0; i < spatial; ++i) {
-                    const Acc d = static_cast<Acc>(xb[i]) - mean_acc;
-                    var_acc += d * d;
-                }
-            }
-            var_acc *= inv_M;
-            const T rstd = static_cast<T>(Acc{1} / std::sqrt(var_acc + static_cast<Acc>(eps)));
-            const T g = gamma[c];
-            const T be = beta[c];
-            for (int b = 0; b < batch; ++b) {
-                const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                T* yb = y + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                for (int i = 0; i < spatial; ++i)
-                    yb[i] = g * (xb[i] - mean) * rstd + be;
-            }
-            mean_per_c[c] = mean;
-            rstd_per_c[c] = rstd;
-        }
-    }
+                                         double eps);
 
     template <typename T>
     static void batch_norm_backward_typed(const T* x,
@@ -11088,48 +1723,7 @@ private:
                                           T* dbeta,
                                           int batch,
                                           int channels,
-                                          int spatial) {
-        using Acc = NormAcc<T>;
-        const std::size_t M = static_cast<std::size_t>(batch) * spatial;
-        const Acc inv_M = Acc{1} / static_cast<Acc>(M);
-        for (int c = 0; c < channels; ++c) {
-            const T m = mean[c];
-            const T r = rstd[c];
-            const T gc = gamma[c];
-            Acc sum_dxn = Acc{};
-            Acc sum_dxn_xn = Acc{};
-            Acc sum_g = Acc{};
-            Acc sum_g_xn = Acc{};
-            for (int b = 0; b < batch; ++b) {
-                const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                const T* gb = g + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                for (int i = 0; i < spatial; ++i) {
-                    const Acc xn_i = static_cast<Acc>((xb[i] - m) * r);
-                    const Acc dxn_i = static_cast<Acc>(gc * gb[i]);
-                    sum_dxn += dxn_i;
-                    sum_dxn_xn += dxn_i * xn_i;
-                    sum_g += static_cast<Acc>(gb[i]);
-                    sum_g_xn += static_cast<Acc>(gb[i]) * xn_i;
-                }
-            }
-            const T sum_dxn_t = static_cast<T>(sum_dxn);
-            const T sum_dxn_xn_t = static_cast<T>(sum_dxn_xn);
-            const T inv_M_t = static_cast<T>(inv_M);
-            for (int b = 0; b < batch; ++b) {
-                const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                const T* gb = g + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                T* dxb = dx + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                for (int i = 0; i < spatial; ++i) {
-                    const T xn_i = (xb[i] - m) * r;
-                    const T dxn_i = gc * gb[i];
-                    dxb[i] =
-                        inv_M_t * r * (static_cast<T>(M) * dxn_i - sum_dxn_t - xn_i * sum_dxn_xn_t);
-                }
-            }
-            dgamma[c] = static_cast<T>(sum_g_xn);
-            dbeta[c] = static_cast<T>(sum_g);
-        }
-    }
+                                          int spatial);
 
     // Reductions over a whole normalisation group run to a million elements
     // at production resolutions, and a serial float sum loses accuracy in
@@ -11153,47 +1747,7 @@ private:
                                          int channels,
                                          int spatial,
                                          int groups,
-                                         double eps) {
-        using Acc = NormAcc<T>;
-        const int Cg = channels / groups;
-        const std::size_t per_group = static_cast<std::size_t>(Cg) * spatial;
-        const Acc inv_pg = Acc{1} / static_cast<Acc>(per_group);
-        for (int b = 0; b < batch; ++b) {
-            for (int g = 0; g < groups; ++g) {
-                Acc mean_acc = Acc{};
-                for (int cc = 0; cc < Cg; ++cc) {
-                    const int c = g * Cg + cc;
-                    const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                    for (int i = 0; i < spatial; ++i)
-                        mean_acc += static_cast<Acc>(xb[i]);
-                }
-                mean_acc *= inv_pg;
-                const T mean = static_cast<T>(mean_acc);
-                Acc var_acc = Acc{};
-                for (int cc = 0; cc < Cg; ++cc) {
-                    const int c = g * Cg + cc;
-                    const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                    for (int i = 0; i < spatial; ++i) {
-                        const Acc d = static_cast<Acc>(xb[i]) - mean_acc;
-                        var_acc += d * d;
-                    }
-                }
-                var_acc *= inv_pg;
-                const T rstd = static_cast<T>(Acc{1} / std::sqrt(var_acc + static_cast<Acc>(eps)));
-                for (int cc = 0; cc < Cg; ++cc) {
-                    const int c = g * Cg + cc;
-                    const T gc = gamma[c];
-                    const T bc = beta[c];
-                    const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                    T* yb = y + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                    for (int i = 0; i < spatial; ++i)
-                        yb[i] = gc * (xb[i] - mean) * rstd + bc;
-                }
-                mean_bg[b * groups + g] = mean;
-                rstd_bg[b * groups + g] = rstd;
-            }
-        }
-    }
+                                         double eps);
 
     template <typename T>
     static void group_norm_backward_typed(const T* x,
@@ -11207,230 +1761,16 @@ private:
                                           int batch,
                                           int channels,
                                           int spatial,
-                                          int groups) {
-        using Acc = NormAcc<T>;
-        const int Cg = channels / groups;
-        const std::size_t per_group = static_cast<std::size_t>(Cg) * spatial;
-        const Acc inv_pg = Acc{1} / static_cast<Acc>(per_group);
-        // dgamma / dbeta run over batch * spatial per channel, which is the
-        // same length of sum the forward widened; they are accumulated apart
-        // and rounded once on the way out.
-        std::vector<Acc> dgamma_acc(static_cast<std::size_t>(channels), Acc{});
-        std::vector<Acc> dbeta_acc(static_cast<std::size_t>(channels), Acc{});
-        for (int b = 0; b < batch; ++b) {
-            for (int gi = 0; gi < groups; ++gi) {
-                const T m = mean_bg[b * groups + gi];
-                const T r = rstd_bg[b * groups + gi];
-                Acc sum_dxn = Acc{};
-                Acc sum_dxn_xn = Acc{};
-                for (int cc = 0; cc < Cg; ++cc) {
-                    const int c = gi * Cg + cc;
-                    const T gc = gamma[c];
-                    const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                    const T* gb = g + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                    for (int i = 0; i < spatial; ++i) {
-                        const Acc xn_i = static_cast<Acc>((xb[i] - m) * r);
-                        const Acc dxn_i = static_cast<Acc>(gc * gb[i]);
-                        sum_dxn += dxn_i;
-                        sum_dxn_xn += dxn_i * xn_i;
-                        dgamma_acc[c] += static_cast<Acc>(gb[i]) * xn_i;
-                        dbeta_acc[c] += static_cast<Acc>(gb[i]);
-                    }
-                }
-                const T sum_dxn_t = static_cast<T>(sum_dxn);
-                const T sum_dxn_xn_t = static_cast<T>(sum_dxn_xn);
-                const T inv_pg_t = static_cast<T>(inv_pg);
-                for (int cc = 0; cc < Cg; ++cc) {
-                    const int c = gi * Cg + cc;
-                    const T gc = gamma[c];
-                    const T* xb = x + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                    const T* gb = g + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                    T* dxb = dx + (static_cast<std::size_t>(b) * channels + c) * spatial;
-                    for (int i = 0; i < spatial; ++i) {
-                        const T xn_i = (xb[i] - m) * r;
-                        const T dxn_i = gc * gb[i];
-                        dxb[i] =
-                            inv_pg_t * r *
-                            (static_cast<T>(per_group) * dxn_i - sum_dxn_t - xn_i * sum_dxn_xn_t);
-                    }
-                }
-            }
-        }
-        for (int co = 0; co < channels; ++co) {
-            dgamma[co] = static_cast<T>(dgamma_acc[co]);
-            dbeta[co] = static_cast<T>(dbeta_acc[co]);
-        }
-    }
+                                          int groups);
 
     // Fills ptr with the scalar value 1 for dtype dt.  Used by ones().
-    void fill_ones(std::byte* ptr, std::size_t n, Dtype dt) {
-        switch (dt) {
-        case Dtype::C128: {
-            auto* p = reinterpret_cast<std::complex<double>*>(ptr);
-            std::fill_n(p, n, std::complex<double>{1.0, 0.0});
-            break;
-        }
-        case Dtype::F32: {
-            float* p = reinterpret_cast<float*>(ptr);
-            for (std::size_t i = 0; i < n; ++i)
-                p[i] = 1.f;
-            break;
-        }
-        case Dtype::F64: {
-            double* p = reinterpret_cast<double*>(ptr);
-            for (std::size_t i = 0; i < n; ++i)
-                p[i] = 1.0;
-            break;
-        }
-        case Dtype::I32: {
-            std::int32_t* p = reinterpret_cast<std::int32_t*>(ptr);
-            for (std::size_t i = 0; i < n; ++i)
-                p[i] = 1;
-            break;
-        }
-        case Dtype::I64: {
-            std::int64_t* p = reinterpret_cast<std::int64_t*>(ptr);
-            for (std::size_t i = 0; i < n; ++i)
-                p[i] = 1;
-            break;
-        }
-        case Dtype::C64: {
-            // Interleaved [re, im, re, im, ...] — set re=1, im=0 per element.
-            float* p = reinterpret_cast<float*>(ptr);
-            for (std::size_t i = 0; i < n; ++i) {
-                p[2 * i] = 1.0f;
-                p[2 * i + 1] = 0.0f;
-            }
-            break;
-        }
-        case Dtype::Bool: {
-            auto* p = reinterpret_cast<std::uint8_t*>(ptr);
-            for (std::size_t i = 0; i < n; ++i)
-                p[i] = 1;
-            break;
-        }
-        case Dtype::I8: {
-            auto* p = reinterpret_cast<std::int8_t*>(ptr);
-            for (std::size_t i = 0; i < n; ++i)
-                p[i] = 1;
-            break;
-        }
-        case Dtype::I16: {
-            auto* p = reinterpret_cast<std::int16_t*>(ptr);
-            for (std::size_t i = 0; i < n; ++i)
-                p[i] = 1;
-            break;
-        }
-        case Dtype::F16:
-        case Dtype::BF16: {
-            // 1.0 is 0x3C00 in IEEE binary16 and 0x3F80 in bfloat16.  Writing
-            // the pattern avoids needing a half type for what is only a fill.
-            const std::uint16_t one = dt == Dtype::BF16 ? 0x3F80 : 0x3C00;
-            std::fill_n(reinterpret_cast<std::uint16_t*>(ptr), n, one);
-            break;
-        }
-        default:
-            ErrorBuilder("cpu_backend::ones").not_implemented("dtype not supported");
-        }
-    }
+    void fill_ones(std::byte* ptr, std::size_t n, Dtype dt);
 
     // Generic unary dispatch: allocates output, calls fn32/fn64/fni32 based on dt.
     // I64 falls back to a scalar loop via static_cast<double>.
     template <class F32Fn, class F64Fn, class I32Fn>
     Storage
-    unary_op(const Storage& a, const Shape& shape, Dtype dt, F32Fn fn32, F64Fn fn64, I32Fn fni32) {
-        const auto& cs = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32)
-            fn32(reinterpret_cast<const float*>(cs.ptr.get()), reinterpret_cast<float*>(ptr.get()),
-                 n);
-        else if (dt == Dtype::F64)
-            fn64(reinterpret_cast<const double*>(cs.ptr.get()),
-                 reinterpret_cast<double*>(ptr.get()), n);
-        else if (dt == Dtype::I32)
-            fni32(reinterpret_cast<const std::int32_t*>(cs.ptr.get()),
-                  reinterpret_cast<std::int32_t*>(ptr.get()), n);
-        else if (dt == Dtype::I64) {
-            // This branch used to read
-            //     op[i] = (std::int64_t)(double)(double)ip[i];
-            // which is an identity: the function was never applied, so
-            // every unary op on I64 returned its own input.  I64 is the
-            // default integer dtype, so ``exp(tensor([2, 3]))`` answered
-            // ``[2, 3]`` instead of ``[7, 20]`` — silently, on the CPU
-            // only, while Metal was correct.
-            const std::int64_t* ip = reinterpret_cast<const std::int64_t*>(cs.ptr.get());
-            std::int64_t* op = reinterpret_cast<std::int64_t*>(ptr.get());
-            std::vector<double> wi(n), wo(n);
-            for (std::size_t i = 0; i < n; ++i)
-                wi[i] = static_cast<double>(ip[i]);
-            fn64(wi.data(), wo.data(), n);
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = static_cast<std::int64_t>(wo[i]);
-        } else if (dt == Dtype::Bool) {
-            // Bool goes through *float*, not through the integer kernel.
-            // Truncating first makes ``tanh(True)`` land on 0 and read back
-            // as False, while a float-to-bool cast is "non-zero" and gives
-            // True — which is what Metal and the reference both do.
-            const auto* p = reinterpret_cast<const std::uint8_t*>(cs.ptr.get());
-            std::vector<float> wi(n), wo(n);
-            for (std::size_t i = 0; i < n; ++i)
-                wi[i] = p[i] ? 1.0f : 0.0f;
-            fn32(wi.data(), wo.data(), n);
-            auto* o = reinterpret_cast<std::uint8_t*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                o[i] = wo[i] != 0.0f ? 1 : 0;
-        } else if (dt == Dtype::I8 || dt == Dtype::I16) {
-            // Accelerate has no vector maths below 32 bits, so these widen,
-            // reuse the I32 kernel and narrow back — the same shape as
-            // ``binary_op``.  Metal supported all three and the CPU did
-            // not, so the same call worked on one device and raised on the
-            // other.
-            std::vector<std::int32_t> wi(n), wo(n);
-            if (dt == Dtype::I16) {
-                const auto* p = reinterpret_cast<const std::int16_t*>(cs.ptr.get());
-                for (std::size_t i = 0; i < n; ++i)
-                    wi[i] = p[i];
-            } else if (dt == Dtype::I8) {
-                const auto* p = reinterpret_cast<const std::int8_t*>(cs.ptr.get());
-                for (std::size_t i = 0; i < n; ++i)
-                    wi[i] = p[i];
-            } else {
-                const auto* p = reinterpret_cast<const std::int8_t*>(cs.ptr.get());
-                for (std::size_t i = 0; i < n; ++i)
-                    wi[i] = p[i];
-            }
-            fni32(wi.data(), wo.data(), n);
-            if (dt == Dtype::I16) {
-                auto* o = reinterpret_cast<std::int16_t*>(ptr.get());
-                for (std::size_t i = 0; i < n; ++i)
-                    o[i] = static_cast<std::int16_t>(wo[i]);
-            } else if (dt == Dtype::I8) {
-                auto* o = reinterpret_cast<std::int8_t*>(ptr.get());
-                for (std::size_t i = 0; i < n; ++i)
-                    o[i] = static_cast<std::int8_t>(wo[i]);
-            } else {
-                auto* o = reinterpret_cast<std::int8_t*>(ptr.get());
-                for (std::size_t i = 0; i < n; ++i)
-                    o[i] = static_cast<std::int8_t>(wo[i]);
-            }
-        } else if (detail::is_half_like(dt)) {
-            // Half has no host scalar to compute in; widen through float
-            // and round once on the way back, which is what the astype
-            // path does.
-            const auto* p = reinterpret_cast<const std::uint16_t*>(cs.ptr.get());
-            const bool brain = dt == Dtype::BF16;
-            std::vector<float> wi(n), wo(n);
-            detail::half_or_bfloat16_to_float_bulk(p, wi.data(), n, brain);
-            fn32(wi.data(), wo.data(), n);
-            auto* o = reinterpret_cast<std::uint16_t*>(ptr.get());
-            detail::float_to_half_or_bfloat16_bulk(wo.data(), o, n, brain);
-        } else {
-            ErrorBuilder("cpu_backend::unary").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    unary_op(const Storage& a, const Shape& shape, Dtype dt, F32Fn fn32, F64Fn fn64, I32Fn fni32);
 
     // Generic binary dispatch: allocates output, calls fn32/fn64/fni32/fni64 based on dt.
     template <class F32Fn, class F64Fn, class I32Fn, class I64Fn>
@@ -11441,81 +1781,7 @@ private:
                       F32Fn fn32,
                       F64Fn fn64,
                       I32Fn fni32,
-                      I64Fn fni64) {
-        const auto& ca = std::get<CpuStorage>(a);
-        const auto& cb = std::get<CpuStorage>(b);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32)
-            fn32(reinterpret_cast<const float*>(ca.ptr.get()),
-                 reinterpret_cast<const float*>(cb.ptr.get()), reinterpret_cast<float*>(ptr.get()),
-                 n);
-        else if (dt == Dtype::F64)
-            fn64(reinterpret_cast<const double*>(ca.ptr.get()),
-                 reinterpret_cast<const double*>(cb.ptr.get()),
-                 reinterpret_cast<double*>(ptr.get()), n);
-        else if (dt == Dtype::I32)
-            fni32(reinterpret_cast<const std::int32_t*>(ca.ptr.get()),
-                  reinterpret_cast<const std::int32_t*>(cb.ptr.get()),
-                  reinterpret_cast<std::int32_t*>(ptr.get()), n);
-        else if (dt == Dtype::I64)
-            fni64(reinterpret_cast<const std::int64_t*>(ca.ptr.get()),
-                  reinterpret_cast<const std::int64_t*>(cb.ptr.get()),
-                  reinterpret_cast<std::int64_t*>(ptr.get()), n);
-        else if (dt == Dtype::Bool || dt == Dtype::I8 || dt == Dtype::I16) {
-            // Accelerate has no vector arithmetic below 32 bits, so these
-            // widen, reuse the I32 kernel, and narrow back.  Bool follows the
-            // reference convention that ``True + True`` is ``True``: the sum
-            // is taken as a number and then read as "non-zero".
-            std::vector<std::int32_t> wa(n), wb(n), wo(n);
-            const auto load = [&](const std::byte* src, std::vector<std::int32_t>& dst) {
-                if (dt == Dtype::I16) {
-                    const auto* p = reinterpret_cast<const std::int16_t*>(src);
-                    for (std::size_t i = 0; i < n; ++i)
-                        dst[i] = p[i];
-                } else if (dt == Dtype::I8) {
-                    const auto* p = reinterpret_cast<const std::int8_t*>(src);
-                    for (std::size_t i = 0; i < n; ++i)
-                        dst[i] = p[i];
-                } else {
-                    const auto* p = reinterpret_cast<const std::uint8_t*>(src);
-                    for (std::size_t i = 0; i < n; ++i)
-                        dst[i] = p[i] ? 1 : 0;
-                }
-            };
-            load(reinterpret_cast<const std::byte*>(ca.ptr.get()), wa);
-            load(reinterpret_cast<const std::byte*>(cb.ptr.get()), wb);
-            fni32(wa.data(), wb.data(), wo.data(), n);
-            if (dt == Dtype::I16) {
-                auto* o = reinterpret_cast<std::int16_t*>(ptr.get());
-                for (std::size_t i = 0; i < n; ++i)
-                    o[i] = static_cast<std::int16_t>(wo[i]);
-            } else if (dt == Dtype::I8) {
-                auto* o = reinterpret_cast<std::int8_t*>(ptr.get());
-                for (std::size_t i = 0; i < n; ++i)
-                    o[i] = static_cast<std::int8_t>(wo[i]);
-            } else {
-                auto* o = reinterpret_cast<std::uint8_t*>(ptr.get());
-                for (std::size_t i = 0; i < n; ++i)
-                    o[i] = wo[i] != 0 ? 1 : 0;
-            }
-        } else if (detail::is_half_like(dt)) {
-            // Half has no host scalar to compute in; widen through float and
-            // round once on the way back, which is what the astype path does.
-            const auto* pa = reinterpret_cast<const std::uint16_t*>(ca.ptr.get());
-            const auto* pb = reinterpret_cast<const std::uint16_t*>(cb.ptr.get());
-            const bool brain = dt == Dtype::BF16;
-            std::vector<float> wa(n), wb(n), wo(n);
-            detail::half_or_bfloat16_to_float_bulk(pa, wa.data(), n, brain);
-            detail::half_or_bfloat16_to_float_bulk(pb, wb.data(), n, brain);
-            fn32(wa.data(), wb.data(), wo.data(), n);
-            auto* o = reinterpret_cast<std::uint16_t*>(ptr.get());
-            detail::float_to_half_or_bfloat16_bulk(wo.data(), o, n, brain);
-        } else
-            ErrorBuilder("cpu_backend::binary").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                      I64Fn fni64);
 
     // Tags used by reduce_axes to select the accumulation operation.
     enum class ReduceOp { Sum, Mean, Max, Min };
@@ -11525,288 +1791,9 @@ private:
     // Each single-axis pass calls the appropriate cpu::sum_axis / max_axis /
     // min_axis primitive.  Mean divides by the reduce dimension after summing.
     Storage reduce_axes(
-        const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt, ReduceOp op) {
-        if (is_complex(dt)) {
-            if (op != ReduceOp::Sum && op != ReduceOp::Mean)
-                ErrorBuilder("cpu_backend::reduce")
-                    .not_implemented("complex ordering is undefined");
-            const auto lane = real_lane_of(dt);
-            auto re = reduce_axes(complex_real(a, in_shape), in_shape, opts, lane, op);
-            auto im = reduce_axes(complex_imag(a, in_shape), in_shape, opts, lane, op);
-            const auto n = std::get<CpuStorage>(re).nbytes / dtype_size(lane);
-            return complex_combine(re, im, Shape{static_cast<std::int64_t>(n)});
-        }
-        // Reductions accumulate, and there is no half accumulator on the
-        // host.  Widening also removes the rounding-per-step error a true
-        // half accumulation would carry.
-        if (detail::is_half_like(dt) && !in_shape.empty()) {
-            const std::size_t in_n = shape_numel(in_shape);
-            const Storage wide =
-                reduce_axes(Storage{detail::widen_half(std::get<CpuStorage>(a), in_n)}, in_shape,
-                            opts, Dtype::F32, op);
-            const std::size_t out_n = std::get<CpuStorage>(wide).nbytes / sizeof(float);
-            return detail::narrow_half(wide, out_n, dt);
-        }
-        // The same shape for the narrow integers.  Only I64 was
-        // implemented, so ``max`` and ``min`` refused int8/16/32 and bool
-        // while Metal answered them — and taking the maximum of an integer
-        // tensor is an ordinary thing to want.  Widening to I64 is exact
-        // for every one of these (comparison and summation of a narrower
-        // integer cannot overflow int64), so the answer is the same one
-        // the wide path would give, narrowed back to the caller's dtype.
-        if (!in_shape.empty() &&
-            (dt == Dtype::I32 || dt == Dtype::I16 || dt == Dtype::I8 || dt == Dtype::Bool)) {
-            const std::size_t in_n = shape_numel(in_shape);
-            const Storage wide =
-                reduce_axes(Storage{detail::widen_int(std::get<CpuStorage>(a), in_n, dt)}, in_shape,
-                            opts, Dtype::I64, op);
-            const std::size_t out_n = std::get<CpuStorage>(wide).nbytes / sizeof(std::int64_t);
-            return detail::narrow_int(wide, out_n, dt);
-        }
-        // 0-d (scalar) input is already its own reduction. Returning early
-        // avoids an infinite recursion in the empty-axes branch below, where
-        // expanding `axes` to all dims would yield another empty list.
-        if (in_shape.empty())
-            return a;
-        if (opts.axes.empty()) {
-            std::vector<int> all_axes;
-            for (int i = 0; i < static_cast<int>(in_shape.size()); ++i)
-                all_axes.push_back(i);
-            ReduceOpts all_opts{all_axes, opts.keepdims};
-            return reduce_axes(a, in_shape, all_opts, dt, op);
-        }
+        const Storage& a, const Shape& in_shape, const ReduceOpts& opts, Dtype dt, ReduceOp op);
 
-        auto axes = opts.axes;
-        std::sort(axes.begin(), axes.end(), std::greater<int>());
-
-        Storage cur = a;
-        Shape cur_shape = in_shape;
-        std::size_t total_rd = 1;
-
-        for (int axis : axes) {
-            const auto& cs = std::get<CpuStorage>(cur);
-            const int ndim = static_cast<int>(cur_shape.size());
-            const int ax = (axis < 0) ? axis + ndim : axis;
-            const std::size_t outer = [&] {
-                std::size_t o = 1;
-                for (int i = 0; i < ax; ++i)
-                    o *= static_cast<std::size_t>(cur_shape[i]);
-                return o;
-            }();
-            const std::size_t rd = static_cast<std::size_t>(cur_shape[ax]);
-            total_rd *= rd;
-            const std::size_t inner = [&] {
-                std::size_t ii = 1;
-                for (int i = ax + 1; i < ndim; ++i)
-                    ii *= static_cast<std::size_t>(cur_shape[i]);
-                return ii;
-            }();
-            const std::size_t out_n = outer * inner;
-            Shape out_shape;
-            for (int i = 0; i < ndim; ++i)
-                if (i != ax)
-                    out_shape.push_back(cur_shape[i]);
-            if (out_shape.empty())
-                out_shape.push_back(1);
-
-            std::size_t nb = out_n * dtype_size(dt);
-            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-
-            if (dt == Dtype::F32) {
-                const float* ip = reinterpret_cast<const float*>(cs.ptr.get());
-                float* outp = reinterpret_cast<float*>(ptr.get());
-                if (op == ReduceOp::Sum || op == ReduceOp::Mean)
-                    cpu::sum_axis_f32(ip, outp, outer, rd, inner);
-                else if (op == ReduceOp::Max)
-                    cpu::max_axis_f32(ip, outp, outer, rd, inner);
-                else
-                    cpu::min_axis_f32(ip, outp, outer, rd, inner);
-            } else if (dt == Dtype::F64) {
-                const double* ip = reinterpret_cast<const double*>(cs.ptr.get());
-                double* outp = reinterpret_cast<double*>(ptr.get());
-                if (op == ReduceOp::Sum || op == ReduceOp::Mean)
-                    cpu::sum_axis_f64(ip, outp, outer, rd, inner);
-                else if (op == ReduceOp::Max)
-                    cpu::max_axis_f64(ip, outp, outer, rd, inner);
-                else
-                    cpu::min_axis_f64(ip, outp, outer, rd, inner);
-            } else if (dt == Dtype::I64) {
-                // Native int64 reduce — no Accelerate primitive, but the
-                // outer × inner × reduce_dim loop is straightforward.
-                // ``sum_op`` / ``prod_op`` promote bool / I8 / I16 / I32 to
-                // I64 via ``promote_int_for_reduce`` so all integral
-                // reductions land here; this preserves the reference
-                // framework's "int.sum() → int64" semantics without
-                // round-tripping through F64 (which would lose
-                // precision past 2^53).
-                const std::int64_t* ip = reinterpret_cast<const std::int64_t*>(cs.ptr.get());
-                std::int64_t* outp = reinterpret_cast<std::int64_t*>(ptr.get());
-                for (std::size_t o = 0; o < outer; ++o) {
-                    for (std::size_t i = 0; i < inner; ++i) {
-                        std::int64_t acc;
-                        if (op == ReduceOp::Sum || op == ReduceOp::Mean) {
-                            acc = 0;
-                        } else if (op == ReduceOp::Max) {
-                            acc = std::numeric_limits<std::int64_t>::min();
-                        } else {  // Min
-                            acc = std::numeric_limits<std::int64_t>::max();
-                        }
-                        for (std::size_t r = 0; r < rd; ++r) {
-                            std::int64_t v = ip[(o * rd + r) * inner + i];
-                            if (op == ReduceOp::Sum || op == ReduceOp::Mean) {
-                                acc += v;
-                            } else if (op == ReduceOp::Max) {
-                                if (v > acc)
-                                    acc = v;
-                            } else {
-                                if (v < acc)
-                                    acc = v;
-                            }
-                        }
-                        outp[o * inner + i] = acc;
-                    }
-                }
-            } else {
-                ErrorBuilder("cpu_backend::reduce").not_implemented("dtype not supported");
-            }
-            cur = Storage{CpuStorage{ptr, nb, dt}};
-            cur_shape = out_shape;
-        }
-
-        if (op == ReduceOp::Mean) {
-            auto& cs = std::get<CpuStorage>(cur);
-            const std::size_t out_n = cs.nbytes / dtype_size(dt);
-            if (dt == Dtype::F32)
-                for (std::size_t i = 0; i < out_n; ++i)
-                    reinterpret_cast<float*>(cs.ptr.get())[i] /= static_cast<float>(total_rd);
-            else if (dt == Dtype::F64)
-                for (std::size_t i = 0; i < out_n; ++i)
-                    reinterpret_cast<double*>(cs.ptr.get())[i] /= static_cast<double>(total_rd);
-            else if (dt == Dtype::I64 && total_rd > 0)
-                for (std::size_t i = 0; i < out_n; ++i)
-                    reinterpret_cast<std::int64_t*>(cs.ptr.get())[i] /=
-                        static_cast<std::int64_t>(total_rd);
-        }
-        return cur;
-    }
-
-    void
-    cast_impl(const std::byte* src, std::byte* dst, std::size_t n, Dtype src_dt, Dtype dst_dt) {
-        auto cast_loop = [&](auto from_tag, auto to_tag) {
-            using Src = decltype(from_tag);
-            using Dst = decltype(to_tag);
-            const Src* sp = reinterpret_cast<const Src*>(src);
-            Dst* dp = reinterpret_cast<Dst*>(dst);
-            for (std::size_t i = 0; i < n; ++i)
-                dp[i] = static_cast<Dst>(sp[i]);
-        };
-
-#define CAST_CASE(S, D, st, dt_)                                                                   \
-    if (src_dt == Dtype::S && dst_dt == Dtype::D) {                                                \
-        cast_loop(st{}, dt_{});                                                                    \
-        return;                                                                                    \
-    }
-
-        CAST_CASE(F32, F64, float, double)
-        CAST_CASE(F64, F32, double, float)
-        CAST_CASE(F32, I32, float, std::int32_t)
-        CAST_CASE(F32, I64, float, std::int64_t)
-        CAST_CASE(F64, I32, double, std::int32_t)
-        CAST_CASE(F64, I64, double, std::int64_t)
-        CAST_CASE(I32, F32, std::int32_t, float)
-        CAST_CASE(I32, F64, std::int32_t, double)
-        CAST_CASE(I64, F32, std::int64_t, float)
-        CAST_CASE(I64, F64, std::int64_t, double)
-        CAST_CASE(I32, I64, std::int32_t, std::int64_t)
-        CAST_CASE(I64, I32, std::int64_t, std::int32_t)
-#undef CAST_CASE
-
-        if (src_dt == dst_dt) {
-            std::memcpy(dst, src, n * dtype_size(dst_dt));
-            return;
-        }
-        if (detail::is_half_like(src_dt) && dst_dt == Dtype::F32) {
-            detail::half_or_bfloat16_to_float_bulk(reinterpret_cast<const std::uint16_t*>(src),
-                                                   reinterpret_cast<float*>(dst), n,
-                                                   src_dt == Dtype::BF16);
-            return;
-        }
-        if (src_dt == Dtype::F32 && detail::is_half_like(dst_dt)) {
-            detail::float_to_half_or_bfloat16_bulk(reinterpret_cast<const float*>(src),
-                                                   reinterpret_cast<std::uint16_t*>(dst), n,
-                                                   dst_dt == Dtype::BF16);
-            return;
-        }
-
-        // The twelve pairs above are a hand-written list, and it was
-        // missing every pair involving int8, int16, bool or half — 40 of
-        // the 56 combinations.  Nothing noticed while the ops that would
-        // have used them refused those dtypes anyway; promoting integers
-        // for the real-valued ops made ``sqrt(int8)`` reach here and fail
-        // on the cast rather than the maths.
-        //
-        // Rather than extend the list, go through double: every dtype the
-        // framework has converts to and from it, so one pair of switches
-        // covers all of them.  int64 above 2^53 is the one lossy case, and
-        // it keeps its exact path in the table above.
-        auto load = [&](std::size_t i) -> double {
-            switch (src_dt) {
-            case Dtype::F64:
-                return reinterpret_cast<const double*>(src)[i];
-            case Dtype::F32:
-                return reinterpret_cast<const float*>(src)[i];
-            case Dtype::F16:
-                return detail::half_bits_to_float(reinterpret_cast<const std::uint16_t*>(src)[i]);
-            case Dtype::BF16:
-                return detail::bfloat_bits_to_float(reinterpret_cast<const std::uint16_t*>(src)[i]);
-            case Dtype::I64:
-                return static_cast<double>(reinterpret_cast<const std::int64_t*>(src)[i]);
-            case Dtype::I32:
-                return reinterpret_cast<const std::int32_t*>(src)[i];
-            case Dtype::I16:
-                return reinterpret_cast<const std::int16_t*>(src)[i];
-            case Dtype::I8:
-                return reinterpret_cast<const std::int8_t*>(src)[i];
-            default:  // Bool
-                return reinterpret_cast<const std::uint8_t*>(src)[i] ? 1.0 : 0.0;
-            }
-        };
-        auto store = [&](std::size_t i, double v) {
-            switch (dst_dt) {
-            case Dtype::F64:
-                reinterpret_cast<double*>(dst)[i] = v;
-                break;
-            case Dtype::F32:
-                reinterpret_cast<float*>(dst)[i] = static_cast<float>(v);
-                break;
-            case Dtype::F16:
-                reinterpret_cast<std::uint16_t*>(dst)[i] =
-                    detail::float_to_half_bits(static_cast<float>(v));
-                break;
-            case Dtype::BF16:
-                reinterpret_cast<std::uint16_t*>(dst)[i] =
-                    detail::float_to_bfloat_bits(static_cast<float>(v));
-                break;
-            case Dtype::I64:
-                reinterpret_cast<std::int64_t*>(dst)[i] = static_cast<std::int64_t>(v);
-                break;
-            case Dtype::I32:
-                reinterpret_cast<std::int32_t*>(dst)[i] = static_cast<std::int32_t>(v);
-                break;
-            case Dtype::I16:
-                reinterpret_cast<std::int16_t*>(dst)[i] = static_cast<std::int16_t>(v);
-                break;
-            case Dtype::I8:
-                reinterpret_cast<std::int8_t*>(dst)[i] = static_cast<std::int8_t>(v);
-                break;
-            default:  // Bool — anything non-zero is true
-                reinterpret_cast<std::uint8_t*>(dst)[i] = (v != 0.0) ? 1 : 0;
-                break;
-            }
-        };
-        for (std::size_t i = 0; i < n; ++i)
-            store(i, load(i));
-    }
+    void cast_impl(const std::byte* src, std::byte* dst, std::size_t n, Dtype src_dt, Dtype dst_dt);
 
     static CpuStorage alloc_cpu(std::size_t numel, Dtype dt) {
         const std::size_t nb = numel * dtype_size(dt);
@@ -11833,17 +1820,7 @@ private:
                             const int* stride,
                             const int* pad,
                             const int* dil,
-                            int N) {
-        if (N == 1)
-            cpu::im2col_1d_f32(src, cols, C, O[0], K[0], S[0], stride[0], pad[0], dil[0]);
-        else if (N == 2)
-            cpu::im2col_f32(src, cols, C, O[0], O[1], K[0], K[1], S[0], S[1], stride[0], stride[1],
-                            pad[0], pad[1], dil[0], dil[1]);
-        else
-            cpu::im2col_3d_f32(src, cols, C, O[0], O[1], O[2], K[0], K[1], K[2], S[0], S[1], S[2],
-                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dil[0],
-                               dil[1], dil[2]);
-    }
+                            int N);
 
     static void ctnd_im2col(const double* src,
                             double* cols,
@@ -11854,17 +1831,7 @@ private:
                             const int* stride,
                             const int* pad,
                             const int* dil,
-                            int N) {
-        if (N == 1)
-            cpu::im2col_1d_f64(src, cols, C, O[0], K[0], S[0], stride[0], pad[0], dil[0]);
-        else if (N == 2)
-            cpu::im2col_f64(src, cols, C, O[0], O[1], K[0], K[1], S[0], S[1], stride[0], stride[1],
-                            pad[0], pad[1], dil[0], dil[1]);
-        else
-            cpu::im2col_3d_f64(src, cols, C, O[0], O[1], O[2], K[0], K[1], K[2], S[0], S[1], S[2],
-                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dil[0],
-                               dil[1], dil[2]);
-    }
+                            int N);
 
     static void ctnd_col2im(const float* cols,
                             float* dst,
@@ -11875,17 +1842,7 @@ private:
                             const int* stride,
                             const int* pad,
                             const int* dil,
-                            int N) {
-        if (N == 1)
-            cpu::col2im_1d_f32(cols, dst, C, O[0], K[0], S[0], stride[0], pad[0], dil[0]);
-        else if (N == 2)
-            cpu::col2im_f32(cols, dst, C, O[0], O[1], K[0], K[1], S[0], S[1], stride[0], stride[1],
-                            pad[0], pad[1], dil[0], dil[1]);
-        else
-            cpu::col2im_3d_f32(cols, dst, C, O[0], O[1], O[2], K[0], K[1], K[2], S[0], S[1], S[2],
-                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dil[0],
-                               dil[1], dil[2]);
-    }
+                            int N);
 
     static void ctnd_col2im(const double* cols,
                             double* dst,
@@ -11896,17 +1853,7 @@ private:
                             const int* stride,
                             const int* pad,
                             const int* dil,
-                            int N) {
-        if (N == 1)
-            cpu::col2im_1d_f64(cols, dst, C, O[0], K[0], S[0], stride[0], pad[0], dil[0]);
-        else if (N == 2)
-            cpu::col2im_f64(cols, dst, C, O[0], O[1], K[0], K[1], S[0], S[1], stride[0], stride[1],
-                            pad[0], pad[1], dil[0], dil[1]);
-        else
-            cpu::col2im_3d_f64(cols, dst, C, O[0], O[1], O[2], K[0], K[1], K[2], S[0], S[1], S[2],
-                               stride[0], stride[1], stride[2], pad[0], pad[1], pad[2], dil[0],
-                               dil[1], dil[2]);
-    }
+                            int N);
 
     // Precision-dispatching GEMM so the transposed-conv bodies can be one
     // generic lambda rather than a copy-pasted F32 / F64 pair.
@@ -11922,9 +1869,7 @@ private:
                           int ldb,
                           float beta,
                           float* C,
-                          int ldc) {
-        cpu::sgemm(ta, tb, M, Nn, Kk, alpha, A, lda, Bm, ldb, beta, C, ldc);
-    }
+                          int ldc);
 
     static void ctnd_gemm(bool ta,
                           bool tb,
@@ -11938,739 +1883,70 @@ private:
                           int ldb,
                           double beta,
                           double* C,
-                          int ldc) {
-        cpu::dgemm(ta, tb, M, Nn, Kk, alpha, A, lda, Bm, ldb, beta, C, ldc);
-    }
+                          int ldc);
 
-    Storage ge_mask(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                ge_mask(detail::as_f32(a), detail::as_f32(b), shape, Dtype::F32), dt);
-        const auto& ca = std::get<CpuStorage>(a);
-        const auto& cb = std::get<CpuStorage>(b);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        auto run_f = [&](auto tag_a, auto tag_b, auto tag_out) {
-            using A = decltype(tag_a);
-            using B = decltype(tag_b);
-            using O = decltype(tag_out);
-            const A* ap = reinterpret_cast<const A*>(ca.ptr.get());
-            const B* bp = reinterpret_cast<const B*>(cb.ptr.get());
-            O* op = reinterpret_cast<O*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = (ap[i] >= bp[i]) ? O{1} : O{0};
-        };
-        if (dt == Dtype::F32)
-            run_f(float{}, float{}, float{});
-        else if (dt == Dtype::F64)
-            run_f(double{}, double{}, double{});
-        else
-            ErrorBuilder("cpu_backend::ge_mask").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage ge_mask(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;
 
-    Storage lt_mask(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                lt_mask(detail::as_f32(a), detail::as_f32(b), shape, Dtype::F32), dt);
-        const auto& ca = std::get<CpuStorage>(a);
-        const auto& cb = std::get<CpuStorage>(b);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        auto run_f = [&](auto tag_a, auto tag_b, auto tag_out) {
-            using A = decltype(tag_a);
-            using B = decltype(tag_b);
-            using O = decltype(tag_out);
-            const A* ap = reinterpret_cast<const A*>(ca.ptr.get());
-            const B* bp = reinterpret_cast<const B*>(cb.ptr.get());
-            O* op = reinterpret_cast<O*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                op[i] = (ap[i] < bp[i]) ? O{1} : O{0};
-        };
-        if (dt == Dtype::F32)
-            run_f(float{}, float{}, float{});
-        else if (dt == Dtype::F64)
-            run_f(double{}, double{}, double{});
-        else
-            ErrorBuilder("cpu_backend::lt_mask").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage lt_mask(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;
 
-    Storage add_scalar(const Storage& a, const Shape& shape, Dtype dt, double scalar) override {
-        // Accelerate's scalar/vector primitives are f32 and f64 only.  Widen at
-        // the door, reuse, round once.  Reached constantly from backward, where
-        // chain-rule constants arrive as scalars.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(
-                add_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
-                           Dtype::F32, scalar),
-                half_n, dt);
-        }
-        const auto& ca = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32)
-            cpu::vsadd_f32(reinterpret_cast<const float*>(ca.ptr.get()), static_cast<float>(scalar),
-                           reinterpret_cast<float*>(ptr.get()), n);
-        else if (dt == Dtype::F64)
-            cpu::vsadd_f64(reinterpret_cast<const double*>(ca.ptr.get()), scalar,
-                           reinterpret_cast<double*>(ptr.get()), n);
-        else
-            ErrorBuilder("cpu_backend::add_scalar").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage add_scalar(const Storage& a, const Shape& shape, Dtype dt, double scalar) override;
 
-    Storage mul_scalar(const Storage& a, const Shape& shape, Dtype dt, double scalar) override {
-        // Accelerate's scalar/vector primitives are f32 and f64 only.  Widen at
-        // the door, reuse, round once.  Reached constantly from backward, where
-        // chain-rule constants arrive as scalars.
-        if (detail::is_half_like(dt)) {
-            const std::size_t half_n = shape_numel(shape);
-            return detail::narrow_half(
-                mul_scalar(Storage{detail::widen_half(std::get<CpuStorage>(a), half_n)}, shape,
-                           Dtype::F32, scalar),
-                half_n, dt);
-        }
-        const auto& ca = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32)
-            cpu::vsmul_f32(reinterpret_cast<const float*>(ca.ptr.get()), static_cast<float>(scalar),
-                           reinterpret_cast<float*>(ptr.get()), n);
-        else if (dt == Dtype::F64)
-            cpu::vsmul_f64(reinterpret_cast<const double*>(ca.ptr.get()), scalar,
-                           reinterpret_cast<double*>(ptr.get()), n);
-        else
-            ErrorBuilder("cpu_backend::mul_scalar").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage mul_scalar(const Storage& a, const Shape& shape, Dtype dt, double scalar) override;
 
     Storage in_range_mask(const Storage& a,
                           const Shape& shape,
                           Dtype dt,
                           double lo,
                           double hi,
-                          bool inclusive) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                in_range_mask(detail::as_f32(a), shape, Dtype::F32, lo, hi, inclusive), dt);
-        const auto& ca = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const auto* p = reinterpret_cast<const float*>(ca.ptr.get());
-            auto* q = reinterpret_cast<float*>(ptr.get());
-            const auto flo = static_cast<float>(lo), fhi = static_cast<float>(hi);
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = (inclusive ? (p[i] >= flo && p[i] <= fhi) : (p[i] > flo && p[i] < fhi))
-                           ? 1.f
-                           : 0.f;
-        } else if (dt == Dtype::F64) {
-            const auto* p = reinterpret_cast<const double*>(ca.ptr.get());
-            auto* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] =
-                    (inclusive ? (p[i] >= lo && p[i] <= hi) : (p[i] > lo && p[i] < hi)) ? 1.0 : 0.0;
-        } else {
-            ErrorBuilder("cpu_backend::in_range_mask").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                          bool inclusive) override;
 
-    Storage leaky_mask(const Storage& a, const Shape& shape, Dtype dt, double slope) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(leaky_mask(detail::as_f32(a), shape, Dtype::F32, slope), dt);
-        const auto& ca = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const auto* p = reinterpret_cast<const float*>(ca.ptr.get());
-            auto* q = reinterpret_cast<float*>(ptr.get());
-            const float fs = static_cast<float>(slope);
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = (p[i] > 0.f) ? 1.f : fs;
-        } else if (dt == Dtype::F64) {
-            const auto* p = reinterpret_cast<const double*>(ca.ptr.get());
-            auto* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = (p[i] > 0.0) ? 1.0 : slope;
-        } else {
-            ErrorBuilder("cpu_backend::leaky_mask").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage leaky_mask(const Storage& a, const Shape& shape, Dtype dt, double slope) override;
 
-    Storage positive_mask(const Storage& a, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(positive_mask(detail::as_f32(a), shape, Dtype::F32), dt);
-        const auto& ca = std::get<CpuStorage>(a);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (dt == Dtype::F32) {
-            const auto* p = reinterpret_cast<const float*>(ca.ptr.get());
-            auto* q = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = (p[i] > 0.f) ? 1.f : 0.f;
-        } else if (dt == Dtype::F64) {
-            const auto* p = reinterpret_cast<const double*>(ca.ptr.get());
-            auto* q = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                q[i] = (p[i] > 0.0) ? 1.0 : 0.0;
-        } else {
-            ErrorBuilder("cpu_backend::positive_mask").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage positive_mask(const Storage& a, const Shape& shape, Dtype dt) override;
 
     // 3.4+ Phase A.1: fused ReLU backward.  Single-pass loop replacing
     // positive_mask + multiply, eliminating one intermediate buffer.  See
     // GpuBackend::relu_backward for the GPU rationale.
     Storage
-    relu_backward(const Storage& g, const Storage& x, const Shape& shape, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                relu_backward(detail::as_f32(g), detail::as_f32(x), shape, Dtype::F32), dt);
-        const auto& cg = std::get<CpuStorage>(g);
-        const auto& cx = std::get<CpuStorage>(x);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        // The gradient is loaded before the comparison picks it, so the
-        // choice compiles to a select.  Written as ``x > 0 ? g[i] : 0`` the
-        // load sat on one side of a branch, and on activations of random
-        // sign — every real network's — half the branches mispredicted:
-        // 2.25 ms on 524k elements against 0.26 when every x was positive.
-        if (dt == Dtype::F32) {
-            const float* __restrict gp = reinterpret_cast<const float*>(cg.ptr.get());
-            const float* __restrict xp = reinterpret_cast<const float*>(cx.ptr.get());
-            float* __restrict op = reinterpret_cast<float*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const float g = gp[i];
-                op[i] = xp[i] <= 0.f ? 0.f : g;
-            }
-        } else if (dt == Dtype::F64) {
-            const double* __restrict gp = reinterpret_cast<const double*>(cg.ptr.get());
-            const double* __restrict xp = reinterpret_cast<const double*>(cx.ptr.get());
-            double* __restrict op = reinterpret_cast<double*>(ptr.get());
-            for (std::size_t i = 0; i < n; ++i) {
-                const double g = gp[i];
-                op[i] = xp[i] <= 0.0 ? 0.0 : g;
-            }
-        } else {
-            ErrorBuilder("cpu_backend::relu_backward").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    relu_backward(const Storage& g, const Storage& x, const Shape& shape, Dtype dt) override;
 
     Storage reduce_grad_to_shape(const Storage& grad,
                                  const Shape& grad_shape,
                                  const Shape& target_shape,
-                                 Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                reduce_grad_to_shape(detail::as_f32(grad), grad_shape, target_shape, Dtype::F32),
-                dt);
-        const std::size_t gn = grad_shape.size();
-        const std::size_t tn = target_shape.size();
-        if (grad_shape == target_shape) {
-            const auto& src = std::get<CpuStorage>(grad);
-            std::size_t nb = src.nbytes;
-            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-            if (nb > 0)
-                std::memcpy(ptr.get(), src.ptr.get(), nb);
-            return Storage{CpuStorage{ptr, nb, dt}};
-        }
-
-        (void)gn;
-        (void)tn;
-        const auto& src = std::get<CpuStorage>(grad);
-        std::size_t tnumel = shape_numel(target_shape);
-        std::size_t nb = tnumel * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const BroadcastPlan plan = plan_broadcast(target_shape, grad_shape);
-
-        // The same sum as reduce_broadcast, in runs: the per-element walk
-        // divided every flat index back into coordinates, and this sits on
-        // the backward of every broadcasting binary op — each bias add.
-        auto do_reduce = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            T* dst_p = reinterpret_cast<T*>(ptr.get());
-            std::fill_n(dst_p, tnumel, T{});
-            sum_broadcast_runs(plan, reinterpret_cast<const T*>(src.ptr.get()), dst_p);
-        };
-        if (dt == Dtype::F32)
-            do_reduce(float{});
-        else if (dt == Dtype::F64)
-            do_reduce(double{});
-        else if (dt == Dtype::C64)
-            do_reduce(std::complex<float>{});
-        else if (dt == Dtype::C128)
-            do_reduce(std::complex<double>{});
-        else
-            ErrorBuilder("cpu_backend::reduce_grad_to_shape")
-                .not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                                 Dtype dt) override;
 
     Storage broadcast_back_for_reduce(const Storage& grad,
                                       const Shape& grad_shape,
                                       const Shape& input_shape,
                                       const std::vector<int>& axes,
                                       bool keepdims,
-                                      Dtype dt) override {
-        // Reached on the *backward* pass of any reduction, so a half model
-        // could run forward and then fail at loss.backward().  Data
-        // movement only, but it dispatches on dtype, so half needs saying.
-        if (detail::is_half_like(dt)) {
-            const Storage wide = broadcast_back_for_reduce(
-                Storage{detail::widen_half(std::get<CpuStorage>(grad), shape_numel(grad_shape))},
-                grad_shape, input_shape, axes, keepdims, Dtype::F32);
-            return detail::narrow_half(wide, shape_numel(input_shape), dt);
-        }
-        Shape kept_shape = input_shape;
-        for (int a : axes)
-            kept_shape[a] = 1;
+                                      Dtype dt) override;
 
-        Shape expected_grad;
-        {
-            std::vector<bool> rm(input_shape.size(), false);
-            for (int a : axes)
-                rm[a] = true;
-            for (std::size_t i = 0; i < input_shape.size(); ++i) {
-                if (rm[i]) {
-                    if (keepdims)
-                        expected_grad.push_back(1);
-                } else
-                    expected_grad.push_back(input_shape[i]);
-            }
-        }
-        (void)grad_shape;
-        (void)expected_grad;
-        const auto& g_cpu = std::get<CpuStorage>(grad);
-        std::size_t in_numel = shape_numel(input_shape);
-        std::size_t nb = in_numel * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
+    Storage full(const Shape& shape, Dtype dt, double fill_value) override;
 
-        // The reduced gradient, shaped as the input with the reduced axes
-        // kept at 1, broadcast back out: a reduction's backward is exactly a
-        // broadcast.  The walk this replaced recomputed every coordinate of
-        // every element with a division and a modulo per axis — on the
-        // backward of every sum and mean.
-        const BroadcastPlan plan = plan_broadcast(kept_shape, input_shape);
-        auto do_bcast = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            broadcast_runs(plan, reinterpret_cast<const T*>(g_cpu.ptr.get()),
-                           reinterpret_cast<T*>(ptr.get()));
-        };
-        if (dt == Dtype::F32)
-            do_bcast(float{});
-        else if (dt == Dtype::F64)
-            do_bcast(double{});
-        else if (dt == Dtype::C64)
-            do_bcast(std::complex<float>{});
-        else if (dt == Dtype::C128)
-            do_bcast(std::complex<double>{});
-        else
-            ErrorBuilder("cpu_backend::broadcast_back_for_reduce")
-                .not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage full(const Shape& shape, Dtype dt, double fill_value) override {
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        auto* p = ptr.get();
-        switch (dt) {
-        case Dtype::C128: {
-            auto* out = reinterpret_cast<std::complex<double>*>(p);
-            std::fill_n(out, n, std::complex<double>{fill_value, 0.0});
-            break;
-        }
-        case Dtype::Bool: {
-            auto v = fill_value != 0.0 ? std::uint8_t{1} : std::uint8_t{0};
-            for (std::size_t i = 0; i < n; ++i)
-                reinterpret_cast<std::uint8_t*>(p)[i] = v;
-            break;
-        }
-        case Dtype::I8: {
-            auto v = static_cast<std::int8_t>(fill_value);
-            for (std::size_t i = 0; i < n; ++i)
-                reinterpret_cast<std::int8_t*>(p)[i] = v;
-            break;
-        }
-        case Dtype::I16: {
-            auto v = static_cast<std::int16_t>(fill_value);
-            for (std::size_t i = 0; i < n; ++i)
-                reinterpret_cast<std::int16_t*>(p)[i] = v;
-            break;
-        }
-        case Dtype::I32: {
-            auto v = static_cast<std::int32_t>(fill_value);
-            for (std::size_t i = 0; i < n; ++i)
-                reinterpret_cast<std::int32_t*>(p)[i] = v;
-            break;
-        }
-        case Dtype::I64: {
-            auto v = static_cast<std::int64_t>(fill_value);
-            for (std::size_t i = 0; i < n; ++i)
-                reinterpret_cast<std::int64_t*>(p)[i] = v;
-            break;
-        }
-        case Dtype::F32: {
-            auto v = static_cast<float>(fill_value);
-            for (std::size_t i = 0; i < n; ++i)
-                reinterpret_cast<float*>(p)[i] = v;
-            break;
-        }
-        case Dtype::F64: {
-            auto v = fill_value;
-            for (std::size_t i = 0; i < n; ++i)
-                reinterpret_cast<double*>(p)[i] = v;
-            break;
-        }
-        case Dtype::C64: {
-            // Interleaved [re, im, re, im, ...]; ``fill_value`` becomes the
-            // real part, imag is set to 0.  Users wanting non-zero imag
-            // should construct the array via ``complex_combine(real, imag)``.
-            auto v = static_cast<float>(fill_value);
-            float* fp = reinterpret_cast<float*>(p);
-            for (std::size_t i = 0; i < n; ++i) {
-                fp[2 * i] = v;
-                fp[2 * i + 1] = 0.0f;
-            }
-            break;
-        }
-        case Dtype::F16: {
-            // 102 ops reached this gate: a composite that builds a constant
-            // of its input's dtype could not do so in half, so the whole
-            // composite refused float16 on the CPU while Metal ran it.
-            const auto bits = detail::float_to_half_bits(static_cast<float>(fill_value));
-            auto* hp = reinterpret_cast<std::uint16_t*>(p);
-            for (std::size_t i = 0; i < n; ++i)
-                hp[i] = bits;
-            break;
-        }
-        case Dtype::BF16: {
-            const auto bits = detail::float_to_bfloat_bits(static_cast<float>(fill_value));
-            auto* hp = reinterpret_cast<std::uint16_t*>(p);
-            for (std::size_t i = 0; i < n; ++i)
-                hp[i] = bits;
-            break;
-        }
-        default:
-            ErrorBuilder("cpu_backend::full").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage eye(std::int64_t N, std::int64_t M, std::int64_t k, Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(eye(N, M, k, Dtype::F32), dt);
-        std::size_t nb = static_cast<std::size_t>(N * M) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        std::memset(ptr.get(), 0, nb);
-        auto set_one = [&](auto* p) {
-            using T = std::remove_pointer_t<decltype(p)>;
-            for (std::int64_t i = 0; i < N; ++i) {
-                if (const std::int64_t j = i + k; j >= 0 && j < M)
-                    p[i * M + j] = static_cast<T>(1);
-            }
-        };
-        switch (dt) {
-        case Dtype::Bool:
-            set_one(reinterpret_cast<std::uint8_t*>(ptr.get()));
-            break;
-        case Dtype::I8:
-            set_one(reinterpret_cast<std::int8_t*>(ptr.get()));
-            break;
-        case Dtype::I16:
-            set_one(reinterpret_cast<std::int16_t*>(ptr.get()));
-            break;
-        case Dtype::I32:
-            set_one(reinterpret_cast<std::int32_t*>(ptr.get()));
-            break;
-        case Dtype::I64:
-            set_one(reinterpret_cast<std::int64_t*>(ptr.get()));
-            break;
-        case Dtype::F32:
-            set_one(reinterpret_cast<float*>(ptr.get()));
-            break;
-        case Dtype::F64:
-            set_one(reinterpret_cast<double*>(ptr.get()));
-            break;
-        case Dtype::C64:
-            set_one(reinterpret_cast<std::complex<float>*>(ptr.get()));
-            break;
-        case Dtype::C128:
-            set_one(reinterpret_cast<std::complex<double>*>(ptr.get()));
-            break;
-        default:
-            ErrorBuilder("cpu_backend::eye").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage eye(std::int64_t N, std::int64_t M, std::int64_t k, Dtype dt) override;
 
     Storage diag(const Storage& v,
                  const Shape& v_shape,
                  std::int64_t k,
                  Dtype dt,
-                 Shape& out_shape) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(diag(detail::as_f32(v), v_shape, k, Dtype::F32, out_shape),
-                                       dt);
-        const auto& cv = std::get<CpuStorage>(v);
-        const std::size_t elem = dtype_size(dt);
-        if (v_shape.size() == 1) {
-            const std::int64_t L = v_shape[0];
-            const std::int64_t side = L + std::abs(k);
-            out_shape = {side, side};
-            std::size_t nb = static_cast<std::size_t>(side * side) * elem;
-            auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-            std::memset(ptr.get(), 0, nb);
-            auto fill = [&](auto* dst, const auto* src) {
-                using T = std::remove_pointer_t<decltype(dst)>;
-                for (std::int64_t i = 0; i < L; ++i) {
-                    const std::int64_t row = (k >= 0) ? i : (i - k);
-                    const std::int64_t col = (k >= 0) ? (i + k) : i;
-                    dst[row * side + col] = static_cast<T>(src[i]);
-                }
-            };
-            switch (dt) {
-            case Dtype::F32:
-                fill(reinterpret_cast<float*>(ptr.get()),
-                     reinterpret_cast<const float*>(cv.ptr.get()));
-                break;
-            case Dtype::F64:
-                fill(reinterpret_cast<double*>(ptr.get()),
-                     reinterpret_cast<const double*>(cv.ptr.get()));
-                break;
-            case Dtype::I32:
-                fill(reinterpret_cast<std::int32_t*>(ptr.get()),
-                     reinterpret_cast<const std::int32_t*>(cv.ptr.get()));
-                break;
-            case Dtype::I64:
-                fill(reinterpret_cast<std::int64_t*>(ptr.get()),
-                     reinterpret_cast<const std::int64_t*>(cv.ptr.get()));
-                break;
-            default:
-                ErrorBuilder("cpu_backend::diag").not_implemented("dtype not supported");
-            }
-            return Storage{CpuStorage{ptr, nb, dt}};
-        }
+                 Shape& out_shape) override;
 
-        const std::int64_t Mv = v_shape[0], Nv = v_shape[1];
-        const std::int64_t r0 = (k >= 0) ? 0 : -k;
-        const std::int64_t c0 = (k >= 0) ? k : 0;
-        const std::int64_t Lv = std::min(Mv - r0, Nv - c0);
-        const std::int64_t out_len = std::max<std::int64_t>(Lv, 0);
-        out_shape = {out_len};
-        std::size_t nb = static_cast<std::size_t>(out_len) * elem;
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        auto extract = [&](auto* dst, const auto* src) {
-            using T = std::remove_pointer_t<decltype(dst)>;
-            for (std::int64_t i = 0; i < out_len; ++i)
-                dst[i] = static_cast<T>(src[(r0 + i) * Nv + (c0 + i)]);
-        };
-        switch (dt) {
-        case Dtype::F32:
-            extract(reinterpret_cast<float*>(ptr.get()),
-                    reinterpret_cast<const float*>(cv.ptr.get()));
-            break;
-        case Dtype::F64:
-            extract(reinterpret_cast<double*>(ptr.get()),
-                    reinterpret_cast<const double*>(cv.ptr.get()));
-            break;
-        case Dtype::I32:
-            extract(reinterpret_cast<std::int32_t*>(ptr.get()),
-                    reinterpret_cast<const std::int32_t*>(cv.ptr.get()));
-            break;
-        case Dtype::I64:
-            extract(reinterpret_cast<std::int64_t*>(ptr.get()),
-                    reinterpret_cast<const std::int64_t*>(cv.ptr.get()));
-            break;
-        default:
-            ErrorBuilder("cpu_backend::diag").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+    Storage tri(const Storage& input, const Shape& shape, Dtype dt, int k, bool upper) override;
 
-    Storage tri(const Storage& input, const Shape& shape, Dtype dt, int k, bool upper) override {
-        const auto& ca = std::get<CpuStorage>(input);
-        if (shape.size() < 2)
-            ErrorBuilder("cpu_backend::tri").fail("input must have ndim >= 2");
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const std::int64_t M = shape[shape.size() - 2];
-        const std::int64_t N = shape[shape.size() - 1];
-        std::size_t batch = 1;
-        for (std::size_t d = 0; d < shape.size() - 2; ++d)
-            batch *= static_cast<std::size_t>(shape[d]);
-        const std::size_t plane = static_cast<std::size_t>(M * N);
-        auto run = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            const T* src = reinterpret_cast<const T*>(ca.ptr.get());
-            T* dst = reinterpret_cast<T*>(ptr.get());
-            for (std::size_t b = 0; b < batch; ++b)
-                for (std::int64_t i = 0; i < M; ++i)
-                    for (std::int64_t j = 0; j < N; ++j) {
-                        const std::size_t f = b * plane + static_cast<std::size_t>(i * N + j);
-                        dst[f] = (upper ? (j - i >= k) : (j - i <= k)) ? src[f] : T{};
-                    }
-        };
-        // Every dtype the framework has, because ``tri`` is masking rather
-        // than arithmetic: it copies an element or writes a zero, so the
-        // only thing that matters is how wide the element is.  This was
-        // F32/F64 only, with half routed through a widen-and-round —
-        // pointless for a memcpy, and lossy in principle — while integers
-        // were refused outright even though ``tril`` on an integer matrix
-        // is an ordinary thing to want and Metal did it.
-        switch (dt) {
-        case Dtype::F32:
-            run(float{});
-            break;
-        case Dtype::F64:
-            run(double{});
-            break;
-        case Dtype::F16:
-        case Dtype::BF16:
-            run(std::uint16_t{});  // bit pattern; zero is all-zero bits in both
-            break;
-        case Dtype::I64:
-            run(std::int64_t{});
-            break;
-        case Dtype::C64:
-            run(std::complex<float>{});
-            break;
-        case Dtype::C128:
-            run(std::complex<double>{});
-            break;
-        case Dtype::I32:
-            run(std::int32_t{});
-            break;
-        case Dtype::I16:
-            run(std::int16_t{});
-            break;
-        case Dtype::I8:
-        case Dtype::Bool:
-            run(std::uint8_t{});
-            break;
-        default:
-            ErrorBuilder("cpu_backend::tri").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
-
-    Storage floordiv(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override {
-        // Exact, in ``dt`` (DivMod.h).  floordiv_op no longer calls this.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                floordiv(detail::as_f32(a), detail::as_f32(b), shape, Dtype::F32), dt);
-        return Storage{cpu::divmod(DivMod::FloorDiv, std::get<CpuStorage>(a),
-                                   std::get<CpuStorage>(b), shape_numel(shape), dt)};
-    }
+    Storage floordiv(const Storage& a, const Storage& b, const Shape& shape, Dtype dt) override;
 
     Storage inner(const Storage& a,
                   const Storage& b,
                   const Shape& a_shape,
                   const Shape& b_shape,
                   const Shape& out_shape,
-                  Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(inner(detail::as_f32(a), detail::as_f32(b), a_shape, b_shape,
-                                             out_shape, Dtype::F32),
-                                       dt);
-        const auto& ca = std::get<CpuStorage>(a);
-        const auto& cb = std::get<CpuStorage>(b);
-        const std::int64_t K = a_shape.back();
-        const std::size_t pa = shape_numel(Shape(a_shape.begin(), a_shape.end() - 1));
-        const std::size_t pb = shape_numel(Shape(b_shape.begin(), b_shape.end() - 1));
-        std::size_t n = shape_numel(out_shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        auto run = [&](auto* op, const auto* ap, const auto* bp) {
-            using T = std::remove_pointer_t<decltype(op)>;
-            for (std::size_t i = 0; i < pa; ++i)
-                for (std::size_t j = 0; j < pb; ++j) {
-                    T s{};
-                    for (std::int64_t k = 0; k < K; ++k)
-                        s = s + ap[i * K + k] * bp[j * K + k];
-                    op[i * pb + j] = s;
-                }
-        };
-        if (dt == Dtype::F32)
-            run(reinterpret_cast<float*>(ptr.get()), reinterpret_cast<const float*>(ca.ptr.get()),
-                reinterpret_cast<const float*>(cb.ptr.get()));
-        else if (dt == Dtype::F64)
-            run(reinterpret_cast<double*>(ptr.get()), reinterpret_cast<const double*>(ca.ptr.get()),
-                reinterpret_cast<const double*>(cb.ptr.get()));
-        else
-            ErrorBuilder("cpu_backend::inner").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                  Dtype dt) override;
 
     CpuStorage permute_cpu(const CpuStorage& src,
                            const Shape& src_shape,
                            const std::vector<int>& perm,
-                           Dtype dt) override {
-        Shape dst_shape;
-        for (int p : perm)
-            dst_shape.push_back(src_shape[static_cast<std::size_t>(p)]);
-        const std::size_t nb = shape_numel(dst_shape) * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        if (nb > 0)
-            cpu::permute_copy(src.ptr.get(), ptr.get(), src_shape, perm, dtype_size(dt));
-        return CpuStorage{ptr, nb, dt};
-    }
+                           Dtype dt) override;
 
     Storage tensordot(const Storage&,
                       const Storage&,
@@ -12679,116 +1955,18 @@ private:
                       const Shape&,
                       const std::vector<int>&,
                       const std::vector<int>&,
-                      Dtype) override {
-        ErrorBuilder("cpu_backend::tensordot").not_implemented("not routed through backend");
-    }
+                      Dtype) override;
 
     Storage where_op(const Storage& cond,
                      const Storage& x,
                      const Storage& y,
                      const Shape& shape,
-                     Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(where_op(detail::as_f32(cond), detail::as_f32(x),
-                                                detail::as_f32(y), shape, Dtype::F32),
-                                       dt);
-        const auto& cc = std::get<CpuStorage>(cond);
-        const auto& cx = std::get<CpuStorage>(x);
-        const auto& cy = std::get<CpuStorage>(y);
-        std::size_t n = shape_numel(shape);
-        std::size_t nb = n * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        const auto* c = reinterpret_cast<const std::uint8_t*>(cc.ptr.get());
-        // Both branches are loaded and one selected: a conditional load is a
-        // branch on the condition, and a data condition (``x > 0``) is a coin
-        // flip.  Restrict locals let the select run as a vector blend.
-        auto run = [&](auto* dst_in, const auto* xp_in, const auto* yp_in) {
-            using T = std::remove_pointer_t<decltype(dst_in)>;
-            cpu::parallel_for(n, kStreamGrain, [&](std::size_t lo, std::size_t hi) {
-                const std::uint8_t* __restrict cp = c;
-                const T* __restrict xp = xp_in;
-                const T* __restrict yp = yp_in;
-                T* __restrict dst = dst_in;
-                for (std::size_t i = lo; i < hi; ++i) {
-                    const T a = xp[i];
-                    const T b = yp[i];
-                    dst[i] = cp[i] ? a : b;
-                }
-            });
-        };
-        // Selection copies bits; it never reads them as numbers.  Dispatching
-        // on element width rather than dtype therefore covers every type —
-        // bool, the integers and both float widths — with four branches and
-        // no per-type code.  The float-only version this replaces was why a
-        // masked integer index had to be written as a clamp elsewhere.
-        switch (dtype_size(dt)) {
-        case 1:
-            run(reinterpret_cast<std::uint8_t*>(ptr.get()),
-                reinterpret_cast<const std::uint8_t*>(cx.ptr.get()),
-                reinterpret_cast<const std::uint8_t*>(cy.ptr.get()));
-            break;
-        case 2:
-            run(reinterpret_cast<std::uint16_t*>(ptr.get()),
-                reinterpret_cast<const std::uint16_t*>(cx.ptr.get()),
-                reinterpret_cast<const std::uint16_t*>(cy.ptr.get()));
-            break;
-        case 4:
-            run(reinterpret_cast<std::uint32_t*>(ptr.get()),
-                reinterpret_cast<const std::uint32_t*>(cx.ptr.get()),
-                reinterpret_cast<const std::uint32_t*>(cy.ptr.get()));
-            break;
-        case 8:
-            run(reinterpret_cast<std::uint64_t*>(ptr.get()),
-                reinterpret_cast<const std::uint64_t*>(cx.ptr.get()),
-                reinterpret_cast<const std::uint64_t*>(cy.ptr.get()));
-            break;
-        default:
-            ErrorBuilder("cpu_backend::where_op").not_implemented("dtype not supported");
-        }
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                     Dtype dt) override;
 
     Storage reduce_broadcast(const Storage& grad,
                              const Shape& input_shape,
                              const Shape& output_shape,
-                             Dtype dt) override {
-        // Accelerate has no half kernels, so the whole family widens at the door,
-        // reuses the float path and rounds once on the way out.  as_f32 /
-        // back_to_f16 key off each storage's own dtype, so index and mask
-        // operands travel through untouched.  See detail::widen_half.
-        if (detail::is_half_like(dt))
-            return detail::back_to_f16(
-                reduce_broadcast(detail::as_f32(grad), input_shape, output_shape, Dtype::F32), dt);
-        const auto& gc = std::get<CpuStorage>(grad);
-        std::size_t in_numel = shape_numel(input_shape);
-        std::size_t nb = in_numel * dtype_size(dt);
-        auto ptr = allocate_aligned_bytes(nb, Device::CPU);
-        std::memset(ptr.get(), 0, nb);
-        const BroadcastPlan plan = plan_broadcast(input_shape, output_shape);
-
-        // The broadcast's runs, read backwards; see sum_broadcast_runs for
-        // why the sums are the same bits the element walk produced.
-        auto run = [&](auto type_tag) {
-            using T = decltype(type_tag);
-            sum_broadcast_runs(plan, reinterpret_cast<const T*>(gc.ptr.get()),
-                               reinterpret_cast<T*>(ptr.get()));
-        };
-        if (dt == Dtype::F32)
-            run(float{});
-        else if (dt == Dtype::F64)
-            run(double{});
-        else if (dt == Dtype::I32)
-            run(std::int32_t{});
-        else if (dt == Dtype::I64)
-            run(std::int64_t{});
-        else
-            ErrorBuilder("cpu_backend::reduce_broadcast").not_implemented("dtype not supported");
-        return Storage{CpuStorage{ptr, nb, dt}};
-    }
+                             Dtype dt) override;
 
     Storage histogram_forward(const Storage& input,
                               const Shape& input_shape,
@@ -12796,94 +1974,12 @@ private:
                               double lo,
                               double hi,
                               std::int64_t bins,
-                              bool density) override {
-        if (detail::is_half_like(input_dtype))
-            return histogram_forward(detail::as_f32(input), input_shape, Dtype::F32, lo, hi, bins,
-                                     density);
-        if (detail::is_narrow_int(input_dtype))
-            return histogram_forward(detail::as_i64(input), input_shape, Dtype::I64, lo, hi, bins,
-                                     density);
-        const auto& cs = std::get<CpuStorage>(input);
-        const std::size_t n = shape_numel(input_shape);
-        const double step = (hi - lo) / static_cast<double>(bins);
-        CpuStorage counts = alloc_cpu(static_cast<std::size_t>(bins), Dtype::F64);
-        auto* dst = reinterpret_cast<double*>(counts.ptr.get());
-        std::memset(dst, 0, counts.nbytes);
-        auto read_val = [&](std::size_t i) -> double {
-            switch (input_dtype) {
-            case Dtype::F32:
-                return static_cast<double>(reinterpret_cast<const float*>(cs.ptr.get())[i]);
-            case Dtype::F64:
-                return reinterpret_cast<const double*>(cs.ptr.get())[i];
-            case Dtype::I64:
-                return static_cast<double>(reinterpret_cast<const std::int64_t*>(cs.ptr.get())[i]);
-            default:
-                ErrorBuilder("cpu::histogram_forward").not_implemented("dtype");
-            }
-        };
-        for (std::size_t i = 0; i < n; ++i) {
-            const double v = read_val(i);
-            if (v < lo || v > hi)
-                continue;
-            std::int64_t bin = static_cast<std::int64_t>((v - lo) / step);
-            if (bin >= bins)
-                bin = bins - 1;
-            dst[bin] += 1.0;
-        }
-        if (density) {
-            for (std::int64_t i = 0; i < bins; ++i)
-                dst[i] /= (static_cast<double>(n) * step);
-        }
-        return Storage{std::move(counts)};
-    }
+                              bool density) override;
 
     CpuStorage nonzero_forward(const Storage& input,
                                const Shape& input_shape,
                                Dtype input_dtype,
-                               std::size_t& numel_out) override {
-        if (detail::is_half_like(input_dtype))
-            return nonzero_forward(detail::as_f32(input), input_shape, Dtype::F32, numel_out);
-        if (detail::is_narrow_int(input_dtype))
-            return nonzero_forward(detail::as_i64(input), input_shape, Dtype::I64, numel_out);
-        const auto& cs = std::get<CpuStorage>(input);
-        const std::size_t n = shape_numel(input_shape);
-        const std::size_t ndim = input_shape.size();
-        std::vector<std::size_t> hits;
-        auto check_nonzero = [&](const auto* p) {
-            using T = std::remove_cv_t<std::remove_pointer_t<decltype(p)>>;
-            for (std::size_t i = 0; i < n; ++i)
-                if (p[i] != T{0})
-                    hits.push_back(i);
-        };
-        if (input_dtype == Dtype::F32)
-            check_nonzero(reinterpret_cast<const float*>(cs.ptr.get()));
-        else if (input_dtype == Dtype::F64)
-            check_nonzero(reinterpret_cast<const double*>(cs.ptr.get()));
-        else if (input_dtype == Dtype::I64)
-            check_nonzero(reinterpret_cast<const std::int64_t*>(cs.ptr.get()));
-        else if (input_dtype == Dtype::C64)
-            check_nonzero(reinterpret_cast<const std::complex<float>*>(cs.ptr.get()));
-        else if (input_dtype == Dtype::C128)
-            check_nonzero(reinterpret_cast<const std::complex<double>*>(cs.ptr.get()));
-        else
-            ErrorBuilder("cpu::nonzero_forward").not_implemented("dtype not supported");
-        numel_out = hits.size();
-        CpuStorage out = alloc_cpu(numel_out * ndim, Dtype::I64);
-        auto* dst = reinterpret_cast<std::int64_t*>(out.ptr.get());
-        Stride stride(ndim, 1);
-        for (std::ptrdiff_t d = static_cast<std::ptrdiff_t>(ndim) - 2; d >= 0; --d)
-            stride[static_cast<std::size_t>(d)] = stride[static_cast<std::size_t>(d) + 1] *
-                                                  input_shape[static_cast<std::size_t>(d) + 1];
-        for (std::size_t row = 0; row < numel_out; ++row) {
-            std::size_t rem = hits[row];
-            for (std::size_t d = 0; d < ndim; ++d) {
-                dst[row * ndim + d] =
-                    static_cast<std::int64_t>(rem / static_cast<std::size_t>(stride[d]));
-                rem %= static_cast<std::size_t>(stride[d]);
-            }
-        }
-        return out;
-    }
+                               std::size_t& numel_out) override;
 
     std::vector<Storage> lstm_forward(const Storage& input,
                                       const Storage& h0,
@@ -12891,11 +1987,7 @@ private:
                                       const std::vector<Storage>& weights,
                                       const LstmOpts& opts,
                                       const Shape& out_shape,
-                                      Dtype dt) override {
-        auto res = lstm_forward_train(input, h0, c0, weights, opts, dt);
-        res.resize(3);
-        return res;
-    }
+                                      Dtype dt) override;
 
     // Float32 and float64 run natively; the 16-bit formats widen to float32
     // at the door and round back on the way out.  The saved gate and cell
@@ -12905,21 +1997,7 @@ private:
                                             const Storage& c0,
                                             const std::vector<Storage>& weights,
                                             const LstmOpts& opts,
-                                            Dtype dt) override {
-        if (is_half_float(dt)) {
-            auto res =
-                lstm_forward_train(detail::as_f32(input), detail::as_f32(h0), detail::as_f32(c0),
-                                   lstm_widen(weights), opts, Dtype::F32);
-            for (std::size_t i = 0; i < 3; ++i)
-                res[i] = detail::back_to_f16(res[i], dt);
-            return res;
-        }
-        if (dt == Dtype::F64)
-            return cpu::lstm::forward_train<double>(input, h0, c0, weights, opts, dt);
-        if (dt == Dtype::F32)
-            return cpu::lstm::forward_train<float>(input, h0, c0, weights, opts, dt);
-        return IBackend::lstm_forward_train(input, h0, c0, weights, opts, dt);
-    }
+                                            Dtype dt) override;
 
     std::vector<Storage> lstm_backward(const Storage& grad_output,
                                        const Storage& grad_hn,
@@ -12930,153 +2008,22 @@ private:
                                        const Storage& gates_all,
                                        const Storage& cells_all,
                                        const LstmOpts& opts,
-                                       Dtype dt) override {
-        if (is_half_float(dt))
-            return detail::back_to_f16(
-                lstm_backward(detail::as_f32(grad_output), detail::as_f32(grad_hn),
-                              detail::as_f32(grad_cn), detail::as_f32(input), detail::as_f32(h0),
-                              lstm_widen(weights), gates_all, cells_all, opts, Dtype::F32),
-                dt);
-        if (dt == Dtype::F64)
-            return cpu::lstm::backward<double>(grad_output, grad_hn, grad_cn, input, h0, weights,
-                                               gates_all, cells_all, opts, dt);
-        if (dt == Dtype::F32)
-            return cpu::lstm::backward<float>(grad_output, grad_hn, grad_cn, input, h0, weights,
-                                              gates_all, cells_all, opts, dt);
-        return IBackend::lstm_backward(grad_output, grad_hn, grad_cn, input, h0, weights, gates_all,
-                                       cells_all, opts, dt);
-    }
+                                       Dtype dt) override;
 
-    static std::vector<Storage> lstm_widen(const std::vector<Storage>& weights) {
-        std::vector<Storage> wide;
-        wide.reserve(weights.size());
-        for (const auto& w : weights)
-            wide.push_back(detail::as_f32(w));
-        return wide;
-    }
+    static std::vector<Storage> lstm_widen(const std::vector<Storage>& weights);
 
     Storage fused_linear_relu_forward(const Storage& x,
                                       const Storage& w,
                                       const Storage& b,
                                       const Shape& out_shape,
-                                      Dtype dt) override {
-        if (dt != Dtype::F32)
-            return IBackend::fused_linear_relu_forward(x, w, b, out_shape, dt);
-
-        const std::size_t elem = dtype_size(dt);
-        std::size_t M = 1;
-        for (std::size_t i = 0; i + 1 < out_shape.size(); ++i)
-            M *= static_cast<std::size_t>(out_shape[i]);
-        const std::size_t N_out = static_cast<std::size_t>(out_shape.back());
-        const std::size_t K = std::get<CpuStorage>(x).nbytes / (elem * (M > 0 ? M : 1));
-        const Shape x_shape = {static_cast<std::int64_t>(M), static_cast<std::int64_t>(K)};
-        const Shape weight_shape = {static_cast<std::int64_t>(N_out), static_cast<std::int64_t>(K)};
-
-        Storage lin_out = linear(x, w, b, x_shape, weight_shape, out_shape, dt);
-
-#ifdef __APPLE__
-        {
-            auto& cpu = std::get<CpuStorage>(lin_out);
-            const std::size_t n = cpu.nbytes / sizeof(float);
-            float* p = reinterpret_cast<float*>(cpu.ptr.get());
-            cpu::vrelu_f32(p, p, n);
-        }
-#else
-        {
-            auto& cpu = std::get<CpuStorage>(lin_out);
-            const std::size_t n = cpu.nbytes / sizeof(float);
-            float* p = reinterpret_cast<float*>(cpu.ptr.get());
-            for (std::size_t i = 0; i < n; ++i)
-                if (p[i] < 0.f)
-                    p[i] = 0.f;
-        }
-#endif
-        return lin_out;
-    }
+                                      Dtype dt) override;
 
     Storage fused_linear_gelu_forward(const Storage& x,
                                       const Storage& w,
                                       const Storage& b,
                                       const Shape& out_shape,
-                                      Dtype dt) override {
-        if (dt != Dtype::F32)
-            return IBackend::fused_linear_gelu_forward(x, w, b, out_shape, dt);
-
-        const std::size_t elem_g = dtype_size(dt);
-        std::size_t M_g = 1;
-        for (std::size_t i = 0; i + 1 < out_shape.size(); ++i)
-            M_g *= static_cast<std::size_t>(out_shape[i]);
-        const std::size_t N_g = static_cast<std::size_t>(out_shape.back());
-        const std::size_t K_g = std::get<CpuStorage>(x).nbytes / (elem_g * (M_g > 0 ? M_g : 1));
-        const Shape x_shape_g = {static_cast<std::int64_t>(M_g), static_cast<std::int64_t>(K_g)};
-        const Shape weight_shape_g = {static_cast<std::int64_t>(N_g),
-                                      static_cast<std::int64_t>(K_g)};
-
-        Storage lin_out = linear(x, w, b, x_shape_g, weight_shape_g, out_shape, dt);
-
-#ifdef __APPLE__
-        {
-            auto& cpu = std::get<CpuStorage>(lin_out);
-            const int n = static_cast<int>(cpu.nbytes / sizeof(float));
-            float* p = reinterpret_cast<float*>(cpu.ptr.get());
-
-            std::vector<float> scratch(static_cast<std::size_t>(n));
-            constexpr float kSqrt2OverPi = 0.7978845608f;
-            constexpr float kCoeff = 0.044715f;
-
-            for (int i = 0; i < n; ++i) {
-                const float xi = p[i];
-                scratch[static_cast<std::size_t>(i)] = kSqrt2OverPi * (xi + kCoeff * xi * xi * xi);
-            }
-            cpu::vtanh_f32(scratch.data(), scratch.data(), static_cast<std::size_t>(n));
-            for (int i = 0; i < n; ++i)
-                p[i] = 0.5f * p[i] * (1.f + scratch[static_cast<std::size_t>(i)]);
-        }
-#else
-        {
-            auto& cpu = std::get<CpuStorage>(lin_out);
-            const std::size_t n = cpu.nbytes / sizeof(float);
-            float* p = reinterpret_cast<float*>(cpu.ptr.get());
-            constexpr float kSqrt2OverPi = 0.7978845608f;
-            constexpr float kCoeff = 0.044715f;
-            for (std::size_t i = 0; i < n; ++i) {
-                const float xi = p[i];
-                const float inner = kSqrt2OverPi * (xi + kCoeff * xi * xi * xi);
-                p[i] = 0.5f * xi * (1.f + std::tanh(inner));
-            }
-        }
-#endif
-        return lin_out;
-    }
+                                      Dtype dt) override;
 };
 
 }  // namespace backend
 }  // namespace lucid
-
-// Static-init registrar that installs :class:`CpuBackend` into the
-// :class:`Dispatcher` for ``Device::CPU``.
-//
-// A single anonymous-namespace instance (``g_cpu_registrar``) runs its
-// constructor at process startup, before any tensor code executes, so
-// the dispatcher is always populated by the time the first op fires.
-// ``BackendInit.cpp`` includes this header to trigger the registration.
-//
-// Notes
-// -----
-// Anonymous namespace ⇒ one translation-unit-local copy.  The class
-// itself has no public methods; only its constructor side-effect matters.
-//
-// See Also
-// --------
-// :func:`Dispatcher::register_backend` — installer endpoint.
-// :class:`CpuBackend` — the backend being registered.
-namespace {
-struct CpuBackendRegistrar {
-    // Registers a fresh :class:`CpuBackend` instance with the
-    // :class:`Dispatcher` for ``Device::CPU``.
-    CpuBackendRegistrar() {
-        lucid::backend::Dispatcher::register_backend(
-            lucid::Device::CPU, std::make_unique<lucid::backend::CpuBackend>());
-    }
-} g_cpu_registrar;
-}  // namespace

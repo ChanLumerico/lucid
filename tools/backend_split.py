@@ -1010,18 +1010,26 @@ def verify_backend(
     else:
         doors_path = curr_path.parent / "DtypeDoors.h"
         doors_toks = (
-            tokenize_code(doors_path.read_text(encoding="utf-8"))
+            tokenize_code(strip_noncode(doors_path.read_text(encoding="utf-8")))
             if doors_path.exists()
             else []
         )
-        combined = curr_prelude_toks + doors_toks
-        # Every non-#include token in base_prelude_toks must appear in combined
-        base_non_inc = [
-            t for t in base_prelude_toks if not t.startswith("#") and not t.startswith('"') and not t.startswith("<")
-        ]
-        comb_non_inc = [
-            t for t in combined if not t.startswith("#") and not t.startswith('"') and not t.startswith("<")
-        ]
+
+        def _strip_outer_ns(toks: list[str], strip_close: bool) -> list[str]:
+            if toks[:6] == ["namespace", "lucid", "{", "namespace", "backend", "{"]:
+                toks = toks[6:]
+                if strip_close and toks[-2:] == ["}", "}"]:
+                    toks = toks[:-2]
+            return toks
+
+        base_non_inc = _strip_outer_ns(
+            tokenize_code(strip_noncode(base_src[: base_parsed.prelude_end])),
+            strip_close=False,
+        )
+        comb_non_inc = _strip_outer_ns(
+            tokenize_code(strip_noncode(curr_src[: curr_parsed.prelude_end])),
+            strip_close=False,
+        ) + _strip_outer_ns(doors_toks, strip_close=True)
         if base_non_inc != comb_non_inc:
             errors.append(
                 f"{rel_header}: prelude + DtypeDoors.h tokens do not match base prelude"
@@ -1035,6 +1043,8 @@ def verify_backend(
         errors.append(f"{rel_header}: unexpected postlude tokens: {curr_post_toks}")
     elif curr_post_toks == ns_close_toks and base_post_toks != ns_close_toks:
         reg_toks = base_post_toks[2:]
+        if reg_toks[:2] == ["namespace", "{"] and reg_toks[-1:] == ["}"]:
+            reg_toks = reg_toks[2:-1]
         init_path = root / "lucid/_C/backend/BackendInit.cpp"
         if init_path.exists():
             init_toks = tokenize_code(init_path.read_text(encoding="utf-8"))

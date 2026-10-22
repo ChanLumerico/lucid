@@ -79,8 +79,8 @@
       "id": "backend", "type": "backend", "label": "Dispatcher", "sublabel": "Cpu/GpuBackend", "row": 1, "col": 5,
       "sources": [
         { "path": "lucid/_C/backend/Dispatcher.h", "line": 90, "label": "for_device" },
-        { "path": "lucid/_C/backend/cpu/CpuBackend.h", "line": 584, "label": "CpuBackend::add" },
-        { "path": "lucid/_C/backend/gpu/GpuBackend.h", "line": 289, "label": "GpuBackend::add" }
+        { "path": "lucid/_C/backend/cpu/methods/Binary.cpp", "line": 24, "label": "CpuBackend::add" },
+        { "path": "lucid/_C/backend/gpu/methods/Binary.cpp", "line": 8, "label": "GpuBackend::add" }
       ]
     },
     {

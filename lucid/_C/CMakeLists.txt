@@ -246,6 +246,7 @@ lucid_object_library(
     core/TensorImpl.cpp
     core/Validate.cpp)
 
+file(GLOB LUCID_CPU_BACKEND_METHODS CONFIGURE_DEPENDS backend/cpu/methods/*.cpp)
 lucid_object_library(
     lucid_backend_cpu
     backend/cpu/Blas.cpp
@@ -256,16 +257,19 @@ lucid_object_library(
     backend/cpu/Reduce.cpp
     backend/cpu/Shape.cpp
     backend/cpu/Vdsp.cpp
-    backend/cpu/Vforce.cpp)
+    backend/cpu/Vforce.cpp
+    ${LUCID_CPU_BACKEND_METHODS})
 
 # Phase 9.1 + 18: Objective-C++ files require ARC and the Metal framework.
 # 3.4 Phase 1: gpu/mps/ subdirectory adds MPSGraph dispatch sources.
+file(GLOB LUCID_GPU_BACKEND_METHODS CONFIGURE_DEPENDS backend/gpu/methods/*.cpp)
 lucid_object_library(
     lucid_backend_gpu
     backend/gpu/MlxBridge.cpp
     backend/gpu/MetalAllocator.mm
     backend/gpu/MetalKernelRunner.mm
-    backend/gpu/mps/MpsBridge.mm)
+    backend/gpu/mps/MpsBridge.mm
+    ${LUCID_GPU_BACKEND_METHODS})
 set_source_files_properties(
     backend/gpu/MetalAllocator.mm
     backend/gpu/MetalKernelRunner.mm

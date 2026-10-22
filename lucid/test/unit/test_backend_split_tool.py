@@ -1,7 +1,6 @@
 """Unit tests for ``tools/backend_split.py`` and ``check_dtype_dispatch`` backend unit keys."""
 
 from pathlib import Path
-import shutil
 
 import pytest
 
@@ -219,7 +218,7 @@ def test_parse_header_rejects_class_scope_ifdef_and_raw_string() -> None:
         backend_split.parse_header(with_raw_str, "CpuBackend")
 
 
-def test_check_dtype_dispatch_unit_key_tracks_moved_methods(tmp_path: Path) -> None:
+def test_check_dtype_dispatch_unit_key_tracks_moved_methods() -> None:
     assert (
         check_dtype_dispatch._known_unit("lucid/_C/backend/cpu/CpuBackend.h")
         == check_dtype_dispatch._CPU
@@ -234,56 +233,4 @@ def test_check_dtype_dispatch_unit_key_tracks_moved_methods(tmp_path: Path) -> N
         check_dtype_dispatch._known_unit("lucid/_C/backend/gpu/methods/Loss.cpp")
         == check_dtype_dispatch._GPU
     )
-
-    # Full dry-run of all 14 families on a temp copy of the real backend headers
-    for rel in (
-        "lucid/_C/backend/cpu/CpuBackend.h",
-        "lucid/_C/backend/gpu/GpuBackend.h",
-    ):
-        dst = tmp_path / rel
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(backend_split.ROOT / rel, dst)
-
-    assert (
-        backend_split.main(
-            [
-                "move",
-                "--backend",
-                "cpu",
-                "--families",
-                "all",
-                "--root",
-                str(tmp_path),
-                "--no-format",
-            ]
-        )
-        == 0
-    )
-    assert (
-        backend_split.main(
-            [
-                "move",
-                "--backend",
-                "gpu",
-                "--families",
-                "all",
-                "--root",
-                str(tmp_path),
-                "--no-format",
-            ]
-        )
-        == 0
-    )
-    assert (
-        backend_split.main(
-            [
-                "verify",
-                "--base",
-                str(backend_split.ROOT),
-                "--root",
-                str(tmp_path),
-            ]
-        )
-        == 0
-    )
-    assert check_dtype_dispatch.main(["--root", str(tmp_path)]) == 0
+    assert check_dtype_dispatch.main(["--root", str(backend_split.ROOT)]) == 0
