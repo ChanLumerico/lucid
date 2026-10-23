@@ -17,7 +17,11 @@ from dataclasses import dataclass
 from typing import ClassVar, Literal, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.generative._common._config import DiffusionModelConfig
+from lucid.models.generative._common._config import (
+    DiffusionModelConfig,
+    check_patch_grid,
+    patch_grid_side,
+)
 
 # How the timestep and class label reach the blocks.  The paper compares
 # all four (Section 3.2, Figure 5) and adopts the last for everything
@@ -184,39 +188,12 @@ class DiTConfig(DiffusionModelConfig):
     @property
     def num_patches(self) -> int:
         """Tokens the latent is cut into — ``(sample_size / patch_size)ˆ2``."""
-        side = (
-            self.sample_size
-            if isinstance(self.sample_size, int)
-            else self.sample_size[0]
-        )
-        return (side // self.patch_size) ** 2
+        return (patch_grid_side(self.sample_size) // self.patch_size) ** 2
 
     @override
     def __post_init__(self) -> None:
         super().__post_init__()
-        side = (
-            self.sample_size
-            if isinstance(self.sample_size, int)
-            else self.sample_size[0]
-        )
-        if self.patch_size <= 0:
-            raise ValueError(f"patch_size must be positive, got {self.patch_size}")
-        if side % self.patch_size != 0:
-            raise ValueError(
-                f"sample_size {side} must be divisible by patch_size "
-                f"{self.patch_size} — a partial patch has no token to live in"
-            )
-        if self.hidden_size % 4 != 0:
-            raise ValueError(
-                f"hidden_size must be divisible by 4 — the positional table "
-                f"splits it into sine and cosine over each of two axes, got "
-                f"{self.hidden_size}"
-            )
-        if self.hidden_size % self.num_heads != 0:
-            raise ValueError(
-                f"hidden_size must be divisible by num_heads, got "
-                f"{self.hidden_size} and {self.num_heads}"
-            )
+        check_patch_grid(self.sample_size, self.patch_size, self.hidden_size, self.num_heads)
         if self.frequency_embedding_size % 2 != 0:
             raise ValueError(
                 f"frequency_embedding_size must be even — the sinusoid "

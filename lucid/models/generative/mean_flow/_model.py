@@ -37,11 +37,13 @@ from lucid.models._output import (
 )
 from lucid.models._tasks import ImageGenerationModel
 from lucid.models._utils._generative import resolve_generation_device
+from lucid.models.generative._common._config import patch_grid_side
 from lucid.models.generative._common._transformers import (
     DiTBlock,
     DiTFinalLayer,
     sincos_position_embedding,
     timestep_embedding,
+    unpatchify,
 )
 from lucid.models.generative.mean_flow._config import MeanFlowConfig
 
@@ -170,11 +172,7 @@ class MeanFlowModel(PretrainedModel):
         """Initialise the network. See the class docstring for parameters."""
         super().__init__(config)
         self.config: MeanFlowConfig = config
-        side = (
-            config.sample_size
-            if isinstance(config.sample_size, int)
-            else config.sample_size[0]
-        )
+        side = patch_grid_side(config.sample_size)
         self.grid = side // config.patch_size
 
         self.patch_embed = nn.Conv2d(
@@ -250,15 +248,6 @@ class MeanFlowModel(PretrainedModel):
             block.zero_conditioning()
         self.final.zero_conditioning()
 
-    def _unpatchify(self, x: Tensor) -> Tensor:
-        """``(B, N, pˆ2 * C)`` back to ``(B, C, H, W)``."""
-        patch = self.config.patch_size
-        channels = self.config.out_channels
-        grid = self.grid
-        x = x.reshape(-1, grid, grid, patch, patch, channels)
-        x = x.permute(0, 5, 1, 3, 2, 4)
-        return x.reshape(-1, channels, grid * patch, grid * patch)
-
     @override
     def forward(
         self,
@@ -309,7 +298,10 @@ class MeanFlowModel(PretrainedModel):
 
         for block in self.blocks:
             tokens = block(tokens, cond)
-        return DiffusionModelOutput(sample=self._unpatchify(self.final(tokens, cond)))
+        image = unpatchify(
+            self.final(tokens, cond), self.grid, self.config.patch_size, self.config.out_channels
+        )
+        return DiffusionModelOutput(sample=image)
 
 
 class MeanFlowForImageGeneration(ImageGenerationModel):
@@ -548,11 +540,7 @@ class MeanFlowForImageGeneration(ImageGenerationModel):
         if steps < 1:
             raise ValueError(f"steps must be positive, got {steps}")
         config = self.config
-        side = (
-            config.sample_size
-            if isinstance(config.sample_size, int)
-            else config.sample_size[0]
-        )
+        side = patch_grid_side(config.sample_size)
         device = resolve_generation_device(self, device)
         if noise is None:
             noise = lucid.randn(

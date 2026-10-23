@@ -1271,6 +1271,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - split CpuBackend/GpuBackend into 14 op-family TUs
 
+- share the DiT backbones' patch-grid code
+
 ### Removed
 
 - delete dead C++ einops kernels and unbound engine bindings

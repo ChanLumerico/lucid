@@ -16,7 +16,11 @@ from dataclasses import dataclass
 from typing import ClassVar, Literal, override
 
 from lucid.models._meta import model_family_meta
-from lucid.models.generative._common._config import GenerativeModelConfig
+from lucid.models.generative._common._config import (
+    GenerativeModelConfig,
+    check_patch_grid,
+    patch_grid_side,
+)
 
 # How ``(t, s)`` are drawn (Section 7.3, Table 3).  All three bias ``t``
 # toward noise and ``s`` toward data so the network learns long strides.
@@ -279,12 +283,7 @@ class TVMConfig(GenerativeModelConfig):
     @property
     def num_patches(self) -> int:
         """Tokens the latent is cut into — ``(sample_size / patch_size)^2``."""
-        side = (
-            self.sample_size
-            if isinstance(self.sample_size, int)
-            else self.sample_size[0]
-        )
-        return (side // self.patch_size) ** 2
+        return (patch_grid_side(self.sample_size) // self.patch_size) ** 2
 
     @override
     def __post_init__(self) -> None:
@@ -296,35 +295,18 @@ class TVMConfig(GenerativeModelConfig):
                 f"sample_size must be square — the positional table is built "
                 f"over a square grid, got {self.sample_size}"
             )
-        side = (
-            self.sample_size
-            if isinstance(self.sample_size, int)
-            else self.sample_size[0]
-        )
-        if self.patch_size <= 0:
-            raise ValueError(f"patch_size must be positive, got {self.patch_size}")
-        if side % self.patch_size != 0:
-            raise ValueError(
-                f"sample_size {side} must be divisible by patch_size "
-                f"{self.patch_size} — a partial patch has no token to live in"
-            )
-        if self.hidden_size % 4 != 0:
-            raise ValueError(
-                f"hidden_size must be divisible by 4 — the positional table "
-                f"splits it into sine and cosine over each of two axes, got "
-                f"{self.hidden_size}"
-            )
-        if self.hidden_size % self.num_heads != 0:
-            raise ValueError(
-                f"hidden_size must be divisible by num_heads, got "
-                f"{self.hidden_size} and {self.num_heads}"
-            )
+        check_patch_grid(self.sample_size, self.patch_size, self.hidden_size, self.num_heads)
         if self.depth <= 0:
             raise ValueError(f"depth must be positive, got {self.depth}")
+        self._check_guidance()
+        self._check_times()
+        self._check_latent()
+        self._check_averages()
+
+    def _check_guidance(self) -> None:
+        """Class dropout is a probability; ``w`` and its range are positive."""
         if not 0.0 <= self.class_dropout <= 1.0:
-            raise ValueError(
-                f"class_dropout is a probability, got {self.class_dropout}"
-            )
+            raise ValueError(f"class_dropout is a probability, got {self.class_dropout}")
         if self.guidance_scale <= 0.0:
             raise ValueError(
                 f"guidance_scale must be positive — the network is conditioned "
@@ -337,15 +319,17 @@ class TVMConfig(GenerativeModelConfig):
                     f"guidance_range must be an ordered pair of positive "
                     f"weights, got {self.guidance_range}"
                 )
+
+    def _check_times(self) -> None:
+        """Logit-normal spreads are positive; the ``s = t`` share is a probability."""
         for name in ("gap_std", "t_std", "s_std"):
             if getattr(self, name) <= 0.0:
-                raise ValueError(
-                    f"{name} must be positive, got {getattr(self, name)}"
-                )
+                raise ValueError(f"{name} must be positive, got {getattr(self, name)}")
         if not 0.0 <= self.ratio_t_equals_s <= 1.0:
-            raise ValueError(
-                f"ratio_t_equals_s is a probability, got {self.ratio_t_equals_s}"
-            )
+            raise ValueError(f"ratio_t_equals_s is a probability, got {self.ratio_t_equals_s}")
+
+    def _check_latent(self) -> None:
+        """One whitening statistic per latent channel, with positive spreads."""
         if not len(self.latent_mean) == len(self.latent_std) == self.in_channels:
             raise ValueError(
                 f"latent_mean and latent_std need one entry per latent channel "
@@ -354,6 +338,9 @@ class TVMConfig(GenerativeModelConfig):
             )
         if any(value <= 0.0 for value in self.latent_std):
             raise ValueError(f"latent_std must be positive, got {self.latent_std}")
+
+    def _check_averages(self) -> None:
+        """Both EMA rates lie in ``[0, 1)``; the evaluation one may be absent."""
         if not 0.0 <= self.target_ema_decay < 1.0:
             raise ValueError(
                 f"target_ema_decay must be in [0, 1) — at 1 the target never "

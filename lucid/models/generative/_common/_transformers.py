@@ -30,6 +30,7 @@ from lucid._tensor.tensor import Tensor
 __all__ = [
     "timestep_embedding",
     "sincos_position_embedding",
+    "unpatchify",
     "DiTBlock",
     "DiTFinalLayer",
 ]
@@ -149,6 +150,33 @@ def sincos_position_embedding(dim: int, side: int) -> Tensor:
     # Columns lead — see the note above.  Row-major flattening makes this
     # the half that changes between adjacent tokens.
     return lucid.cat([cols, rows], dim=-1).reshape(1, side * side, -1)
+
+
+def unpatchify(x: Tensor, grid: int, patch: int, channels: int) -> Tensor:
+    """Put ``(B, N, patch^2 * channels)`` tokens back as ``(B, channels, H, W)``.
+
+    The inverse of a stride-``patch`` patch embedding over a ``grid x grid``
+    token grid, row-major — DiT's ``unpatchify``.
+
+    Parameters
+    ----------
+    x : Tensor
+        ``(B, grid * grid, patch * patch * channels)`` decoder output.
+    grid : int
+        Tokens per side.
+    patch : int
+        Side of a patch.
+    channels : int
+        Channels per pixel.
+
+    Returns
+    -------
+    Tensor
+        ``(B, channels, grid * patch, grid * patch)``.
+    """
+    x = x.reshape(-1, grid, grid, patch, patch, channels)
+    x = x.permute(0, 5, 1, 3, 2, 4)
+    return x.reshape(-1, channels, grid * patch, grid * patch)
 
 
 class DiTBlock(nn.Module):

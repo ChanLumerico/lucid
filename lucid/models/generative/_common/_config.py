@@ -168,6 +168,8 @@ __all__ = [
     "GenerativeActivation",
     "BetaSchedule",
     "FlowPrior",
+    "patch_grid_side",
+    "check_patch_grid",
 ]
 
 
@@ -288,3 +290,69 @@ class WorldModelConfig(GenerativeModelConfig):
     def latent_size(self) -> int:
         """Width of the full latent ``[h; s]`` the decoder and heads read."""
         return self.deter_size + self.stoch_size
+
+
+# ── the patch grid of the DiT-backbone families ──────────────────────────────
+
+
+def patch_grid_side(sample_size: int | tuple[int, int]) -> int:
+    """The side of a square latent, given as an int or a ``(side, side)`` pair.
+
+    Parameters
+    ----------
+    sample_size : int or tuple of int
+        A config's ``sample_size``.
+
+    Returns
+    -------
+    int
+        ``sample_size`` itself, or its first entry.
+    """
+    return sample_size if isinstance(sample_size, int) else sample_size[0]
+
+
+def check_patch_grid(
+    sample_size: int | tuple[int, int], patch_size: int, hidden_size: int, num_heads: int
+) -> None:
+    """Refuse a patch grid a DiT backbone cannot be built over.
+
+    DiT, MeanFlow and TVM cut the latent into ``patch_size`` squares, embed
+    each with a two-axis sine-cosine table and attend over them with
+    ``num_heads`` heads; each of those needs the divisibility checked here.
+
+    Parameters
+    ----------
+    sample_size : int or tuple of int
+        Side of the latent.
+    patch_size : int
+        Side of a patch.
+    hidden_size : int
+        Token width.
+    num_heads : int
+        Attention heads.
+
+    Raises
+    ------
+    ValueError
+        If ``patch_size`` is not positive, does not divide the side, or the
+        width is not divisible by 4 (the positional table) or by the heads.
+    """
+    side = patch_grid_side(sample_size)
+    if patch_size <= 0:
+        raise ValueError(f"patch_size must be positive, got {patch_size}")
+    if side % patch_size != 0:
+        raise ValueError(
+            f"sample_size {side} must be divisible by patch_size "
+            f"{patch_size} — a partial patch has no token to live in"
+        )
+    if hidden_size % 4 != 0:
+        raise ValueError(
+            f"hidden_size must be divisible by 4 — the positional table "
+            f"splits it into sine and cosine over each of two axes, got "
+            f"{hidden_size}"
+        )
+    if hidden_size % num_heads != 0:
+        raise ValueError(
+            f"hidden_size must be divisible by num_heads, got "
+            f"{hidden_size} and {num_heads}"
+        )

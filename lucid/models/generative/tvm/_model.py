@@ -26,7 +26,7 @@ read off an exponential moving average of the weights.
 """
 
 from dataclasses import dataclass
-from typing import ClassVar, cast, override
+from typing import ClassVar, override
 
 import lucid
 import lucid.func
@@ -36,16 +36,14 @@ import lucid.nn.functional as F
 import lucid.special
 from lucid import Tensor
 from lucid.models._base import PretrainedModel
-from lucid.models._output import (
-    DiffusionModelOutput,
-    GenerationOutput,
-    ModelOutput,
-)
+from lucid.models._output import DiffusionModelOutput, GenerationOutput, ModelOutput
 from lucid.models._tasks import ImageGenerationModel
 from lucid.models._utils._generative import resolve_generation_device
+from lucid.models.generative._common._config import patch_grid_side
 from lucid.models.generative._common._transformers import (
     sincos_position_embedding,
     timestep_embedding,
+    unpatchify,
 )
 from lucid.models.generative.tvm._config import TVMConfig
 
@@ -73,6 +71,13 @@ def _spectral_(weight: Tensor) -> None:
     nn.init.normal_(weight)
     sigma = lucid.linalg.svdvals(weight.reshape(int(weight.shape[0]), -1))[0]
     weight.div_(sigma)
+
+
+def _zero_projection(head: nn.Module) -> None:
+    """Zero the linear layer of an adaLN head — the "Zero" of adaLN-Zero."""
+    for layer in head.modules():
+        if isinstance(layer, nn.Linear):
+            layer.weight.zero_()
 
 
 def _modulation(params: Tensor, count: int, width: int, normalize: bool) -> list[Tensor]:
@@ -379,11 +384,7 @@ class TVMModel(PretrainedModel):
         """Initialise the network. See the class docstring for parameters."""
         super().__init__(config)
         self.config: TVMConfig = config
-        side = (
-            config.sample_size
-            if isinstance(config.sample_size, int)
-            else config.sample_size[0]
-        )
+        side = patch_grid_side(config.sample_size)
         self.grid = side // config.patch_size
         width = config.hidden_size
 
@@ -446,7 +447,7 @@ class TVMModel(PretrainedModel):
                     block.mlp.fc2,
                 ):
                     _spectral_(linear.weight)
-                cast(nn.Linear, block.ada_ln[1]).weight.zero_()
+                _zero_projection(block.ada_ln)
             for embedder in (self.time_embed, self.interval_embed, self.guidance_embed):
                 for linear in (embedder.fc1, embedder.fc2):
                     if spectral_time:
@@ -454,21 +455,12 @@ class TVMModel(PretrainedModel):
                     else:
                         nn.init.normal_(linear.weight, std=0.02)
             nn.init.normal_(self.label_embed.weight, std=0.02)
-            cast(nn.Linear, self.final.ada_ln[1]).weight.zero_()
+            _zero_projection(self.final.ada_ln)
             self.final.proj.weight.zero_()
             for module in self.modules():
                 bias = getattr(module, "bias", None)
                 if isinstance(module, (nn.Linear, nn.Conv2d)) and bias is not None:
                     bias.zero_()
-
-    def _unpatchify(self, x: Tensor) -> Tensor:
-        """``(B, N, p^2 * C)`` back to ``(B, C, H, W)``."""
-        patch = self.config.patch_size
-        channels = self.config.out_channels
-        grid = self.grid
-        x = x.reshape(-1, grid, grid, patch, patch, channels)
-        x = x.permute(0, 5, 1, 3, 2, 4)
-        return x.reshape(-1, channels, grid * patch, grid * patch)
 
     def resolve_guidance(
         self, guidance_scale: Tensor | float | None, labels: Tensor | None
@@ -554,7 +546,9 @@ class TVMModel(PretrainedModel):
         )
         for block in self.blocks:
             tokens = block(tokens, cond)
-        out = self._unpatchify(self.final(tokens, cond))
+        out = unpatchify(
+            self.final(tokens, cond), self.grid, self.config.patch_size, self.config.out_channels
+        )
         if self.config.scaled_parameterization:
             out = out * guidance.reshape(-1, 1, 1, 1)
         return DiffusionModelOutput(sample=out)
@@ -829,10 +823,11 @@ class TVMForImageGeneration(ImageGenerationModel):
             primal, along_s = lucid.func.jvp(
                 field, (s.detach().requires_grad_(),), (tangent,)
             )
-            velocity = cast(Tensor, primal)
-        derivative = cast(Tensor, along_s)
+            assert isinstance(primal, Tensor), "the field returns one tensor"
+            velocity = primal
+        assert isinstance(along_s, Tensor), "the field returns one tensor"
         interval = (s - t).reshape(-1, 1, 1, 1)
-        return velocity, velocity + interval * derivative
+        return velocity, velocity + interval * along_s
 
     @override
     def forward(self, images: Tensor, labels: Tensor | None = None) -> TVMOutput:
@@ -981,28 +976,18 @@ class TVMForImageGeneration(ImageGenerationModel):
 
         Examples
         --------
-        >>> import lucid
-        >>> from lucid.models.generative.tvm import (
-        ...     TVMConfig, TVMForImageGeneration)
-        >>> config = TVMConfig(sample_size=8, patch_size=2, hidden_size=32,
-        ...                    depth=2, num_heads=4, num_classes=10)
-        >>> model = TVMForImageGeneration(config).eval()
-        >>> model.generate(2, steps=4).samples.shape
+        >>> from lucid.models import tvm_imagenet256_gen
+        >>> model = tvm_imagenet256_gen(sample_size=8, hidden_size=32, depth=2, num_heads=4)
+        >>> model.eval().generate(2, steps=4).samples.shape
         (2, 4, 8, 8)
         """
         if steps < 1:
             raise ValueError(f"steps must be positive, got {steps}")
-        config = self.config
-        side = (
-            config.sample_size
-            if isinstance(config.sample_size, int)
-            else config.sample_size[0]
-        )
         device = resolve_generation_device(self, device)
         if noise is None:
-            noise = lucid.randn(
-                (n_samples, config.in_channels, side, side), device=device
-            )
+            side = patch_grid_side(self.config.sample_size)
+            shape = (n_samples, self.config.in_channels, side, side)
+            noise = lucid.randn(shape, device=device)
 
         network = self.ema_network if use_ema else self.tvm
         x = noise
@@ -1036,11 +1021,8 @@ class TVMForImageGeneration(ImageGenerationModel):
         Examples
         --------
         >>> import lucid
-        >>> from lucid.models.generative.tvm import (
-        ...     TVMConfig, TVMForImageGeneration)
-        >>> config = TVMConfig(sample_size=8, patch_size=2, hidden_size=32,
-        ...                    depth=2, num_heads=4, num_classes=10)
-        >>> model = TVMForImageGeneration(config)
+        >>> from lucid.models import tvm_imagenet256_gen
+        >>> model = tvm_imagenet256_gen(sample_size=8, hidden_size=32, depth=2, num_heads=4)
         >>> model.from_vae_latent(lucid.zeros((1, 4, 8, 8))).shape
         (1, 4, 8, 8)
         """
@@ -1075,11 +1057,8 @@ class TVMForImageGeneration(ImageGenerationModel):
         Examples
         --------
         >>> import lucid
-        >>> from lucid.models.generative.tvm import (
-        ...     TVMConfig, TVMForImageGeneration)
-        >>> config = TVMConfig(sample_size=8, patch_size=2, hidden_size=32,
-        ...                    depth=2, num_heads=4, num_classes=10)
-        >>> model = TVMForImageGeneration(config)
+        >>> from lucid.models import tvm_imagenet256_gen
+        >>> model = tvm_imagenet256_gen(sample_size=8, hidden_size=32, depth=2, num_heads=4)
         >>> model.to_vae_latent(lucid.zeros((1, 4, 8, 8))).shape
         (1, 4, 8, 8)
         """

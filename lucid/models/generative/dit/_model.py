@@ -35,6 +35,7 @@ from lucid.models.generative._common._transformers import (
     DiTFinalLayer,
     sincos_position_embedding,
     timestep_embedding,
+    unpatchify,
 )
 from lucid.models.generative.dit._config import DiTConfig
 
@@ -305,16 +306,6 @@ class DiTModel(PretrainedModel):
             )
         return time, self.label_embed(labels)
 
-    def _unpatchify(self, x: Tensor) -> Tensor:
-        """``(B, N, pˆ2 * C)`` back to ``(B, C, H, W)``."""
-        patch = self.config.patch_size
-        channels = self.config.out_channels
-        grid = self.grid
-        x = x.reshape(-1, grid, grid, patch, patch, channels)
-        return x.permute(0, 5, 1, 3, 2, 4).reshape(
-            -1, channels, grid * patch, grid * patch
-        )
-
     @override
     def forward(
         self,
@@ -366,7 +357,10 @@ class DiTModel(PretrainedModel):
             for block in self.blocks:
                 tokens = cast(DiTBlock, block)(tokens, cond)
 
-        return DiffusionModelOutput(sample=self._unpatchify(self.final(tokens, cond)))
+        image = unpatchify(
+            self.final(tokens, cond), self.grid, self.config.patch_size, self.config.out_channels
+        )
+        return DiffusionModelOutput(sample=image)
 
 
 class DiTForImageGeneration(ImageGenerationModel):
