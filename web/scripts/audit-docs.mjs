@@ -74,7 +74,13 @@ const SKIP_HREF = (h) =>
   /\.(svg|png|jpe?g|ico|xml|txt|json|css|js|woff2?|webmanifest|bib)$/.test(h);
 
 function stripScripts(html) {
-  return html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, "");
+  // Until stable: removing one block can join the halves of another.
+  let prev;
+  do {
+    prev = html;
+    html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, "");
+  } while (html !== prev);
+  return html;
 }
 
 function loadJson(p) {

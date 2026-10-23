@@ -78,7 +78,7 @@ test("install commands name the PyPI distribution from pyproject.toml", async ({
   // Every Lucid install line in the guide, extras and flags included.
   await page.goto("/docs/installation", { waitUntil: "networkidle" });
   const text = await page.locator("#main-content").innerText();
-  const targets = [...text.matchAll(/pip install(?:\s+--?[\w-]+)*\s+"?(lucid[\w.-]*)/g)].map(
+  const targets = [...text.matchAll(/pip install(?:\s+--?\w[\w-]*)*\s+"?(lucid[\w.-]*)/g)].map(
     (m) => m[1],
   );
   expect(targets.length).toBeGreaterThan(0);

@@ -90,8 +90,14 @@ export function linkifyTypesInHtml(html: string): string {
       // ``decoration-dotted`` separates type links from regular hover
       // underlines so users can tell linked types apart from primitive
       // shiki tokens.
+      // The href lands in raw HTML, so escape it as an attribute value.
+      const attr = `${BASE_PATH}${href}`
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
       return (
-        `<a href="${BASE_PATH}${href}" class="hover:underline decoration-dotted underline-offset-2">` +
+        `<a href="${attr}" class="hover:underline decoration-dotted underline-offset-2">` +
         openTag +
         name +
         closeTag +

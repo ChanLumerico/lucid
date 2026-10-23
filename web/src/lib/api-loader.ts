@@ -1,5 +1,5 @@
 import { readFileSync } from "fs";
-import { join } from "path";
+import { join, resolve, sep } from "path";
 import type {
   ApiData,
   ApiModule,
@@ -57,7 +57,12 @@ function _validateApiData(data: unknown, slug: string): asserts data is ApiData 
 }
 
 export function loadApiData(slug: string): ApiData {
-  const filePath = join(API_DATA_DIR, `${slug}.json`);
+  // The slug comes from the route, which ``next dev`` does not restrict to
+  // ``generateStaticParams``; keep it from naming a file outside api-data.
+  const filePath = resolve(API_DATA_DIR, `${slug}.json`);
+  if (!filePath.startsWith(API_DATA_DIR + sep)) {
+    throw new Error(`API data not found for slug: "${slug}".`);
+  }
   let raw: string;
   try {
     raw = readFileSync(filePath, "utf-8");
