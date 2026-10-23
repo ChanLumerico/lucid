@@ -76,6 +76,19 @@ def test_mean_flow_network_returns_a_diffusion_output(device: str) -> None:
     assert out.sample.shape == (2, 4, 8, 8) and out.loss is None
 
 
+@pytest.mark.parametrize("device", DEVICES)
+def test_tvm_network_returns_a_diffusion_output(device: str) -> None:
+    model = _build("tvm_imagenet256", device).eval()
+    out = model(
+        lucid.randn((2, 4, 8, 8), device=device),
+        lucid.tensor([1.0, 0.7]).to(device),
+        lucid.tensor([0.0, 0.2]).to(device),
+        _labels(device),
+    )
+    assert isinstance(out, M.DiffusionModelOutput)
+    assert out.sample.shape == (2, 4, 8, 8) and out.loss is None
+
+
 # ── one training step from the public factory ──────────────────────────────
 
 
@@ -94,6 +107,7 @@ _TRAIN: dict[str, Callable[[lucid.nn.Module, str], M.ModelOutput]] = {
     "dit_small_2_gen": _dit_step,
     "mean_flow_base_2_gen": _dit_step,
     "stable_diffusion_gen": _sd_step,
+    "tvm_imagenet256_gen": _dit_step,
 }
 
 
@@ -137,6 +151,7 @@ _SAMPLE_SHAPES = {
     "dit_small_2_gen": (2, 4, 8, 8),
     "mean_flow_base_2_gen": (2, 4, 8, 8),
     "stable_diffusion_gen": (2, 3, 32, 32),
+    "tvm_imagenet256_gen": (2, 4, 8, 8),
 }
 
 
@@ -197,13 +212,14 @@ def _labelled_loop(name: str) -> Callable[[int], Callable[[], M.GenerationOutput
     return make
 
 
-# dit and mean_flow embed their class labels once per denoising step;
+# dit, mean_flow and tvm embed their class labels once per denoising step;
 # nn.Embedding's index check no longer reads the indices back (LCD-283).
 _LOOPS = [
     pytest.param(_mixin_loop, id="diffusion_mixin"),
     pytest.param(_sd_loop, id="stable_diffusion"),
     pytest.param(_labelled_loop("dit_small_2_gen"), id="dit"),
     pytest.param(_labelled_loop("mean_flow_base_2_gen"), id="mean_flow"),
+    pytest.param(_labelled_loop("tvm_imagenet256_gen"), id="tvm"),
 ]
 
 

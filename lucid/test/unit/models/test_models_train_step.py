@@ -261,6 +261,15 @@ CASES: list[Any] = [
         {"latent_dim": 8, "down_block_channels": (8, 16, 32)},
         _pixels(32),
     ),
+    # Class-conditional, ``model(x, labels=...)``.  The loss back-propagates
+    # through a Jacobian-vector product, so every parameter has to be
+    # reached through it as well as through the plain forward.
+    (
+        "tvm",
+        "tvm_imagenet256_gen",
+        {"sample_size": 8, "hidden_size": 32, "depth": 1, "num_heads": 4, "num_classes": _CLASSES},
+        _images(8, channels=4),
+    ),
 ]
 
 
@@ -446,7 +455,6 @@ ELSEWHERE: dict[str, str] = {
     "score_sde": "test_models_recent_e2e.py — .loss",
     "dit": "test_models_recent_e2e.py — .loss",
     "mean_flow": "test_models_recent_e2e.py — .loss",
-    "tvm": "test_models_tvm.py — .loss",
     "vqvae": "test_models_recent_e2e.py — .loss",
     "stable_diffusion": "test_models_recent_e2e.py — return_loss=True",
     "clip": "test_models_recent_e2e.py — return_loss=True",
