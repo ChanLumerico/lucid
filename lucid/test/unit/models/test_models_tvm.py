@@ -274,16 +274,29 @@ class TestTarget:
         for name, param in model.target_network.named_parameters():
             assert _gap(param, live[name]) == 0.0, name
 
-    def test_update_target_is_an_ema_step(self) -> None:
-        """θ* ← γ θ* + (1 - γ) θ, at the configured γ."""
-        model = TVMForImageGeneration(_tiny(target_ema_decay=0.9))
-        slow = model.target_network.blocks[0].attn.qkv.weight.detach().clone()
+    def test_update_ema_steps_both_averages(self) -> None:
+        """Algorithm 1: θ* and θ** each move by their own rate, per step."""
+        model = TVMForImageGeneration(_tiny(target_ema_decay=0.9, eval_ema_decay=0.5))
+        target = model.target_network.blocks[0].attn.qkv.weight.detach().clone()
+        evaluated = model.ema_network.blocks[0].attn.qkv.weight.detach().clone()
         with lucid.no_grad():
             model.tvm.blocks[0].attn.qkv.weight += 1.0
         live = model.tvm.blocks[0].attn.qkv.weight.detach().clone()
-        model.update_target()
-        expected = 0.9 * slow + 0.1 * live
-        assert _gap(model.target_network.blocks[0].attn.qkv.weight, expected) < 1e-6
+        model.update_ema()
+        assert (
+            _gap(model.target_network.blocks[0].attn.qkv.weight, 0.9 * target + 0.1 * live)
+            < 1e-6
+        )
+        assert (
+            _gap(model.ema_network.blocks[0].attn.qkv.weight, 0.5 * evaluated + 0.5 * live)
+            < 1e-6
+        )
+
+    def test_no_eval_average_is_kept_when_disabled(self) -> None:
+        """``eval_ema_decay=None`` keeps no θ** and says so when asked."""
+        model = TVMForImageGeneration(_tiny(eval_ema_decay=None))
+        with pytest.raises(ValueError):
+            _ = model.ema_network
 
     def test_zero_decay_targets_the_live_network(self) -> None:
         """Table 4b's γ = 0: no copy, the live weights under a stop-gradient."""
@@ -340,11 +353,25 @@ class TestSampling:
         ), seen
 
     def test_to_vae_latent_inverts_the_whitening(self) -> None:
-        """``ℓ = z σ + μ`` per channel, with the config's statistics."""
+        """``ℓ = z σ + μ`` per channel, and ``from_vae_latent`` undoes it."""
         model = TVMForImageGeneration(_tiny())
         raw = model.to_vae_latent(lucid.zeros((1, 4, 8, 8)))
         mean = lucid.tensor(list(model.config.latent_mean)).reshape(1, -1, 1, 1)
         assert _gap(raw, mean + lucid.zeros((1, 4, 8, 8))) < 1e-6
+        latent = lucid.randn((2, 4, 8, 8)) * 5.0
+        assert _gap(model.to_vae_latent(model.from_vae_latent(latent)), latent) < 1e-4
+
+    def test_use_ema_samples_from_the_evaluation_average(self) -> None:
+        """``generate(use_ema=True)`` reads θ**, not the live weights."""
+        model = TVMForImageGeneration(_tiny(eval_ema_decay=0.5)).eval()
+        _wake(model.tvm)
+        _ = model.ema_network  # θ** ← θ
+        with lucid.no_grad():
+            model.tvm.final.proj.weight += 1.0
+        noise = lucid.randn((1, 4, 8, 8))
+        live = model.generate(1, noise=noise).samples
+        averaged = model.generate(1, noise=noise, use_ema=True).samples
+        assert _gap(live, averaged) > 1e-6
 
 
 class TestFactories:
