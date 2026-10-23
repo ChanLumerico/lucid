@@ -52,8 +52,8 @@ _CFG_IMAGENET512 = TVMConfig(
 )
 
 # Every count in Table 6 is the same network: 678M.  The positional table
-# is a non-persistent buffer, so the two resolutions agree exactly.
-_PARAMS = 678_000_000
+# is a non-persistent buffer, so the two resolutions agree exactly.  Each
+# decorator spells the count out: the docs site reads it as a literal.
 
 
 @register_model(
@@ -62,7 +62,7 @@ _PARAMS = 678_000_000
     model_type="tvm",
     model_class=TVMModel,
     default_config=_CFG_IMAGENET256,
-    params=_PARAMS,
+    params=678_000_000,
     summary="auto",
 )
 def tvm_imagenet256(pretrained: bool = False, **overrides: object) -> TVMModel:
@@ -108,7 +108,7 @@ def tvm_imagenet256(pretrained: bool = False, **overrides: object) -> TVMModel:
     model_type="tvm",
     model_class=TVMModel,
     default_config=_CFG_IMAGENET512,
-    params=_PARAMS,
+    params=678_000_000,
     summary="auto",
 )
 def tvm_imagenet512(pretrained: bool = False, **overrides: object) -> TVMModel:
@@ -157,7 +157,7 @@ def _gen(cfg: TVMConfig, overrides: dict[str, object]) -> TVMForImageGeneration:
     model_type="tvm",
     model_class=TVMForImageGeneration,
     default_config=_CFG_IMAGENET256,
-    params=_PARAMS,
+    params=678_000_000,
     summary="auto",
 )
 def tvm_imagenet256_gen(
@@ -200,7 +200,7 @@ def tvm_imagenet256_gen(
     model_type="tvm",
     model_class=TVMForImageGeneration,
     default_config=_CFG_IMAGENET512,
-    params=_PARAMS,
+    params=678_000_000,
     summary="auto",
 )
 def tvm_imagenet512_gen(

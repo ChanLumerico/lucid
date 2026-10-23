@@ -1134,6 +1134,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - evaluate TVM's EMA averages as update_ema writes them
 
+- give TVM's factories their parameter count as a literal
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
