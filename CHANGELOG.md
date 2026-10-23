@@ -140,6 +140,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add backend split codemod, symdiff, and golden digest
 
+- add Terminal Velocity Matching (Zhou et al., ICLR 2026)
+
 ### Performance
 
 - strided views copy by runs; contiguous() is 11-35x faster
@@ -1123,6 +1125,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - track allocation frame across CPU block views (LCD-517)
 
 - report root allocation in untyped_storage and empty slices
+
+- close the TVM parity gaps against the released code
+
+- pair TVM's EMA parameters by name, not by position
+
+- resolve the CodeQL findings in the docs site
+
+- evaluate TVM's EMA averages as update_ema writes them
 
 ### Changed
 
