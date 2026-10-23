@@ -9,6 +9,9 @@ on:
   schedule:
     - cron: "37 9 * * *"
 
+permissions:
+  contents: read
+
 concurrency:
   group: e2e-${{ github.ref }}
   cancel-in-progress: true

@@ -25,6 +25,9 @@ name: Core ML VM probe
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   probe:
     name: Core ML inside the VM

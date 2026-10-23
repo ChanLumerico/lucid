@@ -22,6 +22,9 @@ on:
   schedule:
     - cron: "17 9 * * *"
 
+permissions:
+  contents: read
+
 # Cancel any in-flight run on the same ref when a new push lands, so
 # rapid successive pushes don't pile up 7–9 min jobs.
 concurrency:
