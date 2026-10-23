@@ -117,17 +117,15 @@ def tvm_imagenet512(pretrained: bool = False, **overrides: object) -> TVMModel:
     Parameters
     ----------
     pretrained : bool, default=False
-        The authors' checkpoint has not been converted and hosted for
-        Lucid yet (``tools/convert_weights/tvm.py`` does the conversion),
-        so ``True`` raises rather than returning a randomly initialised
-        model.
+        ``True`` raises: the released ``im512_w2p5`` weights are not
+        hosted for Lucid yet.
     **overrides : object
-        Optional :class:`TVMConfig` field overrides.
+        :class:`TVMConfig` fields to change from the 512-pixel defaults.
 
     Returns
     -------
     TVMModel
-        The two-time velocity network.
+        The network over a 64-wide latent, conditioned on ``w = 2.5``.
 
     Notes
     -----
@@ -211,17 +209,15 @@ def tvm_imagenet512_gen(
     Parameters
     ----------
     pretrained : bool, default=False
-        The authors' checkpoint has not been converted and hosted for
-        Lucid yet, so ``True`` raises rather than returning a randomly
-        initialised model.
+        ``True`` raises until the 512-pixel weights are hosted for Lucid.
     **overrides : object
-        Optional :class:`TVMConfig` field overrides.
+        :class:`TVMConfig` fields to change from the 512-pixel defaults.
 
     Returns
     -------
     TVMForImageGeneration
-        Exposes the training objective, :meth:`~TVMForImageGeneration.
-        update_ema` and :meth:`~TVMForImageGeneration.generate`.
+        The 512-pixel network, trainable with Algorithm 1 and sampled in
+        one or a few jumps.
 
     Notes
     -----
