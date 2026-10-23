@@ -701,6 +701,10 @@ class TVMForImageGeneration(ImageGenerationModel):
         (1 - \gamma^{**})\theta`, over parameters only — the released
         training loop averages nothing else, and this network has no
         persistent buffers.  Call it after each optimiser step.
+
+        Each average is evaluated as it is written.  The averages are
+        outside :meth:`parameters`, so neither the optimiser's flush nor a
+        loop's reaches them on Metal.
         """
         decays = self._decays()
         if not decays:
@@ -717,6 +721,10 @@ class TVMForImageGeneration(ImageGenerationModel):
                     # `slow[:] = ...`, not `slow.data[:] = ...`: the latter
                     # writes to a copy and silently does nothing.
                     slow[:] = decay * slow + (1.0 - decay) * live[name]
+                    # The write is lazy on Metal, and θ** is not read until
+                    # sampling: unevaluated, each step would chain onto the
+                    # last and keep every past copy of the live weights.
+                    slow.eval()
 
     # ── sampling the training variables ──────────────────────────────────
 
