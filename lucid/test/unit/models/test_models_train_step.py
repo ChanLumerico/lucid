@@ -446,6 +446,7 @@ ELSEWHERE: dict[str, str] = {
     "score_sde": "test_models_recent_e2e.py — .loss",
     "dit": "test_models_recent_e2e.py — .loss",
     "mean_flow": "test_models_recent_e2e.py — .loss",
+    "tvm": "test_models_tvm.py — .loss",
     "vqvae": "test_models_recent_e2e.py — .loss",
     "stable_diffusion": "test_models_recent_e2e.py — return_loss=True",
     "clip": "test_models_recent_e2e.py — return_loss=True",

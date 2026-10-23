@@ -261,6 +261,12 @@ NOT_SINGLE_IMAGE = {
     # package in gigabytes.  Covering it needs an agreed small
     # configuration first, as ``stable`` does.
     "vjepa",
+    # ``tvm``'s only factories are the paper's DiT-XL/2 network, 678M
+    # parameters, so the same holds: a package in gigabytes until a small
+    # configuration is agreed.  Its network is a function of a latent,
+    # two times, a label and a guidance weight, so it belongs with
+    # ``MULTI_INPUT`` once it has one.
+    "tvm",
     # ``genie``'s ``forward`` is its three training objectives, and a
     # tiny configuration stops on ``mse_loss``, which has no Core ML
     # translation.  A packaged training loss has no caller; the playable

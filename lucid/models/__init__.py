@@ -183,6 +183,12 @@ from lucid.models.generative.mean_flow import (
     mean_flow_base_4_gen, mean_flow_base_2_gen, mean_flow_medium_2_gen,
     mean_flow_large_2_gen, mean_flow_xlarge_2_gen,
 )
+# 2026 — Terminal Velocity Matching (Zhou, Parger, Haque & Song)
+from lucid.models.generative.tvm import (
+    TVMConfig, TVMModel, TVMForImageGeneration,
+    tvm_imagenet256, tvm_imagenet512,
+    tvm_imagenet256_gen, tvm_imagenet512_gen,
+)
 # 2019 — NCSN (Song & Ermon)
 from lucid.models.generative.ncsn import (
     NCSNConfig, NCSNModel, NCSNForImageGeneration,
@@ -942,6 +948,10 @@ __all__ = [    # ── Infrastructure ─────────────�
     "mean_flow_large_2", "mean_flow_xlarge_2",
     "mean_flow_base_4_gen", "mean_flow_base_2_gen", "mean_flow_medium_2_gen",
     "mean_flow_large_2_gen", "mean_flow_xlarge_2_gen",
+    # ── Generative (2026) Terminal Velocity Matching ──────────────────────────
+    "TVMConfig", "TVMModel", "TVMForImageGeneration",
+    "tvm_imagenet256", "tvm_imagenet512",
+    "tvm_imagenet256_gen", "tvm_imagenet512_gen",
     # ── Generative (2019) NCSN ────────────────────────────────────────────────
     "NCSNConfig", "NCSNModel", "NCSNForImageGeneration",
     "ncsn_cifar", "ncsn_celeba",

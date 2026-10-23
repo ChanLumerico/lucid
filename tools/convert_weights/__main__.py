@@ -54,6 +54,7 @@ import tools.convert_weights.roformer  # noqa: F401
 import tools.convert_weights.senet  # noqa: F401
 import tools.convert_weights.sknet  # noqa: F401
 import tools.convert_weights.swin  # noqa: F401
+import tools.convert_weights.tvm  # noqa: F401
 import tools.convert_weights.vgg  # noqa: F401
 import tools.convert_weights.vit  # noqa: F401
 import tools.convert_weights.vjepa2  # noqa: F401

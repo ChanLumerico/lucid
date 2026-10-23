@@ -775,6 +775,12 @@ EXPECTED: dict[tuple[str, str], tuple[str, str, str]] = {
         "fallback",
         "backward pass ran inside",
     ),
+    # So is TVM's, and its gradient then runs back through that JVP.
+    ("tvm", "image-generation"): (
+        "fallback",
+        "fallback",
+        "backward pass ran inside",
+    ),
     # The adaptive solver differentiates the dynamics inside the forward.
     ("neural_ode", "image-generation"): (
         "fallback",
