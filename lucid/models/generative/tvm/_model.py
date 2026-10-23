@@ -705,15 +705,18 @@ class TVMForImageGeneration(ImageGenerationModel):
         decays = self._decays()
         if not decays:
             return
+        # Paired by name, not by position: re-assigning a parameter — which
+        # an in-place ``w += ...`` does through ``Module.__setattr__`` —
+        # moves it to the end of its module's registry, so two identically
+        # built networks need not list their parameters in the same order.
+        live = dict(self.tvm.named_parameters())
         with lucid.no_grad():
-            for name, decay in decays.items():
-                average = self._average(name)
-                for live, slow in zip(
-                    self.tvm.parameters(), average.parameters(), strict=True
-                ):
+            for key, decay in decays.items():
+                average = self._average(key)
+                for name, slow in average.named_parameters():
                     # `slow[:] = ...`, not `slow.data[:] = ...`: the latter
                     # writes to a copy and silently does nothing.
-                    slow[:] = decay * slow + (1.0 - decay) * live
+                    slow[:] = decay * slow + (1.0 - decay) * live[name]
 
     # ── sampling the training variables ──────────────────────────────────
 
