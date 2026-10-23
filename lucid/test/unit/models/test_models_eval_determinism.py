@@ -92,6 +92,8 @@ _DROPOUT_FIELDS = (
 _SAMPLES_BY_DESIGN: dict[str, str] = {
     "vae": "reparameterised sampling is the forward",
     "hvae": "reparameterised sampling is the forward",
+    "tvm": "the forward is Algorithm 1's objective: it draws (t, s), w, the "
+    "label drop and the noise",
 }
 
 
