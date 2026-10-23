@@ -193,6 +193,10 @@ class TVMConfig(GenerativeModelConfig):
         terminal and unconditional targets.  ``0`` uses the live weights
         under a stop-gradient; ``0.99`` is the paper's sweet spot
         (Table 4b).
+    eval_ema_decay : float or None, default=0.9999
+        :math:`\gamma^{**}`, the rate of Algorithm 1's second average, the
+        one that is evaluated and released (Table 6, "Eval EMA rate").
+        ``None`` keeps no such copy, saving a network's worth of memory.
     detach_jvp : bool, default=False
         Stop the gradient at :math:`\partial_s F_\theta`.  Faster and
         lighter, but biases the gradient — the paper's runtime study
@@ -266,6 +270,7 @@ class TVMConfig(GenerativeModelConfig):
     ratio_t_equals_s: float = 0.0
 
     target_ema_decay: float = 0.99
+    eval_ema_decay: float | None = 0.9999
     detach_jvp: bool = False
 
     latent_mean: tuple[float, ...] = (0.86488, -0.27787343, 0.21616915, 0.3738409)
@@ -353,4 +358,8 @@ class TVMConfig(GenerativeModelConfig):
             raise ValueError(
                 f"target_ema_decay must be in [0, 1) — at 1 the target never "
                 f"leaves its initialisation, got {self.target_ema_decay}"
+            )
+        if self.eval_ema_decay is not None and not 0.0 <= self.eval_ema_decay < 1.0:
+            raise ValueError(
+                f"eval_ema_decay must be in [0, 1) or None, got {self.eval_ema_decay}"
             )

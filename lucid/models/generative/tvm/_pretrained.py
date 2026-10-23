@@ -178,7 +178,7 @@ def tvm_imagenet256_gen(
     -------
     TVMForImageGeneration
         Exposes the training objective, :meth:`~TVMForImageGeneration.
-        update_target` and :meth:`~TVMForImageGeneration.generate`.
+        update_ema` and :meth:`~TVMForImageGeneration.generate`.
 
     Notes
     -----
@@ -221,7 +221,7 @@ def tvm_imagenet512_gen(
     -------
     TVMForImageGeneration
         Exposes the training objective, :meth:`~TVMForImageGeneration.
-        update_target` and :meth:`~TVMForImageGeneration.generate`.
+        update_ema` and :meth:`~TVMForImageGeneration.generate`.
 
     Notes
     -----

@@ -220,9 +220,13 @@ def _load_ema(path: str) -> tuple[dict[str, np.ndarray], dict[str, Any], dict[st
     """The evaluation EMA's tensors, and the wrapper's and network's flags."""
     with open(path, "rb") as handle:
         data = _ParameterUnpickler(handle).load()
-    if not isinstance(data, dict) or "ema" not in data:
-        raise RuntimeError(f"convert(tvm): {path} holds no 'ema' entry")
-    wrapper = data["ema"]
+    # The authors' sampler reads ``data["ema"]``; their training loop's
+    # snapshots store the same evaluation EMA under ``"net"``.  Either is
+    # the 0.9999 average.
+    key = next((k for k in ("ema", "net") if isinstance(data, dict) and k in data), None)
+    if key is None:
+        raise RuntimeError(f"convert(tvm): {path} holds neither an 'ema' nor a 'net' entry")
+    wrapper = data[key]
     state: dict[str, np.ndarray] = {}
     _flatten(wrapper, "", state)
     network = (_attrs(wrapper).get("_modules") or {}).get("model")

@@ -34,7 +34,7 @@ import lucid.linalg
 import lucid.nn as nn
 import lucid.nn.functional as F
 import lucid.special
-from lucid._tensor.tensor import Tensor
+from lucid import Tensor
 from lucid.models._base import PretrainedModel
 from lucid.models._output import (
     DiffusionModelOutput,
@@ -579,20 +579,23 @@ class TVMForImageGeneration(ImageGenerationModel):
     Matching"*, ICLR 2026 (arXiv:2511.19797).  Training is Algorithm 1
     with the objective of Eq. 15; sampling is Figure 3.
 
-    **Call** :meth:`update_target` **once per optimiser step.**  The
-    terminal target and the unconditional half of the guided velocity are
-    read off :math:`\theta^*`, an EMA of the weights at rate
-    :attr:`TVMConfig.target_ema_decay`, and only the caller knows when an
-    optimiser step has happened.  The EMA network is created from the
-    live weights the first time it is needed (:math:`\theta^* \leftarrow
-    \theta`, Algorithm 1) and is kept outside the module tree: it is not
-    a parameter, not in :meth:`state_dict`, and not counted — it is
-    training state, like an optimiser's moments.  :attr:`target_network`
-    exposes it for checkpointing.
+    **Call** :meth:`update_ema` **once per optimiser step.**  Algorithm 1
+    keeps two exponential moving averages of the weights and updates both
+    after every step: :math:`\theta^*` at
+    :attr:`TVMConfig.target_ema_decay`, which the terminal target and the
+    unconditional half of the guided velocity are read off, and
+    :math:`\theta^{**}` at :attr:`TVMConfig.eval_ema_decay`, the model
+    that is evaluated and that the released checkpoints are.  Only the
+    caller knows when an optimiser step has happened.
 
-    The *evaluation* EMA of Algorithm 1, :math:`\theta^{**}` at 0.9999,
-    is a separate average the training loop keeps; it is what the
-    released checkpoints are.
+    Both copies are created from the live weights the first time either
+    is needed — the first training step reads :math:`\theta^*`, so that
+    is :math:`\theta^* \leftarrow \theta,\ \theta^{**} \leftarrow
+    \theta` at initialisation, as Algorithm 1 has it — and both are kept
+    outside the module tree: not parameters, not in :meth:`state_dict`,
+    not counted.  They are training state, like an optimiser's moments;
+    :attr:`target_network` and :attr:`ema_network` expose them for
+    checkpointing.
 
     Examples
     --------
@@ -614,59 +617,103 @@ class TVMForImageGeneration(ImageGenerationModel):
         super().__init__(config)
         self.config: TVMConfig = config
         self.tvm = TVMModel(config)
-        # A list rather than an attribute: a module assigned directly would
-        # be registered as a child, doubling the parameter count and the
-        # checkpoint for something no optimiser may touch.
-        self._target: list[TVMModel] = []
+        # A dict rather than attributes: a module assigned directly would be
+        # registered as a child, adding the parameter count and the
+        # checkpoint of a network no optimiser may touch — twice over.
+        self._averages: dict[str, TVMModel] = {}
 
-    # ── the EMA target ───────────────────────────────────────────────────
+    # ── the two EMAs of Algorithm 1 ──────────────────────────────────────
+
+    def _decays(self) -> dict[str, float]:
+        """The averages this configuration keeps, by name, with their rates."""
+        decays: dict[str, float] = {}
+        if self.config.target_ema_decay > 0.0:
+            decays["target"] = self.config.target_ema_decay
+        if self.config.eval_ema_decay is not None:
+            decays["eval"] = self.config.eval_ema_decay
+        return decays
+
+    def _average(self, name: str) -> TVMModel:
+        """One average, every average created together on first use.
+
+        Creating them together is what makes both start from the same
+        weights — the initial ones, since the first training step is what
+        first asks for :math:`\theta^*`.  Each is frozen, kept on the live
+        network's device, and in evaluation mode.
+        """
+        device = next(iter(self.tvm.parameters())).device
+        if not self._averages:
+            for key in self._decays():
+                copy = TVMModel(self.config)
+                copy.load_state_dict(self.tvm.state_dict())
+                for param in copy.parameters():
+                    param.requires_grad_(False)
+                self._averages[key] = copy.eval()
+        average = self._averages[name]
+        if next(iter(average.parameters())).device != device:
+            average.to(device)
+        return average
 
     @property
     def target_network(self) -> TVMModel:
         r"""The EMA network :math:`\theta^*` the targets are read from.
 
         With :attr:`TVMConfig.target_ema_decay` at zero this is the live
-        network itself, used under a stop-gradient.  Otherwise it is a
-        frozen copy, created from the live weights on first access and
-        moved to the live network's device whenever they differ.
+        network itself, used under a stop-gradient — Table 4b's
+        :math:`\gamma = 0`.
 
         Returns
         -------
         TVMModel
             The target network.
         """
-        if self.config.target_ema_decay == 0.0:
+        if "target" not in self._decays():
             return self.tvm
-        device = next(iter(self.tvm.parameters())).device
-        if not self._target:
-            target = TVMModel(self.config)
-            target.load_state_dict(self.tvm.state_dict())
-            for param in target.parameters():
-                param.requires_grad_(False)
-            self._target.append(target.eval())
-        target = self._target[0]
-        if next(iter(target.parameters())).device != device:
-            target.to(device)
-        return target
+        return self._average("target")
 
-    def update_target(self) -> None:
-        r"""Move :math:`\theta^*` toward the live weights by one EMA step.
+    @property
+    def ema_network(self) -> TVMModel:
+        r"""The evaluation EMA :math:`\theta^{**}` — what Algorithm 1 outputs.
 
-        :math:`\theta^* \leftarrow \gamma\,\theta^* + (1 - \gamma)\,\theta`
-        at :math:`\gamma =` :attr:`TVMConfig.target_ema_decay`.  A no-op
-        at :math:`\gamma = 0`, where the target is the live network.
+        Returns
+        -------
+        TVMModel
+            The averaged network.
+
+        Raises
+        ------
+        ValueError
+            If :attr:`TVMConfig.eval_ema_decay` is ``None``, so no
+            evaluation average is kept.
         """
-        decay = self.config.target_ema_decay
-        if decay == 0.0:
+        if "eval" not in self._decays():
+            raise ValueError(
+                "eval_ema_decay is None, so no evaluation EMA is kept; "
+                "generate from the live network instead"
+            )
+        return self._average("eval")
+
+    def update_ema(self) -> None:
+        r"""Advance both of Algorithm 1's averages by one step.
+
+        :math:`\theta^* \leftarrow \gamma^*\theta^* + (1 - \gamma^*)\theta`
+        and :math:`\theta^{**} \leftarrow \gamma^{**}\theta^{**} +
+        (1 - \gamma^{**})\theta`, over parameters only — the released
+        training loop averages nothing else, and this network has no
+        persistent buffers.  Call it after each optimiser step.
+        """
+        decays = self._decays()
+        if not decays:
             return
-        target = self.target_network
         with lucid.no_grad():
-            for live, slow in zip(
-                self.tvm.parameters(), target.parameters(), strict=True
-            ):
-                # `slow[:] = ...`, not `slow.data[:] = ...`: the latter writes
-                # to a copy and silently does nothing.
-                slow[:] = decay * slow + (1.0 - decay) * live
+            for name, decay in decays.items():
+                average = self._average(name)
+                for live, slow in zip(
+                    self.tvm.parameters(), average.parameters(), strict=True
+                ):
+                    # `slow[:] = ...`, not `slow.data[:] = ...`: the latter
+                    # writes to a copy and silently does nothing.
+                    slow[:] = decay * slow + (1.0 - decay) * live
 
     # ── sampling the training variables ──────────────────────────────────
 
@@ -857,7 +904,9 @@ class TVMForImageGeneration(ImageGenerationModel):
         velocity_fm = self.tvm(x_fm, s_fm, s_fm, labels, guidance).sample
         guided = w_b * (noise - images) + (1.0 - w_b) * unconditional
 
-        differs = ((t - s).abs() > 1e-6).float()
+        # The released loss zeroes the terminal term wherever ``isclose(s,
+        # t)`` — its default tolerances, not exact equality.
+        differs = 1.0 - lucid.isclose(s, t).float()
         terminal_term = (((terminal - terminal_target) * beta_b) ** 2).mean(
             dim=(1, 2, 3)
         ) * differs
@@ -879,6 +928,7 @@ class TVMForImageGeneration(ImageGenerationModel):
         guidance_scale: float | None = None,
         noise: Tensor | None = None,
         device: str | None = None,
+        use_ema: bool = False,
     ) -> GenerationOutput:
         r"""Jump from noise to data in ``steps`` evaluations.
 
@@ -901,6 +951,11 @@ class TVMForImageGeneration(ImageGenerationModel):
             Starting point :math:`x_1`.  Drawn when absent.
         device : str or None, optional
             Where to draw.  Defaults to the model's own device.
+        use_ema : bool, default=False
+            Sample from the evaluation EMA :math:`\theta^{**}` rather than
+            the live weights — what the paper evaluates after training.  A
+            loaded checkpoint already *is* that average, so the default
+            samples from the live network.
 
         Returns
         -------
@@ -938,6 +993,7 @@ class TVMForImageGeneration(ImageGenerationModel):
                 (n_samples, config.in_channels, side, side), device=device
             )
 
+        network = self.ema_network if use_ema else self.tvm
         x = noise
         with lucid.no_grad():
             for index in range(steps):
@@ -945,9 +1001,42 @@ class TVMForImageGeneration(ImageGenerationModel):
                 s_value = 1.0 - (index + 1) / steps
                 t = lucid.full((n_samples,), t_value, device=device, dtype=x.dtype)
                 s = lucid.full((n_samples,), s_value, device=device, dtype=x.dtype)
-                velocity = self.tvm(x, t, s, labels, guidance_scale).sample
+                velocity = network(x, t, s, labels, guidance_scale).sample
                 x = x + (s_value - t_value) * velocity
         return GenerationOutput(samples=x)
+
+    def from_vae_latent(self, latent: Tensor) -> Tensor:
+        r"""Whiten a Stable Diffusion VAE latent the way the model was trained.
+
+        Parameters
+        ----------
+        latent : Tensor
+            ``(B, C, H, W)`` — a sample from the VAE posterior,
+            :math:`\ell = \mu_\phi(x) + \sigma_\phi(x)\,\epsilon`, which is
+            what the released pipeline encodes images into (not the
+            posterior mean).
+
+        Returns
+        -------
+        Tensor
+            :math:`z = (\ell - \mu) / \sigma` per channel — the ``images``
+            :meth:`forward` trains on.  :meth:`to_vae_latent` inverts it.
+
+        Examples
+        --------
+        >>> import lucid
+        >>> from lucid.models.generative.tvm import (
+        ...     TVMConfig, TVMForImageGeneration)
+        >>> config = TVMConfig(sample_size=8, patch_size=2, hidden_size=32,
+        ...                    depth=2, num_heads=4, num_classes=10)
+        >>> model = TVMForImageGeneration(config)
+        >>> model.from_vae_latent(lucid.zeros((1, 4, 8, 8))).shape
+        (1, 4, 8, 8)
+        """
+        device = latent.device.type
+        mean = lucid.tensor(list(self.config.latent_mean), device=device)
+        std = lucid.tensor(list(self.config.latent_std), device=device)
+        return (latent - mean.reshape(1, -1, 1, 1)) / std.reshape(1, -1, 1, 1)
 
     def to_vae_latent(self, samples: Tensor) -> Tensor:
         r"""Undo the per-channel whitening the model's latents carry.
