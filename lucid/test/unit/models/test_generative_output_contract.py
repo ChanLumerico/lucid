@@ -7,8 +7,10 @@ and a training loop written against the image-generation task got images
 and no loss.  Each family is driven here through its public factory, at a
 size a unit test can afford (config overrides, never an invented factory):
 one optimizer step that has to move the weights, and generation on every
-device.  The last section counts host syncs per sampling loop on Metal,
-which must not grow with the number of steps.
+device.  Where a family's training loop or decoder must call more than
+``forward`` — TVM's weight averages and its latent whitening — that call
+is driven here too.  The last section counts host syncs per sampling loop
+on Metal, which must not grow with the number of steps.
 """
 
 from collections.abc import Callable
@@ -19,6 +21,7 @@ import lucid
 import lucid.models as M
 from lucid._C import engine as _C_engine
 from lucid.models.generative.ddpm import DDPMConfig, DDPMForImageGeneration
+from lucid.models.generative.tvm import TVMForImageGeneration, TVMOutput
 from lucid.test._fixtures.devices import metal_available
 
 DEVICES = ["cpu", "metal"] if metal_available() else ["cpu"]
@@ -133,6 +136,70 @@ def test_a_training_step_moves_the_weights(name: str, device: str) -> None:
         if float((p.detach() - before[n]).abs().max().item()) > 0.0
     ]
     assert moved, f"{name}: no parameter changed after an optimizer step"
+
+
+# ── what a training loop and a decoder call besides forward ────────────────
+
+
+def _max_abs(x: lucid.Tensor) -> float:
+    return float(x.abs().max().item())
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_tvm_step_reports_its_terms_and_advances_both_averages(device: str) -> None:
+    """Algorithm 1's step as a loop takes it: the loss is the sum of the two
+    terms the output reports, and ``update_ema`` after the optimizer step
+    writes ``γ·θ₀ + (1 − γ)·θ₁`` into θ* and θ** — both start at θ₀, which
+    the first forward copies when it reads the target."""
+    lucid.manual_seed(0)
+    model = _build("tvm_imagenet256_gen", device).train()
+    assert isinstance(model, TVMForImageGeneration)
+    initial = {n: p.detach().clone() for n, p in model.tvm.named_parameters()}
+
+    out = model(lucid.randn((2, 4, 8, 8), device=device), _labels(device))
+    assert isinstance(out, TVMOutput)
+    terms = out.terminal_loss + out.flow_matching_loss
+    assert _max_abs(out.loss.detach() - terms) <= 1e-5 * max(1.0, _max_abs(terms))
+    optimizer = lucid.optim.SGD(model.parameters(), lr=0.1)
+    optimizer.zero_grad()
+    out.loss.backward()
+    optimizer.step()
+    model.update_ema()
+
+    eval_decay = model.config.eval_ema_decay
+    assert eval_decay is not None
+    live = dict(model.tvm.named_parameters())
+    averages = (
+        ("target", model.target_network, model.config.target_ema_decay),
+        ("eval", model.ema_network, eval_decay),
+    )
+    for key, network, decay in averages:
+        moved = False
+        for name, slow in network.named_parameters():
+            expected = decay * initial[name] + (1.0 - decay) * live[name].detach()
+            assert _max_abs(slow - expected) <= 1e-6, f"{key}: {name}"
+            moved = moved or _max_abs(slow - initial[name]) > 0.0
+        assert moved, f"the {key} average did not move"
+
+
+@pytest.mark.parametrize("device", DEVICES)
+def test_tvm_samples_round_trip_through_the_vae_latent_whitening(device: str) -> None:
+    """The sampler's output is whitened latent; ``to_vae_latent`` maps it to
+    the raw VAE latent with the config's per-channel statistics, and
+    ``from_vae_latent`` — what training images go through — inverts it."""
+    lucid.manual_seed(0)
+    model = _build("tvm_imagenet256_gen", device).eval()
+    assert isinstance(model, TVMForImageGeneration)
+    samples = model.generate(2, labels=_labels(device)).samples
+
+    latent = model.to_vae_latent(samples)
+    mean = lucid.tensor(list(model.config.latent_mean), device=device)
+    std = lucid.tensor(list(model.config.latent_std), device=device)
+    expected = samples * std.reshape(1, -1, 1, 1) + mean.reshape(1, -1, 1, 1)
+    assert _max_abs(latent - expected) <= 1e-5 * max(1.0, _max_abs(expected))
+    assert _max_abs(model.from_vae_latent(latent) - samples) <= 1e-5 * max(
+        1.0, _max_abs(samples)
+    )
 
 
 # ── generation from the public factory ─────────────────────────────────────
