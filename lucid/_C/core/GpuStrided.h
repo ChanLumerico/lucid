@@ -103,12 +103,15 @@ inline ::mlx::core::array read(const ::mlx::core::array& root, const Geometry& g
             return mx::reshape(mx::contiguous(run), to_mlx(g.shape));
         return mx::reshape(run, to_mlx(g.shape));
     }
-    // as_strided reads a flattened (row-contiguous) copy of its input, and
-    // its result is a strided window onto that; laid out again so code that
+    // as_strided reads a flattened copy of its input and refuses one that is
+    // not row-contiguous.  Flattening shares a strided root's buffer whenever
+    // its axes merge without a copy (an attention output, a stepped slice),
+    // so the root is laid out first; contiguous is free on one that already
+    // is.  The result, a strided window, is laid out again so code that
     // reads the buffer directly sees the member's own order.
     mx::Strides strides(g.stride.begin(), g.stride.end());
-    return mx::contiguous(
-        mx::as_strided(root, to_mlx(g.shape), std::move(strides), static_cast<size_t>(g.offset)));
+    return mx::contiguous(mx::as_strided(mx::contiguous(root), to_mlx(g.shape), std::move(strides),
+                                         static_cast<size_t>(g.offset)));
 }
 
 // The member as a strided slice of the root reshaped to ``dims``: the plan
