@@ -278,7 +278,7 @@ class TVMConfig(GenerativeModelConfig):
 
     @property
     def num_patches(self) -> int:
-        """Tokens the latent is cut into — ``(sample_size / patch_size)ˆ2``."""
+        """Tokens the latent is cut into — ``(sample_size / patch_size)^2``."""
         side = (
             self.sample_size
             if isinstance(self.sample_size, int)

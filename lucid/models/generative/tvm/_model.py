@@ -277,7 +277,7 @@ class _FinalLayer(nn.Module):
 
     @override
     def forward(self, x: Tensor, cond: Tensor) -> Tensor:
-        """Project ``(B, N, D)`` tokens to ``(B, N, patchˆ2 * out_channels)``."""
+        """Project ``(B, N, D)`` tokens to ``(B, N, patch^2 * out_channels)``."""
         shift, scale = _modulation(
             self.ada_ln(cond), 2, int(x.shape[2]), self.modulation_norm
         )
@@ -462,7 +462,7 @@ class TVMModel(PretrainedModel):
                     bias.zero_()
 
     def _unpatchify(self, x: Tensor) -> Tensor:
-        """``(B, N, pˆ2 * C)`` back to ``(B, C, H, W)``."""
+        """``(B, N, p^2 * C)`` back to ``(B, C, H, W)``."""
         patch = self.config.patch_size
         channels = self.config.out_channels
         grid = self.grid
