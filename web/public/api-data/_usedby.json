@@ -1,4 +1,10 @@
 {
+  "lucid.Tensor": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._model"
+    }
+  ],
   "lucid._C.engine": [
     {
       "kind": "module",
@@ -2125,6 +2131,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.mean_flow._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._model"
     }
   ],
   "lucid.linalg": [
@@ -2143,6 +2153,10 @@
     {
       "kind": "module",
       "module": "lucid.linalg._ex"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._model"
     },
     {
       "kind": "module",
@@ -2626,6 +2640,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.tvm._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._model"
     },
     {
@@ -2995,6 +3013,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.rectified_flow._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._model"
     }
   ],
   "lucid.models._output.GenerationOutput": [
@@ -3045,6 +3067,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.stable_diffusion._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._model"
     },
     {
       "kind": "module",
@@ -3269,6 +3295,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.stable_diffusion._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._model"
     },
     {
       "kind": "module",
@@ -3587,6 +3617,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.stable_diffusion._pretrained"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._pretrained"
     },
     {
       "kind": "module",
@@ -5489,6 +5523,76 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.stable_diffusion._pretrained"
+    }
+  ],
+  "lucid.models.generative.tvm": [
+    {
+      "kind": "module",
+      "module": "lucid.models"
+    }
+  ],
+  "lucid.models.generative.tvm._config.TVMConfig": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._model"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._pretrained"
+    }
+  ],
+  "lucid.models.generative.tvm._model.TVMForImageGeneration": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._pretrained"
+    }
+  ],
+  "lucid.models.generative.tvm._model.TVMModel": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._pretrained"
+    }
+  ],
+  "lucid.models.generative.tvm._model.TVMOutput": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm"
+    }
+  ],
+  "lucid.models.generative.tvm._pretrained.tvm_imagenet256": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm"
+    }
+  ],
+  "lucid.models.generative.tvm._pretrained.tvm_imagenet256_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm"
+    }
+  ],
+  "lucid.models.generative.tvm._pretrained.tvm_imagenet512": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm"
+    }
+  ],
+  "lucid.models.generative.tvm._pretrained.tvm_imagenet512_gen": [
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm"
     }
   ],
   "lucid.models.generative.vae": [
@@ -12182,6 +12286,10 @@
     },
     {
       "kind": "module",
+      "module": "lucid.models.generative.tvm._model"
+    },
+    {
+      "kind": "module",
       "module": "lucid.models.generative.vae._model"
     },
     {
@@ -12637,6 +12745,10 @@
     {
       "kind": "module",
       "module": "lucid.models.generative.stable_diffusion._unet"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._model"
     },
     {
       "kind": "module",
@@ -16963,6 +17075,10 @@
     {
       "kind": "module",
       "module": "lucid.distributions.matrix"
+    },
+    {
+      "kind": "module",
+      "module": "lucid.models.generative.tvm._model"
     }
   ],
   "lucid.special.multigammaln": [

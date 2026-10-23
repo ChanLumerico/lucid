@@ -1,0 +1,998 @@
+{
+  "slug": "lucid.models.generative.tvm",
+  "name": "tvm",
+  "path": "lucid.models.generative.tvm",
+  "kind": "module",
+  "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/__init__.py#L1",
+  "members": [
+    {
+      "name": "TVMConfig",
+      "path": "lucid.models.generative.tvm._config.TVMConfig",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "GenerativeModelConfig"
+      ],
+      "labels": [],
+      "signature": "TVMConfig(sample_size: int | tuple[int, int] = 32, in_channels: int = 4, out_channels: int = 4, act_fn: GenerativeActivation = 'silu', patch_size: int = 2, hidden_size: int = 1152, depth: int = 28, num_heads: int = 18, mlp_ratio: float = 4.0, frequency_embedding_size: int = 256, num_classes: int = 1000, class_dropout: float = 0.1, qk_norm: bool = True, modulation_norm: bool = True, time_embedding_init: TimeEmbeddingInit = 'spectral', guidance_scale: float = 2.0, guidance_range: tuple[float, float] | None = None, scaled_parameterization: bool = True, time_sampler: TimeSampler = 'gap', gap_mean: float = -0.8, gap_std: float = 1.0, t_mean: float = 1.0, t_std: float = 1.0, s_mean: float = -0.4, s_std: float = 1.0, separate_flow_matching_time: bool = True, ratio_t_equals_s: float = 0.0, target_ema_decay: float = 0.99, eval_ema_decay: float | None = 0.9999, detach_jvp: bool = False, latent_mean: tuple[float, ...] = (0.86488, -0.27787343, 0.21616915, 0.3738409), latent_std: tuple[float, ...] = (4.85503674, 5.31922414, 3.93725398, 3.9870003))",
+      "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_config.py#L43",
+      "subcategory": "config",
+      "methods": [
+        {
+          "name": "num_patches",
+          "path": "lucid.models.generative.tvm._config.TVMConfig.num_patches",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "num_patches: int",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_config.py#L284",
+          "summary": "Tokens the latent is cut into — `(sample_size / patch_size)^2`.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "int",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.tvm._config.TVMConfig.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(sample_size: int | tuple[int, int] = 32, in_channels: int = 4, out_channels: int = 4, act_fn: GenerativeActivation = 'silu', patch_size: int = 2, hidden_size: int = 1152, depth: int = 28, num_heads: int = 18, mlp_ratio: float = 4.0, frequency_embedding_size: int = 256, num_classes: int = 1000, class_dropout: float = 0.1, qk_norm: bool = True, modulation_norm: bool = True, time_embedding_init: TimeEmbeddingInit = 'spectral', guidance_scale: float = 2.0, guidance_range: tuple[float, float] | None = None, scaled_parameterization: bool = True, time_sampler: TimeSampler = 'gap', gap_mean: float = -0.8, gap_std: float = 1.0, t_mean: float = 1.0, t_std: float = 1.0, s_mean: float = -0.4, s_std: float = 1.0, separate_flow_matching_time: bool = True, ratio_t_equals_s: float = 0.0, target_ema_decay: float = 0.99, eval_ema_decay: float | None = 0.9999, detach_jvp: bool = False, latent_mean: tuple[float, ...] = (0.86488, -0.27787343, 0.21616915, 0.3738409), latent_std: tuple[float, ...] = (4.85503674, 5.31922414, 3.93725398, 3.9870003))",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_config.py#L1",
+          "subcategory": "config",
+          "summary": "Initialise the embedder. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "Configuration for the Terminal Velocity Matching family.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "sample_size",
+          "annotation": "int",
+          "description": "Side of the latent the network operates on — `32` for\n256-pixel ImageNet, `64` for 512-pixel, after the Stable\nDiffusion VAE's factor of eight.",
+          "default": "32"
+        },
+        {
+          "name": "in_channels",
+          "annotation": "int",
+          "description": "Latent channels.  The network predicts one field of the same\nwidth as its input.",
+          "default": "4, 4"
+        },
+        {
+          "name": "out_channels",
+          "annotation": "int",
+          "description": "Latent channels.  The network predicts one field of the same\nwidth as its input.",
+          "default": "4, 4"
+        },
+        {
+          "name": "patch_size",
+          "annotation": "int",
+          "description": "Side of the square patch each token covers.",
+          "default": "2"
+        },
+        {
+          "name": "hidden_size",
+          "annotation": "int",
+          "description": "Transformer width.",
+          "default": "1152"
+        },
+        {
+          "name": "depth",
+          "annotation": "int",
+          "description": "Number of transformer blocks.",
+          "default": "28"
+        },
+        {
+          "name": "num_heads",
+          "annotation": "int",
+          "description": "Attention heads per block.  DiT-XL uses 16; the paper uses 18 so\nthe head dimension is 64, which its attention kernel runs 1.25x\nfaster at, and reports the two train to the same FID.",
+          "default": "18"
+        },
+        {
+          "name": "mlp_ratio",
+          "annotation": "float",
+          "description": "Feed-forward expansion inside each block.",
+          "default": "4.0"
+        },
+        {
+          "name": "frequency_embedding_size",
+          "annotation": "int",
+          "description": "Width of the sinusoid each scalar condition is expanded into\nbefore its MLP.",
+          "default": "256"
+        },
+        {
+          "name": "num_classes",
+          "annotation": "int",
+          "description": "Label vocabulary.  Index `num_classes` is the null label the\nguidance dropout substitutes.",
+          "default": "1000"
+        },
+        {
+          "name": "class_dropout",
+          "annotation": "float",
+          "description": "Probability of training a sample unconditionally — its label is\nreplaced by the null token and its guidance scale by one.",
+          "default": "0.1"
+        },
+        {
+          "name": "qk_norm",
+          "annotation": "bool",
+          "description": "RMS-normalise queries and keys (with a learnable scale) before\nattention.  Part of the semi-Lipschitz control.",
+          "default": "True"
+        },
+        {
+          "name": "modulation_norm",
+          "annotation": "bool",
+          "description": "RMS-normalise each adaLN shift, scale and gate vector (Eq. 16 and\nAppendix B.2).  Without it the modulation's magnitude, and with it\nthe layer's Lipschitz constant, can grow unbounded — the\nactivation blow-up of Figure 4.",
+          "default": "True"
+        },
+        {
+          "name": "time_embedding_init",
+          "annotation": "(spectral, normal)",
+          "description": "How the time and guidance MLPs start.  Every other linear layer\nis initialised to unit spectral norm regardless.",
+          "default": "\"spectral\""
+        },
+        {
+          "name": "guidance_scale",
+          "annotation": "float",
+          "description": "The classifier-free guidance weight $w$ trained at, and the\ndefault a sampler uses for labelled draws.  The paper's best\none-step 256-pixel model trains at `2.0`.",
+          "default": "2.0"
+        },
+        {
+          "name": "guidance_range",
+          "annotation": "tuple of float or None",
+          "description": "`(w_min, w_max)` to train with a random guidance weight instead\nof a constant one: $\\beta = 1/w$ is drawn uniformly from\n$[1/w_{\\max}, 1/w_{\\min}]$.  Constant guidance wins in every\ncomparison the paper makes (Table 4a), which is why `None`.",
+          "default": "None"
+        },
+        {
+          "name": "scaled_parameterization",
+          "annotation": "bool",
+          "description": "Predict $F$ with the guidance weight factored out, so the\nmodel's velocity is $w\\,F_\\theta$ (Table 4c).",
+          "default": "True"
+        },
+        {
+          "name": "time_sampler",
+          "annotation": "(gap, trunc, clamp)",
+          "description": "Joint distribution of `(t, s)`.",
+          "default": "\"gap\""
+        },
+        {
+          "name": "gap_mean",
+          "annotation": "float",
+          "description": "Logit-normal parameters of `t - s` under `\"gap\"`.",
+          "default": "-0.8, 1.0"
+        },
+        {
+          "name": "gap_std",
+          "annotation": "float",
+          "description": "Logit-normal parameters of `t - s` under `\"gap\"`.",
+          "default": "-0.8, 1.0"
+        },
+        {
+          "name": "t_mean",
+          "annotation": "float",
+          "description": "Logit-normal parameters of `t` under `\"trunc\"` and `\"clamp\"`\n— Table 3's best setting for both.",
+          "default": "1.0, 1.0"
+        },
+        {
+          "name": "t_std",
+          "annotation": "float",
+          "description": "Logit-normal parameters of `t` under `\"trunc\"` and `\"clamp\"`\n— Table 3's best setting for both.",
+          "default": "1.0, 1.0"
+        },
+        {
+          "name": "s_mean",
+          "annotation": "float",
+          "description": "Logit-normal parameters of `s`, and of the Flow Matching time\nwhen that is drawn separately.",
+          "default": "-0.4, 1.0"
+        },
+        {
+          "name": "s_std",
+          "annotation": "float",
+          "description": "Logit-normal parameters of `s`, and of the Flow Matching time\nwhen that is drawn separately.",
+          "default": "-0.4, 1.0"
+        },
+        {
+          "name": "separate_flow_matching_time",
+          "annotation": "bool",
+          "description": "Draw the Flow Matching term's time independently of the pair\ninstead of reusing `s` — the sampler the paper names `gap*`,\nwhich lets the Flow Matching term keep the time distribution that\nworks for Flow Matching on its own (Figure 9).",
+          "default": "True"
+        },
+        {
+          "name": "ratio_t_equals_s",
+          "annotation": "float",
+          "description": "Fraction of the batch trained with `s = t`, where the terminal\nterm vanishes and only Flow Matching remains.  The paper finds any\nnon-zero share hurts one-step quality (Table 4d).",
+          "default": "0.0"
+        },
+        {
+          "name": "target_ema_decay",
+          "annotation": "float",
+          "description": "$\\gamma$, the EMA rate of the network that supplies the\nterminal and unconditional targets.  `0` uses the live weights\nunder a stop-gradient; `0.99` is the paper's sweet spot\n(Table 4b).",
+          "default": "0.99"
+        },
+        {
+          "name": "eval_ema_decay",
+          "annotation": "float or None",
+          "description": "$\\gamma^{**}$, the rate of Algorithm 1's second average, the\none that is evaluated and released (Table 6, \"Eval EMA rate\").\n`None` keeps no such copy, saving a network's worth of memory.",
+          "default": "0.9999"
+        },
+        {
+          "name": "detach_jvp",
+          "annotation": "bool",
+          "description": "Stop the gradient at $\\partial_s F_\\theta$.  Faster and\nlighter, but biases the gradient — the paper's runtime study\noffers it as a trade, not a default (Figure 10).",
+          "default": "False"
+        },
+        {
+          "name": "latent_mean",
+          "annotation": "tuple of float",
+          "description": "Per-channel statistics the VAE latent is whitened with before the\nnetwork sees it, $z = (\\ell - \\mu)/\\sigma$ — IMM's setting,\nwhich the paper follows (Appendix F.1), in place of the usual\nsingle factor 0.18215.  The defaults are the 256-pixel ones; the\n512-pixel latent has its own.",
+          "default": "(0.86488, -0.27787343, 0.21616915, 0.3738409)"
+        },
+        {
+          "name": "latent_std",
+          "annotation": "tuple of float",
+          "description": "Per-channel statistics the VAE latent is whitened with before the\nnetwork sees it, $z = (\\ell - \\mu)/\\sigma$ — IMM's setting,\nwhich the paper follows (Appendix F.1), in place of the usual\nsingle factor 0.18215.  The defaults are the 256-pixel ones; the\n512-pixel latent has its own.",
+          "default": "(0.86488, -0.27787343, 0.21616915, 0.3738409)"
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models.generative.tvm import TVMConfig\n>>> config = TVMConfig()\n>>> config.hidden_size, config.depth, config.num_heads\n(1152, 28, 18)\n>>> config.num_patches\n256\nThe 512-pixel model is the same network over a wider latent:\n>>> TVMConfig(sample_size=64).num_patches\n1024"
+      ],
+      "notes": [
+        "Reference: Zhou, Parger, Haque, and Song, *\"Terminal Velocity\nMatching\"*, ICLR 2026 ([arXiv:2511.19797](https://arxiv.org/abs/2511.19797)).  Training settings are\nTable 6; the defaults here are its first column, the 256-pixel model\nat $w = 2$ behind the 3.29 one-step FID.\n\nThe released code agrees with the paper on every setting above, with\none exception it does not exercise: its random-guidance path draws\n$w$ rather than $1/w$ uniformly.  The paper's\ndescription is followed here."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "TVMForImageGeneration",
+      "path": "lucid.models.generative.tvm._model.TVMForImageGeneration",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "ImageGenerationModel"
+      ],
+      "labels": [],
+      "signature": "TVMForImageGeneration(config: TVMConfig)",
+      "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L557",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.tvm._model.TVMForImageGeneration.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: TVMConfig)",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L609",
+          "subcategory": "model",
+          "summary": "Initialise the model. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "target_network",
+          "path": "lucid.models.generative.tvm._model.TVMForImageGeneration.target_network",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "target_network: TVMModel",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L652",
+          "summary": "The EMA network $\\theta^*$ the targets are read from.",
+          "extended": "With `TVMConfig.target_ema_decay` at zero this is the live\nnetwork itself, used under a stop-gradient — Table 4b's\n$\\gamma = 0$.",
+          "parameters": [],
+          "returns": {
+            "annotation": "TVMModel",
+            "description": "The target network."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "ema_network",
+          "path": "lucid.models.generative.tvm._model.TVMForImageGeneration.ema_network",
+          "kind": "function",
+          "labels": [
+            "property"
+          ],
+          "signature": "ema_network: TVMModel",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L669",
+          "summary": "The evaluation EMA $\\theta^{**}$ — what Algorithm 1 outputs.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "TVMModel",
+            "description": "The averaged network."
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If `TVMConfig.eval_ema_decay` is `None`, so no\nevaluation average is kept."
+            }
+          ],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "update_ema",
+          "path": "lucid.models.generative.tvm._model.TVMForImageGeneration.update_ema",
+          "kind": "function",
+          "labels": [],
+          "signature": "update_ema()",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L690",
+          "subcategory": "model",
+          "summary": "Advance both of Algorithm 1's averages by one step.",
+          "extended": "$\\theta^* \\leftarrow \\gamma^*\\theta^* + (1 - \\gamma^*)\\theta$\nand $\\theta^{**} \\leftarrow \\gamma^{**}\\theta^{**} + (1 - \\gamma^{**})\\theta$, over parameters only — the released\ntraining loop averages nothing else, and this network has no\npersistent buffers.  Call it after each optimiser step.\n\nEach average is evaluated as it is written.  The averages are\noutside `parameters`, so neither the optimiser's flush nor a\nloop's reaches them on Metal.",
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.tvm._model.TVMForImageGeneration.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(images: Tensor, labels: Tensor | None = None)",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L832",
+          "subcategory": "model",
+          "summary": "One training step of the TVM objective (Eq. 15).",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "images",
+              "annotation": "Tensor",
+              "description": "`(B, C, H, W)` — the data, here the VAE latent of it.",
+              "default": null
+            },
+            {
+              "name": "labels",
+              "annotation": "Tensor or None",
+              "description": "`(B,)` class indices.  Each is replaced by the null label\nwith probability `TVMConfig.class_dropout`, and that\nsample trains at $w = 1$.  `None` trains the\nunconditional field throughout.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "TVMOutput",
+            "description": "The loss and its two terms."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [
+            "Per sample, with $\\beta = 1/w$,\n\n\n\n$$\n\\beta^2\\Bigl\\lVert \\tfrac{d}{ds} f_\\theta(x_t, t, s)\n  - u_{\\theta^*}\\bigl(\\mathrm{sg}[x_t + f_\\theta(x_t, t, s)],\n  s\\bigr)\\Bigr\\rVert^2 \\mathbb{1}_{t \\ne s}\n+ \\beta^2\\bigl\\lVert u_\\theta(x_{s'}, s')\n  - \\bigl[w\\,v + (1 - w)\\,u_{\\theta^*}(x_{s'}, s', \\varnothing,\n  1)\\bigr]\\bigr\\rVert^2 .\n$$\n\nSquared norms are averaged over elements, as the released\ntraining code computes them; the paper's sum differs by the\nconstant $CHW$."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "generate",
+          "path": "lucid.models.generative.tvm._model.TVMForImageGeneration.generate",
+          "kind": "function",
+          "labels": [],
+          "signature": "generate(n_samples: int = 1, labels: Tensor | None = None, steps: int = 1, guidance_scale: float | None = None, noise: Tensor | None = None, device: str | None = None, use_ema: bool = False)",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L928",
+          "subcategory": "model",
+          "summary": "Jump from noise to data in `steps` evaluations.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "n_samples",
+              "annotation": "int",
+              "description": "How many to draw.",
+              "default": "1"
+            },
+            {
+              "name": "labels",
+              "annotation": "Tensor or None",
+              "description": "`(n_samples,)` class indices.  `None` samples the\nunconditional field.",
+              "default": "None"
+            },
+            {
+              "name": "steps",
+              "annotation": "int",
+              "description": "Network evaluations.  $[0, 1]$ is split evenly and each\npiece is one jump $x_s = x_t + (s - t)\\,w F_\\theta(x_t, t, s)$; the same network serves every step count, from one up\nto the ODE limit, without retraining.",
+              "default": "1"
+            },
+            {
+              "name": "guidance_scale",
+              "annotation": "float or None",
+              "description": "$w$.  `None` uses the weight the model was trained at\nfor labelled draws and one for unlabelled ones.",
+              "default": "None"
+            },
+            {
+              "name": "noise",
+              "annotation": "Tensor or None",
+              "description": "Starting point $x_1$.  Drawn when absent.",
+              "default": "None"
+            },
+            {
+              "name": "device",
+              "annotation": "str or None",
+              "description": "Where to draw.  Defaults to the model's own device.",
+              "default": "None"
+            },
+            {
+              "name": "use_ema",
+              "annotation": "bool",
+              "description": "Sample from the evaluation EMA $\\theta^{**}$ rather than\nthe live weights — what the paper evaluates after training.  A\nloaded checkpoint already *is* that average, so the default\nsamples from the live network.",
+              "default": "False"
+            }
+          ],
+          "returns": {
+            "annotation": "GenerationOutput",
+            "description": "`samples` of shape `(n_samples, out_channels, H, W)` — a\nlatent, for the Stable Diffusion VAE to decode."
+          },
+          "raises": [
+            {
+              "annotation": "ValueError",
+              "description": "If `steps` is not positive."
+            }
+          ],
+          "examples": [
+            ">>> from lucid.models import tvm_imagenet256_gen\n>>> model = tvm_imagenet256_gen(sample_size=8, hidden_size=32, depth=2, num_heads=4)\n>>> model.eval().generate(2, steps=4).samples.shape\n(2, 4, 8, 8)"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "from_vae_latent",
+          "path": "lucid.models.generative.tvm._model.TVMForImageGeneration.from_vae_latent",
+          "kind": "function",
+          "labels": [],
+          "signature": "from_vae_latent(latent: Tensor)",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L1004",
+          "subcategory": "model",
+          "summary": "Whiten a Stable Diffusion VAE latent the way the model was trained.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "latent",
+              "annotation": "Tensor",
+              "description": "`(B, C, H, W)` — a sample from the VAE posterior,\n$\\ell = \\mu_\\phi(x) + \\sigma_\\phi(x)\\,\\epsilon$, which is\nwhat the released pipeline encodes images into (not the\nposterior mean).",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "$z = (\\ell - \\mu) / \\sigma$ per channel — the `images`\n`forward` trains on.  `to_vae_latent` inverts it."
+          },
+          "raises": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models import tvm_imagenet256_gen\n>>> model = tvm_imagenet256_gen(sample_size=8, hidden_size=32, depth=2, num_heads=4)\n>>> model.from_vae_latent(lucid.zeros((1, 4, 8, 8))).shape\n(1, 4, 8, 8)"
+          ],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "to_vae_latent",
+          "path": "lucid.models.generative.tvm._model.TVMForImageGeneration.to_vae_latent",
+          "kind": "function",
+          "labels": [],
+          "signature": "to_vae_latent(samples: Tensor)",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L1034",
+          "subcategory": "model",
+          "summary": "Undo the per-channel whitening the model's latents carry.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "samples",
+              "annotation": "Tensor",
+              "description": "`(B, C, H, W)` — `generate`'s output.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "Tensor",
+            "description": "$\\ell = z\\,\\sigma + \\mu$ with the statistics in\n`TVMConfig.latent_mean` / `TVMConfig.latent_std` —\nthe raw latent the Stable Diffusion VAE's decoder expects."
+          },
+          "raises": [],
+          "examples": [
+            ">>> import lucid\n>>> from lucid.models import tvm_imagenet256_gen\n>>> model = tvm_imagenet256_gen(sample_size=8, hidden_size=32, depth=2, num_heads=4)\n>>> model.to_vae_latent(lucid.zeros((1, 4, 8, 8))).shape\n(1, 4, 8, 8)"
+          ],
+          "notes": [
+            "The released models were trained on `stabilityai/sd-vae-ft-ema`\nposterior samples whitened per channel, not scaled by 0.18215, so\ndecoding a sample without this step yields saturated noise.\n`lucid.models.generative.stable_diffusion.AutoencoderKL`\nis that decoder."
+          ],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "TVM's objective and its one- and few-step sampler.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "TVMConfig",
+          "description": "The variant to build.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.tvm import (\n...     TVMConfig, TVMForImageGeneration)\n>>> config = TVMConfig(sample_size=8, patch_size=2, hidden_size=32,\n...                    depth=2, num_heads=4, num_classes=10)\n>>> model = TVMForImageGeneration(config).eval()\n>>> model.generate(2, labels=lucid.tensor([1, 2])).samples.shape\n(2, 4, 8, 8)"
+      ],
+      "notes": [
+        "Reference: Zhou, Parger, Haque, and Song, *\"Terminal Velocity\nMatching\"*, ICLR 2026 ([arXiv:2511.19797](https://arxiv.org/abs/2511.19797)).  Training is Algorithm 1\nwith the objective of Eq. 15; sampling is Figure 3.\n\n**Call** `update_ema` **once per optimiser step.**  Algorithm 1\nkeeps two exponential moving averages of the weights and updates both\nafter every step: $\\theta^*$ at\n`TVMConfig.target_ema_decay`, which the terminal target and the\nunconditional half of the guided velocity are read off, and\n$\\theta^{**}$ at `TVMConfig.eval_ema_decay`, the model\nthat is evaluated and that the released checkpoints are.  Only the\ncaller knows when an optimiser step has happened.\n\nBoth copies are created from the live weights the first time either\nis needed — the first training step reads $\\theta^*$, so that\nis $\\theta^* \\leftarrow \\theta,\\ \\theta^{**} \\leftarrow \\theta$ at initialisation, as Algorithm 1 has it — and both are kept\noutside the module tree: not parameters, not in `state_dict`,\nnot counted.  They are training state, like an optimiser's moments;\n`target_network` and `ema_network` expose them for\ncheckpointing."
+      ],
+      "attributes": [
+        {
+          "name": "tvm",
+          "annotation": "TVMModel",
+          "description": "The network being trained."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "TVMModel",
+      "path": "lucid.models.generative.tvm._model.TVMModel",
+      "kind": "class",
+      "class_kind": "regular",
+      "bases": [
+        "PretrainedModel"
+      ],
+      "labels": [],
+      "signature": "TVMModel(config: TVMConfig)",
+      "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L330",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.tvm._model.TVMModel.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(config: TVMConfig)",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L383",
+          "subcategory": "model",
+          "summary": "Initialise the network. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "resolve_guidance",
+          "path": "lucid.models.generative.tvm._model.TVMModel.resolve_guidance",
+          "kind": "function",
+          "labels": [],
+          "signature": "resolve_guidance(guidance_scale: Tensor | float | None, labels: Tensor | None)",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L465",
+          "subcategory": "model",
+          "summary": "The guidance weight a call runs at.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "guidance_scale",
+              "annotation": "(Tensor, float or None)",
+              "description": "What the caller asked for.  `None` picks the weight the\nmodel was trained at for a labelled call and $w = 1$\nfor an unlabelled one — the only weight the null label is\never trained with.",
+              "default": null
+            },
+            {
+              "name": "labels",
+              "annotation": "Tensor or None",
+              "description": "The call's labels.",
+              "default": null
+            }
+          ],
+          "returns": {
+            "annotation": "float or Tensor",
+            "description": "`guidance_scale`, or the default it resolves to."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        },
+        {
+          "name": "forward",
+          "path": "lucid.models.generative.tvm._model.TVMModel.forward",
+          "kind": "function",
+          "labels": [],
+          "signature": "forward(x: Tensor, t: Tensor, s: Tensor, labels: Tensor | None = None, guidance_scale: Tensor | float | None = None)",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L489",
+          "subcategory": "model",
+          "summary": "Evaluate the average velocity from time `t` to time `s`.",
+          "extended": null,
+          "parameters": [
+            {
+              "name": "x",
+              "annotation": "Tensor",
+              "description": "`(B, in_channels, H, W)` — the point on the path at `t`.",
+              "default": null
+            },
+            {
+              "name": "t",
+              "annotation": "Tensor",
+              "description": "`(B,)` start times.",
+              "default": null
+            },
+            {
+              "name": "s",
+              "annotation": "Tensor",
+              "description": "`(B,)` end times, `s <= t`.  `s = t` gives the\ninstantaneous velocity.",
+              "default": null
+            },
+            {
+              "name": "labels",
+              "annotation": "Tensor or None",
+              "description": "`(B,)` class indices.  `None` uses the null label, index\n`num_classes`.",
+              "default": "None"
+            },
+            {
+              "name": "guidance_scale",
+              "annotation": "(Tensor, float or None)",
+              "description": "The guidance weight $w$, per sample or shared.  The\nnetwork is conditioned on $1/w$.  `None` resolves as\n`resolve_guidance` describes.",
+              "default": "None"
+            }
+          ],
+          "returns": {
+            "annotation": "DiffusionModelOutput",
+            "description": "`sample` of shape `(B, out_channels, H, W)` — the\naverage velocity, $w\\,F_\\theta$ under the scaled\nparameterisation and $F_\\theta$ otherwise."
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "The two-time velocity network $w\\,F_\\theta(x_t, t, s, c, w)$.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "config",
+          "annotation": "TVMConfig",
+          "description": "The variant to build.",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.tvm import TVMConfig, TVMModel\n>>> config = TVMConfig(sample_size=8, patch_size=2, hidden_size=32,\n...                    depth=2, num_heads=4, num_classes=10)\n>>> model = TVMModel(config).eval()\n>>> x = lucid.randn((1, 4, 8, 8))\n>>> t, s = lucid.tensor([1.0]), lucid.tensor([0.0])\n>>> model(x, t, s, lucid.tensor([3])).sample.shape\n(1, 4, 8, 8)"
+      ],
+      "notes": [
+        "Reference: Zhou, Parger, Haque, and Song, *\"Terminal Velocity\nMatching\"*, ICLR 2026 ([arXiv:2511.19797](https://arxiv.org/abs/2511.19797)), Sections 3–4 and\nAppendix F.1.\n\nThe forward returns the **average velocity over** $[s, t]$ —\nthe displacement divided by its length — so that one step of the\nsampler is $x_s = x_t + (s - t)\\cdot\\mathrm{sample}$.  Under the\nscaled parameterisation that is $w\\,F_\\theta$, the network's\noutput times the guidance weight; otherwise it is $F_\\theta$\nitself.  At $s = t$ it is the instantaneous velocity\n$u_\\theta(x_t, t)$."
+      ],
+      "attributes": [
+        {
+          "name": "patch_embed",
+          "annotation": "lucid.nn.Conv2d",
+          "description": "Patchifying projection — stride equals kernel."
+        },
+        {
+          "name": "pos_embed",
+          "annotation": "Tensor",
+          "description": "Frozen two-dimensional sine-cosine table, added to the tokens."
+        },
+        {
+          "name": "time_embed, interval_embed, guidance_embed",
+          "annotation": "_ScalarEmbedder",
+          "description": "Embeddings of $t$, $t - s$ and $1/w$."
+        },
+        {
+          "name": "label_embed",
+          "annotation": "lucid.nn.Embedding",
+          "description": "Class embedding, with the null label as its last row."
+        },
+        {
+          "name": "blocks",
+          "annotation": "lucid.nn.ModuleList",
+          "description": "The semi-Lipschitz DiT blocks."
+        },
+        {
+          "name": "final",
+          "annotation": "_FinalLayer",
+          "description": "Modulated norm and projection back to patch space."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "TVMOutput",
+      "path": "lucid.models.generative.tvm._model.TVMOutput",
+      "kind": "class",
+      "class_kind": "dataclass",
+      "bases": [
+        "ModelOutput"
+      ],
+      "labels": [],
+      "signature": "TVMOutput(loss: Tensor, terminal_loss: Tensor, flow_matching_loss: Tensor)",
+      "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L292",
+      "subcategory": "model",
+      "methods": [
+        {
+          "name": "__init__",
+          "path": "lucid.models.generative.tvm._model.TVMOutput.__init__",
+          "kind": "function",
+          "labels": [],
+          "signature": "__init__(loss: Tensor, terminal_loss: Tensor, flow_matching_loss: Tensor)",
+          "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_model.py#L1",
+          "subcategory": "model",
+          "summary": "Initialise the embedder. See the class docstring for parameters.",
+          "extended": null,
+          "parameters": [],
+          "returns": {
+            "annotation": "None",
+            "description": ""
+          },
+          "raises": [],
+          "examples": [],
+          "notes": [],
+          "attributes": [],
+          "warns": [],
+          "see_also": []
+        }
+      ],
+      "summary": "What a TVM training step reports.",
+      "extended": null,
+      "parameters": [],
+      "returns": null,
+      "raises": [],
+      "examples": [
+        ">>> import lucid\n>>> from lucid.models.generative.tvm._model import TVMOutput\n>>> out = TVMOutput(\n...     loss=lucid.zeros(()),\n...     terminal_loss=lucid.zeros(()),\n...     flow_matching_loss=lucid.zeros(()),\n... )\n>>> out.loss.shape\n()"
+      ],
+      "notes": [],
+      "attributes": [
+        {
+          "name": "loss",
+          "annotation": "Tensor",
+          "description": "The objective of Eq. 15, a scalar — the two terms below, summed\nper sample and averaged over the batch."
+        },
+        {
+          "name": "terminal_loss",
+          "annotation": "Tensor",
+          "description": "The batch mean of the terminal-velocity term, $\\lVert \\frac{d}{ds} f_\\theta - u_{\\theta^*}(\\hat x_s, s)\\rVert^2 / w^2$.\nZero for samples drawn with $s = t$."
+        },
+        {
+          "name": "flow_matching_loss",
+          "annotation": "Tensor",
+          "description": "The batch mean of the guided Flow Matching term.  Reported apart\nbecause the two move differently: Flow Matching settles early\nwhile the terminal term keeps falling, and a terminal term that\nstalls while Flow Matching is fine is the first sign of a bad\ntarget EMA."
+        }
+      ],
+      "warns": [],
+      "see_also": []
+    },
+    {
+      "name": "tvm_imagenet256",
+      "path": "lucid.models.generative.tvm._pretrained.tvm_imagenet256",
+      "kind": "function",
+      "labels": [],
+      "signature": "tvm_imagenet256(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_pretrained.py#L59",
+      "subcategory": "pretrained",
+      "summary": "The 256-pixel ImageNet network — one step to 3.29 FID.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "The authors' checkpoint has not been converted and hosted for\nLucid yet (`tools/convert_weights/tvm.py` does the conversion),\nso `True` raises rather than returning a randomly initialised\nmodel.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `TVMConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "TVMModel",
+        "description": "The two-time velocity network."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import tvm_imagenet256\n>>> config = tvm_imagenet256().config\n>>> config.num_patches, config.guidance_scale\n(256, 2.0)"
+      ],
+      "notes": [
+        "Reference: Zhou, Parger, Haque, and Song, *\"Terminal Velocity\nMatching\"*, ICLR 2026 ([arXiv:2511.19797](https://arxiv.org/abs/2511.19797)), Tables 1 and 6.  Trained at\na constant guidance weight of 2: 3.29 FID at one function evaluation\nand 2.80 at two, against MeanFlow-XL/2's 3.43 and 2.93."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 678000000
+    },
+    {
+      "name": "tvm_imagenet256_gen",
+      "path": "lucid.models.generative.tvm._pretrained.tvm_imagenet256_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "tvm_imagenet256_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_pretrained.py#L152",
+      "subcategory": "pretrained",
+      "summary": "`tvm_imagenet256` with its objective and sampler.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "The authors' checkpoint has not been converted and hosted for\nLucid yet, so `True` raises rather than returning a randomly\ninitialised model.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "Optional `TVMConfig` field overrides.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "TVMForImageGeneration",
+        "description": "Exposes the training objective, `TVMForImageGeneration.\nupdate_ema` and `TVMForImageGeneration.generate`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import tvm_imagenet256_gen\n>>> model = tvm_imagenet256_gen()"
+      ],
+      "notes": [
+        "Reference: Zhou et al., [arXiv:2511.19797](https://arxiv.org/abs/2511.19797), Algorithm 1 and Table 6."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 678000000
+    },
+    {
+      "name": "tvm_imagenet512",
+      "path": "lucid.models.generative.tvm._pretrained.tvm_imagenet512",
+      "kind": "function",
+      "labels": [],
+      "signature": "tvm_imagenet512(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_pretrained.py#L105",
+      "subcategory": "pretrained",
+      "summary": "The 512-pixel ImageNet network — one step to 4.32 FID.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "`True` raises: the released `im512_w2p5` weights are not\nhosted for Lucid yet.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "`TVMConfig` fields to change from the 512-pixel defaults.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "TVMModel",
+        "description": "The network over a 64-wide latent, conditioned on `w = 2.5`."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import tvm_imagenet512\n>>> tvm_imagenet512().config.num_patches\n1024"
+      ],
+      "notes": [
+        "Reference: Zhou et al., [arXiv:2511.19797](https://arxiv.org/abs/2511.19797), Tables 2 and 6.  Trained at\na constant guidance weight of 2.5 *without* the scaled\nparameterisation; it beats sCT-XL's 4.33 one-step FID at 61% of its\nparameters."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 678000000
+    },
+    {
+      "name": "tvm_imagenet512_gen",
+      "path": "lucid.models.generative.tvm._pretrained.tvm_imagenet512_gen",
+      "kind": "function",
+      "labels": [],
+      "signature": "tvm_imagenet512_gen(pretrained: bool = False, overrides: object = {})",
+      "source": "https://github.com/lucid-official/lucid/blob/7c1432e/lucid/models/generative/tvm/_pretrained.py#L195",
+      "subcategory": "pretrained",
+      "summary": "`tvm_imagenet512` with its objective and sampler.",
+      "extended": null,
+      "parameters": [
+        {
+          "name": "pretrained",
+          "annotation": "bool",
+          "description": "`True` raises until the 512-pixel weights are hosted for Lucid.",
+          "default": "False"
+        },
+        {
+          "name": "**overrides",
+          "annotation": "object",
+          "description": "`TVMConfig` fields to change from the 512-pixel defaults.",
+          "default": "{}"
+        }
+      ],
+      "returns": {
+        "annotation": "TVMForImageGeneration",
+        "description": "The 512-pixel network, trainable with Algorithm 1 and sampled in\none or a few jumps."
+      },
+      "raises": [],
+      "examples": [
+        ">>> from lucid.models import tvm_imagenet512_gen\n>>> model = tvm_imagenet512_gen()"
+      ],
+      "notes": [
+        "Reference: Zhou et al., [arXiv:2511.19797](https://arxiv.org/abs/2511.19797), Algorithm 1 and Table 6.\nThe 512-pixel configurations add gradient clipping at norm 1.0 in the\nreleased training recipe — an optimiser setting, left to the loop."
+      ],
+      "attributes": [],
+      "warns": [],
+      "see_also": [],
+      "param_count": 678000000
+    }
+  ],
+  "summary": "Terminal Velocity Matching — one- and few-step generation from scratch.",
+  "extended": "Zhou, Parger, Haque and Song, ICLR 2026 ([arXiv:2511.19797](https://arxiv.org/abs/2511.19797)).  MeanFlow's\ndual: where MeanFlow differentiates the learned displacement at the\ninterval's start, TVM differentiates it at the terminal time and matches\nit to the velocity where the jump lands — an objective that bounds the\n2-Wasserstein distance once the network is made Lipschitz, which is what\nits RMS-normalised DiT is for.",
+  "parameters": [],
+  "returns": null,
+  "raises": [],
+  "examples": [],
+  "notes": [],
+  "attributes": [],
+  "warns": [],
+  "see_also": [],
+  "canonical_name": "TVM",
+  "citation": "Zhou, Linqi, Mathias Parger, Ayaan Haque, and Jiaming Song. \"Terminal Velocity Matching.\" International Conference on Learning Representations (ICLR), 2026.  [arXiv:2511.19797](https://arxiv.org/abs/2511.19797).",
+  "theory": "Write the ground-truth flow map from time $t$ to time $s$\nas $\\psi(x_t, t, s) = x_t + \\int_t^s u(x_r, r)\\,dr$ and its net\ndisplacement as $f(x_t, t, s) = \\psi(x_t, t, s) - x_t$.  The\ndisplacement satisfies two conditions: it *is* the integral, and its\nderivative at $s = t$ is the instantaneous velocity.  One\ntwo-time network parameterises both,\n\n\n\n$$\nf_\\theta(x_t, t, s) = (s - t)\\,F_\\theta(x_t, t, s), \\qquad\nu_\\theta(x_t, t) = F_\\theta(x_t, t, t),\n$$\n\nand the scaling $(s - t)$ makes $f_\\theta(x_t, t, t) = 0$\nhold by construction.\n\nThe integral condition cannot be trained directly — it would need an\nODE solve per sample.  Differentiating it with respect to the\n**terminal** time $s$ instead gives a condition with no\nintegral in it,\n\n\n\n$$\n\\frac{d}{ds} f(x_t, t, s) = u\\bigl(\\psi(x_t, t, s), s\\bigr),\n$$\n\nand the squared error in that condition, integrated over\n$s \\in [0, t]$, upper-bounds the displacement error.  The\nunknowns on the right are replaced by the model itself — the jump\nlands at $x_t + f_\\theta(x_t, t, s)$ and the velocity there is\n$u_\\theta$ — which is only sound if $u_\\theta$ is right,\nso Flow Matching is trained jointly.  It is the same condition at\nzero displacement:\n\n\n\n$$\n\\mathcal{L}^{t,s}_{\\mathrm{TVM}}\n= \\Bigl\\lVert \\tfrac{d}{ds} f_\\theta(x_t, t, s)\n  - u_{\\theta^*}\\!\\bigl(x_t + f_{\\theta}(x_t, t, s), s\\bigr)\n  \\Bigr\\rVert^2\n+ \\bigl\\lVert u_\\theta(x_s, s) - v_s \\bigr\\rVert^2 .\n$$\n\n$\\theta^*$ is an exponential moving average of the weights,\nheld under a stop-gradient, and the derivative expands to\n$F_\\theta + (s - t)\\,\\partial_s F_\\theta$ — one Jacobian-vector\nproduct along $s$, whose result is itself back-propagated\nthrough.  A weighted integral of this objective over $s$ bounds\n$W_2^2$ between the data and the model's push-forward when\n$u_\\theta(\\cdot, s)$ is Lipschitz (Theorem 1).\n\n**MeanFlow's dual.**  MeanFlow enforces\n$\\frac{d}{dt} f_\\theta = -u(x_t, t)$, differentiating at the\n*start*; the tangent of that derivative contains the sampled velocity\n$v_t$, whose magnitude under guidance varies widely.  TVM's\ntangent is a unit step in $s$, independent of $x_t$ and\n$t$, which is why it trains stably even with random guidance.\n\n**Guidance is learned, not applied.**  The class-conditional field is\nthe guided one, $w\\,u(x, r, c) + (1 - w)\\,u(x, r)$, with the\nunconditional half supplied by the EMA network.  Its magnitude grows\nlinearly in $w$, so the loss is weighted by $1/w^2$ and\nthe network optionally predicts $F$ with the factor $w$\npulled out — the *scaled parameterisation*.\n\n**Semi-Lipschitz control.**  Every LayerNorm becomes a parameter-free\nRMSNorm, queries and keys are RMS-normalised, every adaLN modulation\nvector is itself RMS-normalised so its scale cannot grow without\nbound, and linear layers start at unit spectral norm.",
+  "tasks": [
+    "image-generation"
+  ]
+}
