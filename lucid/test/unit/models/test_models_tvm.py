@@ -113,10 +113,12 @@ class TestNetwork:
             _wake(model)
             x, labels = lucid.randn((1, 4, 8, 8)), lucid.tensor([2])
             t, s = lucid.tensor([0.9]), lucid.tensor([0.3])
-            before = model(x, t, s, labels).sample
+            # Under no_grad, so no forward keeps the weight for backward —
+            # the engine refuses an in-place write to a saved tensor.
             with lucid.no_grad():
+                before = model(x, t, s, labels).sample
                 model.blocks[0].ada_ln[1].weight *= 10.0
-            after = model(x, t, s, labels).sample
+                after = model(x, t, s, labels).sample
             if normalized:
                 assert _gap(before, after) < 1e-4
             else:
@@ -291,6 +293,22 @@ class TestTarget:
             _gap(model.ema_network.blocks[0].attn.qkv.weight, 0.5 * evaluated + 0.5 * live)
             < 1e-6
         )
+
+    def test_update_ema_pairs_parameters_by_name(self) -> None:
+        """A re-assigned parameter must not shift the pairing.
+
+        ``w += ...`` re-registers ``w`` at the end of its module, so the live
+        network and its average list parameters in different orders after
+        it; pairing them by position then mixes a weight with a bias.
+        """
+        model = TVMForImageGeneration(_tiny(target_ema_decay=0.5, eval_ema_decay=None))
+        _ = model.target_network
+        with lucid.no_grad():
+            model.tvm.blocks[0].attn.qkv.weight += 2.0
+        model.update_ema()
+        live = dict(model.tvm.named_parameters())
+        for name, slow in model.target_network.named_parameters():
+            assert slow.shape == live[name].shape, name
 
     def test_no_eval_average_is_kept_when_disabled(self) -> None:
         """``eval_ema_decay=None`` keeps no θ** and says so when asked."""
