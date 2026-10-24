@@ -296,6 +296,10 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
     "lucid.compile._core.buffer_writes": (
         ("Tracer", "lucid._C.engine.compile", "Tracer"),
     ),
+    "lucid.compile._core.custom_backward": (
+        ("TraceGraph", "lucid._C.engine.compile", "TraceGraph"),
+        ("Tracer", "lucid._C.engine.compile", "Tracer"),
+    ),
     "lucid.compile._core.fallback": (
         ("CacheKey", "lucid.compile._core.signature", "CacheKey"),
         ("Module", "lucid.nn.module", "Module"),
@@ -332,6 +336,7 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("Tracer", "lucid._C.engine.compile", "Tracer"),
     ),
     "lucid.compile._entry.segmented_step": (
+        ("CompiledExecutable", "lucid._C.engine.compile", "CompiledExecutable"),
         ("Module", "lucid.nn.module", "Module"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
         ("Tracer", "lucid._C.engine.compile", "Tracer"),
@@ -340,7 +345,6 @@ NAMES: dict[str, tuple[tuple[str, str, str | None], ...]] = {
         ("Module", "lucid.nn.module", "Module"),
         ("Parameter", "lucid.nn.parameter", "Parameter"),
         ("Tensor", "lucid._tensor.tensor", "Tensor"),
-        ("TraceGraph", "lucid._C.engine.compile", "TraceGraph"),
         ("Tracer", "lucid._C.engine.compile", "Tracer"),
     ),
     "lucid.compile._optim.compiler": (

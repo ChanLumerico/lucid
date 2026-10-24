@@ -30,6 +30,8 @@ from typing import TYPE_CHECKING, Callable
 
 from lucid._C import engine as _C_engine
 from lucid._tensor.tensor import Tensor
+from lucid.compile._core.custom_backward import refuse_custom_backward
+from lucid.compile._entry.step import _match_param_ids
 
 if TYPE_CHECKING:
     from lucid.nn.module import Module
@@ -68,6 +70,12 @@ def compiled_step(
         The loss tensor (compiled result).  After this call,
         ``param.grad`` is populated for every parameter of ``model``.
         The caller can then run an optimizer step.
+
+    Raises
+    ------
+    NotImplementedError
+        A gradient passes through a custom ``Function``, whose ``backward``
+        the executable cannot run (:func:`make_step` runs such a step eagerly).
 
     Notes
     -----
@@ -137,24 +145,13 @@ def compiled_step(
         raise RuntimeError("compiled_step: loss_fn's result is not a traced tensor")
     loss_id = int(found)
 
-    # Match each Parameter (by TensorImpl pointer identity) to its
-    # trace feed id.  Using ``impl is target`` (not equality) — every
-    # external feed in the trace is the exact same Python object as
-    # the user-side Parameter.
-    p_impls = [_unwrap(p) for p in params]
-    param_ids: list[int] = []
-    for p_impl in p_impls:
-        found = None
-        for tid, impl in ext.items():
-            if impl is p_impl:
-                found = tid
-                break
-        if found is None:
-            raise RuntimeError(
-                "compiled_step: a model parameter was not observed in the trace "
-                "(model.forward did not use it, or the parameter was wrapped/copied)"
-            )
-        param_ids.append(found)
+    param_ids, observed = _match_param_ids(params, ext)
+    if not all(observed):
+        raise RuntimeError(
+            "compiled_step: a model parameter was not observed in the trace "
+            "(model.forward did not use it, or the parameter was wrapped/copied)"
+        )
+    refuse_custom_backward(tracer, loss_id, param_ids)
 
     # 3.5 BatchNorm running-stats. compiled_step has no eager fallback (it raises
     # on any uncompilable trace), so a cumulative-MA BN (momentum=None) is a hard

@@ -47,7 +47,7 @@ class _ExecutableLike(Protocol):
 
 
 if TYPE_CHECKING:
-    from lucid._C.engine.compile import TraceGraph, Tracer
+    from lucid._C.engine.compile import Tracer
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
     from lucid.nn.parameter import Parameter
@@ -140,7 +140,7 @@ def _build_input_source(
 
 
 def _lower_step_executable(
-    graph: TraceGraph,
+    tracer: Tracer,
     ext: dict[int, object],
     loss_id: int,
     param_ids: list[int],
@@ -148,18 +148,26 @@ def _lower_step_executable(
     *,
     use_dynamic: bool = False,
 ) -> _ExecutableLike | None:
-    """Lower ``graph`` with backward into a compiled executable, or ``None``."""
+    """Lower ``tracer``'s recording with backward into an executable, or ``None``."""
+    from lucid.compile._core.custom_backward import (
+        CustomBackwardInTrace,
+        refuse_custom_backward,
+    )
     from lucid.compile._core.fallback import _fallback_notice
 
     try:
+        refuse_custom_backward(tracer, loss_id, param_ids)
         exe = _C_engine.compile.compile_trace_with_backward(
-            graph,
+            tracer.graph,
             ext,
             loss_id,
             param_ids,
             use_dynamic,
             extra_output_ids=extra_output_ids,
         )
+    except CustomBackwardInTrace as why:
+        _fallback_notice("custom-backward", str(why))
+        return None
     except RuntimeError as why:
         _fallback_notice("lowering", str(why))
         return None
@@ -218,7 +226,7 @@ def _compile_step_entry(
         return None
 
     exe_like = _lower_step_executable(
-        graph,
+        tracer,
         ext,
         loss_id,
         param_ids,
@@ -451,6 +459,15 @@ def make_step(
     callable
         ``step(x, *extra_inputs) -> Tensor`` — the scalar loss.
         ``loss.backward()`` works the same way as the eager baseline.
+
+    Notes
+    -----
+    A step whose gradient passes through a custom
+    :class:`~lucid.autograd.Function` runs eagerly, with a one-time
+    ``CompileFallbackWarning``: the executable can only differentiate the
+    ops ``forward`` recorded, and the ``backward`` the ``Function`` defines
+    — a straight-through estimator, a scaled or reversed gradient — would
+    not run.
 
     Examples
     --------

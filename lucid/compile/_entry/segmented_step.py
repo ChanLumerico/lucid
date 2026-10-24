@@ -64,7 +64,7 @@ from lucid._C import engine as _C_engine
 from lucid.autograd.function import Function, FunctionCtx
 
 if TYPE_CHECKING:
-    from lucid._C.engine.compile import Tracer
+    from lucid._C.engine.compile import CompiledExecutable, Tracer
     from lucid._tensor.tensor import Tensor
     from lucid.nn.module import Module
 
@@ -222,6 +222,28 @@ def _trace_segment_fn(
     return tracer, out
 
 
+def _lower_segment_backward(
+    tracer: Tracer, loss_id: int, grad_target_ids: list[int]
+) -> CompiledExecutable | None:
+    """A segment's backward executable, or ``None`` when it cannot be compiled."""
+    from lucid.compile._core.custom_backward import (
+        CustomBackwardInTrace,
+        refuse_custom_backward,
+    )
+    from lucid.compile._core.fallback import _fallback_notice
+
+    try:
+        refuse_custom_backward(tracer, loss_id, grad_target_ids)
+        return _C_engine.compile.compile_trace_with_backward(
+            tracer.graph, dict(tracer.external_feeds), loss_id, grad_target_ids, False
+        )
+    except CustomBackwardInTrace as why:
+        _fallback_notice("custom-backward", str(why))
+        return None
+    except RuntimeError:
+        return None  # another lowering failure: the step runs eagerly, as it did
+
+
 def _compile_segment(seg: _Segment, x: Tensor) -> _SegCompiled | None:
     """Trace + compile the forward and backward executables for ``seg`` at ``x``.
 
@@ -312,13 +334,7 @@ def _compile_segment(seg: _Segment, x: Tensor) -> _SegCompiled | None:
         grad_target_ids = [x_id_bwd, *bwd_param_ids]
     else:
         grad_target_ids = list(bwd_param_ids)
-
-    try:
-        bwd_exe = _C_engine.compile.compile_trace_with_backward(
-            g_bwd, dict(ext_bwd), loss_id, grad_target_ids, False
-        )
-    except RuntimeError:
-        return None
+    bwd_exe = _lower_segment_backward(t_bwd, int(loss_id), grad_target_ids)
     if bwd_exe is None:
         return None
 

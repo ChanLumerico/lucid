@@ -444,6 +444,11 @@ def _make_apply() -> classmethod:  # type: ignore[type-arg]
         )
 
         output = klass.forward(ctx, *args, **kwargs)  # type: ignore[attr-defined]
+        if (tracer := _C_engine.compile.current_tracer()) is not None:
+            # Imported here: ``lucid.compile`` imports this package.
+            from lucid.compile._core.custom_backward import note_applied
+
+            note_applied(tracer, klass, args, output)
 
         tracked = _C_engine.grad_enabled() and any(ctx.needs_input_grad)
         output = _wrap_outputs(output, klass, ctx, args, kwargs, tracked)

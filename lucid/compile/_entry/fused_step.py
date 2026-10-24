@@ -60,6 +60,8 @@ Limitations
 * No dynamic batch — shape-locked to the first call's input signature.
 * The loss tensor returned has no ``grad_fn`` (the backward has
   already run inside the executable).  ``loss.backward()`` is a no-op.
+* A step whose gradient passes through a custom ``autograd.Function``
+  runs eagerly: the executable cannot run the ``Function``'s ``backward``.
 """
 
 import threading
@@ -72,6 +74,11 @@ from lucid._C import engine as _C_engine
 from lucid._device import device as _device_cls
 from lucid._dtype import dtype as _dtype_cls
 from lucid.compile._core.bn_runstats import advance_bn_counters, bn_counter_targets
+from lucid.compile._core.custom_backward import (
+    GRADIENT_DTYPES,
+    CustomBackwardInTrace,
+    refuse_custom_backward,
+)
 from lucid.compile._core.signature import ParamFingerprint
 
 # Thread-local flag flipped on while ``_FusedStep._build_plan``
@@ -264,18 +271,13 @@ def _untraced(tracer: object) -> Iterator[None]:
         _C_engine.compile.set_current_tracer(tracer)
 
 
-#: The dtypes a gradient can flow through — eager never tracks an integer
-#: or bool value.  The backward walker's ``carries_gradient`` is the same rule.
-_GRADIENT_DTYPES = frozenset(
-    {
-        _C_engine.Dtype.F16,
-        _C_engine.Dtype.BF16,
-        _C_engine.Dtype.F32,
-        _C_engine.Dtype.F64,
-        _C_engine.Dtype.C64,
-        _C_engine.Dtype.C128,
-    }
-)
+def _fallback_category(why: Exception) -> str:
+    """The kind of reason a fused plan was declined for, as announced once."""
+    if isinstance(why, CustomBackwardInTrace):
+        return "custom-backward"
+    if isinstance(why, NotImplementedError):
+        return "cumulative-bn"
+    return "first-run" if "MPSGraph failed" in str(why) else "lowering"
 
 
 def _loss_ancestors(graph: TraceGraph, loss_id: int) -> set[int]:
@@ -296,7 +298,7 @@ def _loss_ancestors(graph: TraceGraph, loss_id: int) -> set[int]:
         if not any(int(meta.id) in needed for meta in node.outputs):
             continue
         if status(node.name) == sink or not any(
-            meta.dtype in _GRADIENT_DTYPES for meta in node.outputs
+            meta.dtype in GRADIENT_DTYPES for meta in node.outputs
         ):
             continue
         needed.update(int(i) for i in node.inputs if int(i) >= 0)
@@ -588,12 +590,7 @@ class _FusedStep:
                 raise
             copt._initialized[:] = prev_init
             copt._pstate[:] = prev_pstate
-            category = (
-                "cumulative-bn"
-                if isinstance(why, NotImplementedError)
-                else ("first-run" if "MPSGraph failed" in msg else "lowering")
-            )
-            _fallback_notice(category, msg)
+            _fallback_notice(_fallback_category(why), msg)
             fallback_key = self._key(
                 self._members() if self._reachable is not None else (),
                 flags,
@@ -1073,6 +1070,7 @@ class _FusedStep:
         maybe_probe_for_graph(traced.graph)
 
         self._lookup_trace_ids(traced)
+        refuse_custom_backward(traced.tracer, traced.loss_id, traced.param_ids)
         self._collect_stateful_targets(traced)
         exe = self._compile_fused_executable(traced)
         resolvers = self._build_resolvers(exe, traced, args)
