@@ -182,12 +182,12 @@ def _eager(case: str, device: str) -> tuple[dict[str, list | None], nn.Module]:
     return grads, model
 
 
-def _warns_on_metal(case: str, device: str):
-    """The fallback's warning, naming the ``Function``, where the step compiles."""
+def _warns_on_metal(function: str, device: str):
+    """The fallback's warning, naming ``function``, where the step compiles."""
     if device != "metal":
         return warnings.catch_warnings()
     _NOTICED.discard("custom-backward")
-    return pytest.warns(CompileFallbackWarning, match=_CASES[case][0])
+    return pytest.warns(CompileFallbackWarning, match=function)
 
 
 def _step_and_update(
@@ -205,7 +205,7 @@ def test_make_step_trains_as_eager(case: str, device: str) -> None:
     want, eager = _eager(case, device)
     model = _model(case, device)
     step = make_step(model, F.mse_loss)
-    with _warns_on_metal(case, device):
+    with _warns_on_metal(_CASES[case][0], device):
         got = _step_and_update(model, step, device)
     _assert_same(got, want)
     _assert_same(
@@ -221,7 +221,7 @@ def test_compiled_module_step_trains_as_eager(case: str, device: str) -> None:
     want, _ = _eager(case, device)
     model = _model(case, device)
     compiled = lucid.compile(model)
-    with _warns_on_metal(case, device):
+    with _warns_on_metal(_CASES[case][0], device):
         got = _step_and_update(
             model, lambda x, t: compiled.step(x, t, loss_fn=F.mse_loss), device
         )
@@ -233,7 +233,7 @@ def test_segmented_step_trains_as_eager(case: str, device: str) -> None:
     want, _ = _eager(case, device)
     model = _model(case, device)
     step = make_step(model, F.mse_loss, segments=3)
-    with _warns_on_metal(case, device):
+    with _warns_on_metal(_CASES[case][0], device):
         got = _step_and_update(model, step, device)
     _assert_same(got, want)
     assert step.eager_only["flag"]
@@ -246,7 +246,7 @@ def test_fused_step_updates_as_eager(case: str, device_gpu_only: str) -> None:
     model = _model(case, device)
     step = fused_step(model, F.mse_loss, optim.SGD(model.parameters(), lr=0.5))
     x, t = _data(device)
-    with _warns_on_metal(case, device):
+    with _warns_on_metal(_CASES[case][0], device):
         step(x, t)
     assert step.cache_info()["eager_only"]
     _assert_same(
@@ -307,6 +307,107 @@ def test_a_quantization_aware_model_trains_as_eager(device: str) -> None:
     F.mse_loss(eager(x), t).backward()
     model = net()
     step = make_step(model, F.mse_loss)
-    with _warns_on_metal("fake-quantized weight", device):
+    with _warns_on_metal("_FakeQuantizeAffine", device):
         step(x, t).backward()
     _assert_same(_grads(model), _grads(eager))
+
+
+# ── each part of the rule, alone ──────────────────────────────────────────
+#
+# Every case above is caught by one clause of the rule: an output computed
+# from a parameter.  These three are each caught by one other clause alone.
+
+
+class _IgnoresWeight(Function):
+    """Returns ``x``; ``forward`` never reads ``w``, ``backward`` still answers for it."""
+
+    @staticmethod
+    def forward(ctx, w, x):
+        del ctx, w
+        return x * 1
+
+    @staticmethod
+    def backward(ctx, g):
+        del ctx
+        return g.sum(dim=0), g
+
+
+class _HandsBack(Function):
+    """Returns its input itself, the trace's id for it not yet made."""
+
+    @staticmethod
+    def forward(ctx, w):
+        del ctx
+        return w
+
+    @staticmethod
+    def backward(ctx, g):
+        del ctx
+        return g * 3
+
+
+#: name → (the Function, the block in front of a ``Linear``).  ``w`` is a
+#: ``(4,)`` parameter, ``x`` the batch.
+_CLAUSES: dict[str, tuple[str, Callable[..., lucid.Tensor]]] = {
+    # The trace never records ``w``: only "an input is a leaf that requires
+    # grad" sees that a gradient goes to it.
+    "leaf input forward ignores": (
+        "_IgnoresWeight",
+        lambda w, x: _IgnoresWeight.apply(w, x),
+    ),
+    # ``w * 2`` comes from a parameter, the output only from the batch: only
+    # the inputs' side of "comes from a source" sees it.
+    "input computed from a parameter": (
+        "_IgnoresWeight",
+        lambda w, x: _IgnoresWeight.apply(w * 2, x),
+    ),
+    # ``w`` has no id until ``x * w`` consumes it: only the second look-up of
+    # the outputs' ids sees that one leads to the loss.  Eager hands ``w``
+    # back with the node on it (LCD-558), so only a first step is compared.
+    "parameter handed back": ("_HandsBack", lambda w, x: x * _HandsBack.apply(w)),
+}
+
+
+class _Weighted(nn.Module):
+    def __init__(self, clause: str) -> None:
+        super().__init__()
+        self.block = _CLAUSES[clause][1]
+        self.w = nn.Parameter(lucid.randn(4))
+        self.head = nn.Linear(4, 3)
+
+    def forward(self, x: lucid.Tensor) -> lucid.Tensor:
+        return self.head(self.block(self.w, x))
+
+
+def _weighted(clause: str, device: str) -> _Weighted:
+    lucid.manual_seed(0)
+    return _Weighted(clause).to(device)
+
+
+@pytest.mark.parametrize("clause", sorted(_CLAUSES))
+def test_each_clause_alone_sends_the_step_eager(clause: str, device: str) -> None:
+    x, t = _data(device)
+    eager = _weighted(clause, device)
+    F.mse_loss(eager(x), t).backward()
+    model = _weighted(clause, device)
+    step = make_step(model, F.mse_loss)
+    with _warns_on_metal(_CLAUSES[clause][0], device):
+        step(x, t).backward()
+    _assert_same(_grads(model), _grads(eager))
+    assert len(step.eager_only) == 1
+
+
+@pytest.mark.parametrize("clause", sorted(_CLAUSES))
+def test_each_clause_alone_makes_compiled_step_refuse(
+    clause: str, device_gpu_only: str
+) -> None:
+    model = _weighted(clause, device_gpu_only)
+    x, t = _data(device_gpu_only)
+    if clause == "leaf input forward ignores":
+        # A parameter the trace never saw stops compiled_step first.
+        with pytest.raises(RuntimeError, match="not observed in the trace"):
+            compiled_step(model, x, lambda y: F.mse_loss(y, t))
+    else:
+        with pytest.raises(NotImplementedError, match=_CLAUSES[clause][0]):
+            compiled_step(model, x, lambda y: F.mse_loss(y, t))
+    assert all(p.grad is None for p in model.parameters())
