@@ -200,6 +200,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - add custom Metal f32-accumulating half reduction kernels
 
+- share spent-subgraph parts so the cut is linear
+
 ### Fixed
 
 - training batch normalization rejects a single value per channel before changing running stats

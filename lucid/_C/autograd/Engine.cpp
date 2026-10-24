@@ -11,7 +11,10 @@
 #include "Engine.h"
 
 #include <algorithm>
+#include <iterator>
+#include <limits>
 #include <map>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -57,6 +60,50 @@ void refuse_released(const Node& node, bool graph) {
         ErrorBuilder("backward").fail(std::string(kSecondPass) + " (" + node.node_name() + ")");
 }
 
+// One node of a severed subgraph and everything below it, by sequence
+// number: the node's own and the parts of the nodes it sent gradients to.
+// What a marker's subgraph held is the parts below it, shared with every
+// other marker whose subgraph overlaps.  Copying the numbers into each marker
+// instead made a chain of N saving nodes hold N²/2 of them, built in time to
+// match: a default backward() was quadratic in the graph (LCD-542).
+class SpentPart {
+public:
+    using Ptr = std::shared_ptr<SpentPart>;
+
+    // The number of a part that stands for no node of its own — the union
+    // a marker over several edges holds.
+    static constexpr std::uint64_t kUnion = std::numeric_limits<std::uint64_t>::max();
+
+    SpentPart(std::uint64_t sequence_nr, std::vector<Ptr> below)
+        : sequence_nr_(sequence_nr), below_(std::move(below)) {}
+
+    SpentPart(const SpentPart&) = delete;
+    SpentPart& operator=(const SpentPart&) = delete;
+
+    // Released by a loop, not by recursion: a chain of saving nodes leaves
+    // a chain of parts as long as the graph, and each level of a recursive
+    // release took a stack frame.
+    ~SpentPart() {
+        std::vector<Ptr> doomed = std::move(below_);
+        while (!doomed.empty()) {
+            Ptr part = std::move(doomed.back());
+            doomed.pop_back();
+            if (part.use_count() == 1) {
+                std::move(part->below_.begin(), part->below_.end(), std::back_inserter(doomed));
+                part->below_.clear();
+            }
+        }
+    }
+
+    std::uint64_t sequence_nr() const noexcept { return sequence_nr_; }
+
+    const std::vector<Ptr>& below() const noexcept { return below_; }
+
+private:
+    std::uint64_t sequence_nr_;
+    std::vector<Ptr> below_;
+};
+
 // What a node holds once a pass has freed the values its eager backward
 // reads.  Clearing its edges to nothing made ``grad()`` read it as a dead end
 // — reporting every input behind it unreachable, and under ``allow_unused``
@@ -64,18 +111,17 @@ void refuse_released(const Node& node, bool graph) {
 // replacing the root's own ``grad_fn`` hid that nothing between the root and
 // an interior tensor or another branch had been freed (LCD-493).
 //
-// Severing at the *frontier* — the nodes in ``freed`` whose eager-read values
-// were actually released — keeps the save-free nodes above them wired and
-// frees the subgraph below them.  Each freed node's outgoing edges are
-// replaced by a single edge to a :class:`SpentGraphNode` carrying the
-// sequence numbers of the subgraph that node could reach, so a later pass
-// that tries to differentiate *past* ``freed`` towards a target in that
-// subgraph still routes into ``freed`` and hits ``refuse_released``, while a
-// pass that stops at an interior tensor above ``freed`` (or follows an
-// untouched branch) never reaches ``freed`` at all.
+// Severing at the *frontier* — the nodes whose eager-read values were
+// released — keeps the save-free nodes above them wired and frees the
+// subgraph below them.  Each such node's outgoing edges are replaced by a
+// single edge to a :class:`SpentGraphNode` holding the parts of the subgraph
+// that node could reach, so a later pass that tries to differentiate *past*
+// it towards a target in that subgraph still routes into it and hits
+// ``refuse_released``, while a pass that stops at an interior tensor above
+// it (or follows an untouched branch) never reaches it at all.
 class SpentGraphNode final : public Node {
 public:
-    explicit SpentGraphNode(std::vector<std::uint64_t> held) : held_(std::move(held)) {
+    explicit SpentGraphNode(SpentPart::Ptr below) : below_(std::move(below)) {
         mark_released(SavedKind::kEagerValues);
     }
 
@@ -93,19 +139,16 @@ public:
 
     std::string node_name() const override { return "SpentGraph"; }
 
-    // Whether ``node`` was part of the spent subgraph.  Matched by sequence
-    // number, unique for the life of the process, so a node made after the
-    // subgraph was freed is never taken for one of its own.
-    bool held(const Node& node) const {
-        return std::binary_search(held_.begin(), held_.end(), node.sequence_nr());
-    }
-
-    const std::vector<std::uint64_t>& held_sequence() const noexcept { return held_; }
+    // The subgraph the node above this one was cut from, never null.  Its
+    // nodes are matched by sequence number, unique for the life of the
+    // process, so a node made after the subgraph was freed is never taken
+    // for one of its own.
+    const SpentPart::Ptr& below() const noexcept { return below_; }
 
 private:
     static void refuse() { ErrorBuilder("backward").fail(kSecondPass); }
 
-    std::vector<std::uint64_t> held_;
+    SpentPart::Ptr below_;
 };
 
 // ``node`` as a spent frontier marker, or null.  Only a SpentGraphNode is
@@ -430,35 +473,97 @@ std::vector<std::shared_ptr<Node>> topo_order(const std::vector<std::shared_ptr<
     return order;
 }
 
-// After a pass that did not retain its graph, sever the outgoing edges of each
-// node whose eager-read values were freed in this pass (``freed``), replacing
-// them with a single edge to a :class:`SpentGraphNode` that records the
-// sequence numbers of the subgraph below that node.  Iterating leaf-first lets
-// each freed node fold in the sequence numbers of any already-severed
-// descendants without walking their subgraphs again, while leaving every
-// save-free node above ``freed`` (and every untouched branch) wired.
-void sever_frontier(const std::vector<std::shared_ptr<Node>>& freed) {
-    for (auto it = freed.rbegin(); it != freed.rend(); ++it) {
-        Node& node = **it;
-        const auto sub = topo_order({*it});
-        std::vector<std::uint64_t> held;
-        for (const auto& desc : sub) {
-            if (desc.get() == &node)
-                continue;
-            if (const auto* spent = as_spent(*desc)) {
-                const auto& prev = spent->held_sequence();
-                held.insert(held.end(), prev.begin(), prev.end());
-            } else {
-                held.push_back(desc->sequence_nr());
-            }
-        }
-        if (held.empty()) {
-            node.set_next_edges({});
+// The part of each node below a pass's frontier, and the frontier nodes to
+// cut, with what the marker each is cut to holds (null: nothing below).
+using SpentParts = std::unordered_map<const Node*, SpentPart::Ptr>;
+using SpentCuts = std::vector<std::pair<Node*, SpentPart::Ptr>>;
+
+// The part ``node`` stands for, once each node below it has one in
+// ``parts``.  A node whose eager-read values were freed — by this pass or an
+// earlier one — is cut (``cuts``): its marker holds the union of what is
+// below it, and its own part adds only its number.  An earlier marker
+// stands for what it holds already.
+SpentPart::Ptr spent_part(Node& node, const SpentParts& parts, SpentCuts& cuts) {
+    if (const auto* marker = as_spent(node))
+        return marker->below();
+    // A part linked twice is still searched once (SpentSearch), so only an
+    // adjacent repeat — ``x * x`` — is dropped: a ``cat`` of every step has
+    // an edge per step, and checking each against the rest would be
+    // quadratic in them.
+    std::vector<SpentPart::Ptr> below;
+    for (const auto& edge : node.next_edges()) {
+        if (!edge.node)
             continue;
+        const SpentPart::Ptr& part = parts.at(edge.node.get());
+        if (below.empty() || below.back() != part)
+            below.push_back(part);
+    }
+    if (!node.saved_released())
+        return std::make_shared<SpentPart>(node.sequence_nr(), std::move(below));
+    if (below.empty()) {
+        cuts.emplace_back(&node, nullptr);
+        return std::make_shared<SpentPart>(node.sequence_nr(), std::move(below));
+    }
+    if (below.size() > 1)
+        below = {std::make_shared<SpentPart>(SpentPart::kUnion, std::move(below))};
+    cuts.emplace_back(&node, below.front());
+    return std::make_shared<SpentPart>(node.sequence_nr(), std::move(below));
+}
+
+// After a pass that did not retain its graph, cut each node whose eager-read
+// values were freed from the subgraph below it, replacing its outgoing edges
+// with a single edge to a :class:`SpentGraphNode` holding that subgraph's
+// parts, while every save-free node above them (and every untouched branch)
+// stays wired.
+//
+// One post-order walk from ``freed``, the nodes this pass freed, gives each
+// node below them its part from its children's.  Walking each freed node's
+// subgraph again, one freed node after another, was what made the cut
+// quadratic.  The edges are replaced only once the walk is done, so it never
+// meets a node a replacement has freed.
+void sever_frontier(const std::vector<std::shared_ptr<Node>>& freed) {
+    if (freed.empty())
+        return;
+    SpentParts parts;
+    parts.reserve(2 * freed.size());
+    SpentCuts cuts;
+    cuts.reserve(freed.size());
+
+    struct Frame {
+        Node* node;
+        SpentPart::Ptr* part;
+        std::size_t edge_idx;
+    };
+    std::vector<Frame> stack;
+    for (const auto& top : freed) {
+        auto [it, fresh] = parts.try_emplace(top.get());
+        if (!fresh)
+            continue;
+        stack.push_back({top.get(), &it->second, 0});
+        while (!stack.empty()) {
+            Frame& f = stack.back();
+            const auto& edges = f.node->next_edges();
+            if (f.edge_idx < edges.size()) {
+                Node* next = edges[f.edge_idx++].node.get();
+                if (next == nullptr)
+                    continue;
+                auto [nit, unseen] = parts.try_emplace(next);
+                if (unseen)
+                    stack.push_back({next, &nit->second, 0});
+                continue;
+            }
+            *f.part = spent_part(*f.node, parts, cuts);
+            stack.pop_back();
         }
-        std::sort(held.begin(), held.end());
-        held.erase(std::unique(held.begin(), held.end()), held.end());
-        node.set_next_edges({Edge(std::make_shared<SpentGraphNode>(std::move(held)), 0)});
+    }
+
+    // In post-order a node is cut after every node below it, so whatever a
+    // cut frees was cut already.
+    for (auto& [node, below] : cuts) {
+        std::vector<Edge> edges;
+        if (below)
+            edges.emplace_back(std::make_shared<SpentGraphNode>(std::move(below)), 0);
+        node->set_next_edges(std::move(edges));
     }
 }
 
@@ -905,20 +1010,71 @@ bool captures_at_barrier(const Node* barrier,
                        [&](std::size_t s) { return inputs[s]->grad_output_nr() == input_nr; });
 }
 
-// Whether ``node`` is a spent root whose freed graph held a requested input.
+// Whether a spent marker's subgraph held a requested input.
 //
-// The spent root has no edges, so the walk cannot follow the gradient past
-// it.  Read as a dead end, it hid every input in the graph it stands for: a
+// A marker has no edges, so the walk cannot follow the gradient past it.
+// Read as a dead end, it hid every input in the subgraph it stands for: a
 // second grad() reported them unreachable — and under allow_unused, or from
 // backward(inputs=), answered None without a word — where the reference
 // refuses the pass.
-bool spent_reaches(const Node& node, const CaptureTargets& targets) {
-    const auto* spent = as_spent(node);
-    if (spent == nullptr)
+//
+// Markers whose subgraphs overlap share the parts below the overlap, and the
+// answer for each part searched is kept for the next marker, so one grad()
+// searches each part once.  What is kept is an answer, not a visit: a part
+// is recorded as reaching no request only once everything below it has been
+// searched, and every part on the way to one that does is recorded as
+// reaching it.  Taking a part already visited for a dead end would answer
+// for the second marker what was true only of the first.
+class SpentSearch {
+public:
+    explicit SpentSearch(const CaptureTargets& targets) {
+        wanted_.reserve(targets.by_node.size());
+        for (const auto& target : targets.by_node)
+            wanted_.push_back(target.first->sequence_nr());
+        std::sort(wanted_.begin(), wanted_.end());
+    }
+
+    bool reaches(const SpentGraphNode& marker) {
+        bool hit = enter(*marker.below());
+        while (!hit && !stack_.empty()) {
+            Frame& f = stack_.back();
+            if (f.next == f.part->below().size()) {
+                stack_.pop_back();
+                continue;
+            }
+            const SpentPart* next = f.part->below()[f.next++].get();
+            hit = enter(*next);
+        }
+        for (const Frame& f : stack_)
+            known_[f.part] = true;
+        stack_.clear();
+        return hit;
+    }
+
+private:
+    struct Frame {
+        const SpentPart* part;
+        std::size_t next;
+    };
+
+    // Whether ``part`` is known to reach a request or is one; otherwise it
+    // is searched next, unless it was searched already.
+    bool enter(const SpentPart& part) {
+        auto [it, fresh] = known_.try_emplace(&part, false);
+        if (!fresh)
+            return it->second;
+        if (std::binary_search(wanted_.begin(), wanted_.end(), part.sequence_nr())) {
+            it->second = true;
+            return true;
+        }
+        stack_.push_back({&part, 0});
         return false;
-    return std::any_of(targets.by_node.begin(), targets.by_node.end(),
-                       [&](const auto& target) { return spent->held(*target.first); });
-}
+    }
+
+    std::vector<std::uint64_t> wanted_;
+    std::unordered_map<const SpentPart*, bool> known_;
+    std::vector<Frame> stack_;
+};
 
 // The nodes from which some requested input is still reachable.
 //
@@ -936,15 +1092,20 @@ bool spent_reaches(const Node& node, const CaptureTargets& targets) {
 // One reverse sweep suffices: ``order`` is topological, so a node's
 // successors have already been decided by the time it is examined.
 //
-// A spent root reaches what its freed graph held (``spent_reaches``), so it
-// is sent its gradient and refuses the pass there, as backward() refuses it.
+// A spent marker reaches what its subgraph held (SpentSearch), so it is sent
+// its gradient and refuses the pass there, as backward() refuses it.
 std::unordered_set<const Node*> reaching_nodes(const std::vector<std::shared_ptr<Node>>& order,
                                                const CaptureTargets& targets) {
     std::unordered_set<const Node*> reaching;
+    std::optional<SpentSearch> spent;  // made at the first marker
     for (auto it = order.rbegin(); it != order.rend(); ++it) {
         const Node* node = it->get();
-        bool hit =
-            targets.by_node.find(node) != targets.by_node.end() || spent_reaches(*node, targets);
+        bool hit = targets.by_node.find(node) != targets.by_node.end();
+        if (const auto* marker = hit ? nullptr : as_spent(*node)) {
+            if (!spent)
+                spent.emplace(targets);
+            hit = spent->reaches(*marker);
+        }
         if (!hit) {
             for (const auto& edge : node->next_edges()) {
                 if (edge.node && reaching.find(edge.node.get()) != reaching.end()) {
@@ -965,13 +1126,12 @@ std::unordered_set<const Node*> reaching_nodes(const std::vector<std::shared_ptr
 // itself, but its gradient is captured rather than propagated unless a
 // *further* request sits upstream of it.  An AccumulateGrad has no edges, so
 // it never propagates — executing one is precisely what writes a leaf's
-// .grad, which this path never does.  A spent root that reaches a request
-// runs, so that it refuses.
-bool propagates(const Node* node,
-                const std::unordered_set<const Node*>& reaching,
-                const CaptureTargets& targets) {
-    if (spent_reaches(*node, targets))
-        return true;
+// .grad, which this path never does.  A spent marker that reaches a request
+// runs, so that it refuses — and it is in ``reaching`` only then, as it is no
+// requested input's grad_fn.
+bool propagates(const Node* node, const std::unordered_set<const Node*>& reaching) {
+    if (as_spent(*node) != nullptr)
+        return reaching.find(node) != reaching.end();
     for (const auto& edge : node->next_edges()) {
         if (edge.node && reaching.find(edge.node.get()) != reaching.end())
             return true;
@@ -1010,7 +1170,7 @@ struct GradPlan {
     bool hold_at(const Node* next, std::uint32_t slot) const {
         return next->is_barrier() &&
                (has_slot_hooks(*next, slot) || captures_at_barrier(next, slot, targets, inputs) ||
-                !propagates(next, reaching, targets));
+                !propagates(next, reaching));
     }
 };
 
@@ -1082,7 +1242,7 @@ void grad_for_graph(const std::vector<BackwardRoot>& roots,
         if (!plan.on_path(node.get()))
             continue;
 
-        const bool runs = propagates(node.get(), plan.reaching, plan.targets);
+        const bool runs = propagates(node.get(), plan.reaching);
 
         // Hooks before the checks, as in backward().
         SlotGrads<TensorImplPtr> slots;
@@ -1159,7 +1319,7 @@ void grad_eager(const std::vector<BackwardRoot>& roots,
         if (!plan.on_path(node.get()))
             continue;
 
-        const bool runs = propagates(node.get(), plan.reaching, plan.targets);
+        const bool runs = propagates(node.get(), plan.reaching);
 
         // Hooks before the checks, as in backward().
         SlotGrads<Storage> slots;

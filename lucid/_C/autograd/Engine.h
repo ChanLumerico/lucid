@@ -122,9 +122,9 @@ public:
     // The engine consumes nodes destructively when ``retain_graph=false``:
     // ``release_saved()`` frees the forward tensors each node had stashed
     // for its backward formula — and, when the node can never run again,
-    // the tensor hooks it held — and, when that freed values an eager pass
-    // reads, ``root``'s grad_fn becomes a spent node, which severs the
-    // producer→graph reference so the chain of shared_ptrs collapses.
+    // the tensor hooks it held — and each node whose release freed values
+    // an eager pass reads is cut from the subgraph below it, which a spent
+    // marker then stands for, so the chain of shared_ptrs below collapses.
     //
     // Examples
     // --------
@@ -141,9 +141,9 @@ public:
     // under the second one, and ran the hooks of a shared tensor once per
     // root, each time on that root's part of its gradient.
     //
-    // A pass without ``retain_graph`` frees what it ran.  The roots are
-    // severed from their graphs only when that freed values an eager
-    // backward reads (Node::saved_kind): a graph that saved none runs again,
+    // A pass without ``retain_graph`` frees what it ran.  Only the nodes
+    // whose release freed values an eager backward reads (Node::saved_kind)
+    // are cut from what is below them: a graph that saved none runs again,
     // as the reference allows.
     static void backward(const std::vector<BackwardRoot>& roots,
                          bool retain_graph = false,
