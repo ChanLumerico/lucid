@@ -32,7 +32,6 @@
 #include "../core/TensorImpl.h"
 #include "../ops/gfunc/Gfunc.h"
 #include "AccumulateGrad.h"
-#include "FusionPass.h"
 #include "GraphBarrier.h"
 #include "GraphOps.h"
 #include "Helpers.h"
@@ -738,15 +737,6 @@ void check_result_count(const Node& node, std::size_t n) {
         ErrorBuilder("Engine::backward").fail("input_grads/next_edges size mismatch");
 }
 
-// The fusion pass (e.g. LinearBackward + ReluBackward into one node), once
-// per graph the roots stand on; anomaly mode reports the unfused nodes.
-void fuse(const std::vector<std::shared_ptr<Node>>& fns) {
-    if (is_anomaly_enabled())
-        return;
-    for (const auto& fn : fns)
-        run_fusion_pass(fn.get());
-}
-
 // Hand each root's seed to its grad_fn, on the slot the root stands for.  A
 // leaf with no graph was given its seed already.
 template <typename Seed, typename Route>
@@ -817,7 +807,6 @@ static void backward_for_graph(const std::vector<BackwardRoot>& roots,
     const auto fns = root_nodes(roots);
     if (fns.empty())
         return;
-    fuse(fns);
     const auto order = topo_order(fns);
 
     GraphPending pending;
@@ -862,7 +851,6 @@ static void eager_backward(const std::vector<BackwardRoot>& roots,
     const auto fns = root_nodes(roots);
     if (fns.empty())
         return;
-    fuse(fns);
     const auto order = topo_order(fns);
 
     Pending pending;
@@ -1371,8 +1359,6 @@ std::vector<TensorImplPtr> Engine::grad(const std::vector<BackwardRoot>& roots,
     std::vector<TensorImplPtr> results(inputs.size());
 
     const auto fns = root_nodes(roots);
-    if (!create_graph)
-        fuse(fns);
     const auto order = topo_order(fns);
     const GradPlan plan{inputs, targets, reaching_nodes(order, targets)};
 

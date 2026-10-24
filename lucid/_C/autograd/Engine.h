@@ -37,13 +37,11 @@ struct BackwardRoot {
 // 1. Compute a reverse-topological ordering of the backward graph using an
 //    iterative post-order DFS (the recursive form would overflow on deep
 //    networks).
-// 2. Optionally run a fusion pass that collapses adjacent backward nodes
-//    (e.g. ``LinearBackward`` + ``ReluBackward``) into a single fused node.
-// 3. Walk the ordering once, calling each node's ``apply()``; gradients
+// 2. Walk the ordering once, calling each node's ``apply()``; gradients
 //    arriving at a node from multiple producers are summed into a pending
 //    map before the node is executed.  A barrier (a node with several
 //    output slots) takes them slot by slot instead.
-// 4. When a node is popped, before it runs, the hooks of the tensors it
+// 3. When a node is popped, before it runs, the hooks of the tensors it
 //    produced (``Tensor.register_hook``) run on their slot's whole gradient
 //    and what they return is what the node receives; then ``retain_grad``
 //    keeps that value in the tensor's ``.grad``.  The gradients of a hooked
@@ -52,9 +50,12 @@ struct BackwardRoot {
 //    null test and Python is never called.  The node's own checks (saved
 //    state already freed, saved inputs written in place) come after its
 //    hooks, which may themselves run a backward through it.
-// 5. Leaves (tensors with no ``grad_fn``) are reached through their
+// 4. Leaves (tensors with no ``grad_fn``) are reached through their
 //    :class:`AccumulateGrad` sentinel, which runs the leaf's own hooks and
 //    then writes the final gradient into ``leaf.grad``.
+// 5. Without ``retain_graph``, each node frees what it saved once it has
+//    run, and one more walk cuts the nodes whose release freed values an
+//    eager backward reads from the subgraph below them.
 //
 // All four traversals — ``backward``, ``backward(create_graph=True)``,
 // ``grad`` and ``grad(create_graph=True)`` — run the hooks the same way;

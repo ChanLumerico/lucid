@@ -302,32 +302,37 @@ def _gru_loss(steps: int) -> lucid.Tensor:
     return h.sum()
 
 
-def _backward_seconds(build: Callable[[int], lucid.Tensor], size: int) -> float:
+def _backward_seconds(
+    build: Callable[[int], lucid.Tensor], size: int, retain: bool
+) -> float:
     best = float("inf")
     for _ in range(3):
         loss = build(size)
         gc.collect()
         start = time.perf_counter()
-        loss.backward()
+        loss.backward(retain_graph=retain)
         best = min(best, time.perf_counter() - start)
         del loss
     return best
 
 
+@pytest.mark.parametrize("retain", [False, True], ids=["default", "retain-graph"])
 @pytest.mark.parametrize(
     ("build", "size"),
     [(_chain_loss, 2500), (_gru_loss, 150)],
     ids=["mul-chain", "gru-cell-bptt"],
 )
-def test_a_default_backward_is_linear_in_the_graph(
-    build: Callable[[int], lucid.Tensor], size: int
+def test_a_backward_is_linear_in_the_graph(
+    build: Callable[[int], lucid.Tensor], size: int, retain: bool
 ) -> None:
-    # Quadratic was 16 ms at a 2,000-node chain and 62 ms at 4,000, and a
-    # GRUCell unrolled 500 steps took 0.6 s where retain_graph=True took
-    # 8 ms.  Doubling a linear pass doubles its time; the slack absorbs a
-    # loaded machine.  The cut is host-side work, the same on every device.
-    small = _backward_seconds(build, size)
-    large = _backward_seconds(build, 2 * size)
+    # The cut was quadratic: 16 ms at a 2,000-node chain and 62 ms at
+    # 4,000, and a GRUCell unrolled 500 steps took 0.6 s where
+    # retain_graph=True took 8 ms.  Every pass also ran a fusion pass that
+    # fused nothing and erased from the middle of a vector the size of the
+    # graph.  Doubling a linear pass doubles its time; the slack absorbs a
+    # loaded machine.  Both are host-side work, the same on every device.
+    small = _backward_seconds(build, size, retain)
+    large = _backward_seconds(build, 2 * size, retain)
     assert large < 3 * small + 0.002, (
         f"{size}: {small:.4f} s, {2 * size}: {large:.4f} s"
     )
