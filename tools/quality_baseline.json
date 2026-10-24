@@ -1036,7 +1036,7 @@
     "lucid/nn/modules/normalization.py": 571,
     "lucid/nn/modules/pooling.py": 769,
     "lucid/nn/modules/rnn.py": 58,
-    "lucid/optim/lr_scheduler.py": 291,
+    "lucid/optim/lr_scheduler.py": 285,
     "lucid/special/__init__.py": 894,
     "lucid/utils/transforms/_color.py": 274
    },

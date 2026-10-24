@@ -6,7 +6,14 @@ from bisect import bisect_right
 from collections.abc import Callable
 import math
 from typing import override
-from lucid.optim._scheduler_base import _LRScheduler, _holds_a_callable
+from lucid.optim._scheduler_base import (
+    _CheckpointState,
+    _CompositeSchedulerMixin,
+    _LRScheduler,
+    _check_schedulers,
+    _require_group_keys,
+    _reset_to_base,
+)
 from lucid.optim.optimizer import (
     Optimizer,
     _CyclicLike,
@@ -600,7 +607,7 @@ class CyclicLR(_LRScheduler, _CyclicLike):
         return _cyclic_get_lr(self, math.floor(1 + self.last_epoch / self.total_size))
 
 
-class ReduceLROnPlateau:
+class ReduceLROnPlateau(_CheckpointState):
     r"""Reduce the learning rate when a monitored metric stops improving.
 
     Once the metric fails to improve by more than ``threshold`` for
@@ -677,6 +684,8 @@ class ReduceLROnPlateau:
     ... )
     """
 
+    _steps_on_a_metric = True  # so the composites, which step without one, refuse it
+
     def __init__(
         self,
         optimizer: Optimizer,
@@ -704,18 +713,6 @@ class ReduceLROnPlateau:
         self._best: float = float("inf") if mode == "min" else float("-inf")
         self._num_bad_epochs = 0
         self._cooldown_counter = 0
-
-    def state_dict(self) -> dict[str, object]:
-        """Serialisable state — see :meth:`_LRScheduler.state_dict`."""
-        return {
-            k: v
-            for k, v in self.__dict__.items()
-            if k != "optimizer" and not _holds_a_callable(v)
-        }
-
-    def load_state_dict(self, state_dict: dict[str, object]) -> None:
-        """Restore state produced by :meth:`state_dict`."""
-        self.__dict__.update(state_dict)
 
     def step(self, metrics: float) -> None:
         """Update the scheduler with the latest monitored metric value."""
@@ -1063,7 +1060,9 @@ class ConstantLR(_LRScheduler):
         Wrapped optimizer.
     factor : float, optional
         Multiplicative factor applied to the base LR during the constant
-        phase, in ``(0, 1]`` (default: ``1/3``).
+        phase, in ``[0, 1]`` (default: ``1/3``).  A factor of ``0`` has
+        nothing to scale back up, so the step that reaches ``total_iters``
+        raises ``ValueError``.
     total_iters : int, optional
         Number of epochs to hold the scaled LR before restoring the base
         value (default: ``5``).
@@ -1110,10 +1109,8 @@ class ConstantLR(_LRScheduler):
         verbose: bool = False,
     ) -> None:
         """Initialise the ConstantLR.  See the class docstring for parameter semantics."""
-        # The rate is scaled back up by 1 / factor at total_iters, which a
-        # factor of zero has no inverse for.
-        if not 0.0 < factor <= 1.0:
-            raise ValueError(f"ConstantLR: factor must be in (0, 1], got {factor}")
+        if not 0.0 <= factor <= 1.0:
+            raise ValueError(f"ConstantLR: factor must be in [0, 1], got {factor}")
         self.factor = factor
         self.total_iters = total_iters
         super().__init__(optimizer, last_epoch, verbose)
@@ -1132,6 +1129,12 @@ class ConstantLR(_LRScheduler):
             return [lr * self.factor for lr in self._group_lrs()]
         if self.last_epoch != self.total_iters:
             return self._group_lrs()
+        if self.factor == 0.0:
+            # Where the reference divides by zero: the step refuses instead.
+            raise ValueError(
+                "ConstantLR: factor=0 cannot be restored at total_iters; use a "
+                "larger total_iters or SequentialLR"
+            )
         return [lr * (1.0 / self.factor) for lr in self._group_lrs()]
 
     @override
@@ -1331,9 +1334,25 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
         self.T_0 = T_0
         self.T_mult = T_mult
         self.eta_min = eta_min
-        self._T_cur = 0
+        self._T_cur = last_epoch  # a resumed one is that far in, not at the start
         self._T_i = T_0
         super().__init__(optimizer, last_epoch, verbose)
+
+    def _advance_cycle(self) -> None:
+        """Move a step through the cycle — to its start, before step 0 — as the reference."""
+        if self.last_epoch < 0:
+            self._T_cur, self._T_i = 0, self.T_0
+            return
+        self._T_cur += 1
+        if self._T_cur >= self._T_i:
+            self._T_cur %= self._T_i
+            self._T_i *= self.T_mult
+
+    @override
+    def _initial_step(self) -> None:
+        """Write step 0's rates, at the cycle position ``last_epoch`` puts it."""
+        self._advance_cycle()
+        super()._initial_step()
 
     @override
     def step(self) -> None:
@@ -1345,10 +1364,7 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
         epoch (or each iteration, depending on the schedule).
         """
         cycle = (self._T_cur, self._T_i)
-        self._T_cur += 1
-        if self._T_cur >= self._T_i:
-            self._T_cur -= self._T_i
-            self._T_i *= self.T_mult
+        self._advance_cycle()
         try:
             super().step()
         except ValueError:
@@ -1492,54 +1508,12 @@ class OneCycleLR(_LRScheduler, _OneCycleLike):
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step."""
         # The phases read their bounds off each group, so a group added
-        # later is scheduled if it carries them.  Checked before any
+        # later is scheduled if it carries them; checked before any
         # group's momentum is touched.
-        keys = ["initial_lr", "max_lr", "min_lr"]
-        if self.cycle_momentum:
-            keys += ["max_momentum", "base_momentum"]
-        for i, group in enumerate(self.optimizer.param_groups):
-            missing = [k for k in keys if k not in group]
-            if missing:
-                raise ValueError(
-                    f"OneCycleLR: param group {i} has no {', '.join(missing)}, "
-                    "which the schedule reads off each group and sets only on the "
-                    "groups it was built over; build the scheduler after "
-                    f"add_param_group, or give the group {', '.join(keys)}"
-                )
+        keys = ("initial_lr", "max_lr", "min_lr")
+        momentum = ("max_momentum", "base_momentum") if self.cycle_momentum else ()
+        _require_group_keys("OneCycleLR", self.optimizer, keys + momentum)
         return _one_cycle_get_lr(self)
-
-
-class _CompositeSchedulerMixin:
-    """Shared checkpoint serialisation for composite schedulers."""
-
-    schedulers: list[_LRScheduler]
-
-    def state_dict(self) -> dict[str, object]:
-        """Serialisable state, including each wrapped scheduler's own state."""
-        own = {
-            k: v
-            for k, v in self.__dict__.items()
-            if k not in ("optimizer", "schedulers") and not _holds_a_callable(v)
-        }
-        own["schedulers"] = [sch.state_dict() for sch in self.schedulers]
-        return own
-
-    def load_state_dict(self, state_dict: dict[str, object]) -> None:
-        """Restore state produced by :meth:`state_dict`."""
-        incoming = dict(state_dict)
-        raw_children = incoming.pop("schedulers", None)
-        self.__dict__.update(incoming)
-        if raw_children is not None:
-            if not isinstance(raw_children, list):
-                raise TypeError("load_state_dict: 'schedulers' must be a list")
-            child_states: list[dict[str, object]] = raw_children
-            if len(child_states) != len(self.schedulers):
-                raise ValueError(
-                    f"{type(self).__name__}.load_state_dict: got {len(child_states)} child states "
-                    f"for {len(self.schedulers)} schedulers"
-                )
-            for sch, child in zip(self.schedulers, child_states, strict=True):
-                sch.load_state_dict(child)
 
 
 class SequentialLR(_CompositeSchedulerMixin):
@@ -1557,9 +1531,9 @@ class SequentialLR(_CompositeSchedulerMixin):
     ----------
     optimizer : Optimizer
         The optimizer shared by all schedulers.
-    schedulers : list of _LRScheduler
-        Ordered list of scheduler instances to activate in sequence.
-        Must have ``len(schedulers) == len(milestones) + 1``.
+    schedulers : list of _LRScheduler or ChainedScheduler
+        Schedulers to activate in sequence, on ``optimizer``.  Must have
+        ``len(schedulers) == len(milestones) + 1``.
     milestones : list of int
         Sorted list of epoch indices at which to switch to the next
         scheduler.
@@ -1570,7 +1544,7 @@ class SequentialLR(_CompositeSchedulerMixin):
     ----------
     optimizer : Optimizer
         The shared optimizer.
-    schedulers : list of _LRScheduler
+    schedulers : list of _LRScheduler or ChainedScheduler
         All schedulers in activation order.
     milestones : list of int
         Epoch indices marking scheduler transitions.
@@ -1605,20 +1579,19 @@ class SequentialLR(_CompositeSchedulerMixin):
     ...     scheduler.step()
     """
 
+    schedulers: list[_LRScheduler | ChainedScheduler]
+
     def __init__(
         self,
         optimizer: Optimizer,
-        schedulers: list[_LRScheduler],
+        schedulers: list[_LRScheduler | ChainedScheduler],
         milestones: list[int],
         last_epoch: int = -1,
     ) -> None:
         """Initialise the SequentialLR.  See the class docstring for parameter semantics."""
-        if not schedulers:
-            raise ValueError("SequentialLR expects at least one scheduler")
-        if any(sched.optimizer is not optimizer for sched in schedulers):
-            raise ValueError(
-                "SequentialLR expects all schedulers to belong to its optimizer"
-            )
+        _check_schedulers(
+            "SequentialLR", schedulers, optimizer, (_LRScheduler, ChainedScheduler)
+        )
         if len(milestones) != len(schedulers) - 1:
             raise ValueError(
                 f"SequentialLR expects one milestone fewer than schedulers, got "
@@ -1631,13 +1604,22 @@ class SequentialLR(_CompositeSchedulerMixin):
         # Each child took its own step 0 as it was built, one on top of the
         # other.  Start from the base again, take those steps back, and give
         # step 0 to the child that runs first only.
-        for group in optimizer.param_groups:
-            group["lr"] = _group_float(
-                group, "initial_lr" if "initial_lr" in group else "lr"
-            )
-        for sched in schedulers:
-            sched.last_epoch -= 1
+        _reset_to_base(optimizer)
+        self._undo_initial_step()
         schedulers[bisect_right(milestones, 0)]._initial_step()
+
+    @override
+    def load_state_dict(self, state_dict: dict[str, object]) -> None:
+        """Restore state produced by :meth:`state_dict`, from this or an older Lucid.
+
+        An older Lucid's state (it holds ``_idx``) counted ``last_epoch`` from
+        -1: one behind, which would put the switch a step late again.
+        """
+        incoming = dict(state_dict)
+        last = incoming.get("last_epoch")
+        if incoming.pop("_idx", None) is not None and isinstance(last, int):
+            incoming["last_epoch"] = last + 1
+        super().load_state_dict(incoming)
 
     def step(self) -> None:
         """Advance the active scheduler by one epoch, switching if a milestone is reached.
@@ -1670,7 +1652,7 @@ class SequentialLR(_CompositeSchedulerMixin):
                 # The child taking over starts its own schedule, at epoch 0
                 # and from the base: stepping it instead switched a step
                 # late and carried the outgoing child's rate into it.
-                sched._update_lr(0)
+                sched._restart()
             else:
                 sched.step()
         except ValueError:
@@ -1707,13 +1689,13 @@ class ChainedScheduler(_CompositeSchedulerMixin):
 
     Parameters
     ----------
-    schedulers : list of _LRScheduler
-        List of scheduler instances to step together.  All schedulers must
-        wrap the same optimizer.
+    schedulers : list of _LRScheduler, SequentialLR or ChainedScheduler
+        Schedulers to step together, all on the same optimizer.  A
+        ``ReduceLROnPlateau`` steps on a metric and is refused.
 
     Attributes
     ----------
-    schedulers : list of _LRScheduler
+    schedulers : list of _LRScheduler, SequentialLR or ChainedScheduler
         The chained schedulers stepped in order.
 
     Notes
@@ -1749,24 +1731,36 @@ class ChainedScheduler(_CompositeSchedulerMixin):
     ...     scheduler.step()
     """
 
+    schedulers: list[_LRScheduler | SequentialLR | ChainedScheduler]
+
     def __init__(
         self,
-        schedulers: list[_LRScheduler],
+        schedulers: list[_LRScheduler | SequentialLR | ChainedScheduler],
         optimizer: Optimizer | None = None,
     ) -> None:
         """Initialise the ChainedScheduler.  See the class docstring for parameter semantics."""
-        if not schedulers:
-            raise ValueError("ChainedScheduler expects at least one scheduler")
-        optimizer = optimizer or schedulers[0].optimizer
-        for sched in schedulers:
-            if sched.optimizer != optimizer:
-                raise ValueError(
-                    "ChainedScheduler expects all schedulers to belong to the same optimizer"
-                )
         # Nothing to write: each child took its step 0 on the rate the one
         # before it left, so the chain starts composed.
+        self.optimizer = _check_schedulers(
+            "ChainedScheduler",
+            schedulers,
+            optimizer,
+            (_LRScheduler, _CompositeSchedulerMixin),
+        )
         self.schedulers = schedulers
-        self.optimizer = optimizer
+
+    def _initial_step(self) -> None:
+        """Step 0 of a chain that runs first in a SequentialLR: each child steps once."""
+        for sched in self.schedulers:
+            sched.step()
+
+    def _restart(self) -> None:
+        """Start over at a SequentialLR milestone, as a chain that runs first does.
+
+        The reference has no closed form for a chain, and fails there instead.
+        """
+        _reset_to_base(self.optimizer)
+        self._initial_step()
 
     def step(self) -> None:
         """Step all chained schedulers simultaneously.

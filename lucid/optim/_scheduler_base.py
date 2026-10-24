@@ -1,6 +1,8 @@
 """
-The learning-rate scheduler base class and the checkpoint rule it shares.
+The learning-rate scheduler base classes and the rules the schedulers share.
 """
+
+from collections.abc import Sequence
 
 from lucid.optim.optimizer import Optimizer, _group_float
 
@@ -23,7 +25,52 @@ def _holds_a_callable(value: object) -> bool:
     return False
 
 
-class _LRScheduler:
+class _CheckpointState:
+    """A scheduler's checkpoint: its attributes, less the optimizer and callables."""
+
+    def state_dict(self) -> dict[str, object]:
+        """Serialisable scheduler state, for checkpoint / resume.
+
+        Mirrors the optimizer's contract: everything needed to continue the
+        schedule exactly, minus the ``optimizer`` itself (the caller already
+        holds it) and minus any callable hyper-parameter.
+
+        Callables — ``LambdaLR``'s and ``MultiplicativeLR``'s ``lr_lambda`` —
+        are **not** captured: a Python function is not reliably serialisable,
+        and silently pickling one would make a checkpoint that only reloads in
+        the process that wrote it.  Reconstruct the scheduler with the same
+        lambda, then :meth:`load_state_dict` the rest.  This holds whether the
+        callables are stored singly (``MultiplicativeLR.lr_lambda``) or in a
+        list (``LambdaLR.lr_lambdas``, one per param group).
+
+        Returns
+        -------
+        dict
+            Attribute snapshot; feed it back to :meth:`load_state_dict`.
+        """
+        return {
+            k: v
+            for k, v in self.__dict__.items()
+            if k != "optimizer" and not _holds_a_callable(v)
+        }
+
+    def load_state_dict(self, state_dict: dict[str, object]) -> None:
+        """Restore state produced by :meth:`state_dict`.
+
+        Parameters
+        ----------
+        state_dict : dict
+            A snapshot from :meth:`state_dict` of a scheduler of the same type.
+
+        Notes
+        -----
+        Without this the schedule silently restarted on resume while the
+        optimizer state restored correctly — the two went out of sync.
+        """
+        self.__dict__.update(state_dict)
+
+
+class _LRScheduler(_CheckpointState):
     """Base class for all learning rate schedulers.
 
     Subclasses must implement :meth:`get_lr`, which returns a list of new
@@ -177,6 +224,14 @@ class _LRScheduler:
         """
         return self.get_lr()
 
+    def _restart(self) -> None:
+        """Start over at epoch 0, from the base rates — a SequentialLR milestone."""
+        self._update_lr(0)
+
+    def _undo_initial_step(self) -> None:
+        """Take back the step 0 the constructor took, as SequentialLR does."""
+        self.last_epoch -= 1
+
     def step(self) -> None:
         """Advance the scheduler by one epoch and update optimizer learning rates.
 
@@ -221,47 +276,6 @@ class _LRScheduler:
         """
         raise NotImplementedError
 
-    def state_dict(self) -> dict[str, object]:
-        """Serialisable scheduler state, for checkpoint / resume.
-
-        Mirrors the optimizer's contract: everything needed to continue the
-        schedule exactly, minus the ``optimizer`` itself (the caller already
-        holds it) and minus any callable hyper-parameter.
-
-        Callables — ``LambdaLR``'s and ``MultiplicativeLR``'s ``lr_lambda`` —
-        are **not** captured: a Python function is not reliably serialisable,
-        and silently pickling one would make a checkpoint that only reloads in
-        the process that wrote it.  Reconstruct the scheduler with the same
-        lambda, then :meth:`load_state_dict` the rest.  This holds whether the
-        callables are stored singly (``MultiplicativeLR.lr_lambda``) or in a
-        list (``LambdaLR.lr_lambdas``, one per param group).
-
-        Returns
-        -------
-        dict
-            Attribute snapshot; feed it back to :meth:`load_state_dict`.
-        """
-        return {
-            k: v
-            for k, v in self.__dict__.items()
-            if k != "optimizer" and not _holds_a_callable(v)
-        }
-
-    def load_state_dict(self, state_dict: dict[str, object]) -> None:
-        """Restore state produced by :meth:`state_dict`.
-
-        Parameters
-        ----------
-        state_dict : dict
-            A snapshot from :meth:`state_dict` of a scheduler of the same type.
-
-        Notes
-        -----
-        Without this the schedule silently restarted on resume while the
-        optimizer state restored correctly — the two went out of sync.
-        """
-        self.__dict__.update(state_dict)
-
     def get_last_lr(self) -> list[float]:
         """Return the last learning rate computed by the scheduler.
 
@@ -294,3 +308,111 @@ class _LRScheduler:
                 print(
                     f"Epoch {epoch}: adjusting learning rate of group {i} to {lr:.4e}."
                 )
+
+
+class _CompositeSchedulerMixin:
+    """What the composite schedulers share: checkpoints and taking back step 0."""
+
+    optimizer: Optimizer
+    schedulers: Sequence[_LRScheduler | _CompositeSchedulerMixin]
+
+    def state_dict(self) -> dict[str, object]:
+        """Serialisable state, including each wrapped scheduler's own state."""
+        own = {
+            k: v
+            for k, v in self.__dict__.items()
+            if k not in ("optimizer", "schedulers") and not _holds_a_callable(v)
+        }
+        own["schedulers"] = [sch.state_dict() for sch in self.schedulers]
+        return own
+
+    def load_state_dict(self, state_dict: dict[str, object]) -> None:
+        """Restore state produced by :meth:`state_dict`."""
+        incoming = dict(state_dict)
+        raw_children = incoming.pop("schedulers", None)
+        self.__dict__.update(incoming)
+        if raw_children is not None:
+            if not isinstance(raw_children, list):
+                raise TypeError("load_state_dict: 'schedulers' must be a list")
+            child_states: list[dict[str, object]] = raw_children
+            if len(child_states) != len(self.schedulers):
+                raise ValueError(
+                    f"{type(self).__name__}.load_state_dict: got {len(child_states)} child states "
+                    f"for {len(self.schedulers)} schedulers"
+                )
+            for sch, child in zip(self.schedulers, child_states, strict=True):
+                sch.load_state_dict(child)
+
+    def _undo_initial_step(self) -> None:
+        """Take back each wrapped scheduler's step 0, as the reference recurses."""
+        for sched in self.schedulers:
+            sched._undo_initial_step()
+
+
+def _check_schedulers(
+    owner: str,
+    schedulers: Sequence[_LRScheduler | _CompositeSchedulerMixin],
+    optimizer: Optimizer | None,
+    accepted: tuple[type, ...],
+) -> Optimizer:
+    """The optimizer a composite's children share, or why it cannot wrap them.
+
+    Checked before the composite changes anything.  SequentialLR used to
+    put every rate back to its base and take back its children's step 0
+    first, then fail on a child it could not drive with an untyped
+    ``AttributeError`` — leaving the optimizer and the children altered.
+    A scheduler that steps on a metric is a scheduler, just not one a
+    composite can step: ``ValueError``, as the reference raises.
+    """
+    if not schedulers:
+        raise ValueError(f"{owner} expects at least one scheduler")
+    for i, sched in enumerate(schedulers):
+        if getattr(sched, "_steps_on_a_metric", False):
+            raise ValueError(
+                f"{owner} at index {i}: {type(sched).__name__} steps on a metric, "
+                f"which {owner}.step() does not take"
+            )
+        if not isinstance(sched, accepted):
+            kinds = {
+                _LRScheduler: "an LR scheduler",
+                _CompositeSchedulerMixin: "SequentialLR or ChainedScheduler",
+            }
+            names = " or ".join(kinds.get(t, t.__name__) for t in accepted)
+            raise TypeError(
+                f"{owner} at index {i}: expected {names}, got {type(sched).__name__}"
+            )
+    shared = optimizer or schedulers[0].optimizer
+    for i, sched in enumerate(schedulers):
+        if sched.optimizer is not shared:
+            raise ValueError(
+                f"{owner} expects all schedulers to belong to the same optimizer; "
+                f"the one at index {i} does not"
+            )
+    return shared
+
+
+def _require_group_keys(
+    owner: str, optimizer: Optimizer, keys: tuple[str, ...]
+) -> None:
+    """Refuse a step whose schedule reads ``keys`` off a group that lacks them.
+
+    The schedule sets them on the groups it was built over, so a group added
+    afterwards has none unless it brought its own.
+    """
+    for i, group in enumerate(optimizer.param_groups):
+        missing = [k for k in keys if k not in group]
+        if missing:
+            raise ValueError(
+                f"{owner}: param group {i} has no {', '.join(missing)}, which the "
+                "schedule reads off each group and sets only on the groups it was "
+                "built over; build the scheduler after add_param_group, or give "
+                f"the group {', '.join(keys)}"
+            )
+
+
+def _reset_to_base(optimizer: Optimizer) -> None:
+    """Put each group back at the rate it had before any scheduler touched it."""
+    for group in optimizer.param_groups:
+        group["lr"] = _group_float(
+            group, "initial_lr" if "initial_lr" in group else "lr"
+        )
