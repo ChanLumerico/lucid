@@ -2,6 +2,7 @@
 Container modules: Sequential, ModuleList, ModuleDict.
 """
 
+import operator
 from collections import OrderedDict
 from collections.abc import (
     Iterable,
@@ -14,6 +15,18 @@ from typing import Iterator, cast, overload, override
 from lucid.nn.module import Module
 from lucid.nn.parameter import Parameter
 from lucid._tensor.tensor import Tensor
+
+
+def _key_at(keys: list[str], idx: int) -> str:
+    """The key at list position ``idx``, found the way a list finds it.
+
+    ``idx`` goes through ``operator.index``, so a string or a float is a
+    ``TypeError``; a position outside ``[-len, len)`` is an ``IndexError``.
+    """
+    position = operator.index(idx)
+    if not -len(keys) <= position < len(keys):
+        raise IndexError(f"index {position} is out of range")
+    return keys[position]
 
 
 class Sequential(Module):
@@ -169,9 +182,14 @@ class Sequential(Module):
         return m
 
     def __setitem__(self, idx: int, module: Module) -> None:
-        """Replace the child module at the given index."""
-        keys = list(self._modules.keys())
-        self._modules[keys[idx]] = module
+        """Replace the child module at the given index.
+
+        Assigned through ``setattr`` like any other child: it keeps its
+        turn in the forward, a value that is not a :class:`Module` is a
+        ``TypeError``, and a compiled wrapper of the child it replaces
+        stops answering for the index.
+        """
+        setattr(self, _key_at(list(self._modules), idx), module)
 
     def __delitem__(self, idx: int | slice) -> None:
         """Remove the child module at the given index or slice."""
@@ -333,9 +351,13 @@ class ModuleList[M: Module = Module](Module):
         return cast(M, self._modules[keys[idx]])
 
     def __setitem__(self, idx: int, module: M) -> None:
-        """Replace the child module at the given index."""
-        keys = list(self._modules.keys())
-        self._modules[keys[idx]] = module
+        """Replace the child module at the given index.
+
+        Assigned through ``setattr`` like any other child: a value that is
+        not a :class:`Module` is a ``TypeError``, and a compiled wrapper of
+        the child it replaces stops answering for the index.
+        """
+        setattr(self, _key_at(list(self._modules), idx), module)
 
     def __delitem__(self, idx: int | slice) -> None:
         """Remove the child module at the given index or slice."""
@@ -671,10 +693,16 @@ class ParameterList(Module):
         assert p is not None
         return p
 
-    def __setitem__(self, idx: int, param: Parameter) -> None:
-        """Replace the child module at the given index."""
-        keys = list(self._parameters.keys())
-        self._parameters[keys[idx]] = param
+    def __setitem__(self, idx: int, param: Tensor) -> None:
+        """Replace the parameter at the given index.
+
+        A plain tensor is wrapped in a :class:`Parameter`, as the reference
+        does; anything else that is not a Parameter is a ``TypeError``
+        from the assignment.
+        """
+        if isinstance(param, Tensor) and not isinstance(param, Parameter):
+            param = Parameter(param)
+        setattr(self, _key_at(list(self._parameters), idx), param)
 
     def __delitem__(self, idx: int | slice) -> None:
         """Remove the child module at the given index or slice."""

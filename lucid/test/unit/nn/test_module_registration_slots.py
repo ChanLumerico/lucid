@@ -369,3 +369,89 @@ _TRANSITIONS = {
 def test_each_transition_matches_the_reference(ref, transition):
     start, steps = _TRANSITIONS[transition]
     assert _outcome(lucid, start, steps) == _outcome(ref, start, steps)
+
+
+# ── containers: indexed assignment goes through the same rules ──────────────
+
+
+def _container(lib: ModuleType, kind: str) -> object:
+    if kind == "Sequential":
+        return lib.nn.Sequential(
+            lib.nn.Linear(1, 1), lib.nn.ReLU(), lib.nn.Linear(1, 1)
+        )
+    if kind == "ModuleList":
+        return lib.nn.ModuleList(
+            [lib.nn.Linear(1, 1), lib.nn.ReLU(), lib.nn.Linear(1, 1)]
+        )
+    return lib.nn.ParameterList([lib.nn.Parameter(lib.zeros(1)) for _ in range(3)])
+
+
+def _item(lib: ModuleType, kind: str, what: str) -> object:
+    if what == "own kind":
+        what = "parameter" if kind == "ParameterList" else "module"
+    return _value(lib, what)
+
+
+def _indexed(lib: ModuleType, kind: str, index: object, what: str) -> object:
+    container = _container(lib, kind)
+    try:
+        container[index] = _item(lib, kind, what)
+    except (TypeError, IndexError) as error:
+        return type(error).__name__
+    return [
+        (name, type(value).__name__)
+        for registry in (container._modules, container._parameters)
+        for name, value in registry.items()
+    ]
+
+
+_INDEXED = [
+    (kind, index, what)
+    for kind in ("Sequential", "ModuleList", "ParameterList")
+    for index, what in [
+        (0, "own kind"),
+        (-1, "own kind"),
+        (3, "own kind"),
+        (-4, "own kind"),
+        ("0", "own kind"),
+        (1.0, "own kind"),
+        (0, "int"),
+        (0, "tensor"),
+        (0, "module" if kind == "ParameterList" else "parameter"),
+    ]
+]
+
+
+@pytest.mark.parity
+@pytest.mark.parametrize(
+    "kind, index, what", _INDEXED, ids=[f"{k}[{i!r}]={w}" for k, i, w in _INDEXED]
+)
+def test_indexed_assignment_matches_the_reference(ref, kind, index, what):
+    assert _indexed(lucid, kind, index, what) == _indexed(ref, kind, index, what)
+
+
+@pytest.mark.parametrize("kind", ["Sequential", "ModuleList"])
+def test_indexed_assignment_refuses_what_is_not_a_module(kind, device):
+    container = _container(lucid, kind).to(device)
+    held = container[0]
+    with pytest.raises(TypeError, match="cannot assign 'int' as child module '0'"):
+        container[0] = 5
+    assert container[0] is held
+    assert list(container._modules) == ["0", "1", "2"]
+
+
+def test_a_plain_tensor_put_in_a_parameter_list_is_trained(device):
+    params = nn.ParameterList([nn.Parameter(lucid.zeros(2, device=device))])
+    params[0] = lucid.ones(2, device=device)
+    assert type(params[0]) is nn.Parameter and params[0].requires_grad
+    assert list(params.parameters())[0] is params[0]
+
+
+def test_replacing_a_compiled_child_by_index_replaces_what_answers():
+    block = nn.Sequential(nn.Linear(2, 2), nn.Linear(2, 2))
+    block[0] = lucid.compile(block[0])
+    plain = nn.Linear(2, 2)
+    block[0] = plain
+    assert getattr(block, "0") is plain
+    assert block[0] is plain
+    assert list(block._modules) == ["0", "1"]
