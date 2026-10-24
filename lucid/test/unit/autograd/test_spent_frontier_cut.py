@@ -292,6 +292,15 @@ def _chain_loss(n: int) -> lucid.Tensor:
     return y.sum()
 
 
+# A saving node between every two save-free ones: the cut walks through
+# nodes it keeps wired as well as the ones it cuts.
+def _affine_chain_loss(n: int) -> lucid.Tensor:
+    y = lucid.randn(64, dtype=lucid.float64, requires_grad=True)
+    for _ in range(n):
+        y = y * 0.999 + 0.001
+    return y.sum()
+
+
 def _gru_loss(steps: int) -> lucid.Tensor:
     lucid.manual_seed(0)
     cell = nn.GRUCell(8, 16)
@@ -319,14 +328,15 @@ def _backward_seconds(
 @pytest.mark.parametrize("retain", [False, True], ids=["default", "retain-graph"])
 @pytest.mark.parametrize(
     ("build", "size"),
-    [(_chain_loss, 2500), (_gru_loss, 150)],
-    ids=["mul-chain", "gru-cell-bptt"],
+    [(_chain_loss, 2500), (_affine_chain_loss, 1500), (_gru_loss, 150)],
+    ids=["mul-chain", "affine-f64-chain", "gru-cell-bptt"],
 )
 def test_a_backward_is_linear_in_the_graph(
     build: Callable[[int], lucid.Tensor], size: int, retain: bool
 ) -> None:
     # The cut was quadratic: 16 ms at a 2,000-node chain and 62 ms at
-    # 4,000, and a GRUCell unrolled 500 steps took 0.6 s where
+    # 4,000, 0.33 s and 1.35 s at 4,000 and 8,000 steps of y * 0.999 +
+    # 0.001, and a GRUCell unrolled 500 steps took 0.6 s where
     # retain_graph=True took 8 ms.  Every pass also ran a fusion pass that
     # fused nothing and erased from the middle of a vector the size of the
     # graph.  Doubling a linear pass doubles its time; the slack absorbs a
