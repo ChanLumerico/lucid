@@ -29,6 +29,18 @@ def _key_at(keys: list[str], idx: int) -> str:
     return keys[position]
 
 
+def _as_parameter(value: object) -> object:
+    """A plain tensor as a :class:`Parameter`; anything else unchanged.
+
+    Typed ``object`` because what arrives at runtime is not always what the
+    caller's annotation promised, and whatever is not a tensor is left for
+    ``Module.__setattr__`` to refuse.
+    """
+    if isinstance(value, Tensor) and not isinstance(value, Parameter):
+        return Parameter(value)
+    return value
+
+
 class Sequential(Module):
     r"""An ordered container of modules applied one after another in sequence.
 
@@ -700,9 +712,7 @@ class ParameterList(Module):
         does; anything else that is not a Parameter is a ``TypeError``
         from the assignment.
         """
-        if isinstance(param, Tensor) and not isinstance(param, Parameter):
-            param = Parameter(param)
-        setattr(self, _key_at(list(self._parameters), idx), param)
+        setattr(self, _key_at(list(self._parameters), idx), _as_parameter(param))
 
     def __delitem__(self, idx: int | slice) -> None:
         """Remove the child module at the given index or slice."""

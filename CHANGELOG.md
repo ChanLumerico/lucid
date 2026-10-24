@@ -1287,6 +1287,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - share the DiT backbones' patch-grid code
 
+- type ParameterList's tensor wrap on what arrives
+
 ### Removed
 
 - delete dead C++ einops kernels and unbound engine bindings
