@@ -192,3 +192,45 @@ def test_an_older_lucids_sequential_checkpoint_resumes_on_schedule(ref: Any) -> 
     resumed_opt.load_state_dict(opt.state_dict())
     resumed.load_state_dict(older)
     assert advance(resumed_opt, resumed, 6) == pytest.approx(want)
+
+
+def _everything(opt: Any, scheds: list[Any]) -> list[Any]:
+    """The rates and momenta, and every scheduler's own state."""
+    return [dict(g, params=None) for g in opt.param_groups] + [
+        dict(vars(s)) for s in scheds
+    ]
+
+
+def _chain_step(S: Any, o: Any) -> tuple[Any, list[Any]]:
+    kids = [S.ExponentialLR(o, gamma=0.9), S.LambdaLR(o, lambda e: 0.5**e)]
+    chain = S.ChainedScheduler(kids)
+    return chain, [chain, *kids]
+
+
+def _chain_restart(S: Any, o: Any) -> tuple[Any, list[Any]]:
+    kids = [S.ExponentialLR(o, gamma=0.9), S.LambdaLR(o, lambda e: 0.5**e)]
+    chain = S.ChainedScheduler(kids)
+    warmup = S.LinearLR(o)
+    seq = S.SequentialLR(o, [warmup, chain], milestones=[3])
+    return seq, [seq, warmup, chain, *kids]
+
+
+# The chain's second child refuses a group added after it, once the first
+# has already stepped: in a step of the chain's own, and in its restart at
+# a SequentialLR milestone.
+_HALF_STEPPED = {"chain-step": _chain_step, "chain-restart": _chain_restart}
+
+
+@pytest.mark.parametrize("case", list(_HALF_STEPPED))
+def test_a_refused_composite_step_changes_nothing(case: str) -> None:
+    """A chain stepped its first child before the second refused."""
+    opt = optim.SGD([nn.Parameter(lucid.zeros(1))], lr=LR, momentum=0.9)
+    composite, scheds = _HALF_STEPPED[case](optim.lr_scheduler, opt)
+    for _ in range(2):
+        opt.step()
+        composite.step()
+    opt.add_param_group({"params": [nn.Parameter(lucid.zeros(1))], "lr": 0.2})
+    before = _everything(opt, scheds)
+    with pytest.raises(ValueError, match="param group 1"):
+        composite.step()
+    assert _everything(opt, scheds) == before

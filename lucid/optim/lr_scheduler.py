@@ -3,13 +3,14 @@ Learning rate schedulers.
 """
 
 from bisect import bisect_right
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 import math
 from typing import override
 from lucid.optim._scheduler_base import (
     _CheckpointState,
     _CompositeSchedulerMixin,
     _LRScheduler,
+    _all_or_nothing,
     _check_schedulers,
     _require_group_keys,
     _reset_to_base,
@@ -1523,9 +1524,11 @@ class SequentialLR(_CompositeSchedulerMixin):
     the next scheduler whenever the epoch counter crosses a milestone.
     Before the first milestone, ``schedulers[0]`` is active; between
     milestone ``k-1`` and ``k``, ``schedulers[k]`` is active.  At its
-    milestone a scheduler starts its own schedule at epoch 0, computed from
-    the base rates — a param group added before that point has none, and
-    the switch raises ``ValueError``.
+    milestone a scheduler starts over at epoch 0, from the base rates.  An
+    LR scheduler does so by its closed form, which has no rate for a param
+    group added before then: the switch raises ``ValueError``.  A
+    ``ChainedScheduler`` starts its chain over as one that runs first does
+    (a Lucid extension: the reference cannot restart a chain).
 
     Parameters
     ----------
@@ -1584,7 +1587,7 @@ class SequentialLR(_CompositeSchedulerMixin):
     def __init__(
         self,
         optimizer: Optimizer,
-        schedulers: list[_LRScheduler | ChainedScheduler],
+        schedulers: Sequence[_LRScheduler | ChainedScheduler],
         milestones: list[int],
         last_epoch: int = -1,
     ) -> None:
@@ -1598,7 +1601,7 @@ class SequentialLR(_CompositeSchedulerMixin):
                 f"{len(milestones)} milestones for {len(schedulers)} schedulers"
             )
         self.optimizer = optimizer
-        self.schedulers = schedulers
+        self.schedulers = list(schedulers)
         self.milestones = milestones
         self.last_epoch = last_epoch + 1
         # Each child took its own step 0 as it was built, one on top of the
@@ -1612,8 +1615,7 @@ class SequentialLR(_CompositeSchedulerMixin):
     def load_state_dict(self, state_dict: dict[str, object]) -> None:
         """Restore state produced by :meth:`state_dict`, from this or an older Lucid.
 
-        An older Lucid's state (it holds ``_idx``) counted ``last_epoch`` from
-        -1: one behind, which would put the switch a step late again.
+        An older Lucid's (it holds ``_idx``) ``last_epoch`` is one behind.
         """
         incoming = dict(state_dict)
         last = incoming.get("last_epoch")
@@ -1735,19 +1737,18 @@ class ChainedScheduler(_CompositeSchedulerMixin):
 
     def __init__(
         self,
-        schedulers: list[_LRScheduler | SequentialLR | ChainedScheduler],
+        schedulers: Sequence[_LRScheduler | SequentialLR | ChainedScheduler],
         optimizer: Optimizer | None = None,
     ) -> None:
         """Initialise the ChainedScheduler.  See the class docstring for parameter semantics."""
-        # Nothing to write: each child took its step 0 on the rate the one
-        # before it left, so the chain starts composed.
+        # Nothing to write: each child took its step 0 on the last one's rate.
         self.optimizer = _check_schedulers(
             "ChainedScheduler",
             schedulers,
             optimizer,
             (_LRScheduler, _CompositeSchedulerMixin),
         )
-        self.schedulers = schedulers
+        self.schedulers = list(schedulers)
 
     def _initial_step(self) -> None:
         """Step 0 of a chain that runs first in a SequentialLR: each child steps once."""
@@ -1755,12 +1756,10 @@ class ChainedScheduler(_CompositeSchedulerMixin):
             sched.step()
 
     def _restart(self) -> None:
-        """Start over at a SequentialLR milestone, as a chain that runs first does.
-
-        The reference has no closed form for a chain, and fails there instead.
-        """
-        _reset_to_base(self.optimizer)
-        self._initial_step()
+        """Start over at a SequentialLR milestone, as a chain that runs first does."""
+        with _all_or_nothing(self):
+            _reset_to_base(self.optimizer)
+            self._initial_step()
 
     def step(self) -> None:
         """Step all chained schedulers simultaneously.
@@ -1777,8 +1776,9 @@ class ChainedScheduler(_CompositeSchedulerMixin):
         >>> model = nn.Linear(4, 2)
         >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
         """
-        for sched in self.schedulers:
-            sched.step()
+        with _all_or_nothing(self):
+            for sched in self.schedulers:
+                sched.step()
 
     def get_last_lr(self) -> list[float]:
         """Return the composed learning rates, as the optimizer holds them."""

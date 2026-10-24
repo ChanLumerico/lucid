@@ -2,7 +2,8 @@
 The learning-rate scheduler base classes and the rules the schedulers share.
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 
 from lucid.optim.optimizer import Optimizer, _group_float
 
@@ -416,3 +417,38 @@ def _reset_to_base(optimizer: Optimizer) -> None:
         group["lr"] = _group_float(
             group, "initial_lr" if "initial_lr" in group else "lr"
         )
+
+
+def _scheduler_tree(
+    schedulers: Sequence[_LRScheduler | _CompositeSchedulerMixin],
+) -> Iterator[_LRScheduler | _CompositeSchedulerMixin]:
+    """Every scheduler under ``schedulers``, composites and what they wrap."""
+    for sched in schedulers:
+        yield sched
+        if isinstance(sched, _CompositeSchedulerMixin):
+            yield from _scheduler_tree(sched.schedulers)
+
+
+@contextmanager
+def _all_or_nothing(composite: _CompositeSchedulerMixin) -> Iterator[None]:
+    """Undo everything a composite's step did when one of its children refuses.
+
+    A chain steps its children one after another, so a refusal by the
+    second left the first stepped and the rates half-written.  The rates
+    and the state of every scheduler under the composite go back as they
+    were.  Each step replaces the values it changes rather than mutating
+    them, so shallow copies are enough.
+    """
+    groups = [dict(g) for g in composite.optimizer.param_groups]
+    states = [(s, dict(vars(s))) for s in _scheduler_tree(composite.schedulers)]
+    try:
+        yield
+    except ValueError:
+        for group, saved in zip(composite.optimizer.param_groups, groups, strict=True):
+            group.clear()
+            group.update(saved)
+        for sched, state in states:
+            vars(sched).clear()
+            vars(sched).update(state)
+        composite.optimizer._sync_hyperparams()
+        raise
