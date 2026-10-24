@@ -137,13 +137,53 @@ class _MBConv(nn.Module):
 _LN_EPS: float = 1e-6
 
 
+def _relative_index(grid_h: int, grid_w: int, device: str) -> Tensor:
+    """Flat ``(N, N)`` index of each position pair into a ``(2H-1)×(2W-1)`` table."""
+    coords_h = lucid.arange(grid_h, device=device).to(lucid.int64)
+    coords_w = lucid.arange(grid_w, device=device).to(lucid.int64)
+    ys = coords_h.reshape(grid_h, 1).expand(grid_h, grid_w).reshape(-1)
+    xs = coords_w.reshape(1, grid_w).expand(grid_h, grid_w).reshape(-1)
+    n = grid_h * grid_w
+    # Offsets shifted into [0, 2H-2] and [0, 2W-2], then flattened row-major.
+    rel_h = ys.reshape(n, 1) - ys.reshape(1, n) + (grid_h - 1)
+    rel_w = xs.reshape(n, 1) - xs.reshape(1, n) + (grid_w - 1)
+    return rel_h * (2 * grid_w - 1) + rel_w
+
+
+def _resize_rel_table(
+    table: Tensor, num_heads: int, src: tuple[int, int], dst: tuple[int, int]
+) -> Tensor:
+    r"""Bilinearly resize a per-head offset table from grid ``src`` to ``dst``.
+
+    Section A.1: "we simply use bi-linear interpolation to increase the size
+    :math:`(2H-1) \times (2W-1)` to the desired size
+    :math:`(2H'-1) \times (2W'-1)`."
+    """
+    src_h, src_w = 2 * src[0] - 1, 2 * src[1] - 1
+    dst_h, dst_w = 2 * dst[0] - 1, 2 * dst[1] - 1
+    resized = F.interpolate(
+        table.reshape(1, num_heads, src_h, src_w),
+        size=(dst_h, dst_w),
+        mode="bilinear",
+        align_corners=False,
+    )
+    return resized.reshape(num_heads, dst_h * dst_w)
+
+
 @final
 class _RelAttnBlock(nn.Module):
     """Pre-norm Transformer block with relative position bias.
 
-    Relative position bias table is built for a fixed (H, W) grid determined
-    at construction time. The actual grid at runtime must match; the feature
-    map is averaged-pooled to this size if it does not (graceful degradation).
+    ``rel_bias`` holds one entry per relative offset of the ``(grid_h,
+    grid_w)`` attention grid the block was built for.  A forward on another
+    grid resizes that table bilinearly to the new grid's offsets (§A.1) *as
+    a function of the parameter*, which is what the official implementation
+    does: its ``Attention`` keeps ``relative_bias`` at the pre-training
+    shape and resizes it with ``tf.image.resize`` inside the graph
+    (``scale_ratio``).  So a forward never replaces or rewrites the
+    parameter — gradients reach the original table and an optimizer built
+    beforehand still owns it.  :meth:`resample_rel_pos` is the explicit way
+    to rebase the table itself onto a new grid.
     """
 
     _rel_idx: Tensor
@@ -169,18 +209,19 @@ class _RelAttnBlock(nn.Module):
         self.num_heads = num_heads
         self.head_dim = out_dim // num_heads
         self.scale = self.head_dim**-0.5
-        # The bias table is indexed on the *post*-pool grid, which is what
-        # attention runs on.
+        # The grid the bias table is built for — the *post*-pool grid, which
+        # is what attention runs on.
         self.grid_h = grid_h
         self.grid_w = grid_w
-        # Pre-pool grid, needed to fold the sequence back to 2-D for pooling.
-        self.in_h = grid_h * 2 if downsample else grid_h
-        self.in_w = grid_w * 2 if downsample else grid_w
 
         # Relative position bias: table is (2H-1) × (2W-1) per head
         self.rel_bias = nn.Parameter(
             lucid.zeros(num_heads, (2 * grid_h - 1) * (2 * grid_w - 1))
         )
+        # Index tables for grids other than the built one.  They depend only
+        # on the grid and the device — never on a parameter — so they are
+        # derived state: not a buffer, never in ``state_dict``.
+        self._grid_index: dict[tuple[int, int, str], Tensor] = {}
 
         # Eqn (4): ``x <- Proj(Pool(x)) + Attention(Pool(Norm(x)))``.  The
         # identity branch projects the pooled input to the new width, and the
@@ -201,73 +242,76 @@ class _RelAttnBlock(nn.Module):
         self._init_rel_idx()
 
     def _init_rel_idx(self) -> None:
-        H, W = self.grid_h, self.grid_w
-        dev = self.rel_bias.device
-        # Relative index for each pair of positions
-        coords_h = lucid.arange(H, device=dev).to(lucid.int64)
-        coords_w = lucid.arange(W, device=dev).to(lucid.int64)
-        # Build 2-D position grid (H*W, 2)
-        ys = coords_h.reshape(H, 1).expand(H, W).reshape(-1)
-        xs = coords_w.reshape(1, W).expand(H, W).reshape(-1)
-        N = H * W
-        # Relative offset: (N, N)
-        rel_h = ys.reshape(N, 1) - ys.reshape(1, N)  # row diffs
-        rel_w = xs.reshape(N, 1) - xs.reshape(1, N)  # col diffs
-        # Shift to [0, 2H-2] and [0, 2W-2]
-        rel_h = rel_h + (H - 1)
-        rel_w = rel_w + (W - 1)
-        # Combine into flat index: row * (2W-1) + col
-        rel_idx = rel_h * (2 * W - 1) + rel_w  # (N, N)
-        # Register as a proper non-persistent buffer so ``.to(device=...)``
-        # moves it alongside parameters and Metal forward stays on-device.
+        # A non-persistent buffer so ``.to(device=...)`` moves it alongside
+        # the parameters and the Metal forward stays on-device.
+        rel_idx = _relative_index(self.grid_h, self.grid_w, self.rel_bias.device.type)
         self.register_buffer("_rel_idx", rel_idx, persistent=False)
 
     def resample_rel_pos(self, grid_h: int, grid_w: int) -> None:
-        """Resize the relative-position table to a new attention grid.
+        r"""Rebase the relative-position table onto a new attention grid.
 
         Section A.1: "When finetuned on a larger resolution, we simply use
         bi-linear interpolation to increase the size
         :math:`(2H-1) \times (2W-1)` to the desired size
-        :math:`(2H'-1) \times (2W'-1)`."  Every headline CoAtNet result
-        depends on this — CoAtNet-3/-4 pre-train at 224 and fine-tune at
-        384/512 — so without it a checkpoint is welded to the resolution it
-        was built at.  Rebuilding the model at the new ``image_size`` gives
-        correctly *shaped* tables but throws the learned ones away.
+        :math:`(2H'-1) \times (2W'-1)`."  CoAtNet-3/-4 pre-train at 224 and
+        fine-tune at 384/512, so a checkpoint must not be welded to the
+        resolution it was built at.
+
+        A forward on another grid already resizes the table on the fly and
+        leaves this parameter alone, training the pre-training-size table
+        through the resize.  Call this instead when the fine-tune should
+        train the full-size table, as a checkpoint filter that resizes at
+        load time does.  It *replaces* ``rel_bias``, so build the optimizer
+        after calling it.
 
         Args:
             grid_h: New attention-grid height.
             grid_w: New attention-grid width.
+
+        Raises:
+            ValueError: If either side of the grid is not positive.
         """
+        if grid_h < 1 or grid_w < 1:
+            raise ValueError(
+                f"resample_rel_pos needs a positive attention grid, got "
+                f"({grid_h}, {grid_w})"
+            )
         if (grid_h, grid_w) == (self.grid_h, self.grid_w):
             return
-        old_h = 2 * self.grid_h - 1
-        old_w = 2 * self.grid_w - 1
-        table = self.rel_bias.reshape(1, self.num_heads, old_h, old_w)
-        resized = F.interpolate(
-            table,
-            size=(2 * grid_h - 1, 2 * grid_w - 1),
-            mode="bilinear",
-            align_corners=False,
-        )
-        self.rel_bias = nn.Parameter(
-            resized.reshape(self.num_heads, (2 * grid_h - 1) * (2 * grid_w - 1))
-        )
+        with lucid.no_grad():
+            resized = _resize_rel_table(
+                self.rel_bias,
+                self.num_heads,
+                (self.grid_h, self.grid_w),
+                (grid_h, grid_w),
+            )
+        self.rel_bias = nn.Parameter(resized)
         self.grid_h, self.grid_w = grid_h, grid_w
-        self.in_h = grid_h * 2 if self.downsample else grid_h
-        self.in_w = grid_w * 2 if self.downsample else grid_w
         self._init_rel_idx()
 
-    def _rel_pos_bias(self) -> Tensor:
-        # rel_idx: (N, N), rel_bias: (num_heads, (2H-1)*(2W-1))
-        # Output shape — (num_heads, N, N)
-        idx: Tensor = self._rel_idx
-        idx_flat = idx.reshape(-1)  # (N*N,)
-        # Gather from bias table
-        bias = self.rel_bias[:, idx_flat]  # (num_heads, N*N)
-        N = self.grid_h * self.grid_w
-        return bias.reshape(self.num_heads, N, N)
+    def _rel_pos_bias(self, grid: tuple[int, int]) -> Tensor:
+        """The ``(num_heads, N, N)`` bias for attention on ``grid``."""
+        table: Tensor
+        if grid == (self.grid_h, self.grid_w):
+            table, idx = self.rel_bias, self._rel_idx
+        else:
+            table = _resize_rel_table(
+                self.rel_bias, self.num_heads, (self.grid_h, self.grid_w), grid
+            )
+            idx = self._index_for(grid)
+        n = grid[0] * grid[1]
+        return table[:, idx.reshape(-1)].reshape(self.num_heads, n, n)
 
-    def _attn(self, x: Tensor) -> Tensor:
+    def _index_for(self, grid: tuple[int, int]) -> Tensor:
+        device = self.rel_bias.device.type
+        key = (grid[0], grid[1], device)
+        idx = self._grid_index.get(key)
+        if idx is None:
+            idx = _relative_index(grid[0], grid[1], device)
+            self._grid_index[key] = idx
+        return idx
+
+    def _attn(self, x: Tensor, grid: tuple[int, int]) -> Tensor:
         B, N, _C = x.shape
         qkv = self.qkv(x)  # (B, N, 3 * out_dim)
         qkv = qkv.reshape(B, N, 3, self.num_heads, self.head_dim)
@@ -276,30 +320,36 @@ class _RelAttnBlock(nn.Module):
 
         # Fused SDPA with the relative-position bias as an additive mask —
         # softmax((q·kᵀ)·scale + bias)·v, never forming the (B,H,N,N) scores.
-        bias = self._rel_pos_bias().reshape(1, self.num_heads, N, N)
+        bias = self._rel_pos_bias(grid).reshape(1, self.num_heads, N, N)
         out = F.scaled_dot_product_attention(q, k, v, attn_mask=bias, scale=self.scale)
         out = out.permute(0, 2, 1, 3).reshape(B, N, self.out_dim)
         return self.proj(out)
 
     @override
-    def forward(self, x: Tensor) -> Tensor:
-        # Input x — (B, N, C)
-        identity = self._pool(x)
+    def forward(self, x: Tensor, grid: tuple[int, int]) -> Tensor:
+        # x is (B, N, C), flattened row-major from the 2-D ``grid``.  An odd
+        # side pools to its floor, as the constructor's ``input_grid // 2``
+        # and timm's down-sample do; the TF original pads "same" (ceil).
+        # Every paper resolution gives even grids, so only odd overrides of
+        # ``image_size`` see the difference.
+        attn_grid = (grid[0] // 2, grid[1] // 2) if self.downsample else grid
+        identity = self._pool(x, grid)
         shortcut = self.shortcut(identity)
-        h = self._pool(self.norm1(x))
-        x = shortcut + self.drop_path1(self._attn(h))
+        h = self._pool(self.norm1(x), grid)
+        x = shortcut + self.drop_path1(self._attn(h, attn_grid))
         x = x + self.drop_path2(self.fc2(F.gelu(self.fc1(self.norm2(x)))))
         return x
 
-    def _pool(self, seq: Tensor) -> Tensor:
+    def _pool(self, seq: Tensor, grid: tuple[int, int]) -> Tensor:
         """Max-pool a ``(B, N, C)`` sequence on its 2-D grid, per Eqn (4)."""
         if not self.downsample:
             return seq
         b = int(seq.shape[0])
         c = int(seq.shape[2])
-        grid = seq.permute(0, 2, 1).reshape(b, c, self.in_h, self.in_w)
-        grid = F.max_pool2d(grid, 2, stride=2)
-        return grid.reshape(b, c, self.grid_h * self.grid_w).permute(0, 2, 1)
+        planes = seq.permute(0, 2, 1).reshape(b, c, grid[0], grid[1])
+        planes = F.max_pool2d(planes, 2, stride=2)
+        pooled = (grid[0] // 2) * (grid[1] // 2)
+        return planes.reshape(b, c, pooled).permute(0, 2, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -309,15 +359,18 @@ class _RelAttnBlock(nn.Module):
 
 @final
 class _TransformerStage(nn.Module):
-    """Transformer stage: optional MaxPool2d(2) → linear channel proj → N×RelAttnBlock.
+    """Transformer stage: flatten → N×RelAttnBlock → LayerNorm → unflatten.
 
     When ``downsample=True`` (default — what S3 and S4 use in CoAtNet-0..5)
-    the stage spatially halves via AvgPool2d before the first block.  When
-    ``downsample=False`` it preserves spatial dims and just channel-projects
-    + applies the N attention blocks — the mode CoAtNet-6 / CoAtNet-7 use
-    for the transformer part of the mixed S3 (spatial halving already
-    happened inside the preceding MBConv sub-stage).  Channel projection
-    (``in_ch → out_ch``) is a single Linear.
+    the first block max-pools both of its branches by 2 and widens
+    ``in_ch → out_ch`` (Eqn 4).  When ``downsample=False`` the stage keeps
+    the spatial dims — the mode CoAtNet-6 / CoAtNet-7 use for the
+    transformer part of the mixed S3 (spatial halving already happened
+    inside the preceding MBConv sub-stage).
+
+    ``input_grid`` only sizes the blocks' bias tables.  The grids a forward
+    runs on come from the input, so another resolution is a pure function
+    of the same parameters (see :class:`_RelAttnBlock`).
     """
 
     def __init__(
@@ -340,7 +393,6 @@ class _TransformerStage(nn.Module):
             grid_w = input_grid[1]
 
         self.downsample = downsample
-        self.grid_h, self.grid_w = grid_h, grid_w
         self.pool: nn.MaxPool2d | nn.Identity = (
             # Eqn (4): "the standard max pooling of stride 2 is directly
             # applied to the input states of both branches".
@@ -373,20 +425,15 @@ class _TransformerStage(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         # x: (B, C, H, W) — flattened once; the first block pools if needed.
         B, C, H, W = x.shape
-        target_h = H // 2 if self.downsample else H
-        target_w = W // 2 if self.downsample else W
-        if (target_h, target_w) != (self.grid_h, self.grid_w):
-            for blk in self.blocks:
-                if isinstance(blk, _RelAttnBlock):
-                    blk.resample_rel_pos(target_h, target_w)
-            self.grid_h, self.grid_w = target_h, target_w
+        out_grid = (H // 2, W // 2) if self.downsample else (H, W)
         seq = x.reshape(B, C, H * W).permute(0, 2, 1)  # (B, N, C)
+        grid = (H, W)
         for blk in self.blocks:
-            seq = blk(seq)
+            seq = blk(seq, grid)
+            grid = out_grid
         seq = self.norm(seq)
         D = int(seq.shape[2])
-        out_h, out_w = self.grid_h, self.grid_w
-        return seq.permute(0, 2, 1).reshape(B, D, out_h, out_w)
+        return seq.permute(0, 2, 1).reshape(B, D, out_grid[0], out_grid[1])
 
 
 # ---------------------------------------------------------------------------

@@ -2,8 +2,11 @@
 
 import unittest
 
+import pytest
+
 import lucid
 import lucid.models as models
+import lucid.optim as optim
 from lucid.models.vision.coatnet import (
     CoAtNetConfig,
     CoAtNet,
@@ -21,6 +24,16 @@ from lucid.models.vision.coatnet import (
     coatnet_7,
     coatnet_7_cls,
 )
+from lucid.models.vision.coatnet._model import _TransformerStage
+
+#: CoAtNet-0 shrunk through its own config (H11): one block per stage.
+_SMALL: dict[str, object] = {
+    "blocks_per_stage": (1, 1, 1, 1),
+    "dims": (16, 32, 64, 128),
+    "stem_width": 16,
+    "attn_heads": (2, 4),
+    "head_hidden_size": 32,
+}
 
 
 class TestCoAtNetConfig(unittest.TestCase):
@@ -227,6 +240,147 @@ class TestCoAtNetMixedS3Variants(unittest.TestCase):
         self.assertEqual(out.logits.shape, (1, 1000))
         out_resized = m(lucid.randn(1, 3, 160, 160))
         self.assertEqual(out_resized.logits.shape, (1, 1000))
+
+
+class TestCoAtNetResolutionChange(unittest.TestCase):
+    """Another resolution is a function of the same parameters (LCD-544).
+
+    The official implementation keeps ``relative_bias`` at the
+    pre-training shape and bilinearly resizes it inside the graph.  The
+    stage here used to replace each block's ``rel_bias`` with the resized
+    copy instead: the call answered, and every call after it ran on a table
+    the optimizer and the checkpoint knew nothing about.
+    """
+
+    #: An 8×8 input pools to the 4×4 grid the tables are built for; 12×12
+    #: pools to 6×6, which they are not.
+    _BUILT = (8, 8)
+    _OTHER = (12, 12)
+
+    def _stage(self) -> _TransformerStage:
+        lucid.manual_seed(0)
+        stage = _TransformerStage(8, 16, 2, 2, self._BUILT)
+        # Zero-initialised tables would hide a rewrite that keeps zeros.
+        with lucid.no_grad():
+            for block in stage.blocks:
+                block.rel_bias.copy_(lucid.randn(*block.rel_bias.shape))
+        return stage
+
+    def _images(self, side: tuple[int, int], batch: int = 1) -> lucid.Tensor:
+        return lucid.randn(batch, 8, *side)
+
+    def test_round_trip_keeps_the_tables_and_the_output(self) -> None:
+        stage = self._stage().eval()
+        tables = [block.rel_bias for block in stage.blocks]
+        kept = [t.detach().clone() for t in tables]
+        built, other = self._images(self._BUILT), self._images(self._OTHER)
+        with lucid.no_grad():
+            first = stage(built)
+            resized = stage(other)
+            again = stage(built)
+        self.assertEqual(resized.shape, (1, 16, 6, 6))
+        for block, table, value in zip(stage.blocks, tables, kept, strict=True):
+            self.assertIs(block.rel_bias, table)
+            self.assertEqual(float((table.detach() - value).abs().max()), 0.0)
+        self.assertEqual(float((first - again).abs().max()), 0.0)
+
+    def test_state_dict_layout_survives_another_resolution(self) -> None:
+        stage = self._stage().eval()
+        layout = {k: tuple(v.shape) for k, v in stage.state_dict().items()}
+        with lucid.no_grad():
+            stage(self._images(self._OTHER))
+        self.assertEqual(
+            {k: tuple(v.shape) for k, v in stage.state_dict().items()}, layout
+        )
+
+    def test_training_at_another_resolution_trains_the_built_table(self) -> None:
+        stage = self._stage().train()
+        opt = optim.SGD(stage.parameters(), lr=0.1)
+        owned = {id(p) for group in opt.param_groups for p in group["params"]}
+        tables = [block.rel_bias for block in stage.blocks]
+        kept = [t.detach().clone() for t in tables]
+        out = stage(self._images(self._OTHER, batch=2))
+        # Against a target, not ``out.square()``: the stage ends in a
+        # LayerNorm, whose output has a constant mean square.
+        (out - lucid.randn(*out.shape)).square().mean().backward()
+        for table in tables:
+            self.assertIn(id(table), owned)
+            self.assertIsNotNone(table.grad)
+            self.assertGreater(float(table.grad.abs().sum()), 0.0)
+        opt.step()
+        for table, value in zip(tables, kept, strict=True):
+            self.assertGreater(float((table.detach() - value).abs().max()), 0.0)
+
+    def test_on_the_fly_resize_matches_resample_rel_pos(self) -> None:
+        # One interpolation, two entry points: a forward on the new grid and
+        # rebasing the table onto it must give the same answer.
+        stage = self._stage().eval()
+        other = self._images(self._OTHER)
+        with lucid.no_grad():
+            on_the_fly = stage(other)
+        for block in stage.blocks:
+            block.resample_rel_pos(6, 6)
+        self.assertEqual(stage.blocks[0].rel_bias.shape, (2, 11 * 11))
+        with lucid.no_grad():
+            rebased = stage(other)
+        self.assertEqual(float((on_the_fly - rebased).abs().max()), 0.0)
+
+    def test_resample_rel_pos_rejects_an_empty_grid(self) -> None:
+        block = self._stage().blocks[0]
+        # Pinned to the method's own message: interpolate rejects a size of
+        # -1 with a ValueError of its own, which a bare check would accept.
+        with self.assertRaisesRegex(ValueError, "positive attention grid"):
+            block.resample_rel_pos(0, 4)
+
+    def test_public_factory_trains_at_another_resolution(self) -> None:
+        lucid.manual_seed(0)
+        model = models.create_model(
+            "coatnet_0_cls", image_size=64, num_classes=4, **_SMALL
+        )
+        params = list(model.parameters())
+        opt = optim.SGD(params, lr=0.1)
+        model.train()
+        out = model(lucid.randn(2, 3, 96, 96), labels=lucid.tensor([0, 3]))
+        assert out.loss is not None
+        out.loss.backward()
+        opt.step()
+        self.assertEqual([id(p) for p in model.parameters()], [id(p) for p in params])
+        tables = [p for n, p in model.named_parameters() if n.endswith("rel_bias")]
+        self.assertTrue(tables)
+        for table in tables:
+            self.assertIsNotNone(table.grad)
+        model.eval()
+        with lucid.no_grad():
+            self.assertEqual(model(lucid.randn(1, 3, 64, 64)).logits.shape, (1, 4))
+
+
+@pytest.mark.parametrize("image_size", [200, 104])
+def test_odd_sided_grids_pool_with_floor(image_size: int) -> None:
+    """An odd-sided S3 map pools to its floor, at the built size and off it.
+
+    200 and 104 reach S3 on a 25×25 and a 13×13 map.  The first block used
+    to fold its sequence back onto twice the built grid (24×24, 12×12), so
+    even the built size failed a reshape.  Floor is what the constructor's
+    ``input_grid // 2`` and ``max_pool2d(2, stride=2)`` already meant, and
+    what timm's down-sample does.
+    """
+    lucid.manual_seed(0)
+    model = models.create_model("coatnet_0", image_size=image_size, **_SMALL).eval()
+    tables = {n: p for n, p in model.named_parameters() if n.endswith("rel_bias")}
+    kept = {n: p.detach().clone() for n, p in tables.items()}
+    larger = image_size + 32
+    built = lucid.randn(1, 3, image_size, image_size)
+    with lucid.no_grad():
+        first = model.forward_features(built)
+        other = model.forward_features(lucid.randn(1, 3, larger, larger))
+        again = model.forward_features(built)
+    assert first.shape == (1, 128, image_size // 32, image_size // 32)
+    assert other.shape == (1, 128, larger // 32, larger // 32)
+    for name, table in model.named_parameters():
+        if name in tables:
+            assert table is tables[name], f"forward replaced {name}"
+            assert float((table.detach() - kept[name]).abs().max()) == 0.0
+    assert float((first - again).abs().max()) == 0.0
 
 
 if __name__ == "__main__":
