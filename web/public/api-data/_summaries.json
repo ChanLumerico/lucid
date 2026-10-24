@@ -90798,7 +90798,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 52260,
             "own_params": 0,
             "children": [
@@ -90820,7 +90820,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 257060,
             "own_params": 0,
             "children": [
@@ -91088,7 +91088,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 52260,
             "own_params": 0,
             "children": [
@@ -91110,7 +91110,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 257060,
             "own_params": 0,
             "children": [
@@ -91422,7 +91422,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 52260,
                 "own_params": 0,
                 "children": [
@@ -91444,7 +91444,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 257060,
                 "own_params": 0,
                 "children": [
@@ -91752,7 +91752,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 2099200,
             "own_params": 0,
             "children": [
@@ -91768,7 +91768,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 3672064,
             "own_params": 0,
             "children": [
@@ -92000,7 +92000,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 976024,
             "own_params": 0,
             "children": [
@@ -92022,7 +92022,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 1897624,
             "own_params": 0,
             "children": [
@@ -92260,7 +92260,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 976024,
                 "own_params": 0,
                 "children": [
@@ -92282,7 +92282,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 1897624,
                 "own_params": 0,
                 "children": [
@@ -92516,7 +92516,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 246024,
             "own_params": 0,
             "children": [
@@ -92538,7 +92538,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 553224,
             "own_params": 0,
             "children": [
@@ -92776,7 +92776,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 246024,
                 "own_params": 0,
                 "children": [
@@ -92798,7 +92798,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 553224,
                 "own_params": 0,
                 "children": [
@@ -93038,7 +93038,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 2099200,
                 "own_params": 0,
                 "children": [
@@ -93054,7 +93054,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 3672064,
                 "own_params": 0,
                 "children": [
@@ -93324,7 +93324,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 5900544,
             "own_params": 0,
             "children": [
@@ -93346,7 +93346,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 7080192,
             "own_params": 0,
             "children": [
@@ -93696,7 +93696,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 5900544,
                 "own_params": 0,
                 "children": [
@@ -93718,7 +93718,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 7080192,
                 "own_params": 0,
                 "children": [
@@ -94071,7 +94071,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 656128,
             "own_params": 0,
             "children": [
@@ -94093,7 +94093,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 787200,
             "own_params": 0,
             "children": [
@@ -94443,7 +94443,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 656128,
                 "own_params": 0,
                 "children": [
@@ -94465,7 +94465,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 787200,
                 "own_params": 0,
                 "children": [
@@ -94818,7 +94818,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 10488832,
             "own_params": 0,
             "children": [
@@ -94840,7 +94840,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 12585984,
             "own_params": 0,
             "children": [
@@ -95190,7 +95190,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 10488832,
                 "own_params": 0,
                 "children": [
@@ -95212,7 +95212,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 12585984,
                 "own_params": 0,
                 "children": [
@@ -95565,7 +95565,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 1475712,
             "own_params": 0,
             "children": [
@@ -95587,7 +95587,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 1770624,
             "own_params": 0,
             "children": [
@@ -95937,7 +95937,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 1475712,
                 "own_params": 0,
                 "children": [
@@ -95959,7 +95959,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 1770624,
                 "own_params": 0,
                 "children": [
@@ -96312,7 +96312,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 23597568,
             "own_params": 0,
             "children": [
@@ -96334,7 +96334,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 28316160,
             "own_params": 0,
             "children": [
@@ -96684,7 +96684,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 23597568,
                 "own_params": 0,
                 "children": [
@@ -96706,7 +96706,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 28316160,
                 "own_params": 0,
                 "children": [
@@ -97059,7 +97059,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 2622976,
             "own_params": 0,
             "children": [
@@ -97081,7 +97081,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 3147264,
             "own_params": 0,
             "children": [
@@ -97431,7 +97431,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 2622976,
                 "own_params": 0,
                 "children": [
@@ -97453,7 +97453,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 3147264,
                 "own_params": 0,
                 "children": [
@@ -97776,7 +97776,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 52260,
                 "own_params": 0,
                 "children": [
@@ -97798,7 +97798,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 257060,
                 "own_params": 0,
                 "children": [
@@ -243456,7 +243456,7 @@
           },
           {
             "name": "prior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 52260,
             "own_params": 0,
             "children": [
@@ -243478,7 +243478,7 @@
           },
           {
             "name": "posterior_head",
-            "type": "Sequential",
+            "type": "ModuleList",
             "params": 257060,
             "own_params": 0,
             "children": [
@@ -243668,7 +243668,7 @@
               },
               {
                 "name": "prior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 52260,
                 "own_params": 0,
                 "children": [
@@ -243690,7 +243690,7 @@
               },
               {
                 "name": "posterior_head",
-                "type": "Sequential",
+                "type": "ModuleList",
                 "params": 257060,
                 "own_params": 0,
                 "children": [
@@ -273392,13 +273392,6 @@
                   }
                 ],
                 "repeat": 4
-              },
-              {
-                "name": "6",
-                "type": "Identity",
-                "params": 0,
-                "own_params": 0,
-                "children": []
               }
             ]
           },
@@ -273991,13 +273984,6 @@
                     "children": []
                   }
                 ]
-              },
-              {
-                "name": "6",
-                "type": "Identity",
-                "params": 0,
-                "own_params": 0,
-                "children": []
               }
             ]
           },
@@ -274489,13 +274475,6 @@
                       }
                     ],
                     "repeat": 4
-                  },
-                  {
-                    "name": "6",
-                    "type": "Identity",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   }
                 ]
               },
@@ -275088,13 +275067,6 @@
                         "children": []
                       }
                     ]
-                  },
-                  {
-                    "name": "6",
-                    "type": "Identity",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   }
                 ]
               },
@@ -275582,13 +275554,6 @@
                   }
                 ],
                 "repeat": 4
-              },
-              {
-                "name": "6",
-                "type": "Identity",
-                "params": 0,
-                "own_params": 0,
-                "children": []
               }
             ]
           },
@@ -276181,13 +276146,6 @@
                     "children": []
                   }
                 ]
-              },
-              {
-                "name": "6",
-                "type": "Identity",
-                "params": 0,
-                "own_params": 0,
-                "children": []
               }
             ]
           },
@@ -276679,13 +276637,6 @@
                       }
                     ],
                     "repeat": 4
-                  },
-                  {
-                    "name": "6",
-                    "type": "Identity",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   }
                 ]
               },
@@ -277278,13 +277229,6 @@
                         "children": []
                       }
                     ]
-                  },
-                  {
-                    "name": "6",
-                    "type": "Identity",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   }
                 ]
               },
@@ -277772,13 +277716,6 @@
                   }
                 ],
                 "repeat": 4
-              },
-              {
-                "name": "6",
-                "type": "Identity",
-                "params": 0,
-                "own_params": 0,
-                "children": []
               }
             ]
           },
@@ -278371,13 +278308,6 @@
                     "children": []
                   }
                 ]
-              },
-              {
-                "name": "6",
-                "type": "Identity",
-                "params": 0,
-                "own_params": 0,
-                "children": []
               }
             ]
           },
@@ -278869,13 +278799,6 @@
                       }
                     ],
                     "repeat": 4
-                  },
-                  {
-                    "name": "6",
-                    "type": "Identity",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   }
                 ]
               },
@@ -279468,13 +279391,6 @@
                         "children": []
                       }
                     ]
-                  },
-                  {
-                    "name": "6",
-                    "type": "Identity",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   }
                 ]
               },
@@ -279962,13 +279878,6 @@
                   }
                 ],
                 "repeat": 4
-              },
-              {
-                "name": "6",
-                "type": "Identity",
-                "params": 0,
-                "own_params": 0,
-                "children": []
               }
             ]
           },
@@ -280561,13 +280470,6 @@
                     "children": []
                   }
                 ]
-              },
-              {
-                "name": "6",
-                "type": "Identity",
-                "params": 0,
-                "own_params": 0,
-                "children": []
               }
             ]
           },
@@ -281059,13 +280961,6 @@
                       }
                     ],
                     "repeat": 4
-                  },
-                  {
-                    "name": "6",
-                    "type": "Identity",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   }
                 ]
               },
@@ -281658,13 +281553,6 @@
                         "children": []
                       }
                     ]
-                  },
-                  {
-                    "name": "6",
-                    "type": "Identity",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   }
                 ]
               },
@@ -282112,13 +282000,6 @@
                   }
                 ],
                 "repeat": 2
-              },
-              {
-                "name": "3",
-                "type": "Identity",
-                "params": 0,
-                "own_params": 0,
-                "children": []
               }
             ]
           },
@@ -282615,13 +282496,6 @@
                   }
                 ],
                 "repeat": 3
-              },
-              {
-                "name": "3",
-                "type": "Identity",
-                "params": 0,
-                "own_params": 0,
-                "children": []
               }
             ]
           },
@@ -283048,13 +282922,6 @@
                       }
                     ],
                     "repeat": 2
-                  },
-                  {
-                    "name": "3",
-                    "type": "Identity",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   }
                 ]
               },
@@ -283551,13 +283418,6 @@
                       }
                     ],
                     "repeat": 3
-                  },
-                  {
-                    "name": "3",
-                    "type": "Identity",
-                    "params": 0,
-                    "own_params": 0,
-                    "children": []
                   }
                 ]
               },
@@ -351025,6 +350885,854 @@
         "params": 37888000,
         "own_params": 37888000,
         "children": []
+      }
+    ]
+  },
+  "tvm_imagenet256": {
+    "name": "TVMModel",
+    "type": "TVMModel",
+    "params": 678068496,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "patch_embed",
+        "type": "Conv2d",
+        "params": 19584,
+        "own_params": 19584,
+        "children": []
+      },
+      {
+        "name": "time_embed",
+        "type": "_ScalarEmbedder",
+        "params": 1624320,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "fc1",
+            "type": "Linear",
+            "params": 296064,
+            "own_params": 296064,
+            "children": []
+          },
+          {
+            "name": "act",
+            "type": "SiLU",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc2",
+            "type": "Linear",
+            "params": 1328256,
+            "own_params": 1328256,
+            "children": []
+          }
+        ],
+        "repeat": 3
+      },
+      {
+        "name": "label_embed",
+        "type": "Embedding",
+        "params": 1153152,
+        "own_params": 1153152,
+        "children": []
+      },
+      {
+        "name": "blocks",
+        "type": "ModuleList",
+        "params": 669347840,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_TVMBlock",
+            "params": 23905280,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "RMSNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "attn",
+                "type": "_Attention",
+                "params": 5313152,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "qkv",
+                    "type": "Linear",
+                    "params": 3984768,
+                    "own_params": 3984768,
+                    "children": []
+                  },
+                  {
+                    "name": "q_norm",
+                    "type": "RMSNorm",
+                    "params": 64,
+                    "own_params": 64,
+                    "children": [],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Linear",
+                    "params": 1328256,
+                    "own_params": 1328256,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm2",
+                "type": "RMSNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "_FeedForward",
+                "params": 10622592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 5313024,
+                    "own_params": 5313024,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "GELU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 5309568,
+                    "own_params": 5309568,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 7969536,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 7969536,
+                    "own_params": 7969536,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 28
+          }
+        ]
+      },
+      {
+        "name": "final",
+        "type": "_FinalLayer",
+        "params": 2674960,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "norm",
+            "type": "RMSNorm",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "ada_ln",
+            "type": "Sequential",
+            "params": 2656512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 2656512,
+                "own_params": 2656512,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "proj",
+            "type": "Linear",
+            "params": 18448,
+            "own_params": 18448,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "tvm_imagenet256_gen": {
+    "name": "TVMForImageGeneration",
+    "type": "TVMForImageGeneration",
+    "params": 678068496,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "tvm",
+        "type": "TVMModel",
+        "params": 678068496,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 19584,
+            "own_params": 19584,
+            "children": []
+          },
+          {
+            "name": "time_embed",
+            "type": "_ScalarEmbedder",
+            "params": 1624320,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 296064,
+                "own_params": 296064,
+                "children": []
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 1328256,
+                "own_params": 1328256,
+                "children": []
+              }
+            ],
+            "repeat": 3
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 1153152,
+            "own_params": 1153152,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 669347840,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TVMBlock",
+                "params": 23905280,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "RMSNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 5313152,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3984768,
+                        "own_params": 3984768,
+                        "children": []
+                      },
+                      {
+                        "name": "q_norm",
+                        "type": "RMSNorm",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1328256,
+                        "own_params": 1328256,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "RMSNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_FeedForward",
+                    "params": 10622592,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 5313024,
+                        "own_params": 5313024,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 5309568,
+                        "own_params": 5309568,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 7969536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 7969536,
+                        "own_params": 7969536,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 28
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 2674960,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "RMSNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 2656512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 2656512,
+                    "own_params": 2656512,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 18448,
+                "own_params": 18448,
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "tvm_imagenet512": {
+    "name": "TVMModel",
+    "type": "TVMModel",
+    "params": 678068496,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "patch_embed",
+        "type": "Conv2d",
+        "params": 19584,
+        "own_params": 19584,
+        "children": []
+      },
+      {
+        "name": "time_embed",
+        "type": "_ScalarEmbedder",
+        "params": 1624320,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "fc1",
+            "type": "Linear",
+            "params": 296064,
+            "own_params": 296064,
+            "children": []
+          },
+          {
+            "name": "act",
+            "type": "SiLU",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "fc2",
+            "type": "Linear",
+            "params": 1328256,
+            "own_params": 1328256,
+            "children": []
+          }
+        ],
+        "repeat": 3
+      },
+      {
+        "name": "label_embed",
+        "type": "Embedding",
+        "params": 1153152,
+        "own_params": 1153152,
+        "children": []
+      },
+      {
+        "name": "blocks",
+        "type": "ModuleList",
+        "params": 669347840,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "0",
+            "type": "_TVMBlock",
+            "params": 23905280,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm1",
+                "type": "RMSNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "attn",
+                "type": "_Attention",
+                "params": 5313152,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "qkv",
+                    "type": "Linear",
+                    "params": 3984768,
+                    "own_params": 3984768,
+                    "children": []
+                  },
+                  {
+                    "name": "q_norm",
+                    "type": "RMSNorm",
+                    "params": 64,
+                    "own_params": 64,
+                    "children": [],
+                    "repeat": 2
+                  },
+                  {
+                    "name": "proj",
+                    "type": "Linear",
+                    "params": 1328256,
+                    "own_params": 1328256,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "norm2",
+                "type": "RMSNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "mlp",
+                "type": "_FeedForward",
+                "params": 10622592,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "fc1",
+                    "type": "Linear",
+                    "params": 5313024,
+                    "own_params": 5313024,
+                    "children": []
+                  },
+                  {
+                    "name": "act",
+                    "type": "GELU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "fc2",
+                    "type": "Linear",
+                    "params": 5309568,
+                    "own_params": 5309568,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 7969536,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 7969536,
+                    "own_params": 7969536,
+                    "children": []
+                  }
+                ]
+              }
+            ],
+            "repeat": 28
+          }
+        ]
+      },
+      {
+        "name": "final",
+        "type": "_FinalLayer",
+        "params": 2674960,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "norm",
+            "type": "RMSNorm",
+            "params": 0,
+            "own_params": 0,
+            "children": []
+          },
+          {
+            "name": "ada_ln",
+            "type": "Sequential",
+            "params": 2656512,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "1",
+                "type": "Linear",
+                "params": 2656512,
+                "own_params": 2656512,
+                "children": []
+              }
+            ]
+          },
+          {
+            "name": "proj",
+            "type": "Linear",
+            "params": 18448,
+            "own_params": 18448,
+            "children": []
+          }
+        ]
+      }
+    ]
+  },
+  "tvm_imagenet512_gen": {
+    "name": "TVMForImageGeneration",
+    "type": "TVMForImageGeneration",
+    "params": 678068496,
+    "own_params": 0,
+    "children": [
+      {
+        "name": "tvm",
+        "type": "TVMModel",
+        "params": 678068496,
+        "own_params": 0,
+        "children": [
+          {
+            "name": "patch_embed",
+            "type": "Conv2d",
+            "params": 19584,
+            "own_params": 19584,
+            "children": []
+          },
+          {
+            "name": "time_embed",
+            "type": "_ScalarEmbedder",
+            "params": 1624320,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "fc1",
+                "type": "Linear",
+                "params": 296064,
+                "own_params": 296064,
+                "children": []
+              },
+              {
+                "name": "act",
+                "type": "SiLU",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "fc2",
+                "type": "Linear",
+                "params": 1328256,
+                "own_params": 1328256,
+                "children": []
+              }
+            ],
+            "repeat": 3
+          },
+          {
+            "name": "label_embed",
+            "type": "Embedding",
+            "params": 1153152,
+            "own_params": 1153152,
+            "children": []
+          },
+          {
+            "name": "blocks",
+            "type": "ModuleList",
+            "params": 669347840,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "0",
+                "type": "_TVMBlock",
+                "params": 23905280,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "norm1",
+                    "type": "RMSNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "attn",
+                    "type": "_Attention",
+                    "params": 5313152,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "qkv",
+                        "type": "Linear",
+                        "params": 3984768,
+                        "own_params": 3984768,
+                        "children": []
+                      },
+                      {
+                        "name": "q_norm",
+                        "type": "RMSNorm",
+                        "params": 64,
+                        "own_params": 64,
+                        "children": [],
+                        "repeat": 2
+                      },
+                      {
+                        "name": "proj",
+                        "type": "Linear",
+                        "params": 1328256,
+                        "own_params": 1328256,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "norm2",
+                    "type": "RMSNorm",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "mlp",
+                    "type": "_FeedForward",
+                    "params": 10622592,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "fc1",
+                        "type": "Linear",
+                        "params": 5313024,
+                        "own_params": 5313024,
+                        "children": []
+                      },
+                      {
+                        "name": "act",
+                        "type": "GELU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "fc2",
+                        "type": "Linear",
+                        "params": 5309568,
+                        "own_params": 5309568,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "name": "ada_ln",
+                    "type": "Sequential",
+                    "params": 7969536,
+                    "own_params": 0,
+                    "children": [
+                      {
+                        "name": "0",
+                        "type": "SiLU",
+                        "params": 0,
+                        "own_params": 0,
+                        "children": []
+                      },
+                      {
+                        "name": "1",
+                        "type": "Linear",
+                        "params": 7969536,
+                        "own_params": 7969536,
+                        "children": []
+                      }
+                    ]
+                  }
+                ],
+                "repeat": 28
+              }
+            ]
+          },
+          {
+            "name": "final",
+            "type": "_FinalLayer",
+            "params": 2674960,
+            "own_params": 0,
+            "children": [
+              {
+                "name": "norm",
+                "type": "RMSNorm",
+                "params": 0,
+                "own_params": 0,
+                "children": []
+              },
+              {
+                "name": "ada_ln",
+                "type": "Sequential",
+                "params": 2656512,
+                "own_params": 0,
+                "children": [
+                  {
+                    "name": "0",
+                    "type": "SiLU",
+                    "params": 0,
+                    "own_params": 0,
+                    "children": []
+                  },
+                  {
+                    "name": "1",
+                    "type": "Linear",
+                    "params": 2656512,
+                    "own_params": 2656512,
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "name": "proj",
+                "type": "Linear",
+                "params": 18448,
+                "own_params": 18448,
+                "children": []
+              }
+            ]
+          }
+        ]
       }
     ]
   },
