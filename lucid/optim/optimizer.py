@@ -509,7 +509,7 @@ def _one_cycle_get_lr(sched: _OneCycleLike) -> list[float]:
         else sched._annealing_linear
     )
     lrs: list[float] = []
-    for group in sched.optimizer.param_groups[: len(sched.base_lrs)]:
+    for group in sched.optimizer.param_groups:
         start_step = 0.0
         for i, (end_step, s_lr, e_lr, s_mom, e_mom) in enumerate(
             sched._schedule_phases

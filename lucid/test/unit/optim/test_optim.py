@@ -101,49 +101,8 @@ class TestLRScheduler:
             optim.lr_scheduler.LambdaLR(opt, [lambda epoch: 1.0])
 
 
-_S = optim.lr_scheduler
-# Schedulers whose rates come from ``base_lrs``, one per group seen at
-# construction.  A group added later is not theirs to schedule.
-_BASE_RATE_SCHEDULERS = {
-    "LambdaLR": lambda o: _S.LambdaLR(o, lambda epoch: 0.5**epoch),
-    "CosineAnnealingLR": lambda o: _S.CosineAnnealingLR(o, T_max=10),
-    "LinearLR": lambda o: _S.LinearLR(o),
-    "ConstantLR": lambda o: _S.ConstantLR(o),
-    "PolynomialLR": lambda o: _S.PolynomialLR(o),
-    "OneCycleLR": lambda o: _S.OneCycleLR(o, max_lr=0.1, total_steps=10),
-    "CosineAnnealingWarmRestarts": lambda o: _S.CosineAnnealingWarmRestarts(o, T_0=2),
-    "SequentialLR": lambda o: _S.SequentialLR(
-        o, [_S.ConstantLR(o), _S.LinearLR(o)], milestones=[2]
-    ),
-    "ChainedScheduler": lambda o: _S.ChainedScheduler(
-        [_S.ConstantLR(o), _S.LinearLR(o)]
-    ),
-    "CyclicLR": lambda o: _S.CyclicLR(o, base_lr=0.01, max_lr=0.2, step_size_up=2),
-}
-
-
-@pytest.mark.parametrize(
-    "make", list(_BASE_RATE_SCHEDULERS.values()), ids=list(_BASE_RATE_SCHEDULERS)
-)
-def test_a_group_added_after_the_scheduler_keeps_its_own_rate(make) -> None:
-    """``add_param_group`` after the scheduler: it steps, and leaves the group be.
-
-    The reference pairs the groups with the schedule's rates by ``zip``
-    and so stops at the groups it was built over; a strict ``zip`` made
-    every ``step()`` raise instead.
-    """
-    tracked, late, alone = (lucid.zeros(1, requires_grad=True) for _ in range(3))
-    opt = optim.SGD([tracked], lr=0.1)
-    solo = optim.SGD([alone], lr=0.1)
-    sched, solo_sched = make(opt), make(solo)
-    opt.add_param_group({"params": [late], "lr": 0.3})
-    for _ in range(4):
-        opt.step()
-        sched.step()
-        solo.step()
-        solo_sched.step()
-    assert opt.param_groups[0]["lr"] == solo.param_groups[0]["lr"]
-    assert opt.param_groups[1]["lr"] == 0.3
+# What a scheduler does with a param group added after it was built is
+# checked against the reference in test_scheduler_late_param_group.py.
 
 
 _LEAK_PROBE = """

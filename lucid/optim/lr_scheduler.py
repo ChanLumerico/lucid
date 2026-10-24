@@ -2,9 +2,11 @@
 Learning rate schedulers.
 """
 
+from bisect import bisect_right
 from collections.abc import Callable
 import math
 from typing import override
+from lucid.optim._scheduler_base import _LRScheduler, _holds_a_callable
 from lucid.optim.optimizer import (
     Optimizer,
     _CyclicLike,
@@ -15,236 +17,6 @@ from lucid.optim.optimizer import (
     _init_one_cycle,
     _one_cycle_get_lr,
 )
-
-
-def _holds_a_callable(value: object) -> bool:
-    """Whether ``value`` carries a Python function into a checkpoint.
-
-    ``not callable(v)`` was the whole test, and ``LambdaLR`` stores its
-    lambdas as ``lr_lambdas`` — a *list* — which is not itself callable.
-    So the one scheduler the exclusion was written for was the one it
-    missed, and ``lucid.save`` on a checkpoint holding a ``LambdaLR``
-    raised out of ``pickle``.  A container is disqualified by any
-    callable in it, not by all of them: a list with one lambda in it is
-    exactly as unpicklable as a list of nothing else.
-    """
-    if callable(value):
-        return True
-    if isinstance(value, (list, tuple)):
-        return any(callable(item) for item in value)
-    return False
-
-
-def _write_rates(groups: list[dict[str, object]], rates: list[float]) -> None:
-    """Write rates in order; a group added after the schedule keeps its own."""
-    for group, lr in zip(groups, rates, strict=False):
-        group["lr"] = lr
-
-
-class _LRScheduler:
-    """Base class for all learning rate schedulers.
-
-    Subclasses must implement :meth:`get_lr`, which returns a list of new
-    learning rates — one per optimizer parameter group — given the current
-    ``last_epoch`` counter.
-
-    The scheduler tracks ``base_lrs``: the initial learning rates captured
-    from the optimizer at construction time.  Every call to :meth:`step`
-    increments ``last_epoch`` by one, recomputes the learning rates via
-    :meth:`get_lr`, and writes them back into the optimizer's param groups.
-
-    Parameters
-    ----------
-    optimizer : Optimizer
-        Wrapped optimizer whose learning rate will be scheduled.
-    last_epoch : int, optional
-        The index of the last epoch.  Pass ``-1`` (default) to start from
-        epoch 0 on the first :meth:`step` call; pass ``N`` to resume from
-        an existing checkpoint where ``N`` steps have already been taken.
-    verbose : bool, optional
-        If ``True``, prints the updated learning rate to stdout after every
-        :meth:`step` call (default: ``False``).
-
-    Attributes
-    ----------
-    optimizer : Optimizer
-        The optimizer being scheduled.
-    base_lrs : list of float
-        The initial learning rates of each param group captured at
-        construction time.
-    last_epoch : int
-        Number of :meth:`step` calls completed so far.
-    verbose : bool
-        Whether to print learning-rate updates.
-
-    Notes
-    -----
-    Schedulers should be stepped **after** the optimizer:
-
-    .. code-block:: python
-
-        for batch in dataloader:
-            optimizer.zero_grad()
-            loss = model(batch)
-            loss.backward()
-            optimizer.step()
-            scheduler.step()
-
-    Examples
-    --------
-    This class is not instantiated directly.  Use a concrete subclass such
-    as :class:`StepLR` or :class:`CosineAnnealingLR`.
-    """
-
-    def __init__(
-        self, optimizer: Optimizer, last_epoch: int = -1, verbose: bool = False
-    ) -> None:
-        self.optimizer = optimizer
-        self.last_epoch = (
-            last_epoch + 1
-        )  # starts at 0; after N step() calls, last_epoch == N
-        self._step_count = 0
-        self.verbose = verbose
-        # The rate before any scheduler touched it, kept on the group: the
-        # schedule below writes step 0's rate straight away, and a second
-        # scheduler on the same optimizer — a SequentialLR's cosine after
-        # its warmup — must still start from the true base, not from that.
-        if last_epoch == -1:
-            for group in optimizer.param_groups:
-                group.setdefault("initial_lr", group["lr"])
-        self.base_lrs: list[float] = [
-            _group_float(g, "initial_lr" if "initial_lr" in g else "lr")
-            for g in optimizer.param_groups
-        ]
-        # Step 0's rate takes effect now, before the first optimizer step.
-        # Only step() used to write a rate, so the first update ran at the
-        # base rate whatever the schedule said: LambdaLR and LinearLR warmups
-        # at full rate, ConstantLR unscaled, CyclicLR at max_lr, OneCycleLR at
-        # max_lr rather than max_lr / div_factor — 25x its first step.
-        self._last_lr: list[float] = list(self.get_lr())
-        _write_rates(optimizer.param_groups, self._last_lr)
-        optimizer._sync_hyperparams()
-
-    def step(self) -> None:
-        """Advance the scheduler by one epoch and update optimizer learning rates.
-
-        Increments ``last_epoch`` by one, calls :meth:`get_lr` to obtain
-        the new per-group learning rates, and writes them into the optimizer's
-        param groups.  Also calls ``optimizer._sync_hyperparams()`` so that
-        any engine-level optimizer mirrors the updated value.
-
-        Should be called **once per epoch**, after ``optimizer.step()``.
-
-        Examples
-        --------
-        >>> import lucid
-        >>> import lucid.nn as nn
-        >>> import lucid.optim as optim
-        >>> model = nn.Linear(4, 2)
-        >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
-        >>> scheduler = lucid.optim.StepLR(optimizer, step_size=10)
-        >>> for epoch in range(50):
-        ...     optimizer.step()
-        ...     scheduler.step()
-        """
-        self.last_epoch += 1
-        self._step_count += 1
-        values = self.get_lr()
-        _write_rates(self.optimizer.param_groups, values)
-        self._last_lr = list(values)
-        self.optimizer._sync_hyperparams()
-        if self.verbose:
-            self.print_lr(self.verbose, self.last_epoch, values)
-
-    def get_lr(self) -> list[float]:
-        """Compute new learning rates for all param groups.
-
-        Returns
-        -------
-        list of float
-            One learning rate per optimizer param group, based on the
-            current ``last_epoch`` and ``base_lrs``.
-
-        Raises
-        ------
-        NotImplementedError
-            Concrete subclasses must override this method.
-        """
-        raise NotImplementedError
-
-    def state_dict(self) -> dict[str, object]:
-        """Serialisable scheduler state, for checkpoint / resume.
-
-        Mirrors the optimizer's contract: everything needed to continue the
-        schedule exactly, minus the ``optimizer`` itself (the caller already
-        holds it) and minus any callable hyper-parameter.
-
-        Callables — ``LambdaLR``'s and ``MultiplicativeLR``'s ``lr_lambda`` —
-        are **not** captured: a Python function is not reliably serialisable,
-        and silently pickling one would make a checkpoint that only reloads in
-        the process that wrote it.  Reconstruct the scheduler with the same
-        lambda, then :meth:`load_state_dict` the rest.  This holds whether the
-        callables are stored singly (``MultiplicativeLR.lr_lambda``) or in a
-        list (``LambdaLR.lr_lambdas``, one per param group).
-
-        Returns
-        -------
-        dict
-            Attribute snapshot; feed it back to :meth:`load_state_dict`.
-        """
-        return {
-            k: v
-            for k, v in self.__dict__.items()
-            if k != "optimizer" and not _holds_a_callable(v)
-        }
-
-    def load_state_dict(self, state_dict: dict[str, object]) -> None:
-        """Restore state produced by :meth:`state_dict`.
-
-        Parameters
-        ----------
-        state_dict : dict
-            A snapshot from :meth:`state_dict` of a scheduler of the same type.
-
-        Notes
-        -----
-        Without this the schedule silently restarted on resume while the
-        optimizer state restored correctly — the two went out of sync.
-        """
-        self.__dict__.update(state_dict)
-
-    def get_last_lr(self) -> list[float]:
-        """Return the last learning rate computed by the scheduler.
-
-        Returns
-        -------
-        list of float
-            The current learning rate of each optimizer param group, read
-            directly from the optimizer (not a cached copy).
-
-        Examples
-        --------
-        """
-        return [_group_float(g) for g in self.optimizer.param_groups]
-
-    def print_lr(self, is_verbose: bool, epoch: int, lrs: list[float]) -> None:
-        """Print the current learning rates to stdout when verbose mode is on.
-
-        Parameters
-        ----------
-        is_verbose : bool
-            When ``True``, the message is printed; when ``False``, this
-            method is a no-op.
-        epoch : int
-            The epoch index to include in the printed message.
-        lrs : list of float
-            The new learning rates for each param group.
-        """
-        if is_verbose:
-            for i, lr in enumerate(lrs):
-                print(
-                    f"Epoch {epoch}: adjusting learning rate of group {i} to {lr:.4e}."
-                )
 
 
 class StepLR(_LRScheduler):
@@ -328,8 +100,16 @@ class StepLR(_LRScheduler):
             documented in the class docstring.
         """
         if self.last_epoch == 0 or self.last_epoch % self.step_size != 0:
-            return [_group_float(g) for g in self.optimizer.param_groups]
-        return [lr * self.gamma for lr in self.get_last_lr()]
+            return self._group_lrs()
+        return [lr * self.gamma for lr in self._group_lrs()]
+
+    @override
+    def _get_closed_form_lr(self) -> list[float]:
+        """The rates at ``last_epoch`` from ``base_lrs``."""
+        return [
+            base_lr * self.gamma ** (self.last_epoch // self.step_size)
+            for base_lr in self.base_lrs
+        ]
 
 
 class ExponentialLR(_LRScheduler):
@@ -402,9 +182,14 @@ class ExponentialLR(_LRScheduler):
             One learning rate per param group, derived from the schedule formula
             documented in the class docstring.
         """
-        if self.last_epoch == 0:
-            return self.base_lrs
-        return [lr * self.gamma for lr in self.get_last_lr()]
+        if self._is_initial:
+            return self._group_lrs()
+        return [lr * self.gamma for lr in self._group_lrs()]
+
+    @override
+    def _get_closed_form_lr(self) -> list[float]:
+        """The rates at ``last_epoch`` from ``base_lrs``."""
+        return [base_lr * self.gamma**self.last_epoch for base_lr in self.base_lrs]
 
 
 class MultiStepLR(_LRScheduler):
@@ -480,8 +265,16 @@ class MultiStepLR(_LRScheduler):
             documented in the class docstring.
         """
         if self.last_epoch not in self.milestones:
-            return [_group_float(g) for g in self.optimizer.param_groups]
-        return [lr * self.gamma for lr in self.get_last_lr()]
+            return self._group_lrs()
+        # A milestone listed twice decays twice.
+        decay = self.gamma ** self.milestones.count(self.last_epoch)
+        return [lr * decay for lr in self._group_lrs()]
+
+    @override
+    def _get_closed_form_lr(self) -> list[float]:
+        """The rates at ``last_epoch`` from ``base_lrs``."""
+        passed = bisect_right(self.milestones, self.last_epoch)
+        return [base_lr * self.gamma**passed for base_lr in self.base_lrs]
 
 
 class CosineAnnealingLR(_LRScheduler):
@@ -526,6 +319,11 @@ class CosineAnnealingLR(_LRScheduler):
     training deep networks and pairs naturally with warm-restarts
     (see :class:`CosineAnnealingWarmRestarts`).
 
+    Each step scales a group's distance from ``eta_min`` by the ratio of
+    consecutive cosine values.  For a group present from the start that is
+    the formula above; it is also what composes with another schedule and
+    carries a group added later from the rate it was added with.
+
     Examples
     --------
     >>> import lucid.nn as nn
@@ -561,6 +359,26 @@ class CosineAnnealingLR(_LRScheduler):
             One learning rate per param group, derived from the schedule formula
             documented in the class docstring.
         """
+        t = self.last_epoch
+        if self._is_initial:
+            return self._group_lrs()
+        if (t - 1 - self.T_max) % (2 * self.T_max) == 0:
+            # The step off the trough, where the ratio below divides by
+            # zero: the rise is a fixed share of the base, so only the
+            # groups the schedule was built over have one.
+            rise = (1 - math.cos(math.pi / self.T_max)) / 2
+            return [
+                lr + (base_lr - self.eta_min) * rise
+                for base_lr, lr in zip(self.base_lrs, self._group_lrs(), strict=False)
+            ]
+        ratio = (1 + math.cos(math.pi * t / self.T_max)) / (
+            1 + math.cos(math.pi * (t - 1) / self.T_max)
+        )
+        return [self.eta_min + (lr - self.eta_min) * ratio for lr in self._group_lrs()]
+
+    @override
+    def _get_closed_form_lr(self) -> list[float]:
+        """The rates at ``last_epoch`` from ``base_lrs``."""
         return [
             self.eta_min
             + (base_lr - self.eta_min)
@@ -776,6 +594,9 @@ class CyclicLR(_LRScheduler, _CyclicLike):
     @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step."""
+        # Refused before the momentum of the groups it does rate is touched.
+        if len(self.optimizer.param_groups) > len(self.base_lrs):
+            raise self._unrated_group(len(self.base_lrs))
         return _cyclic_get_lr(self, math.floor(1 + self.last_epoch / self.total_size))
 
 
@@ -1087,10 +908,13 @@ class MultiplicativeLR(_LRScheduler):
             One learning rate per param group, derived from the schedule formula
             documented in the class docstring.
         """
-        if self.last_epoch == 0:
-            return [_group_float(g) for g in self.optimizer.param_groups]
+        if self._is_initial:
+            return self._group_lrs()
         factor = self.lr_lambda(self.last_epoch)
-        return [g["lr"] * factor for g in self.optimizer.param_groups]
+        # The factor is per group the scheduler was built over, as the
+        # reference keeps one lambda per group: a group added later has
+        # none, and the step is refused.
+        return [lr * factor for lr in self._group_lrs()[: len(self.base_lrs)]]
 
 
 class LinearLR(_LRScheduler):
@@ -1116,11 +940,11 @@ class LinearLR(_LRScheduler):
     optimizer : Optimizer
         Wrapped optimizer.
     start_factor : float, optional
-        The multiplier applied to the base LR at epoch 0
+        The multiplier applied to the base LR at epoch 0, in ``(0, 1]``
         (default: ``1/3``).
     end_factor : float, optional
-        The multiplier applied to the base LR at epoch ``total_iters``
-        (default: ``1.0``).
+        The multiplier applied to the base LR at epoch ``total_iters``, in
+        ``[0, 1]`` (default: ``1.0``).
     total_iters : int, optional
         Number of steps over which the interpolation runs (default: ``5``).
     last_epoch : int, optional
@@ -1143,6 +967,10 @@ class LinearLR(_LRScheduler):
     ``start_factor`` to a small value (e.g. ``1/total_iters``) and
     ``end_factor=1.0`` so the learning rate ramps up to its nominal value
     over the first few epochs.
+
+    Each step scales a group's current rate by the factor's growth since
+    the step before, so a group added later is carried from the rate it was
+    added with through the rest of the ramp.
 
     Examples
     --------
@@ -1168,6 +996,16 @@ class LinearLR(_LRScheduler):
         verbose: bool = False,
     ) -> None:
         """Initialise the LinearLR.  See the class docstring for parameter semantics."""
+        # Each step scales the current rate by the factor's growth since the
+        # last one, which a start of zero has no ratio to.
+        if not 0.0 < start_factor <= 1.0:
+            raise ValueError(
+                f"LinearLR: start_factor must be in (0, 1], got {start_factor}"
+            )
+        if not 0.0 <= end_factor <= 1.0:
+            raise ValueError(
+                f"LinearLR: end_factor must be in [0, 1], got {end_factor}"
+            )
         self.start_factor = start_factor
         self.end_factor = end_factor
         self.total_iters = total_iters
@@ -1183,6 +1021,18 @@ class LinearLR(_LRScheduler):
             One learning rate per param group, derived from the schedule formula
             documented in the class docstring.
         """
+        t = self.last_epoch
+        if t == 0:
+            return [lr * self.start_factor for lr in self._group_lrs()]
+        if self._is_initial or t > self.total_iters:
+            return self._group_lrs()
+        span = self.end_factor - self.start_factor
+        growth = 1.0 + span / (self.total_iters * self.start_factor + (t - 1) * span)
+        return [lr * growth for lr in self._group_lrs()]
+
+    @override
+    def _get_closed_form_lr(self) -> list[float]:
+        """The rates at ``last_epoch`` from ``base_lrs``."""
         t = min(self.last_epoch, self.total_iters)
         factor = (
             self.start_factor
@@ -1213,7 +1063,7 @@ class ConstantLR(_LRScheduler):
         Wrapped optimizer.
     factor : float, optional
         Multiplicative factor applied to the base LR during the constant
-        phase (default: ``1/3``).
+        phase, in ``(0, 1]`` (default: ``1/3``).
     total_iters : int, optional
         Number of epochs to hold the scaled LR before restoring the base
         value (default: ``5``).
@@ -1234,6 +1084,10 @@ class ConstantLR(_LRScheduler):
     ``ConstantLR`` is useful as the first stage in a :class:`SequentialLR`
     chain, e.g. to hold a reduced LR during an initial burn-in period
     before switching to a main decay schedule.
+
+    The rate is scaled, not set: by ``factor`` at epoch 0 and by
+    ``1 / factor`` at ``total_iters``.  A group added in between was never
+    scaled down, and is scaled up from the rate it was added with.
 
     Examples
     --------
@@ -1256,6 +1110,10 @@ class ConstantLR(_LRScheduler):
         verbose: bool = False,
     ) -> None:
         """Initialise the ConstantLR.  See the class docstring for parameter semantics."""
+        # The rate is scaled back up by 1 / factor at total_iters, which a
+        # factor of zero has no inverse for.
+        if not 0.0 < factor <= 1.0:
+            raise ValueError(f"ConstantLR: factor must be in (0, 1], got {factor}")
         self.factor = factor
         self.total_iters = total_iters
         super().__init__(optimizer, last_epoch, verbose)
@@ -1270,9 +1128,17 @@ class ConstantLR(_LRScheduler):
             One learning rate per param group, derived from the schedule formula
             documented in the class docstring.
         """
-        if self.last_epoch < self.total_iters:
-            return [base_lr * self.factor for base_lr in self.base_lrs]
-        return list(self.base_lrs)
+        if self.last_epoch == 0:
+            return [lr * self.factor for lr in self._group_lrs()]
+        if self.last_epoch != self.total_iters:
+            return self._group_lrs()
+        return [lr * (1.0 / self.factor) for lr in self._group_lrs()]
+
+    @override
+    def _get_closed_form_lr(self) -> list[float]:
+        """The rates at ``last_epoch`` from ``base_lrs``."""
+        scale = 1.0 if self.last_epoch >= self.total_iters else self.factor
+        return [base_lr * scale for base_lr in self.base_lrs]
 
 
 class PolynomialLR(_LRScheduler):
@@ -1364,12 +1230,20 @@ class PolynomialLR(_LRScheduler):
             One learning rate per param group, derived from the schedule formula
             documented in the class docstring.
         """
-        if self.last_epoch >= self.total_iters:
-            return [self.eta_min] * len(self.base_lrs)
         t = self.last_epoch
         T = self.total_iters
+        if self._is_initial or t > T:
+            return self._group_lrs()
+        decay = ((1.0 - t / T) / (1.0 - (t - 1) / T)) ** self.power
+        return [self.eta_min + (lr - self.eta_min) * decay for lr in self._group_lrs()]
+
+    @override
+    def _get_closed_form_lr(self) -> list[float]:
+        """The rates at ``last_epoch`` from ``base_lrs``."""
+        t = min(self.last_epoch, self.total_iters)
         return [
-            (base_lr - self.eta_min) * ((1 - t / T) ** self.power) + self.eta_min
+            (base_lr - self.eta_min) * ((1 - t / self.total_iters) ** self.power)
+            + self.eta_min
             for base_lr in self.base_lrs
         ]
 
@@ -1470,18 +1344,17 @@ class CosineAnnealingWarmRestarts(_LRScheduler):
         Should be called after the optimizer's ``.step()`` at the end of each
         epoch (or each iteration, depending on the schedule).
         """
-        self.last_epoch += 1
-        self._step_count += 1
+        cycle = (self._T_cur, self._T_i)
         self._T_cur += 1
         if self._T_cur >= self._T_i:
             self._T_cur -= self._T_i
             self._T_i *= self.T_mult
-        values = self.get_lr()
-        _write_rates(self.optimizer.param_groups, values)
-        self._last_lr = list(values)
-        self.optimizer._sync_hyperparams()
-        if self.verbose:
-            self.print_lr(self.verbose, self.last_epoch, values)
+        try:
+            super().step()
+        except ValueError:
+            # A refused step leaves the cycle where it was, too.
+            self._T_cur, self._T_i = cycle
+            raise
 
     @override
     def get_lr(self) -> list[float]:
@@ -1618,6 +1491,21 @@ class OneCycleLR(_LRScheduler, _OneCycleLike):
     @override
     def get_lr(self) -> list[float]:
         """Compute the learning rate for each parameter group at the current step."""
+        # The phases read their bounds off each group, so a group added
+        # later is scheduled if it carries them.  Checked before any
+        # group's momentum is touched.
+        keys = ["initial_lr", "max_lr", "min_lr"]
+        if self.cycle_momentum:
+            keys += ["max_momentum", "base_momentum"]
+        for i, group in enumerate(self.optimizer.param_groups):
+            missing = [k for k in keys if k not in group]
+            if missing:
+                raise ValueError(
+                    f"OneCycleLR: param group {i} has no {', '.join(missing)}, "
+                    "which the schedule reads off each group and sets only on the "
+                    "groups it was built over; build the scheduler after "
+                    f"add_param_group, or give the group {', '.join(keys)}"
+                )
         return _one_cycle_get_lr(self)
 
 
@@ -1660,7 +1548,10 @@ class SequentialLR(_CompositeSchedulerMixin):
     ``SequentialLR`` runs its list of schedulers one at a time, activating
     the next scheduler whenever the epoch counter crosses a milestone.
     Before the first milestone, ``schedulers[0]`` is active; between
-    milestone ``k-1`` and ``k``, ``schedulers[k]`` is active.
+    milestone ``k-1`` and ``k``, ``schedulers[k]`` is active.  At its
+    milestone a scheduler starts its own schedule at epoch 0, computed from
+    the base rates — a param group added before that point has none, and
+    the switch raises ``ValueError``.
 
     Parameters
     ----------
@@ -1722,15 +1613,31 @@ class SequentialLR(_CompositeSchedulerMixin):
         last_epoch: int = -1,
     ) -> None:
         """Initialise the SequentialLR.  See the class docstring for parameter semantics."""
+        if not schedulers:
+            raise ValueError("SequentialLR expects at least one scheduler")
+        if any(sched.optimizer is not optimizer for sched in schedulers):
+            raise ValueError(
+                "SequentialLR expects all schedulers to belong to its optimizer"
+            )
+        if len(milestones) != len(schedulers) - 1:
+            raise ValueError(
+                f"SequentialLR expects one milestone fewer than schedulers, got "
+                f"{len(milestones)} milestones for {len(schedulers)} schedulers"
+            )
         self.optimizer = optimizer
         self.schedulers = schedulers
         self.milestones = milestones
-        self.last_epoch = last_epoch
-        self._idx = 0
-        # Each child wrote its own step-0 rate as it was built, so the last
-        # one built won.  The first child's is the rate until its milestone.
-        _write_rates(optimizer.param_groups, schedulers[0].get_lr())
-        optimizer._sync_hyperparams()
+        self.last_epoch = last_epoch + 1
+        # Each child took its own step 0 as it was built, one on top of the
+        # other.  Start from the base again, take those steps back, and give
+        # step 0 to the child that runs first only.
+        for group in optimizer.param_groups:
+            group["lr"] = _group_float(
+                group, "initial_lr" if "initial_lr" in group else "lr"
+            )
+        for sched in schedulers:
+            sched.last_epoch -= 1
+        schedulers[bisect_right(milestones, 0)]._initial_step()
 
     def step(self) -> None:
         """Advance the active scheduler by one epoch, switching if a milestone is reached.
@@ -1756,12 +1663,19 @@ class SequentialLR(_CompositeSchedulerMixin):
         ...     scheduler.step()
         """
         self.last_epoch += 1
-        while (
-            self._idx < len(self.milestones)
-            and self.last_epoch >= self.milestones[self._idx]
-        ):
-            self._idx += 1
-        self.schedulers[min(self._idx, len(self.schedulers) - 1)].step()
+        idx = bisect_right(self.milestones, self.last_epoch)
+        sched = self.schedulers[idx]
+        try:
+            if idx > 0 and self.milestones[idx - 1] == self.last_epoch:
+                # The child taking over starts its own schedule, at epoch 0
+                # and from the base: stepping it instead switched a step
+                # late and carried the outgoing child's rate into it.
+                sched._update_lr(0)
+            else:
+                sched.step()
+        except ValueError:
+            self.last_epoch -= 1
+            raise
 
     def get_last_lr(self) -> list[float]:
         """Return the last learning rates from the currently active scheduler.
@@ -1772,7 +1686,8 @@ class SequentialLR(_CompositeSchedulerMixin):
             Current learning rate of each optimizer param group, as
             reported by the active scheduler.
         """
-        return self.schedulers[min(self._idx, len(self.schedulers) - 1)].get_last_lr()
+        active = self.schedulers[bisect_right(self.milestones, self.last_epoch)]
+        return active.get_last_lr()
 
 
 class ChainedScheduler(_CompositeSchedulerMixin):
@@ -1808,6 +1723,15 @@ class ChainedScheduler(_CompositeSchedulerMixin):
     useful when you want, for example, a warmup schedule and an exponential
     decay to both apply simultaneously.
 
+    The product holds for chainable children — :class:`StepLR`,
+    :class:`MultiStepLR`, :class:`ExponentialLR`, :class:`ConstantLR`,
+    :class:`LinearLR`, :class:`CosineAnnealingLR`, :class:`PolynomialLR`,
+    :class:`MultiplicativeLR` — which scale the rate they find.  A child that
+    computes its rate from its base alone (:class:`LambdaLR`,
+    :class:`CyclicLR`, :class:`OneCycleLR`,
+    :class:`CosineAnnealingWarmRestarts`) overwrites what the children
+    before it wrote.
+
     :meth:`get_last_lr` returns the composed rate, which is also what is
     stored in the optimizer.
 
@@ -1839,47 +1763,18 @@ class ChainedScheduler(_CompositeSchedulerMixin):
                 raise ValueError(
                     "ChainedScheduler expects all schedulers to belong to the same optimizer"
                 )
+        # Nothing to write: each child took its step 0 on the rate the one
+        # before it left, so the chain starts composed.
         self.schedulers = schedulers
         self.optimizer = optimizer
-        self._last_lr: list[float] = []
-        # Each child was built after the one before it had written its own
-        # step-0 rate, and some read that rate back (StepLR).  Start every
-        # track from the base instead.
-        for sched in schedulers:
-            _write_rates(sched.optimizer.param_groups, sched.base_lrs)
-            sched._last_lr = list(sched.get_lr())
-        self._compose()
-
-    def _compose(self) -> None:
-        """Write :math:`\\eta_0 \\prod_k f_k(t)` into the optimizer.
-
-        Each child computes its own rate from its own base and writes it,
-        so stepping them in turn left only the last one's — a warmup chained
-        with a decay kept the warmup and lost the decay once it ended.  The
-        chain multiplies the factors instead, each child's rate over its base.
-        """
-        optimizer = self.schedulers[0].optimizer
-        values: list[float] = []
-        for i, group in enumerate(optimizer.param_groups):
-            tracked = [sch for sch in self.schedulers if i < len(sch.base_lrs)]
-            if not tracked:
-                values.append(_group_float(group, "lr"))
-                continue
-            lr = _group_float(group, "initial_lr" if "initial_lr" in group else "lr")
-            for sch in tracked:
-                base = sch.base_lrs[i]
-                lr *= sch._last_lr[i] / base if base else 1.0
-            group["lr"] = lr
-            values.append(lr)
-        self._last_lr = values
-        optimizer._sync_hyperparams()
 
     def step(self) -> None:
         """Step all chained schedulers simultaneously.
 
         Calls :meth:`~_LRScheduler.step` on every scheduler in order.
-        Each scheduler writes its updated learning rates into the shared
-        optimizer.
+        Each scheduler scales the rate the one before it wrote, so the
+        factors multiply — for every param group, including one added
+        after the chain was built.
 
         Examples
         --------
@@ -1889,14 +1784,8 @@ class ChainedScheduler(_CompositeSchedulerMixin):
         >>> optimizer = optim.SGD(model.parameters(), lr=0.1)
         """
         for sched in self.schedulers:
-            # Each child steps on its own track.  Several compute from the
-            # group's current rate (ExponentialLR, StepLR), and that rate is
-            # the chain's product — the previous child's factor would be
-            # applied again.
-            _write_rates(sched.optimizer.param_groups, sched._last_lr)
             sched.step()
-        self._compose()
 
     def get_last_lr(self) -> list[float]:
-        """Return the composed learning rates the chain last wrote."""
-        return list(self._last_lr)
+        """Return the composed learning rates, as the optimizer holds them."""
+        return [_group_float(g) for g in self.optimizer.param_groups]
