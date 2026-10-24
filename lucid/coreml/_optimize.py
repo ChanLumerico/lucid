@@ -261,9 +261,9 @@ class CompressionAware(Module):
         for name, fit in self._fits.items():
             fit.refit(self._real(name))
 
-    def _real(self, name: str) -> Tensor:
-        held = getattr(self._holders[name], "weight")
-        return held if isinstance(held, Parameter) else held
+    def _real(self, name: str) -> Parameter:
+        # From the registry, which a forward's shadowing value never reaches.
+        return self._holders[name].get_parameter("weight")
 
     def _compressed(self, name: str) -> Tensor:
         real = self._real(name)
@@ -276,17 +276,21 @@ class CompressionAware(Module):
     @override
     def forward(self, *args: Tensor, **kwargs: object) -> Tensor | tuple[Tensor, ...]:
         """Run the model with every covered weight compressed."""
-        held: dict[str, Parameter] = {}
-        for name, module in self._holders.items():
-            parameter = getattr(module, "weight")
-            held[name] = parameter
-            module.weight = self._compressed(name)
+        # The compressed value shadows the parameter from the layer's
+        # ``__dict__``, which attribute lookup reads before
+        # ``Module.__getattr__`` reaches the registry: the layer's forward
+        # sees it while the Parameter keeps its slot, so ``parameters()``,
+        # the optimizer and ``state_dict()`` see the real one throughout.
+        # Assigning a plain tensor to the registered name is refused, and
+        # used to evict the parameter and re-register it last.
         try:
+            for name, module in self._holders.items():
+                object.__setattr__(module, "weight", self._compressed(name))
             output: Tensor | tuple[Tensor, ...] = self.model(*args, **kwargs)
             return output
         finally:
-            for name, module in self._holders.items():
-                module.weight = held[name]
+            for module in self._holders.values():
+                module.__dict__.pop("weight", None)
 
     def settle(self) -> Module:
         """Write the compressed values into the model and hand it back.

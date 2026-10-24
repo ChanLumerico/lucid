@@ -145,6 +145,26 @@ class TestTheForwardPassIsCompressed:
         aware = cml.CompressionAware(model, weights=cml.Palettize(bits=4))
         assert len(list(aware.parameters())) == len(list(model.parameters()))
 
+    def test_a_forward_leaves_every_parameter_in_its_place(self) -> None:
+        """The compressed weight only shadows the parameter during a call.
+
+        It used to be assigned over the parameter and the parameter assigned
+        back, which moved ``second.weight`` behind ``second.bias`` on every
+        forward; assigning a plain tensor to a registered parameter is now
+        refused outright (LCD-551).
+        """
+        model = _net()
+        before = list(model.named_parameters())
+        aware = cml.CompressionAware(model, weights=cml.Palettize(bits=4))
+        aware(lucid.randn(2, 3, 16, 16))
+        after = list(model.named_parameters())
+        assert [name for name, _ in after] == [name for name, _ in before]
+        assert all(
+            now is then for (_, now), (_, then) in zip(after, before, strict=True)
+        )
+        assert "weight" not in model.second.__dict__
+        assert model.second.weight is dict(before)["second.weight"]
+
 
 class TestTheExportWritesWhatWasTrained:
     """The half that was broken, and the reason the fitter changed.

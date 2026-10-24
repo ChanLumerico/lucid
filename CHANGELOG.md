@@ -1146,6 +1146,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - keep a registered name's slot when it is assigned again
 
+- shadow the compressed weight rather than assign it
+
 ### Changed
 
 - **Breaking (2026-10-11 wave).** Every change below makes Lucid match the reference; read this list before upgrading:
