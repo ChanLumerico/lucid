@@ -40,7 +40,6 @@ from lucid.utils.tokenizer._pre_tokenizers import (
     WhitespaceSplit,
 )
 
-
 # ── Vocab loader helpers (shared between BPE + BPEFast) ─────────────
 
 

@@ -205,4 +205,3 @@ def test_compiled_step_with_learnable_0d_f32_parameter_matches_eager(
     assert comp_model.scale.grad.item() == pytest.approx(
         eager_model.scale.grad.item(), rel=1e-5, abs=1e-5
     )
-

@@ -249,4 +249,3 @@ def test_a_pre_hook_dropping_every_gradient_leaves_zeros(
         ]
 
     assert run(lucid, device) == run(ref, "cpu")
-

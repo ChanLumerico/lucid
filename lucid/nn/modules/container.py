@@ -160,7 +160,9 @@ class Sequential(Module):
         keys = list(self._modules.keys())
         if isinstance(idx, slice):
             return Sequential(
-                OrderedDict((k, m) for k in keys[idx] if (m := self._modules[k]) is not None)
+                OrderedDict(
+                    (k, m) for k in keys[idx] if (m := self._modules[k]) is not None
+                )
             )
         m = self._modules[keys[idx]]
         assert m is not None
@@ -555,9 +557,7 @@ class ModuleDict[M: Module = Module](Module):
         """Remove all modules from the ModuleDict."""
         self._modules.clear()
 
-    def update(
-        self, modules: Mapping[str, M] | Iterable[tuple[str, M]]
-    ) -> None:
+    def update(self, modules: Mapping[str, M] | Iterable[tuple[str, M]]) -> None:
         """Update the ModuleDict with another mapping of modules."""
         items = modules.items() if isinstance(modules, Mapping) else modules
         for key, module in items:

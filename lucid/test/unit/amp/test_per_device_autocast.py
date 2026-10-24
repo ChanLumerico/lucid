@@ -290,4 +290,3 @@ def test_autocast_default_dtypes_match_reference(ref: object) -> None:
         with autocast("metal"):
             assert _state("metal") == (True, lucid.float16)
             assert (x_gpu @ x_gpu).dtype is lucid.float16
-

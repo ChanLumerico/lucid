@@ -961,11 +961,7 @@ def _rebind(t: Tensor, impl: _C_engine.TensorImpl) -> None:
     if old.is_metal_shared and not old.requires_grad and not records:
         old.copy_from(impl)
         return
-    if (
-        old.is_aliased()
-        or not old.is_contiguous()
-        or old.storage_offset_bytes() != 0
-    ):
+    if old.is_aliased() or not old.is_contiguous() or old.storage_offset_bytes() != 0:
         _C_engine.assign_inplace(old, impl, "__setitem__")
         return
     if not records:

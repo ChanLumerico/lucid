@@ -203,7 +203,9 @@ def test_offset_counts_from_the_root(name: str, device: str) -> None:
     assert _moving(v.shape, v.stride()) == _moving(cpu_v.shape, cpu_v.stride())
     if device == "cpu":
         if v.numel() > 0:
-            assert v.data_ptr() - root.data_ptr() == v.storage_offset() * v.element_size()
+            assert (
+                v.data_ptr() - root.data_ptr() == v.storage_offset() * v.element_size()
+            )
         assert v.storage_offset() == cell.expected_offset
     else:
         if cpu_v.numel() > 0:
@@ -231,7 +233,8 @@ def test_untyped_storage_is_the_roots(name: str, device: str) -> None:
     assert v.untyped_storage().size() == root.nbytes
     if device == "cpu" and v.numel() > 0:
         assert (
-            v.data_ptr() == v.untyped_storage().data_ptr() + v.storage_offset() * v.element_size()
+            v.data_ptr()
+            == v.untyped_storage().data_ptr() + v.storage_offset() * v.element_size()
         )
 
 
@@ -352,12 +355,18 @@ def test_random_view_chains_match_across_cpu_and_metal(
             keep_alive.append(metal)
             assert metal.shape == cpu.shape
             assert metal.tolist() == cpu.tolist()
-            assert _moving(metal.shape, metal.stride()) == _moving(cpu.shape, cpu.stride())
+            assert _moving(metal.shape, metal.stride()) == _moving(
+                cpu.shape, cpu.stride()
+            )
             if not copied and cpu.numel() > 0:
                 assert metal.storage_offset() == _cpu_offset(cpu, cpu_root)
-                assert metal.as_strided(metal.shape, metal.stride()).tolist() == metal.tolist()
                 assert (
-                    metal.as_strided((2,), (1,), 0).tolist() == metal_root.reshape(-1)[:2].tolist()
+                    metal.as_strided(metal.shape, metal.stride()).tolist()
+                    == metal.tolist()
+                )
+                assert (
+                    metal.as_strided((2,), (1,), 0).tolist()
+                    == metal_root.reshape(-1)[:2].tolist()
                 )
 
 

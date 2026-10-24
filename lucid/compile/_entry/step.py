@@ -327,13 +327,9 @@ class _CompiledStepFunction(Function):
         """Chain ``grad_loss`` into each saved per-parameter gradient."""
         from lucid._dispatch import _wrap
 
-        saved_grad_impls = cast(
-            list[_C_engine.TensorImpl | None], ctx.saved_grad_impls
-        )
+        saved_grad_impls = cast(list[_C_engine.TensorImpl | None], ctx.saved_grad_impls)
         n_user = cast(int, ctx.n_user)
-        scaled = [
-            None if g is None else grad_loss * _wrap(g) for g in saved_grad_impls
-        ]
+        scaled = [None if g is None else grad_loss * _wrap(g) for g in saved_grad_impls]
         return tuple([None] * n_user + scaled)
 
 

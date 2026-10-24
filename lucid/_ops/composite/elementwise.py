@@ -196,7 +196,11 @@ def subtract(input: Tensor, other: Tensor | Scalar, *, alpha: float = 1.0) -> Te
     tensor([2., 1.])
     """
     alpha = _promotion.as_number(alpha)
-    return input - other if alpha == 1.0 and not isinstance(alpha, bool) else input - (other * alpha)
+    return (
+        input - other
+        if alpha == 1.0 and not isinstance(alpha, bool)
+        else input - (other * alpha)
+    )
 
 
 def multiply(input: Tensor, other: Tensor | Scalar) -> Tensor:
@@ -362,7 +366,11 @@ def rsub(input: Tensor, other: Tensor | Scalar, *, alpha: float = 1.0) -> Tensor
     tensor([9., 8.])
     """
     alpha = _promotion.as_number(alpha)
-    return other - input if alpha == 1.0 and not isinstance(alpha, bool) else other - (input * alpha)
+    return (
+        other - input
+        if alpha == 1.0 and not isinstance(alpha, bool)
+        else other - (input * alpha)
+    )
 
 
 def arctan2(input: Tensor, other: Tensor) -> Tensor:
@@ -818,7 +826,9 @@ def heaviside(input: Tensor, values: Tensor | Scalar) -> Tensor:
     tensor([0., 0.5, 1.])
     """
     if not _is_tensor(values):
-        values = lucid.full_like(input, float(_promotion.as_number(cast(float, values))))
+        values = lucid.full_like(
+            input, float(_promotion.as_number(cast(float, values)))
+        )
     return lucid.where(
         input == 0.0,
         values,
@@ -1321,7 +1331,9 @@ def ldexp(input: Tensor, other: Tensor | Scalar) -> Tensor:
     exp_t: Tensor = (
         other.to(dtype=work_dtype)
         if _is_tensor(other)
-        else lucid.tensor(_promotion.as_number(other), dtype=work_dtype, device=input.device)
+        else lucid.tensor(
+            _promotion.as_number(other), dtype=work_dtype, device=input.device
+        )
     )
     limit = 2400.0 if work_dtype == lucid.float64 else 300.0
     if (

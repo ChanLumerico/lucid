@@ -317,9 +317,7 @@ def test_the_cpu_names_the_index_out_of_range() -> None:
         x[lucid.tensor([0]), lucid.tensor([5])]
 
 
-_SCALAR_KEY_SPELLINGS: dict[
-    str, Callable[[Callable[[object], object]], object]
-] = {
+_SCALAR_KEY_SPELLINGS: dict[str, Callable[[Callable[[object], object]], object]] = {
     "int": lambda T: 1,
     "numpy-int": lambda T: np.int64(1),
     "numpy-0d-array": lambda T: np.array(1),

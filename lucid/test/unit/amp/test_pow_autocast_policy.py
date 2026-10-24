@@ -145,7 +145,9 @@ def test_half_scalar_pow_under_metal_autocast_runs_in_float32(
     assert got.dtype == lucid.float32
     _assert_matches(got, want)
 
-    x = lucid.tensor([0.5, 1.25, 2.0, 3.0], dtype=dtype, device="metal", requires_grad=True)
+    x = lucid.tensor(
+        [0.5, 1.25, 2.0, 3.0], dtype=dtype, device="metal", requires_grad=True
+    )
     with autocast(device_type="metal", dtype=lucid.float16):
         y_pow = _C_engine.pow_scalar(x._impl, exponent)
         y_rpow = _C_engine.rpow_scalar(2.0, x._impl)
@@ -154,7 +156,9 @@ def test_half_scalar_pow_under_metal_autocast_runs_in_float32(
 
 
 @_metal_only
-@pytest.mark.parametrize("dtype", [lucid.float32, lucid.float16, lucid.bfloat16], ids=str)
+@pytest.mark.parametrize(
+    "dtype", [lucid.float32, lucid.float16, lucid.bfloat16], ids=str
+)
 def test_local_response_norm_under_metal_autocast_runs_in_float32(
     ref: ModuleType, dtype: lucid.dtype
 ) -> None:

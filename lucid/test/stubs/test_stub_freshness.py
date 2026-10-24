@@ -197,17 +197,13 @@ def test_tensor_self_annotations_are_limited_to_inplace_and_factory() -> None:
                     item.name.endswith("_") and not item.name.startswith("__")
                 ), f"{rel}: Tensor.{item.name} must not return Self"
             for arg in (
-                item.args.posonlyargs
-                + item.args.args[1:]
-                + item.args.kwonlyargs
+                item.args.posonlyargs + item.args.args[1:] + item.args.kwonlyargs
             ):
                 if arg.annotation is None:
                     continue
                 arg_names = {
                     n.id for n in ast.walk(arg.annotation) if isinstance(n, ast.Name)
                 }
-                assert "Self" not in arg_names, (
-                    f"{rel}: Tensor.{item.name} parameter {arg.arg!r} must be Tensor, not Self"
-                )
-
-
+                assert (
+                    "Self" not in arg_names
+                ), f"{rel}: Tensor.{item.name} parameter {arg.arg!r} must be Tensor, not Self"

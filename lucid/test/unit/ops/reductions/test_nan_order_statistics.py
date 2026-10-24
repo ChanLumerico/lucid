@@ -236,7 +236,11 @@ def test_bool_and_out_of_range_dims_are_refused(device: str) -> None:
 def test_mode_matches_reference(
     ref: ModuleType, device: str, dtype: str, dim: int, keepdim: bool
 ) -> None:
-    raw = [[True, False, True, False], [False, False, True, False]] if dtype == "bool_" else _TIES
+    raw = (
+        [[True, False, True, False], [False, False, True, False]]
+        if dtype == "bool_"
+        else _TIES
+    )
     ref_dt = "bool" if dtype == "bool_" else dtype
     grad = dtype in ("float32", "float16")
     x = lucid.tensor(raw, dtype=getattr(lucid, dtype), device=device)
@@ -385,4 +389,3 @@ def test_no_value_is_read_back_to_the_host(
         for method in ("numpy", "item", "tolist", "__float__", "__int__", "__bool__"):
             guard.setattr(lucid.Tensor, method, forbidden)
         _CALLS[call](x)
-

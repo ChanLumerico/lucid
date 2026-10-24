@@ -300,7 +300,9 @@ def test_solve_and_solve_ex_left_false_and_matrix_norm_dtype(
         lucid.tensor(b2_np, device=device),
         left=False,
     )
-    x_ex_r, info_r = ref.linalg.solve_ex(ref.tensor(a_np), ref.tensor(b2_np), left=False)
+    x_ex_r, info_r = ref.linalg.solve_ex(
+        ref.tensor(a_np), ref.tensor(b2_np), left=False
+    )
     assert np.allclose(x_ex_l.numpy(), x_ex_r.numpy(), atol=1e-5)
     assert info_l.tolist() == info_r.tolist() == [0, 0]
 
@@ -333,7 +335,9 @@ def test_solve_and_solve_ex_left_false_and_matrix_norm_dtype(
     cot_np = np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32)
     sym_l = lucid.tensor(sym_np, device=device, requires_grad=True)
     sym_r = ref.tensor(sym_np, requires_grad=True)
-    (LA.pinv(sym_l, hermitian=True) * lucid.tensor(cot_np, device=device)).sum().backward()
+    (
+        LA.pinv(sym_l, hermitian=True) * lucid.tensor(cot_np, device=device)
+    ).sum().backward()
     (ref.linalg.pinv(sym_r, hermitian=True) * ref.tensor(cot_np)).sum().backward()
     assert sym_l.grad is not None and sym_r.grad is not None
     assert np.allclose(sym_l.grad.numpy(), sym_r.grad.numpy(), atol=1e-5)
@@ -351,6 +355,3 @@ def test_solve_and_solve_ex_left_false_and_matrix_norm_dtype(
         mn_r = ref.linalg.matrix_norm(ref.tensor(a_np[0]), ord="fro", dtype=ref.float64)
         assert mn_l.dtype is lucid.float64
         assert np.allclose(mn_l.numpy(), mn_r.numpy(), atol=1e-12)
-
-
-

@@ -3252,9 +3252,7 @@ class Tensor:
         bcast_shape[dim] = k
         idx_rs = _C_engine.reshape(index._impl, bcast_shape)
         idx_bc = _C_engine.broadcast_to(idx_rs, out_shape)
-        return Tensor.__new_from_impl__(
-            _C_engine.gather(self._impl, idx_bc, dim)
-        )
+        return Tensor.__new_from_impl__(_C_engine.gather(self._impl, idx_bc, dim))
 
     # ── index writes (index_add / index_copy / index_fill / index_put) ────────
     # Each in-place form runs its out-of-place op and writes the result into
@@ -3717,9 +3715,7 @@ class Tensor:
         >>> x.masked_select(mask).tolist()
         [1.0, 3.0]
         """
-        return Tensor.__new_from_impl__(
-            _C_engine.masked_select(self._impl, mask._impl)
-        )
+        return Tensor.__new_from_impl__(_C_engine.masked_select(self._impl, mask._impl))
 
     def expand_as(self, other: Tensor) -> Tensor:
         r"""Broadcast ``self`` to match ``other.shape``.
@@ -3894,13 +3890,9 @@ class Tensor:
                 f"lerp expects floating-point tensors, got {self.dtype} and "
                 f"{end.dtype} — cast them first"
             )
-        diff = Tensor.__new_from_impl__(
-            _C_engine.sub(end._impl, self._impl)
-        )
+        diff = Tensor.__new_from_impl__(_C_engine.sub(end._impl, self._impl))
         if isinstance(weight, Tensor):
-            scaled = Tensor.__new_from_impl__(
-                _C_engine.mul(weight._impl, diff._impl)
-            )
+            scaled = Tensor.__new_from_impl__(_C_engine.mul(weight._impl, diff._impl))
         else:
             w_impl = _C_engine.full(
                 list(diff._impl.shape),
@@ -3908,9 +3900,7 @@ class Tensor:
                 diff._impl.dtype,
                 diff._impl.device,
             )
-            scaled = Tensor.__new_from_impl__(
-                _C_engine.mul(w_impl, diff._impl)
-            )
+            scaled = Tensor.__new_from_impl__(_C_engine.mul(w_impl, diff._impl))
         return Tensor.__new_from_impl__(_C_engine.add(self._impl, scaled._impl))
 
     def where(self, condition: Tensor, other: Tensor | float) -> Tensor:
@@ -3962,9 +3952,7 @@ class Tensor:
         # ``other`` of another dtype raised ``DtypeMismatch``.
         from lucid._ops._adapters import _where_adapter
 
-        return Tensor.__new_from_impl__(
-            _where_adapter(condition, self, other)
-        )
+        return Tensor.__new_from_impl__(_where_adapter(condition, self, other))
 
     def diff(
         self,

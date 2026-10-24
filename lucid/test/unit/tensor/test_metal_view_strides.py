@@ -134,8 +134,10 @@ def test_a_metal_view_layout_dispatches_nothing_and_is_the_cpus(make: _View) -> 
     cpu = make(base)
     assert view.shape == cpu.shape
     assert _moving(view.shape, view.stride()) == _moving(cpu.shape, cpu.stride())
-    assert view.is_contiguous() == cpu.is_contiguous() == _contiguous(
-        cpu.shape, cpu.stride()
+    assert (
+        view.is_contiguous()
+        == cpu.is_contiguous()
+        == _contiguous(cpu.shape, cpu.stride())
     )
     assert view.storage_offset() == cpu.storage_offset()
     if cpu.numel():
@@ -321,9 +323,7 @@ def _same_view(
         assert metal.is_contiguous() == cpu.is_contiguous(), where
         if root is not None:
             assert (
-                metal.storage_offset()
-                == cpu.storage_offset()
-                == _cpu_offset(cpu, root)
+                metal.storage_offset() == cpu.storage_offset() == _cpu_offset(cpu, root)
             ), where
     assert metal.tolist() == cpu.tolist(), where
 
@@ -422,7 +422,11 @@ def test_the_python_view_rule_is_the_engines(seed: int) -> None:
             metal_stride: tuple[int, ...] | None = tuple(a_metal.view(*target).stride())
         except RuntimeError:
             metal_stride = None
-        assert (metal_stride is None) == (cpu_stride is None), (shape, a_cpu.stride(), target)
+        assert (metal_stride is None) == (cpu_stride is None), (
+            shape,
+            a_cpu.stride(),
+            target,
+        )
         if metal_stride is not None and cpu_stride is not None:
             assert _moving(target, metal_stride) == _moving(target, cpu_stride)
         assert a_metal.squeeze().stride() == a_cpu.squeeze().stride()

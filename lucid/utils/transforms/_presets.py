@@ -860,9 +860,7 @@ class Detection(TransformsPreset):
         fill: float | tuple[float, ...] = (
             0.0
             if pad_value is None
-            else tuple(
-                pad_value * s + m for m, s in zip(m_seq, s_seq, strict=True)
-            )
+            else tuple(pad_value * s + m for m, s in zip(m_seq, s_seq, strict=True))
         )
         self._pad = (
             PadIfNeeded(side, side, value=fill, position=pad_position)

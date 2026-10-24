@@ -586,9 +586,7 @@ def test_a_well_shaped_weight_is_taken(name: str, device: str) -> None:
     shapes = (
         [(C,)]
         if name in CLASS_WEIGHT
-        else [(N, C)]
-        if name in SAME_WEIGHT
-        else [(C,), (N, C), (N, 1), (1,), ()]
+        else [(N, C)] if name in SAME_WEIGHT else [(C,), (N, C), (N, 1), (1,), ()]
     )
     for shape in shapes:
         weight = lucid.full(shape, 2.0, device=device)

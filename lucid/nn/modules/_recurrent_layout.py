@@ -337,11 +337,7 @@ def _check_dropout(dropout: object, num_layers: int) -> float:
         ValueError: ``dropout`` is not a number in ``[0, 1]``.
     """
     d = _promotion.as_number(dropout)
-    if (
-        isinstance(d, bool)
-        or not isinstance(d, (int, float))
-        or not 0.0 <= d <= 1.0
-    ):
+    if isinstance(d, bool) or not isinstance(d, (int, float)) or not 0.0 <= d <= 1.0:
         raise ValueError(
             "dropout should be a number in range [0, 1] representing the "
             f"probability of an element being zeroed, got {dropout!r}"

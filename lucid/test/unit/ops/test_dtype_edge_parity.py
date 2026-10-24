@@ -323,4 +323,3 @@ def test_tensor_clamp_and_clip_stubs_declare_tensor_bounds() -> None:
         "def clamp(self, min: Tensor | Scalar | None = None, max: Tensor | Scalar | None = None) -> Tensor:"
         in text
     )
-

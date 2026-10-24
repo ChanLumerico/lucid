@@ -77,9 +77,7 @@ def _grn_inputs(dtype: str) -> list[np.ndarray]:
 
 
 def _run_bn(arrays: list[np.ndarray], dtype: object, device: str) -> list[np.ndarray]:
-    x, rm, rv, w, b = (
-        lucid.tensor(a, dtype=dtype, device=device) for a in arrays[:5]
-    )
+    x, rm, rv, w, b = (lucid.tensor(a, dtype=dtype, device=device) for a in arrays[:5])
     for t in (x, rm, w, b):
         t.requires_grad_()
     out = F.batch_norm(x, rm, rv, w, b, training=False, eps=1e-5)

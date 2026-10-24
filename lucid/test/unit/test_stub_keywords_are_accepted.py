@@ -987,4 +987,3 @@ def test_lcd434_signature_parity_stragglers(device: str) -> None:
     loaded = lucid.load(buf, "cpu", pickle, weights_only=True, mmap=False)
     assert isinstance(loaded, Tensor)
     assert loaded.tolist() == [1.0, 2.0, 3.0]
-

@@ -97,7 +97,9 @@ _F64_NORMS = [None, "backward", "ortho", "forward"]
 @pytest.mark.parity
 @pytest.mark.parametrize("n", _F64_LENGTHS)
 @pytest.mark.parametrize("norm", _F64_NORMS)
-def test_f64_and_c128_1d_fft_family_matches_reference(n: int, norm: str | None, ref) -> None:
+def test_f64_and_c128_1d_fft_family_matches_reference(
+    n: int, norm: str | None, ref
+) -> None:
     rng = np.random.default_rng(n + 17)
     re = rng.standard_normal(n).astype(np.float64)
     im = rng.standard_normal(n).astype(np.float64)
@@ -171,7 +173,8 @@ def test_f64_and_c128_nd_fft_and_gradients_match_reference(
         w_im = rng.standard_normal(tuple(ly.shape)).astype(np.float64)
         if ly.is_complex():
             l_loss = (
-                lucid.real(ly) * lucid.tensor(w_re) + lucid.imag(ly) * lucid.tensor(w_im)
+                lucid.real(ly) * lucid.tensor(w_re)
+                + lucid.imag(ly) * lucid.tensor(w_im)
             ).sum()
             t_loss = (ty.real * ref.tensor(w_re) + ty.imag * ref.tensor(w_im)).sum()
         else:
@@ -195,4 +198,3 @@ def test_non_positive_fft_length_raises_invalid_argument() -> None:
                 lucid.fft.rfft(x, n=bad_n)
             with pytest.raises(_C_engine.InvalidArgument):
                 lucid.fft.irfft(lucid.fft.rfft(x), n=bad_n)
-

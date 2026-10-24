@@ -251,9 +251,7 @@ class finfo:
     resolution: float = 0.0
     dtype: str = ""
 
-    def __init__(
-        self, dt: _DtypeCls | type[_DtypeCls] | _C_engine.Dtype | str
-    ) -> None:
+    def __init__(self, dt: _DtypeCls | type[_DtypeCls] | _C_engine.Dtype | str) -> None:
         """Populate floating-point limits for ``dt``.
 
         Parameters
@@ -331,9 +329,7 @@ class iinfo:
     min: int = 0
     dtype: str = ""
 
-    def __init__(
-        self, dt: _DtypeCls | type[_DtypeCls] | _C_engine.Dtype | str
-    ) -> None:
+    def __init__(self, dt: _DtypeCls | type[_DtypeCls] | _C_engine.Dtype | str) -> None:
         """Populate integer limits for ``dt``.
 
         Parameters

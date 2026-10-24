@@ -1136,7 +1136,9 @@ class _CompiledStepBase:
         del flags
         return ()
 
-    def _group_values(self, group: dict[str, object], flags: _Flags) -> dict[str, float]:
+    def _group_values(
+        self, group: dict[str, object], flags: _Flags
+    ) -> dict[str, float]:
         """This step's numbers for ``group``."""
         del group, flags
         return {}
@@ -1177,7 +1179,13 @@ class _CompiledStepBase:
         del i, name
 
     def _update(
-        self, p: Tensor, g: Tensor, state: _State, flags: _Flags, gs: _ScalarFn, ps: _ScalarFn
+        self,
+        p: Tensor,
+        g: Tensor,
+        state: _State,
+        flags: _Flags,
+        gs: _ScalarFn,
+        ps: _ScalarFn,
     ) -> _Update:
         """Emit one parameter's update; returns the new parameter and state."""
         raise NotImplementedError

@@ -200,4 +200,3 @@ def test_half_reductions_accumulate_in_float32(
         rtol=4e-3 if dtype == lucid.float16 else 2.5e-2,
         atol=1e-4,
     )
-

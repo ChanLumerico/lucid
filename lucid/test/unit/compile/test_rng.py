@@ -242,4 +242,3 @@ def test_rng_draw_with_view_taken_redraws_like_eager() -> None:
         assert np.allclose(got.item(), want.item(), rtol=1e-5)
         for g, w in zip(got_grads, want_grads):
             assert np.allclose(g, w, rtol=1e-4, atol=1e-5)
-

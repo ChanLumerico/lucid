@@ -59,7 +59,9 @@ def test_required_ci_stage_preserves_failure(
     assert ("NEXT_STAGE" in result.stdout) == (status in (0, 1))
 
 
-def test_part_core_and_coverage_do_not_abort_on_first_failure_or_collection_error() -> None:
+def test_part_core_and_coverage_do_not_abort_on_first_failure_or_collection_error() -> (
+    None
+):
     root = Path(__file__).resolve().parents[4]
     ci_full = (root / "scripts/ci_full.sh").read_text()
     part_core = ci_full.split("part_core() {", 1)[1].split("\n}", 1)[0]
@@ -123,5 +125,6 @@ def test_pyproject_test_extra_includes_quality_gate_collectors() -> None:
     quality_deps = data["dependency-groups"]["quality"]
     for pkg in ("lizard", "vulture"):
         pinned = next(d for d in quality_deps if d.startswith(f"{pkg}=="))
-        assert pinned in test_deps, f"{pinned!r} missing from [project.optional-dependencies].test"
-
+        assert (
+            pinned in test_deps
+        ), f"{pinned!r} missing from [project.optional-dependencies].test"

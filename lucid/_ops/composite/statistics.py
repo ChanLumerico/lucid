@@ -218,16 +218,13 @@ def quantile(
                 )
             sorted_x = lucid.sort(input, dim)
             n = input.shape[dim]
-            results = _quantile_sorted(
-                sorted_x, q_list, dim, keepdim, interpolation, n
-            )
+            results = _quantile_sorted(sorted_x, q_list, dim, keepdim, interpolation, n)
             nans = lucid.isnan(input).sum(dim=dim, keepdim=keepdim)
         # An integer input holds no NaN, and an ``interpolation="lower"`` result
         # of one is an integer tensor that could not hold the NaN fill anyway.
         if lucid.is_floating_point(input):
             results = [
-                lucid.where(nans == 0, r, lucid.full_like(r, math.nan))
-                for r in results
+                lucid.where(nans == 0, r, lucid.full_like(r, math.nan)) for r in results
             ]
 
         return _pack_quantile_results(results, scalar_q, input.ndim, dim, keepdim)

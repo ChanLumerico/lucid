@@ -388,9 +388,7 @@ class TestSoftmaxAndReductionDtype:
     F.softmax / log_softmax / softmin input/dim=None/_stacklevel parity."""
 
     @pytest.mark.parametrize("device", ["cpu", "metal"])
-    @pytest.mark.parametrize(
-        "fn_name", ["softmax", "log_softmax", "softmin"]
-    )
+    @pytest.mark.parametrize("fn_name", ["softmax", "log_softmax", "softmin"])
     def test_softmax_family_dtype_forward_and_backward(
         self, ref: object, device: str, fn_name: str
     ) -> None:
@@ -432,10 +430,22 @@ class TestSoftmaxAndReductionDtype:
         rx = ref_mod.tensor(np_x, dtype=ref_mod.float16)
 
         for l_out, r_out in [
-            (lucid.softmax(x, dim=-1, dtype=lucid.float32), ref_mod.softmax(rx, dim=-1, dtype=ref_mod.float32)),
-            (lucid.log_softmax(x, dim=-1, dtype=lucid.float32), ref_mod.log_softmax(rx, dim=-1, dtype=ref_mod.float32)),
-            (x.softmax(dim=-1, dtype=lucid.float32), rx.softmax(dim=-1, dtype=ref_mod.float32)),
-            (x.log_softmax(dim=-1, dtype=lucid.float32), rx.log_softmax(dim=-1, dtype=ref_mod.float32)),
+            (
+                lucid.softmax(x, dim=-1, dtype=lucid.float32),
+                ref_mod.softmax(rx, dim=-1, dtype=ref_mod.float32),
+            ),
+            (
+                lucid.log_softmax(x, dim=-1, dtype=lucid.float32),
+                ref_mod.log_softmax(rx, dim=-1, dtype=ref_mod.float32),
+            ),
+            (
+                x.softmax(dim=-1, dtype=lucid.float32),
+                rx.softmax(dim=-1, dtype=ref_mod.float32),
+            ),
+            (
+                x.log_softmax(dim=-1, dtype=lucid.float32),
+                rx.log_softmax(dim=-1, dtype=ref_mod.float32),
+            ),
         ]:
             assert l_out.dtype == lucid.float32
             np.testing.assert_allclose(
@@ -462,7 +472,9 @@ class TestSoftmaxAndReductionDtype:
     def test_softmax_explicit_dtype_honored_under_autocast(self) -> None:
         if not lucid.metal.is_available():
             pytest.skip("metal not available")
-        x = lucid.linspace(-2.0, 2.0, 16, dtype=lucid.float32, device="metal").reshape(4, 4)
+        x = lucid.linspace(-2.0, 2.0, 16, dtype=lucid.float32, device="metal").reshape(
+            4, 4
+        )
         with lucid.amp.autocast("metal", dtype=lucid.float16):
             out_default = F.softmax(x, dim=-1)
             out_f16 = F.softmax(x, dim=-1, dtype=lucid.float16)
@@ -512,4 +524,3 @@ class TestSoftmaxAndReductionDtype:
             lucid.mean(x, dtype=lucid.int64)
         with pytest.raises(TypeError):
             lucid.nanmean(x, dtype=lucid.int64)
-

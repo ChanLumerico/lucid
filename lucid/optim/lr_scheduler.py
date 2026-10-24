@@ -756,8 +756,18 @@ class CyclicLR(_LRScheduler, _CyclicLike):
     ) -> None:
         """Initialise the CyclicLR.  See the class docstring for parameter semantics."""
         cfg = (
-            base_lr, max_lr, step_size_up, step_size_down, mode, gamma,
-            scale_fn, scale_mode, cycle_momentum, base_momentum, max_momentum, last_epoch,
+            base_lr,
+            max_lr,
+            step_size_up,
+            step_size_down,
+            mode,
+            gamma,
+            scale_fn,
+            scale_mode,
+            cycle_momentum,
+            base_momentum,
+            max_momentum,
+            last_epoch,
         )
         base_lrs = _init_cyclic(self, optimizer, cfg)
         super().__init__(optimizer, last_epoch)
@@ -1588,9 +1598,19 @@ class OneCycleLR(_LRScheduler, _OneCycleLike):
     ) -> None:
         """Initialise the OneCycleLR.  See the class docstring for parameter semantics."""
         cfg = (
-            max_lr, total_steps, epochs, steps_per_epoch, pct_start, anneal_strategy,
-            cycle_momentum, base_momentum, max_momentum, div_factor, final_div_factor,
-            three_phase, last_epoch,
+            max_lr,
+            total_steps,
+            epochs,
+            steps_per_epoch,
+            pct_start,
+            anneal_strategy,
+            cycle_momentum,
+            base_momentum,
+            max_momentum,
+            div_factor,
+            final_div_factor,
+            three_phase,
+            last_epoch,
         )
         _init_one_cycle(self, optimizer, cfg)
         super().__init__(optimizer, last_epoch)

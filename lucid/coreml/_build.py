@@ -2422,7 +2422,9 @@ class _BuildCtx:
     lifted_names: set[str] = dataclasses.field(default_factory=set)
     asked_for: int = 0
     carried: dict[str, State] = dataclasses.field(default_factory=dict)
-    plain_inputs: list[tuple[str, int, Tensor]] = dataclasses.field(default_factory=list)
+    plain_inputs: list[tuple[str, int, Tensor]] = dataclasses.field(
+        default_factory=list
+    )
     names: dict[int, str] = dataclasses.field(default_factory=dict)
     input_ids: set[int] = dataclasses.field(default_factory=set)
     builder_shapes_state: dict[str, list[int]] = dataclasses.field(default_factory=dict)
@@ -2430,7 +2432,9 @@ class _BuildCtx:
     weight_dtypes: dict[str, int] = dataclasses.field(default_factory=dict)
     quantized_count: int = 0
     f32_opmath_scalars: set[int] = dataclasses.field(default_factory=set)
-    rewrites: dict[int, _staging.WindowRewrite] = dataclasses.field(default_factory=dict)
+    rewrites: dict[int, _staging.WindowRewrite] = dataclasses.field(
+        default_factory=dict
+    )
     stuffing: dict[int, _staging.StuffRewrite] = dataclasses.field(default_factory=dict)
     absorbed: set[int] = dataclasses.field(default_factory=set)
     precomputed: set[int] = dataclasses.field(default_factory=set)
@@ -2512,9 +2516,7 @@ def _validate_state_and_draws(ctx: _BuildCtx) -> None:
         ctx.lifted_heads.add(tid)
         ctx.lifted_names.add(name)
         ctx.inputs.append((name, tid, sample))
-    ctx.plain_inputs = [
-        entry for entry in ctx.inputs if entry[0] not in ctx.carried
-    ]
+    ctx.plain_inputs = [entry for entry in ctx.inputs if entry[0] not in ctx.carried]
     if not ctx.plain_inputs:
         raise ValueError(
             "lucid.coreml: every input was declared state, leaving nothing for the "
@@ -2605,9 +2607,7 @@ def _init_program_and_state(ctx: _BuildCtx) -> None:
         )
     _declare_carried_state(ctx)
     ctx.blob = (
-        ctx.into.blob
-        if ctx.into is not None
-        else cm.BlobWriter(ctx.paths.weight_bin)
+        ctx.into.blob if ctx.into is not None else cm.BlobWriter(ctx.paths.weight_bin)
     )
 
 
@@ -2618,9 +2618,7 @@ def _write_palettized_const(
     palettized: tuple[bytes, Tensor, list[int], int],
 ) -> None:
     keys, palettes, lut_shape, key_bits = palettized
-    offset = ctx.blob.append_bytes(
-        keys, _C_engine.coreml.BLOB_SUBBYTE[str(key_bits)]
-    )
+    offset = ctx.blob.append_bytes(keys, _C_engine.coreml.BLOB_SUBBYTE[str(key_bits)])
     lut_offset = ctx.blob.append_tensor(
         _unwrap(palettes.half() if ctx.half else palettes), ctx.body_blob
     )
@@ -2832,9 +2830,7 @@ def _emit_one_folded_constant(ctx: _BuildCtx, tid: int) -> bool:
     builder = ctx.builder
     folded_value = _wrap(ctx.traced_values[tid])
     if tid in ctx.thinned:
-        folded_value = folded_value.reshape(
-            *[int(d) for d in folded_value.shape][1:]
-        )
+        folded_value = folded_value.reshape(*[int(d) for d in folded_value.shape][1:])
     if tid in ctx.f32_opmath_scalars:
         ctx.names[tid] = builder.const_float32(float(folded_value.item()))
         return True
@@ -3092,9 +3088,7 @@ def _build_package_summary(
             for name, _tid, sample, kind in ctx.lifted
         ],
         "traced_outputs": (
-            {field: tensor for field, _tid, tensor in ctx.outputs}
-            if ctx.lifted
-            else {}
+            {field: tensor for field, _tid, tensor in ctx.outputs} if ctx.lifted else {}
         ),
         "quantized_weights": ctx.quantized_count,
         "flexible": ctx.shapes is not None or ctx.shape_range is not None,
@@ -3206,13 +3200,27 @@ def build_package(
     body_mil, body_blob = _spec.body_dtypes(precision)
     return _run_build_pipeline(
         _BuildCtx(
-            model=model, example=example, path=path, precision=precision,
-            io_precision=io_precision, weights=weights, shapes=shapes,
-            shape_range=shape_range, state=state, image_input=image_input,
-            classifier=classifier, metadata=metadata, output_field=output_field,
-            draws=draws, activations=activations, into=into, target=target,
-            half=precision is Precision.FLOAT16, half_io=half_io,
-            body_mil=body_mil, body_blob=body_blob,
+            model=model,
+            example=example,
+            path=path,
+            precision=precision,
+            io_precision=io_precision,
+            weights=weights,
+            shapes=shapes,
+            shape_range=shape_range,
+            state=state,
+            image_input=image_input,
+            classifier=classifier,
+            metadata=metadata,
+            output_field=output_field,
+            draws=draws,
+            activations=activations,
+            into=into,
+            target=target,
+            half=precision is Precision.FLOAT16,
+            half_io=half_io,
+            body_mil=body_mil,
+            body_blob=body_blob,
         )
     )
 

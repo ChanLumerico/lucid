@@ -497,9 +497,7 @@ _CASES: dict[str, _Case] = {
     ),
     "prelu": _Case(lambda lib, F, m: F.prelu(m(1, 2, 3), m(2))),
     "quantile": _cpu(lambda lib, F, m: lib.quantile(m(4), 0.5)),
-    "soft_margin_loss": _Case(
-        lambda lib, F, m: F.soft_margin_loss(m(4), m.signs(4))
-    ),
+    "soft_margin_loss": _Case(lambda lib, F, m: F.soft_margin_loss(m(4), m.signs(4))),
     "softplus": _Case(lambda lib, F, m: F.softplus(m(4))),
     "vecdot": _Case(lambda lib, F, m: lib.linalg.vecdot(m(3, 4), m(3, 4))),
     "vector_norm": _Case(lambda lib, F, m: lib.linalg.vector_norm(m(4))),
@@ -654,6 +652,7 @@ _MIXED: dict[str, _MixedFn] = {
     "stack": lambda lib, F, h, f: lib.stack([h(4), f(4)]),
     "tensordot": lambda lib, F, h, f: lib.tensordot(h(3, 4), f(4, 2), 1),
 }
+
 
 def _widest_columns() -> list[Any]:
     params = []

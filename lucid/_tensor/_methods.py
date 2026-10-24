@@ -423,8 +423,7 @@ def _is_set_to(self: Tensor, tensor: Tensor) -> bool:
         return False
     if self.is_metal:
         return self._impl is tensor._impl or (
-            (fid := self._impl.family_id()) != 0
-            and fid == tensor._impl.family_id()
+            (fid := self._impl.family_id()) != 0 and fid == tensor._impl.family_id()
         )
     ptr_a = self.data_ptr()
     ptr_b = tensor.data_ptr()
@@ -971,9 +970,7 @@ def _divide_(
     )
 
 
-def _subtract_(
-    self: Tensor, other: TensorOrScalar, *, alpha: float = 1.0
-) -> Tensor:
+def _subtract_(self: Tensor, other: TensorOrScalar, *, alpha: float = 1.0) -> Tensor:
     """Write ``lucid.subtract(self, other, alpha=alpha)`` into ``self`` in place."""
     import lucid
 
@@ -1101,7 +1098,9 @@ def _bernoulli_(
             if isinstance(p, lucid.Tensor)
             else lucid.bernoulli(base, p, generator=generator)
         )
-        return base * 0 + out if base.requires_grad and base.is_floating_point() else out
+        return (
+            base * 0 + out if base.requires_grad and base.is_floating_point() else out
+        )
 
     return _write(self, "bernoulli_", _draw)
 

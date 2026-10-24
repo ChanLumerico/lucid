@@ -310,4 +310,3 @@ class TestTheOtherFourAxesReachingThisOne:
         gpu_keys = lucid.tensor([0, 1, 2, 3], dtype=lucid.int32, device="metal")
         with pytest.raises(ValueError, match="keys must be on the CPU"):
             _C_engine.coreml.pack_bits(gpu_keys._impl, 2)
-

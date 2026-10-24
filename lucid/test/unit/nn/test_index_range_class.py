@@ -412,7 +412,9 @@ def test_every_row_has_a_unique_id() -> None:
 # ── CPU: refused before the consumer's kernel ──────────────────────────────
 
 
-def _invoke(fn: Callable[..., lucid.Tensor], kwargs: Kwargs, **extra: object) -> lucid.Tensor:
+def _invoke(
+    fn: Callable[..., lucid.Tensor], kwargs: Kwargs, **extra: object
+) -> lucid.Tensor:
     kw = {**kwargs, **extra}
     args = [kw.pop("tensor")] if "tensor" in kw else []
     return fn(*args, **kw)

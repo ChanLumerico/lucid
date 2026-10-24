@@ -150,7 +150,7 @@ def test_rejects_untracked_cpp_non_member_and_extra_include(tmp_path: Path) -> N
 
     # 3. Extra #include in methods/Binary.cpp
     cpu_bin.write_text(
-        '#include <vector>\n' + _CLEAN_CPU_BINARY,
+        "#include <vector>\n" + _CLEAN_CPU_BINARY,
         encoding="utf-8",
     )
     violations = check_backend_layout.scan_backend_layout(tmp_path, tracked)

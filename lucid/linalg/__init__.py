@@ -46,7 +46,9 @@ def _linalg_op[R](fn: Callable[..., R]) -> Callable[..., R]:
         uk = {k: _try_unwrap(v) or v for k, v in kwargs.items()}
         out: object = fn(*ua, **uk)
         if isinstance(out, tuple):
-            out = tuple(_wrap(o) if isinstance(o, _C_engine.TensorImpl) else o for o in out)
+            out = tuple(
+                _wrap(o) if isinstance(o, _C_engine.TensorImpl) else o for o in out
+            )
         elif isinstance(out, _C_engine.TensorImpl):
             out = _wrap(out)
         # ``fn`` is annotated with what the caller gets once it is re-wrapped,
@@ -1196,7 +1198,9 @@ def pinv(
     """
     if rcond is not None:
         if atol is not None or rtol is not None:
-            raise TypeError("pinv: rcond cannot be specified together with atol or rtol")
+            raise TypeError(
+                "pinv: rcond cannot be specified together with atol or rtol"
+            )
         rtol = rcond
     if atol is not None or rtol is not None or hermitian:
         return _pinv_with_tol(input, atol=atol, rtol=rtol, hermitian=hermitian)
@@ -1791,7 +1795,11 @@ def slogdet(A: Tensor) -> tuple[Tensor, Tensor]:
     """
     d = det(A)
     di, z = _unwrap(d), _C_engine.zeros_like(_unwrap(d))
-    sign = _wrap(_C_engine.where(_C_engine.equal(di, z), _C_engine.mul(di, z), _C_engine.sign(di)))
+    sign = _wrap(
+        _C_engine.where(
+            _C_engine.equal(di, z), _C_engine.mul(di, z), _C_engine.sign(di)
+        )
+    )
     return _SlogdetResult(sign, cast(Tensor, _LogAbsDet.apply(d)))
 
 
@@ -2109,9 +2117,7 @@ def solve_triangular(
     return _wrap(_la.solve_triangular(_unwrap(input), _unwrap(B), upper, unitriangular))
 
 
-def vander(
-    x: Tensor, *, N: int | None = None, increasing: bool = False
-) -> Tensor:
+def vander(x: Tensor, *, N: int | None = None, increasing: bool = False) -> Tensor:
     r"""Construct a Vandermonde matrix from a 1-D or batched vector.
 
     Given an input :math:`x` of shape ``(*, n)``, returns the
@@ -2161,11 +2167,15 @@ def vander(
     x_impl = _unwrap(x)
     shape = [int(s) for s in x_impl.shape]
     if not shape:
-        raise _C_engine.InvalidArgument("linalg.vander: expected input with at least 1 dimension, got 0D tensor")
+        raise _C_engine.InvalidArgument(
+            "linalg.vander: expected input with at least 1 dimension, got 0D tensor"
+        )
     n = shape[-1]
     cols = n if N is None else int(N)
     if cols < 0:
-        raise _C_engine.InvalidArgument(f"linalg.vander: N must be non-negative, got {cols}")
+        raise _C_engine.InvalidArgument(
+            f"linalg.vander: N must be non-negative, got {cols}"
+        )
     # The exponent row is combined with ``x`` by ``pow``, so it must live on the
     # input's device — a hardcoded CPU exponent raised DeviceMismatch for any
     # Metal input.
@@ -2214,9 +2224,7 @@ def _cast_for_norm(
     complex_in = x.dtype in _COMPLEX_DTYPES
     if complex_in != (target in _COMPLEX_DTYPES):
         kind = "complex" if complex_in else "real"
-        raise TypeError(
-            f"{op}: dtype must be {kind} for a {kind} input, got {target}"
-        )
+        raise TypeError(f"{op}: dtype must be {kind} for a {kind} input, got {target}")
     if lucid.promote_types(x.dtype, target) != target:
         raise TypeError(
             f"{op}: dtype={target} would narrow the {x.dtype} input; "
@@ -2316,7 +2324,11 @@ def vector_norm(
     """
     xi = _require_normable(_unwrap(input), "vector_norm")
     with _autocast_entry("vector_norm", xi) as (xi_cast,):
-        xi = _cast_for_norm(input, dtype, "vector_norm") if dtype is not None else xi_cast
+        xi = (
+            _cast_for_norm(input, dtype, "vector_norm")
+            if dtype is not None
+            else xi_cast
+        )
         # Every order below is a function of the magnitudes |x_i| alone, and
         # this is the one place in linalg where a norm takes them: a complex
         # input is replaced by its (real) magnitudes before any order sees it.
@@ -2324,7 +2336,11 @@ def vector_norm(
         # through this function instead of repeating the step (CHA-147, CHA-231).
         r = _C_engine.abs(xi) if xi.dtype in (_C_engine.C64, _C_engine.C128) else xi
         # Every axis, rather than a flatten, for ``dim=None`` so ``keepdim`` retains rank.
-        axes = list(range(len(r.shape))) if dim is None else _reduction_axes(r, dim, "vector_norm")
+        axes = (
+            list(range(len(r.shape)))
+            if dim is None
+            else _reduction_axes(r, dim, "vector_norm")
+        )
         if ord == 0:
             nz = _C_engine.not_equal(r, _C_engine.zeros_like(r))
             return _wrap(_C_engine.astype(_C_engine.sum(nz, axes, keepdim), r.dtype))
@@ -2662,7 +2678,11 @@ def matrix_norm(
     """
     xi = _require_normable(_unwrap(input), "matrix_norm")
     with _autocast_entry("matrix_norm", xi) as (xi_cast,):
-        xi = _cast_for_norm(input, dtype, "matrix_norm") if dtype is not None else xi_cast
+        xi = (
+            _cast_for_norm(input, dtype, "matrix_norm")
+            if dtype is not None
+            else xi_cast
+        )
         if dtype is None:
             input = _wrap(xi)
         d0, d1 = _check_matrix_norm_dims(len(xi.shape), dim)
@@ -3102,7 +3122,9 @@ def _bunch_kaufman_steps(piv: list[int], n: int) -> list[tuple[int, int, int]]:
     return steps
 
 
-def ldl_solve(LD: Tensor, pivots: Tensor, B: Tensor, *, hermitian: bool = False) -> Tensor:
+def ldl_solve(
+    LD: Tensor, pivots: Tensor, B: Tensor, *, hermitian: bool = False
+) -> Tensor:
     r"""Solve a symmetric linear system using an LDL factorization.
 
     Given :math:`A = L\,D\,L^\top` produced by :func:`ldl_factor`,
@@ -3501,12 +3523,31 @@ def diagonal(
 # The ``*_ex`` family reads LAPACK's ``info``; ``lu_factor`` and
 # ``ldl_factor`` above are its checked forms.
 from lucid.linalg._ex import (
-    _check_matrix_norm_dims, _complete_svd_factors, _cond_compute, _EighResult,
-    _EigResult, _householder_product, _LstsqResult, _lstsq_solution,
-    _lu_factor_ex, _lu_solve_general, _LuFactorResult, _LuResult,
-    _matrix_norm_sv, _pinv_with_tol, _QrResult, _SlogdetResult, _sv_cutoff,
-    cholesky_ex, inv_ex, ldl_factor, ldl_factor_ex, lu_factor_ex, solve_ex,
-    tensorinv, tensorsolve,
+    _check_matrix_norm_dims,
+    _complete_svd_factors,
+    _cond_compute,
+    _EighResult,
+    _EigResult,
+    _householder_product,
+    _LstsqResult,
+    _lstsq_solution,
+    _lu_factor_ex,
+    _lu_solve_general,
+    _LuFactorResult,
+    _LuResult,
+    _matrix_norm_sv,
+    _pinv_with_tol,
+    _QrResult,
+    _SlogdetResult,
+    _sv_cutoff,
+    cholesky_ex,
+    inv_ex,
+    ldl_factor,
+    ldl_factor_ex,
+    lu_factor_ex,
+    solve_ex,
+    tensorinv,
+    tensorsolve,
 )
 
 __all__ = [

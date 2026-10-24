@@ -91,9 +91,9 @@ def test_the_operator_writes_into_self(device: str, dunder: str) -> None:
     alias = a
     # ``_impl.version``: Lucid has no ``Tensor._version`` yet (LCD-488).
     impl, version = a._impl, a._impl.version
-    expected = (
-        getattr(_base(lucid, dtype).to(device), "__" + dunder[3:])(operand).tolist()
-    )
+    expected = getattr(_base(lucid, dtype).to(device), "__" + dunder[3:])(
+        operand
+    ).tolist()
 
     out = _augment(a, symbol, operand)
 
@@ -109,9 +109,9 @@ def test_a_view_of_self_sees_the_write(device: str, dunder: str) -> None:
     symbol, dtype, operand = AUGMENTED[dunder]
     a = _base(lucid, dtype).to(device)
     view = a[:2]
-    expected = (
-        getattr(_base(lucid, dtype).to(device), "__" + dunder[3:])(operand).tolist()
-    )
+    expected = getattr(_base(lucid, dtype).to(device), "__" + dunder[3:])(
+        operand
+    ).tolist()
     _augment(a, symbol, operand)
     assert view.tolist() == expected[:2]
 
@@ -123,9 +123,9 @@ def test_the_operator_on_a_view_writes_through_to_its_base(
     symbol, dtype, operand = AUGMENTED[dunder]
     a = _base(lucid, dtype).to(device)
     view = a[1:3]
-    expected = (
-        getattr(_base(lucid, dtype).to(device), "__" + dunder[3:])(operand).tolist()
-    )
+    expected = getattr(_base(lucid, dtype).to(device), "__" + dunder[3:])(
+        operand
+    ).tolist()
     _augment(view, symbol, operand)
     assert a.tolist() == [5, *expected[1:3], 8]
 

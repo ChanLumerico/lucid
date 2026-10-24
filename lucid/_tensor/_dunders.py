@@ -920,8 +920,7 @@ def __index__(self: Tensor) -> int:
     value = self.item()
     if isinstance(value, bool) or not isinstance(value, int):
         raise TypeError(
-            f"only integer tensors can be used as an index, "
-            f"got dtype {self.dtype}"
+            f"only integer tensors can be used as an index, " f"got dtype {self.dtype}"
         )
     return value
 
@@ -1670,14 +1669,54 @@ def __setitem__(self: Tensor, idx: _IndexType, value: TensorOrScalar) -> None:
 
 
 _DUNDER_METHODS = (
-    __add__, __radd__, __iadd__, __sub__, __rsub__, __isub__,
-    __mul__, __rmul__, __imul__, __truediv__, __rtruediv__, __itruediv__,
-    __floordiv__, __rfloordiv__, __pow__, __rpow__, __ipow__,
-    __matmul__, __rmatmul__, __neg__, __abs__, __invert__,
-    __and__, __rand__, __or__, __ror__, __xor__, __rxor__,
-    __int__, __index__, __float__, __complex__, __mod__, __rmod__,
-    __divmod__, __rdivmod__, __lshift__, __rlshift__, __rshift__, __rrshift__,
-    __eq__, __ne__, __lt__, __le__, __gt__, __ge__, __getitem__, __setitem__,
+    __add__,
+    __radd__,
+    __iadd__,
+    __sub__,
+    __rsub__,
+    __isub__,
+    __mul__,
+    __rmul__,
+    __imul__,
+    __truediv__,
+    __rtruediv__,
+    __itruediv__,
+    __floordiv__,
+    __rfloordiv__,
+    __pow__,
+    __rpow__,
+    __ipow__,
+    __matmul__,
+    __rmatmul__,
+    __neg__,
+    __abs__,
+    __invert__,
+    __and__,
+    __rand__,
+    __or__,
+    __ror__,
+    __xor__,
+    __rxor__,
+    __int__,
+    __index__,
+    __float__,
+    __complex__,
+    __mod__,
+    __rmod__,
+    __divmod__,
+    __rdivmod__,
+    __lshift__,
+    __rlshift__,
+    __rshift__,
+    __rrshift__,
+    __eq__,
+    __ne__,
+    __lt__,
+    __le__,
+    __gt__,
+    __ge__,
+    __getitem__,
+    __setitem__,
 )
 
 

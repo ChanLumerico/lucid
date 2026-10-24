@@ -491,7 +491,9 @@ def amax(
     lucid.max : returns ``(values, indices)`` for a single axis.
     """
     return _wrap(
-        _C_engine.max(input._impl, _reduction_axes(input._impl, dim, "amax"), bool(keepdim))
+        _C_engine.max(
+            input._impl, _reduction_axes(input._impl, dim, "amax"), bool(keepdim)
+        )
     )
 
 
@@ -528,7 +530,9 @@ def amin(
     lucid.min : returns ``(values, indices)`` for a single axis.
     """
     return _wrap(
-        _C_engine.min(input._impl, _reduction_axes(input._impl, dim, "amin"), bool(keepdim))
+        _C_engine.min(
+            input._impl, _reduction_axes(input._impl, dim, "amin"), bool(keepdim)
+        )
     )
 
 
@@ -563,7 +567,9 @@ def aminmax(
     (-1.0, 4.0)
     """
     dim_num = _promotion.as_number(dim)
-    if dim_num is not None and (isinstance(dim_num, bool) or not isinstance(dim_num, int)):
+    if dim_num is not None and (
+        isinstance(dim_num, bool) or not isinstance(dim_num, int)
+    ):
         raise TypeError(
             f"aminmax(): argument 'dim' must be int, not {type(dim).__name__}"
         )

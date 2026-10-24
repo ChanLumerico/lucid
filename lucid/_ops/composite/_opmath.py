@@ -101,9 +101,7 @@ def _restore_metal_f32_subnormals(
     work_norm: Tensor, exp_eff: Tensor, bits: Tensor, out: Tensor
 ) -> Tensor:
     with lucid.no_grad():
-        scaled = _scale_pow2(
-            lucid.abs(work_norm), lucid.trunc(exp_eff) + 149.0, 300.0
-        )
+        scaled = _scale_pow2(lucid.abs(work_norm), lucid.trunc(exp_eff) + 149.0, 300.0)
         finite_nz = (
             (lucid.abs(work_norm) > 0.0)
             & (~lucid.isinf(work_norm))

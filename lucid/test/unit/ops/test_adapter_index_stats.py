@@ -248,9 +248,7 @@ def test_unique_consecutive_flat(
 
 
 @pytest.mark.parametrize("dim", [0, 1, -1])
-def test_unique_consecutive_along_a_dim(
-    ref: ModuleType, device: str, dim: int
-) -> None:
+def test_unique_consecutive_along_a_dim(ref: ModuleType, device: str, dim: int) -> None:
     data = [[[1, 2], [1, 2]], [[1, 2], [1, 2]], [[0, 5], [0, 5]], [[1, 2], [1, 2]]]
     x = lucid.tensor(data, device=device)
     want = ref.unique_consecutive(
@@ -406,7 +404,10 @@ def test_half_data_dependent_ops_match_reference(
     rx = ref.tensor(vals, dtype=ref_dt)
 
     # histc: explicit range, auto-range, and direct _C_engine.histc auto-range
-    _same(lucid.histc(x, bins=4, min=0.0, max=3.0), ref.histc(rx, bins=4, min=0.0, max=3.0))
+    _same(
+        lucid.histc(x, bins=4, min=0.0, max=3.0),
+        ref.histc(rx, bins=4, min=0.0, max=3.0),
+    )
     _same(lucid.histc(x, bins=4), ref.histc(rx, bins=4))
     _same(
         lucid._dispatch._wrap(_C_engine.histc(x._impl, 4, 0.0, 0.0)),
@@ -477,14 +478,22 @@ def test_searchsorted_and_bucketize_duplicates_nan_empty_and_2d(
     q = lucid.tensor(q_vals, device=device)
     rseq = ref.tensor(seq_vals)
     rq = ref.tensor(q_vals)
-    _same(lucid.searchsorted(seq, q, right=right), ref.searchsorted(rseq, rq, right=right))
+    _same(
+        lucid.searchsorted(seq, q, right=right), ref.searchsorted(rseq, rq, right=right)
+    )
     _same(lucid.bucketize(q, seq, right=right), ref.bucketize(rq, rseq, right=right))
 
     # Empty sequence and empty queries
     empty = lucid.zeros(0, device=device)
     rempty = ref.zeros(0)
-    _same(lucid.searchsorted(empty, q, right=right), ref.searchsorted(rempty, rq, right=right))
-    _same(lucid.searchsorted(seq, empty, right=right), ref.searchsorted(rseq, rempty, right=right))
+    _same(
+        lucid.searchsorted(empty, q, right=right),
+        ref.searchsorted(rempty, rq, right=right),
+    )
+    _same(
+        lucid.searchsorted(seq, empty, right=right),
+        ref.searchsorted(rseq, rempty, right=right),
+    )
 
     # N-D row-wise searchsorted
     seq_2d = lucid.tensor([[1.0, 3.0, 5.0], [2.0, 4.0, 6.0]], device=device)
@@ -506,5 +515,3 @@ def test_searchsorted_1m_by_1m_completes_in_bounded_memory() -> None:
     assert out.dtype == lucid.int64
     assert int(out[0].item()) == 0
     assert int(out[-1].item()) == 1_000_000
-
-

@@ -378,7 +378,9 @@ def test_the_padding_reaches_the_model_at_pad_value() -> None:
 
 
 @pytest.mark.parametrize(
-    ("mean", "std"), [((0.5, 0.5), None), ((0.5, 0.5, 0.5), (0.25, 0.25))], ids=["2-3", "3-2"]
+    ("mean", "std"),
+    [((0.5, 0.5), None), ((0.5, 0.5, 0.5), (0.25, 0.25))],
+    ids=["2-3", "3-2"],
 )
 def test_a_pad_value_with_unpaired_mean_and_std_names_both(
     mean: tuple[float, ...], std: tuple[float, ...] | None

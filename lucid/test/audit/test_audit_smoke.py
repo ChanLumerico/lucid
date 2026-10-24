@@ -313,7 +313,9 @@ def test_inplace_tensor_methods_resize_tensor_peers_and_index_put_runs() -> None
     assert edge is not None and entry is not None
     ctx = _axes.Context(quick=True)
     for name in ("add_", "mul_", "lerp_", "masked_fill_"):
-        sym = _surface.Symbol(f"Tensor.{name}", "tensor", "method", getattr(lucid.Tensor, name))
+        sym = _surface.Symbol(
+            f"Tensor.{name}", "tensor", "method", getattr(lucid.Tensor, name)
+        )
         finding = edge.run(sym, ctx)
         assert finding.status is Status.PASS, (name, finding)
     for qual, obj in (
@@ -325,7 +327,6 @@ def test_inplace_tensor_methods_resize_tensor_peers_and_index_put_runs() -> None
         sym = _surface.Symbol(qual, sub, kind, obj)
         finding = entry.run(sym, ctx)
         assert finding.status is Status.PASS, (qual, finding)
-
 
 
 # ── baseline ─────────────────────────────────────────────────────────────────

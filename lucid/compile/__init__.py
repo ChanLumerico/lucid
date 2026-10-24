@@ -41,7 +41,16 @@ import sys
 import types
 from contextlib import contextmanager
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Callable, Iterator, Protocol, cast, final, overload, override
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Iterator,
+    Protocol,
+    cast,
+    final,
+    overload,
+    override,
+)
 
 from lucid._C import engine as _C_engine
 from lucid._tensor import Tensor
@@ -491,24 +500,38 @@ type _CompileOptions = dict[str, str | int | bool | Callable[..., object]]
 
 @overload
 def compile[**P, R](
-    model: Callable[P, R], *, fullgraph: bool = ..., dynamic: bool | None = ...,
-    backend: str | Callable[..., object] | None = ..., mode: str | None = ...,
-    options: _CompileOptions | None = ..., disable: bool = ...,
+    model: Callable[P, R],
+    *,
+    fullgraph: bool = ...,
+    dynamic: bool | None = ...,
+    backend: str | Callable[..., object] | None = ...,
+    mode: str | None = ...,
+    options: _CompileOptions | None = ...,
+    disable: bool = ...,
 ) -> CompiledModule[P, R]: ...
 
 
 @overload
 def compile(
-    model: None = None, *, fullgraph: bool = ..., dynamic: bool | None = ...,
-    backend: str | Callable[..., object] | None = ..., mode: str | None = ...,
-    options: _CompileOptions | None = ..., disable: bool = ...,
+    model: None = None,
+    *,
+    fullgraph: bool = ...,
+    dynamic: bool | None = ...,
+    backend: str | Callable[..., object] | None = ...,
+    mode: str | None = ...,
+    options: _CompileOptions | None = ...,
+    disable: bool = ...,
 ) -> Callable[[Callable[..., object]], object]: ...
 
 
 def compile[**P, R](
-    model: Callable[P, R] | None = None, *, fullgraph: bool = False,
-    dynamic: bool | None = None, backend: str | Callable[..., object] | None = None,
-    mode: str | None = None, options: _CompileOptions | None = None,
+    model: Callable[P, R] | None = None,
+    *,
+    fullgraph: bool = False,
+    dynamic: bool | None = None,
+    backend: str | Callable[..., object] | None = None,
+    mode: str | None = None,
+    options: _CompileOptions | None = None,
     disable: bool = False,
 ) -> CompiledModule[P, R] | Callable[[Callable[..., object]], object]:
     """Wrap ``model`` so calls are routed through cached MPSGraph executables.

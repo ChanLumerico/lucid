@@ -131,9 +131,7 @@ class autocast:
         """
         self._engine_device = _to_engine_device(device_type)
         self._dtype = (
-            (bfloat16 if device_type == "cpu" else float16)
-            if dtype is None
-            else dtype
+            (bfloat16 if device_type == "cpu" else float16) if dtype is None else dtype
         )
         self._enabled = enabled
         self._cache_enabled = True if cache_enabled is None else bool(cache_enabled)

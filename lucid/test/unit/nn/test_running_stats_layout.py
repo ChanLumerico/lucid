@@ -307,6 +307,7 @@ _PATHS: dict[str, tuple[str, dict[str, Any], tuple[int, ...]]] = {
     ),
 }
 
+
 def _make(framework_nn: Any, path: str) -> Any:
     name, kwargs, _ = _PATHS[path]
     return getattr(framework_nn, name)(_C, **kwargs)

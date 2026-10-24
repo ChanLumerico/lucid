@@ -351,4 +351,3 @@ def test_trig_and_hyperbolic_within_one_ulp_and_exact_at_zero(
     assert int(np.abs(gb - wb).max()) <= 1
     if name == "cos" and dtype is np.float32:
         assert lucid.hann_window(4)[0].item() == 0.0
-

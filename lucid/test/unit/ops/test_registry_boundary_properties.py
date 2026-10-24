@@ -90,7 +90,9 @@ def _make_tensor(shape: tuple[int, ...], dtype_name: str, device: str) -> lucid.
         vals = [(i % 2) == 1 for i in range(numel)]
         return lucid.tensor(vals, dtype=dt, device=device).reshape(shape)
     if dtype_name == "complex64":
-        re = lucid.arange(1, numel + 1, dtype=lucid.float32, device=device).reshape(shape)
+        re = lucid.arange(1, numel + 1, dtype=lucid.float32, device=device).reshape(
+            shape
+        )
         im = lucid.ones(shape, dtype=lucid.float32, device=device)
         return lucid.complex(re, im)
     vals_num = [(i % 5) + 1 for i in range(numel)]
@@ -178,7 +180,9 @@ def _call_ref_entry(
 
 # ── Classification of _REGISTRY entries ──────────────────────────────────────
 
-_SPECIAL_UNARY_KWARGS: dict[str, Callable[[lucid.Tensor], tuple[tuple[object, ...], dict[str, object]]]] = {
+_SPECIAL_UNARY_KWARGS: dict[
+    str, Callable[[lucid.Tensor], tuple[tuple[object, ...], dict[str, object]]]
+] = {
     "reshape": lambda x: ((-1,), {}),
     "view": lambda x: ((-1,), {}),
     "squeeze": lambda x: ((), {}),
@@ -267,9 +271,7 @@ _UNARY_SPECIAL_ENTRIES: tuple[OpEntry, ...] = tuple(
 )
 
 _BINARY_ENTRIES: tuple[OpEntry, ...] = tuple(
-    e
-    for e in _REGISTRY
-    if e.n_tensor_args == 2 and e.name not in _INDEXED_NAMES
+    e for e in _REGISTRY if e.n_tensor_args == 2 and e.name not in _INDEXED_NAMES
 )
 
 _INDEXED_ENTRIES: tuple[OpEntry, ...] = tuple(
@@ -320,9 +322,9 @@ def test_unary_and_reduction_registry_ops_at_boundary_inputs(
         try:
             got = _call_entry(entry, x)
         except Exception as exc:
-            assert isinstance(exc, _TYPED_REFUSALS), (
-                f"{entry.name} raised untyped {type(exc).__name__}: {exc}"
-            )
+            assert isinstance(
+                exc, _TYPED_REFUSALS
+            ), f"{entry.name} raised untyped {type(exc).__name__}: {exc}"
             continue
         if ref is None:
             continue
@@ -353,9 +355,9 @@ def test_shape_and_parameterized_unary_registry_ops_at_boundary_inputs(
         try:
             got = _call_entry(entry, x, *args, **kwargs)
         except Exception as exc:
-            assert isinstance(exc, _TYPED_REFUSALS), (
-                f"{entry.name} raised untyped {type(exc).__name__}: {exc}"
-            )
+            assert isinstance(
+                exc, _TYPED_REFUSALS
+            ), f"{entry.name} raised untyped {type(exc).__name__}: {exc}"
             continue
         first = _extract_first_tensor(got)
         if first is not None:
@@ -394,9 +396,9 @@ def test_binary_registry_ops_at_boundary_shapes_and_mixed_dtypes(
         try:
             got = _call_entry(entry, a, b)
         except Exception as exc:
-            assert isinstance(exc, _TYPED_REFUSALS), (
-                f"{entry.name} raised untyped {type(exc).__name__}: {exc}"
-            )
+            assert isinstance(
+                exc, _TYPED_REFUSALS
+            ), f"{entry.name} raised untyped {type(exc).__name__}: {exc}"
             continue
         if ref is None:
             continue
@@ -427,9 +429,9 @@ def test_join_and_variadic_registry_ops_at_boundary_inputs(
         try:
             got = _call_entry(entry, tensors)
         except Exception as exc:
-            assert isinstance(exc, _TYPED_REFUSALS), (
-                f"{entry.name} raised untyped {type(exc).__name__}: {exc}"
-            )
+            assert isinstance(
+                exc, _TYPED_REFUSALS
+            ), f"{entry.name} raised untyped {type(exc).__name__}: {exc}"
             continue
         first = _extract_first_tensor(got)
         if first is not None:
@@ -447,9 +449,9 @@ def test_join_and_variadic_registry_ops_at_boundary_inputs(
             try:
                 _ = call()
             except Exception as exc:
-                assert isinstance(exc, _TYPED_REFUSALS), (
-                    f"{name} raised untyped {type(exc).__name__}: {exc}"
-                )
+                assert isinstance(
+                    exc, _TYPED_REFUSALS
+                ), f"{name} raised untyped {type(exc).__name__}: {exc}"
 
 
 @pytest.mark.property
@@ -494,9 +496,9 @@ def test_indexed_registry_ops_refuse_out_of_range_indices_without_crash(
         try:
             out = fn()
         except Exception as exc:
-            assert isinstance(exc, _TYPED_REFUSALS), (
-                f"{name} raised untyped {type(exc).__name__}: {exc}"
-            )
+            assert isinstance(
+                exc, _TYPED_REFUSALS
+            ), f"{name} raised untyped {type(exc).__name__}: {exc}"
             continue
         assert isinstance(out, lucid.Tensor)
         assert out.device.type == device

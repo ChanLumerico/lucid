@@ -30,6 +30,7 @@ _EMPTY_PERMUTES = [
     ((0, 5), (1, 0)),
 ]
 
+
 @pytest.mark.parametrize("shape,perm", _EMPTY_PERMUTES)
 def test_empty_permuted_view_inplace_ops_succeed(
     ref: ModuleType,

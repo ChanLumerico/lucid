@@ -79,6 +79,7 @@ _FUNCTIONAL_OPS = {
     "tanhshrink": False,
 }
 
+
 def _attr(root: Any, path: str) -> Callable[..., Any]:
     for part in path.split("."):
         root = getattr(root, part)

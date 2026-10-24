@@ -202,7 +202,9 @@ def scatter_along_axis(
     norm_axis = axis % rank if rank else 0
     for a in range(rank):
         if 0 < idx_shape[a] < upd_shape[a]:
-            updates, _, upd_shape = _split_prefix(b, updates, upd_shape, a, idx_shape[a])
+            updates, _, upd_shape = _split_prefix(
+                b, updates, upd_shape, a, idx_shape[a]
+            )
     tails: list[tuple[int, str, list[int]]] = []
     for a in range(rank):
         if a != norm_axis and 0 < idx_shape[a] < cur_shape[a]:

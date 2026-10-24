@@ -52,9 +52,7 @@ DIGEST_DTYPES: dict[str, tuple[str, ...]] = {
     ),
 }
 
-FLOAT_DTYPES: frozenset[str] = frozenset(
-    {"float16", "bfloat16", "float32", "float64"}
-)
+FLOAT_DTYPES: frozenset[str] = frozenset({"float16", "bfloat16", "float32", "float64"})
 
 
 def _tensor_digest(t: lucid.Tensor) -> dict[str, Any]:

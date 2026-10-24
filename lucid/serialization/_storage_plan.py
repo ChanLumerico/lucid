@@ -109,9 +109,7 @@ def _own_geometry(t: _T) -> tuple[list[int], list[int], int]:
     )
 
 
-def _window_positions(
-    size: tuple[int, ...], stride: tuple[int, ...], start: int
-) -> _T:
+def _window_positions(size: tuple[int, ...], stride: tuple[int, ...], start: int) -> _T:
     """``start + sum(i * stride)`` over the indices ``i`` of ``size``, on the CPU."""
     import lucid
 
@@ -299,14 +297,16 @@ def _compact_strided_cluster(
             int(picked[s].item()) - offset if d > 1 else 1
             for d, s in zip(m.shape, step, strict=True)
         ]
-        placed = _window_positions(
-            tuple(m.shape), tuple(stride), offset
-        )
+        placed = _window_positions(tuple(m.shape), tuple(stride), offset)
         if not bool((placed == picked).all().item()):
             return False
         remapped.append((m, stride, offset))
     buf = _C_engine.TensorImpl.from_bytes(
-        top.raw, [_numel(top.shape)], top.tensor._impl.dtype, _C_engine.Device.CPU, False
+        top.raw,
+        [_numel(top.shape)],
+        top.tensor._impl.dtype,
+        _C_engine.Device.CPU,
+        False,
     )
     for m, stride, offset in remapped:
         back = _C_engine.TensorImpl._make_view(buf, m.shape, stride, offset)

@@ -296,7 +296,9 @@ def test_a_parameter_whose_elements_overlap_is_refused(
 
     dense.grad = lucid.tensor([4.0, 5.0]).to(device)
     p.grad = lucid.tensor([1.0, 2.0, 3.0, 4.0]).to(device)
-    with pytest.raises((_C_engine.InvalidArgument, RuntimeError), match=r"parameter 1.*overlap"):
+    with pytest.raises(
+        (_C_engine.InvalidArgument, RuntimeError), match=r"parameter 1.*overlap"
+    ):
         opt.step()
 
     np.testing.assert_array_equal(_flat(dense), dense_before)
@@ -305,4 +307,3 @@ def test_a_parameter_whose_elements_overlap_is_refused(
     assert 1 not in state_after
     for k, expected in state_before.items():
         np.testing.assert_array_equal(np.asarray(state_after[0][k]), expected)
-

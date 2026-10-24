@@ -176,9 +176,7 @@ def _format_param(
     n = len(optimizer.param_groups)
     if isinstance(param, (list, tuple)):
         if len(param) != n:
-            raise ValueError(
-                f"expected {n} values for {name}, but got {len(param)}"
-            )
+            raise ValueError(f"expected {n} values for {name}, but got {len(param)}")
         return [float(x) for x in param]
     return [float(param)] * n
 
@@ -945,7 +943,9 @@ class Optimizer:
                 cur_pair[1],
                 {pair_key: cur_pair, k0: cur_pair[0], k1: cur_pair[1]},
             )
-        upd: dict[str, object] = {} if isinstance(raw_pair, tuple) else {pair_key: cur_pair}
+        upd: dict[str, object] = (
+            {} if isinstance(raw_pair, tuple) else {pair_key: cur_pair}
+        )
         return cur_pair[0], cur_pair[1], upd
 
     def _resolve_group_hparams(
@@ -1176,7 +1176,9 @@ class Optimizer:
         self, group: dict[str, object], params: list[Parameter]
     ) -> None:
         """Apply decoupled weight decay in Python for optimizers whose engine lacks it."""
-        if not (self._PYTHON_DECOUPLED_WD and group.get("decoupled_weight_decay", False)):
+        if not (
+            self._PYTHON_DECOUPLED_WD and group.get("decoupled_weight_decay", False)
+        ):
             return
         wd = _group_float(group, "weight_decay")
         if wd == 0.0:

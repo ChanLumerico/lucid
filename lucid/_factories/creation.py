@@ -296,11 +296,7 @@ def empty_strided(
             raise RuntimeError(
                 f"Storage size calculation overflowed with sizes={list(sz)} and strides={list(st)}"
             )
-    needed = (
-        0
-        if 0 in sz
-        else 1 + sum((n - 1) * s for n, s in zip(sz, st, strict=True))
-    )
+    needed = 0 if 0 in sz else 1 + sum((n - 1) * s for n, s in zip(sz, st, strict=True))
     base = empty((needed,), dtype=dtype, device=device, requires_grad=False)
     out = base.as_strided(sz, st, 0)
     if requires_grad:
@@ -392,9 +388,7 @@ def full(
     """
     val = _python_scalar(fill_value)
     _dt_arg = (
-        _scalar_dtype(val, _default_dtype_enum_cached())
-        if dtype is None
-        else dtype
+        _scalar_dtype(val, _default_dtype_enum_cached()) if dtype is None else dtype
     )
     _dt, _dev, _rg = normalize_factory_kwargs(_dt_arg, device, requires_grad)
     shape = list(size) if isinstance(size, (list, tuple)) else [size]

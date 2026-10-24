@@ -574,7 +574,9 @@ def instance_norm(
 
         from lucid._factories.creation import full as _full_factory
 
-        eps_scalar: Tensor = _full_factory((), eps, device=input.device, dtype=var.dtype)
+        eps_scalar: Tensor = _full_factory(
+            (), eps, device=input.device, dtype=var.dtype
+        )
         y: Tensor = (input - mean) / (var + eps_scalar).sqrt()
         if weight is not None:
             y = y * weight.reshape(bcast_shape)

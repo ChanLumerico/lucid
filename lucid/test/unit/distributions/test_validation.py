@@ -318,4 +318,3 @@ def test_positive_definite_checks_every_matrix_in_mixed_batch(device: str) -> No
     assert got.device == device
     assert got.dtype == lucid.bool
     assert got.tolist() == per_matrix == [False, False, False, True]
-

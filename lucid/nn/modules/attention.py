@@ -300,11 +300,20 @@ class MultiheadAttention(Module):
     """
 
     def __init__(
-        self, embed_dim: int, num_heads: int, dropout: float = 0.0, bias: bool = True,
-        add_bias_kv: bool = False, add_zero_attn: bool = False,
-        kdim: int | None = None, vdim: int | None = None, batch_first: bool = False,
-        device: DeviceLike | None = None, dtype: DTypeLike | None = None,
-        *, num_kv_heads: int | None = None,
+        self,
+        embed_dim: int,
+        num_heads: int,
+        dropout: float = 0.0,
+        bias: bool = True,
+        add_bias_kv: bool = False,
+        add_zero_attn: bool = False,
+        kdim: int | None = None,
+        vdim: int | None = None,
+        batch_first: bool = False,
+        device: DeviceLike | None = None,
+        dtype: DTypeLike | None = None,
+        *,
+        num_kv_heads: int | None = None,
     ) -> None:
         """Initialise the MultiheadAttention module. See the class docstring for parameter semantics."""
         super().__init__()

@@ -185,8 +185,12 @@ def test_metal_broadcast_and_wide_int64_divmod_are_exact(ref: ModuleType) -> Non
         want = [[_int_oracle(_KIND[op], x, y, 64) for x in nums] for y in dens]
         assert got == want
 
-    fa = lucid.tensor([[0.0, -0.0, 5.0, -5.0, _INF, -_INF]], dtype=lucid.float32, device="metal")
-    fb = lucid.tensor([[1.0], [-1.0], [_INF], [-_INF]], dtype=lucid.float32, device="metal")
+    fa = lucid.tensor(
+        [[0.0, -0.0, 5.0, -5.0, _INF, -_INF]], dtype=lucid.float32, device="metal"
+    )
+    fb = lucid.tensor(
+        [[1.0], [-1.0], [_INF], [-_INF]], dtype=lucid.float32, device="metal"
+    )
     rfa = ref.tensor([[0.0, -0.0, 5.0, -5.0, _INF, -_INF]], dtype=ref.float32)
     rfb = ref.tensor([[1.0], [-1.0], [_INF], [-_INF]], dtype=ref.float32)
     for op in ("floordiv", "mod", "fmod"):

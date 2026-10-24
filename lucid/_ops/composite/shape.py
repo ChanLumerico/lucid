@@ -171,7 +171,9 @@ def moveaxis(
     >>> lucid.moveaxis(x, [0, 1], [-1, -2]).shape
     (4, 5, 3, 2)
     """
-    source, destination = _promotion.as_number(source), _promotion.as_number(destination)
+    source, destination = _promotion.as_number(source), _promotion.as_number(
+        destination
+    )
     _src = list(source) if not isinstance(source, int) else source
     _dst = list(destination) if not isinstance(destination, int) else destination
     return lucid.movedim(input, _src, _dst)

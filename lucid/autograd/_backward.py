@@ -443,9 +443,7 @@ def _batched_grad(
     totals: list[Tensor | None] = []
     for j in range(len(ins)):
         col = [g for row in rows if (g := row[j]) is not None]
-        totals.append(
-            _lucid.stack(col, dim=0) if len(col) == batch_size else None
-        )
+        totals.append(_lucid.stack(col, dim=0) if len(col) == batch_size else None)
     return totals, batch_size
 
 
@@ -469,9 +467,13 @@ def _finalize_grads(
 
     if batch_size is not None:
         return tuple(
-            _lucid.zeros((batch_size, *inp.shape), dtype=inp.dtype, device=inp.device)
-            if g is None
-            else g
+            (
+                _lucid.zeros(
+                    (batch_size, *inp.shape), dtype=inp.dtype, device=inp.device
+                )
+                if g is None
+                else g
+            )
             for g, inp in zip(totals, ins, strict=True)
         )
     return tuple(
@@ -634,5 +636,3 @@ def _single_grad(
         create_graph,
     )
     return [None if impl is None else _wrap(impl) for impl in partials]
-
-

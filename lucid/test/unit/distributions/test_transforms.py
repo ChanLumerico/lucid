@@ -807,9 +807,7 @@ def test_independent_transform_with_event_dim_inner_matches_reference(
     ("dim", "lengths"),
     [(-1, [2, 2]), (1, [2, 2]), (0, [1, 2]), (-2, [1, 2])],
 )
-def test_cat_transform_mixed_event_dim_matches_reference(
-    ref, device, dim, lengths
-):
+def test_cat_transform_mixed_event_dim_matches_reference(ref, device, dim, lengths):
     """LCD-507: ``CatTransform.log_abs_det_jacobian`` reduces partitions with
     smaller ``event_dim`` via ``_sum_rightmost`` and concatenates or sums
     according to whether ``dim`` falls inside ``self.event_dim``."""
@@ -838,5 +836,3 @@ def test_cat_transform_mixed_event_dim_matches_reference(
     np.testing.assert_allclose(
         got.to("cpu").numpy(), want.numpy(), rtol=1e-5, atol=1e-6
     )
-
-

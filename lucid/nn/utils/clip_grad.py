@@ -19,7 +19,9 @@ _D = _C_engine.Dtype
 _NORMABLE = frozenset({_D.F16, _D.BF16, _D.F32, _D.F64, _D.C64})
 
 
-def _norm_work_dtype(impls: list[_C_engine.TensorImpl], amp_active: bool) -> _C_engine.Dtype:
+def _norm_work_dtype(
+    impls: list[_C_engine.TensorImpl], amp_active: bool
+) -> _C_engine.Dtype:
     dt0 = impls[0].dtype
     if any(i.dtype == _D.F64 for i in impls):
         return _D.F64
@@ -40,23 +42,35 @@ def _inf_norm(impls: list[_C_engine.TensorImpl], dt: _C_engine.Dtype) -> float:
     ]
     if not norms:
         return float("-inf")
-    joined = norms[0] if len(norms) == 1 else _C_engine.max(_C_engine.stack(norms, 0), [0], False)
+    joined = (
+        norms[0]
+        if len(norms) == 1
+        else _C_engine.max(_C_engine.stack(norms, 0), [0], False)
+    )
     return float(_wrap(joined).item())
 
 
-def _lp_norm(impls: list[_C_engine.TensorImpl], dt: _C_engine.Dtype, norm_type: float) -> float:
+def _lp_norm(
+    impls: list[_C_engine.TensorImpl], dt: _C_engine.Dtype, norm_type: float
+) -> float:
     use_sq = norm_type == 2.0 and dt != _D.C64
     norms = [
         _C_engine.sum(
-            _C_engine.square(_as_work(i, dt))
-            if use_sq
-            else _C_engine.pow_scalar(_C_engine.abs(_as_work(i, dt)), norm_type),
+            (
+                _C_engine.square(_as_work(i, dt))
+                if use_sq
+                else _C_engine.pow_scalar(_C_engine.abs(_as_work(i, dt)), norm_type)
+            ),
             [],
             False,
         )
         for i in impls
     ]
-    acc = norms[0] if len(norms) == 1 else _C_engine.sum(_C_engine.stack(norms, 0), [0], False)
+    acc = (
+        norms[0]
+        if len(norms) == 1
+        else _C_engine.sum(_C_engine.stack(norms, 0), [0], False)
+    )
     val = float(_wrap(acc).item())
     return math.sqrt(val) if use_sq else val ** (1.0 / norm_type)
 
@@ -67,7 +81,9 @@ def _total_norm(
     """The :math:`\\ell_p` norm of ``impls`` taken jointly, as a Python float."""
     dt = _norm_work_dtype(impls, _C_engine.amp_is_active())
     total_norm = (
-        _inf_norm(impls, dt) if norm_type == math.inf else _lp_norm(impls, dt, norm_type)
+        _inf_norm(impls, dt)
+        if norm_type == math.inf
+        else _lp_norm(impls, dt, norm_type)
     )
     if error_if_nonfinite and (math.isnan(total_norm) or math.isinf(total_norm)):
         raise RuntimeError(
@@ -93,7 +109,9 @@ def _scale_clipped_grads(
             coef = _C_engine.full([], clip_coef, w_dt, g_w.device)
             coefs[key] = coef
         scaled = _C_engine.mul(g_w, coef)
-        p._impl.set_grad(scaled if scaled.dtype == g_dt else _C_engine.astype(scaled, g_dt))
+        p._impl.set_grad(
+            scaled if scaled.dtype == g_dt else _C_engine.astype(scaled, g_dt)
+        )
 
 
 def clip_grad_norm_(
@@ -317,7 +335,9 @@ def get_total_norm(
     """
     del foreach  # reference-signature parity
     items: list[Tensor | None] = (
-        [cast("Tensor", tensors)] if _promotion.try_unwrap(tensors) is not None else list(tensors)
+        [cast("Tensor", tensors)]
+        if _promotion.try_unwrap(tensors) is not None
+        else list(tensors)
     )
     impls = [_unwrap(t) for t in items if t is not None]
     if not impls:

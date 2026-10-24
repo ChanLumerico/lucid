@@ -196,4 +196,3 @@ def test_tensor_divide_and_true_divide_methods(ref: ModuleType, device: str) -> 
     b.divide_(2, rounding_mode="trunc")
     rb.divide_(2, rounding_mode="trunc")
     assert b.tolist() == rb.tolist()
-

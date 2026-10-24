@@ -320,7 +320,11 @@ def _to(
             return self
 
     target_device, target_dtype, copy = _resolve_to_targets(self, args, kwargs)
-    if target_device == self._impl.device and target_dtype == self._impl.dtype and not copy:
+    if (
+        target_device == self._impl.device
+        and target_dtype == self._impl.dtype
+        and not copy
+    ):
         return self
     return _transfer_impl(self._impl, target_device, target_dtype)
 
@@ -520,6 +524,4 @@ def _reset_class_annotation_cell(cls: type) -> None:
     ann = getattr(cls.__dict__.get("__init__"), "__annotate__", None)
     closure = getattr(ann, "__closure__", None)
     if closure:
-        closure[0].cell_contents = {
-            "_UntypedStorage": cls.__dict__["_UntypedStorage"]
-        }
+        closure[0].cell_contents = {"_UntypedStorage": cls.__dict__["_UntypedStorage"]}

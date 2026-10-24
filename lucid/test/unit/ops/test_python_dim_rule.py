@@ -77,9 +77,26 @@ def test_an_axis_past_the_last_is_refused(ref, device, op, shape):
     call = _PAST_THE_LAST_AXIS[op]
     bad = max(len(shape), 1)
     for dim in (bad, -bad - 1):
-        with pytest.raises(IndexError, match=f"axis out of range: got {dim}|Dimension specified as {dim}|FFT axis {dim}"):
+        with pytest.raises(
+            IndexError,
+            match=f"axis out of range: got {dim}|Dimension specified as {dim}|FFT axis {dim}",
+        ):
             call(lucid, lucid.zeros(shape, device=device), dim)
-        if op in ("split", "chunk", "glu", "diff", "Tensor.diff", "unique", "unique_consecutive", "fft", "fftshift") and not shape:
+        if (
+            op
+            in (
+                "split",
+                "chunk",
+                "glu",
+                "diff",
+                "Tensor.diff",
+                "unique",
+                "unique_consecutive",
+                "fft",
+                "fftshift",
+            )
+            and not shape
+        ):
             continue
         with pytest.raises(IndexError):
             call(ref, ref.zeros(shape), dim)
@@ -364,4 +381,3 @@ def test_matrix_norm_refuses_out_of_range_dims(ref, device) -> None:
             lucid.linalg.matrix_norm(x, dim=bad_dim)
         with pytest.raises(IndexError):
             ref.linalg.matrix_norm(xr, dim=bad_dim)
-

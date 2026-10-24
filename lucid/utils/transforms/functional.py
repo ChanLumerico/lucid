@@ -252,9 +252,7 @@ def pad(
         pad_spec = (padding, padding, padding, padding)
     else:
         pad_spec = padding
-    return F.pad(
-        img, pad_spec, mode=mode, value=value if mode == "constant" else None
-    )
+    return F.pad(img, pad_spec, mode=mode, value=value if mode == "constant" else None)
 
 
 def normalize(

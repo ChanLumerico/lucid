@@ -355,9 +355,7 @@ def _pinned_resolver(
     return lambda: impl
 
 
-def _param_resolver(
-    params: list[Tensor], i: int
-) -> Callable[[], _C_engine.TensorImpl]:
+def _param_resolver(params: list[Tensor], i: int) -> Callable[[], _C_engine.TensorImpl]:
     return lambda: _unwrap_hot(params[i])
 
 
@@ -694,7 +692,9 @@ class _FusedStep:
             import lucid as _lucid
 
             p0 = self._copt._params[0]
-            self._scale_holder = _lucid.zeros((), dtype=_lucid.float32, device=p0.device)
+            self._scale_holder = _lucid.zeros(
+                (), dtype=_lucid.float32, device=p0.device
+            )
             self._inv_scale_holder = _lucid.zeros(
                 (), dtype=_lucid.float32, device=p0.device
             )
@@ -704,9 +704,7 @@ class _FusedStep:
         self._refresh_scaler_scalars()
         return True
 
-    def _resolve_members(
-        self, tracer: Tracer, loss_for_bwd: Tensor
-    ) -> tuple[int, ...]:
+    def _resolve_members(self, tracer: Tracer, loss_for_bwd: Tensor) -> tuple[int, ...]:
         """Find participating parameters that require grad and reach the loss."""
         from lucid._dispatch import _unwrap
 
@@ -823,14 +821,12 @@ class _FusedStep:
 
                     found_inf_f32: Tensor | None = None
                     if scaler_enabled:
-                        opt_outputs, slots, found_inf_f32 = (
-                            self._emit_scaled_update(
-                                ghost_grads,
-                                layout,
-                                vectors,
-                                flags,
-                                loss_for_bwd,
-                            )
+                        opt_outputs, slots, found_inf_f32 = self._emit_scaled_update(
+                            ghost_grads,
+                            layout,
+                            vectors,
+                            flags,
+                            loss_for_bwd,
                         )
                     else:
                         opt_outputs, slots = copt._emit(
@@ -932,9 +928,7 @@ class _FusedStep:
         if traced.unscaled_loss_tid is not None:
             traced.output_target_ids.append(traced.unscaled_loss_tid)
 
-    def _compile_fused_executable(
-        self, traced: _FusedTrace
-    ) -> CompiledExecutable:
+    def _compile_fused_executable(self, traced: _FusedTrace) -> CompiledExecutable:
         """Lower the combined forward+backward+optimizer trace into an executable."""
         import os as _os
 
@@ -994,8 +988,7 @@ class _FusedStep:
         params = copt._params
         ext = traced.ext
         impl_to_resolver: dict[int, Callable[[], _C_engine.TensorImpl]] = {
-            id(_unwrap_hot(p)): _param_resolver(params, i)
-            for i, p in enumerate(params)
+            id(_unwrap_hot(p)): _param_resolver(params, i) for i, p in enumerate(params)
         }
         for i in traced.members:
             for name, buf in copt._state[i].items():

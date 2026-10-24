@@ -285,8 +285,12 @@ def _fill(
     if dtype in _FLOATING and isinstance(value, (bool, int, float)):
         return _C_engine.full(shape, float(value), dtype, device)
     v = _coerce(value, dtype)
-    if not shape or isinstance(v, complex) or (
-        isinstance(v, int) and not isinstance(v, bool) and abs(v) > _EXACT_IN_DOUBLE
+    if (
+        not shape
+        or isinstance(v, complex)
+        or (
+            isinstance(v, int) and not isinstance(v, bool) and abs(v) > _EXACT_IN_DOUBLE
+        )
     ):
         scalar = _scalar_impl(v, dtype, device)
         return (

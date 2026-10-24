@@ -162,4 +162,3 @@ def test_the_running_stats_match_eager(entry: str, device: str, norm: str) -> No
     assert lucid.allclose(ran.running_mean, ref.running_mean, atol=1e-5)
     assert lucid.allclose(ran.running_var, ref.running_var, atol=1e-4)
     assert ran.num_batches_tracked.item() == ref.num_batches_tracked.item()
-

@@ -137,9 +137,9 @@ def test_synthetic_move_and_verify_covers_all_cpp_constructs(tmp_path: Path) -> 
     assert keep_only is True
 
     # Check nested return type qualification and default-arg stripping
-    indexing_cpp = (
-        work_dir / "lucid/_C/backend/cpu/methods/Indexing.cpp"
-    ).read_text(encoding="utf-8")
+    indexing_cpp = (work_dir / "lucid/_C/backend/cpu/methods/Indexing.cpp").read_text(
+        encoding="utf-8"
+    )
     assert "CpuBackend::AxisScatterWalk CpuBackend::axis_scatter_walk(" in indexing_cpp
     assert "static " not in indexing_cpp
 
@@ -207,7 +207,9 @@ def test_parse_header_rejects_class_scope_ifdef_and_raw_string() -> None:
         "class CpuBackend final : public IBackend {\npublic:",
         "class CpuBackend final : public IBackend {\npublic:\n#ifdef FOO\n#endif",
     )
-    with pytest.raises(ValueError, match="Preprocessor directive #ifdef at class scope"):
+    with pytest.raises(
+        ValueError, match="Preprocessor directive #ifdef at class scope"
+    ):
         backend_split.parse_header(with_class_ifdef, "CpuBackend")
 
     with_raw_str = _SYNTHETIC_CPU_HEADER.replace(
@@ -224,9 +226,7 @@ def test_check_dtype_dispatch_unit_key_tracks_moved_methods() -> None:
         == check_dtype_dispatch._CPU
     )
     assert (
-        check_dtype_dispatch._known_unit(
-            "lucid/_C/backend/cpu/methods/Indexing.cpp"
-        )
+        check_dtype_dispatch._known_unit("lucid/_C/backend/cpu/methods/Indexing.cpp")
         == check_dtype_dispatch._CPU
     )
     assert (

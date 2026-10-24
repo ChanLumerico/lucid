@@ -23,13 +23,33 @@ from lucid._dtype import bfloat16 as _bfloat16, dtype as _dtype, finfo as _finfo
 from lucid._dtype import float16 as _float16, float32 as _float32
 from lucid._types import Reduction, ReductionKL
 from lucid.nn.functional._loss_checks import (
-    _REDUCTIONS, _broadcast_operands, _broadcast_shape, _cast,
-    _check_broadcasts_to, _check_class_target, _check_class_weight,
-    _check_dtypes, _check_kind, _check_reduction as _check_reduction,
-    _check_same_rank, _check_target, _check_unit_interval, _loss_dtype,
-    _num_classes, _operands, _pair_operands, _shape,
+    _REDUCTIONS,
+    _broadcast_operands,
+    _broadcast_shape,
+    _cast,
+    _check_broadcasts_to,
+    _check_class_target,
+    _check_class_weight,
+    _check_dtypes,
+    _check_kind,
+    _check_reduction as _check_reduction,
+    _check_same_rank,
+    _check_target,
+    _check_unit_interval,
+    _loss_dtype,
+    _num_classes,
+    _operands,
+    _pair_operands,
+    _shape,
 )
-from lucid.nn.functional._index_checks import _ClassTargets, _check_ctc, _class_index, _class_targets, _host_read, _poison
+from lucid.nn.functional._index_checks import (
+    _ClassTargets,
+    _check_ctc,
+    _class_index,
+    _class_targets,
+    _host_read,
+    _poison,
+)
 from lucid.nn.functional._inplace import _keep_in_graph
 
 if TYPE_CHECKING:
@@ -44,8 +64,11 @@ _KERNEL_REDUCTION: dict[str, int] = {"none": 0, "mean": 1, "sum": 2}
 
 
 def _reduce(
-    t: Tensor, reduction: str, out_dtype: _dtype | None = None,
-    *, weight: Tensor | None = None,
+    t: Tensor,
+    reduction: str,
+    out_dtype: _dtype | None = None,
+    *,
+    weight: Tensor | None = None,
 ) -> Tensor:
     """Apply ``reduction`` to the per-element losses ``t`` — the one place a
     loss reduces.
@@ -123,7 +146,10 @@ def _check_same_weight(weight: Tensor | None, x: Tensor, op: str) -> None:
 
 
 def mse_loss(
-    input: Tensor, target: Tensor, reduction: Reduction = "mean", weight: Tensor | None = None
+    input: Tensor,
+    target: Tensor,
+    reduction: Reduction = "mean",
+    weight: Tensor | None = None,
 ) -> Tensor:
     r"""Mean-squared-error (L2) loss between input and target.
 
@@ -201,7 +227,10 @@ def mse_loss(
 
 
 def l1_loss(
-    input: Tensor, target: Tensor, reduction: Reduction = "mean", weight: Tensor | None = None
+    input: Tensor,
+    target: Tensor,
+    reduction: Reduction = "mean",
+    weight: Tensor | None = None,
 ) -> Tensor:
     r"""Mean-absolute-error (L1) loss between input and target.
 
@@ -259,7 +288,9 @@ def l1_loss(
     _check_same_weight(weight, input, "l1_loss")
     x, target = _operands("l1_loss", input, target)
     _check_target(x, target, "l1_loss")
-    diff: _C_engine.TensorImpl = _C_engine.abs(_C_engine.sub(_unwrap(x), _unwrap(target)))
+    diff: _C_engine.TensorImpl = _C_engine.abs(
+        _C_engine.sub(_unwrap(x), _unwrap(target))
+    )
     if weight is not None:
         return _reduce(_wrap(diff) * weight, reduction, weight=weight)
     return _reduce(_wrap(diff), reduction)
@@ -271,22 +302,35 @@ def _check_beta(beta: float, op: str = "smooth_l1_loss") -> None:
 
 
 def _check_delta(delta: float, op: str = "huber_loss") -> None:
-    if isinstance(delta := _promotion.as_number(delta), bool) or not isinstance(delta, (int, float)):
-        raise TypeError(f"{op}: delta must be a float or int, got {type(delta).__name__}")
+    if isinstance(delta := _promotion.as_number(delta), bool) or not isinstance(
+        delta, (int, float)
+    ):
+        raise TypeError(
+            f"{op}: delta must be a float or int, got {type(delta).__name__}"
+        )
     if not delta > 0.0:
         raise ValueError(f"{op}: delta must be positive, got {delta!r}")
 
 
 def _check_label_smoothing(label_smoothing: float, op: str = "cross_entropy") -> None:
-    if isinstance(label_smoothing := _promotion.as_number(label_smoothing), bool) or not 0.0 <= label_smoothing <= 1.0:
-        raise ValueError(f"{op}: label_smoothing must be in [0, 1], got {label_smoothing!r}")
+    if (
+        isinstance(label_smoothing := _promotion.as_number(label_smoothing), bool)
+        or not 0.0 <= label_smoothing <= 1.0
+    ):
+        raise ValueError(
+            f"{op}: label_smoothing must be in [0, 1], got {label_smoothing!r}"
+        )
 
 
-def _check_multi_margin(p: int, weight: Tensor | None, op: str = "multi_margin_loss") -> None:
+def _check_multi_margin(
+    p: int, weight: Tensor | None, op: str = "multi_margin_loss"
+) -> None:
     if isinstance(p := _promotion.as_number(p), bool) or (p != 1 and p != 2):
         raise ValueError(f"{op}: only p == 1 and p == 2 supported, got {p!r}")
     if weight is not None and weight.ndim != 1:
-        raise ValueError(f"{op}: expected weight to be None or 1D tensor, got {weight.ndim}D")
+        raise ValueError(
+            f"{op}: expected weight to be None or 1D tensor, got {weight.ndim}D"
+        )
 
 
 def _check_triplet_margin(margin: float, op: str) -> None:
@@ -381,8 +425,11 @@ def smooth_l1_loss(
 
 
 def huber_loss(
-    input: Tensor, target: Tensor, reduction: Reduction = "mean",
-    delta: float = 1.0, weight: Tensor | None = None,
+    input: Tensor,
+    target: Tensor,
+    reduction: Reduction = "mean",
+    delta: float = 1.0,
+    weight: Tensor | None = None,
 ) -> Tensor:
     r"""Huber loss — robust regression with a tunable transition point.
 
@@ -461,8 +508,11 @@ def huber_loss(
 
 
 def _class_nll(
-    log_p: Tensor, targets: _ClassTargets, weight: Tensor | None,
-    reduction: str, label_smoothing: float,
+    log_p: Tensor,
+    targets: _ClassTargets,
+    weight: Tensor | None,
+    reduction: str,
+    label_smoothing: float,
 ) -> Tensor:
     """Negative log-likelihood of integer class targets — the shared body of
     :func:`cross_entropy` and :func:`nll_loss`.
@@ -500,7 +550,9 @@ def _class_nll(
     # ``None`` when every sample counts once.
     sample_weight: Tensor | None = None
     if weight is not None:
-        sample_weight = _lucid.index_select(weight, 0, safe.reshape(-1)).reshape(list(safe.shape))
+        sample_weight = _lucid.index_select(weight, 0, safe.reshape(-1)).reshape(
+            list(safe.shape)
+        )
     if keep is not None:
         sample_weight = keep if sample_weight is None else sample_weight * keep
     if sample_weight is not None:
@@ -547,8 +599,12 @@ def _weighted_mean(nll: Tensor, sample_weight: Tensor) -> Tensor:
 
 
 def cross_entropy(
-    input: Tensor, target: Tensor, weight: Tensor | None = None,
-    ignore_index: int = -100, reduction: Reduction = "mean", label_smoothing: float = 0.0,
+    input: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
+    ignore_index: int = -100,
+    reduction: Reduction = "mean",
+    label_smoothing: float = 0.0,
 ) -> Tensor:
     r"""Cross-entropy loss for multi-class classification.
 
@@ -665,17 +721,24 @@ def cross_entropy(
     out: Tensor
     if soft:
         # Class dim is 1 for both (N, C) and (N, C, *) inputs.
-        out = _soft_target_nll(_log_softmax(x, dim=1), target, weight, reduction, label_smoothing)
+        out = _soft_target_nll(
+            _log_softmax(x, dim=1), target, weight, reduction, label_smoothing
+        )
     else:
         # The targets are checked before the first kernel runs.
         targets = _class_targets(target, num_classes, op, ignore_index=ignore_index)
-        out = _class_nll(_log_softmax(x, dim=1), targets, weight, reduction, label_smoothing)
+        out = _class_nll(
+            _log_softmax(x, dim=1), targets, weight, reduction, label_smoothing
+        )
     return out.reshape([]) if unbatched and reduction == "none" else out
 
 
 def _soft_target_nll(
-    log_p: Tensor, target: Tensor, weight: Tensor | None,
-    reduction: str, label_smoothing: float,
+    log_p: Tensor,
+    target: Tensor,
+    weight: Tensor | None,
+    reduction: str,
+    label_smoothing: float,
 ) -> Tensor:
     """Cross-entropy against per-class probabilities ``target`` of the
     shape of ``log_p``: ``-sum_c w_c y_c log p_c`` per sample, and a
@@ -691,8 +754,11 @@ def _soft_target_nll(
 
 
 def nll_loss(
-    input: Tensor, target: Tensor, weight: Tensor | None = None,
-    ignore_index: int = -100, reduction: Reduction = "mean",
+    input: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
+    ignore_index: int = -100,
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Negative log-likelihood loss for multi-class classification.
 
@@ -763,11 +829,16 @@ def nll_loss(
         target = target.reshape([1])
     targets = _class_targets(target, num_classes, op, ignore_index=ignore_index)
     out: Tensor = _class_nll(x, targets, weight, reduction, 0.0)
-    return _keep_in_graph(out.reshape([]) if unbatched and reduction == "none" else out, input)
+    return _keep_in_graph(
+        out.reshape([]) if unbatched and reduction == "none" else out, input
+    )
 
 
 def binary_cross_entropy(
-    input: Tensor, target: Tensor, weight: Tensor | None = None, reduction: Reduction = "mean"
+    input: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Binary cross-entropy between predicted probabilities and targets.
 
@@ -889,8 +960,11 @@ def binary_cross_entropy(
 
 
 def binary_cross_entropy_with_logits(
-    input: Tensor, target: Tensor, weight: Tensor | None = None,
-    reduction: Reduction = "mean", pos_weight: Tensor | None = None,
+    input: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
+    reduction: Reduction = "mean",
+    pos_weight: Tensor | None = None,
 ) -> Tensor:
     r"""Binary cross-entropy from raw logits (numerically stable).
 
@@ -985,8 +1059,11 @@ def binary_cross_entropy_with_logits(
 
 
 def kl_div(
-    input: Tensor, target: Tensor, size_average: bool | None = None,
-    reduction: ReductionKL = "mean", log_target: bool = False,
+    input: Tensor,
+    target: Tensor,
+    size_average: bool | None = None,
+    reduction: ReductionKL = "mean",
+    log_target: bool = False,
 ) -> Tensor:
     r"""Kullback-Leibler divergence between two distributions.
 
@@ -1085,8 +1162,14 @@ def kl_div(
 
 
 def triplet_margin_loss(
-    anchor: Tensor, positive: Tensor, negative: Tensor, margin: float = 1.0,
-    p: float = 2.0, eps: float = 1e-6, swap: bool = False, reduction: Reduction = "mean",
+    anchor: Tensor,
+    positive: Tensor,
+    negative: Tensor,
+    margin: float = 1.0,
+    p: float = 2.0,
+    eps: float = 1e-6,
+    swap: bool = False,
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Triplet margin loss for metric learning.
 
@@ -1171,14 +1254,21 @@ def triplet_margin_loss(
         d_pn = _unwrap(pairwise_distance(positive, negative, p=p, eps=eps))
         d_an = _C_engine.minimum(d_an, d_pn)
     margin_t = _C_engine.full(d_ap.shape, margin, d_ap.dtype, d_ap.device)
-    loss = _C_engine.clip(_C_engine.add(_C_engine.sub(d_ap, d_an), margin_t), 0.0, math.inf)
+    loss = _C_engine.clip(
+        _C_engine.add(_C_engine.sub(d_ap, d_an), margin_t), 0.0, math.inf
+    )
     return _reduce(_wrap(loss), reduction)
 
 
 def triplet_margin_with_distance_loss(
-    anchor: Tensor, positive: Tensor, negative: Tensor,
-    *, distance_function: object | None = None, margin: float = 1.0,
-    swap: bool = False, reduction: Reduction = "mean",
+    anchor: Tensor,
+    positive: Tensor,
+    negative: Tensor,
+    *,
+    distance_function: object | None = None,
+    margin: float = 1.0,
+    swap: bool = False,
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Triplet margin loss with a user-supplied distance function.
 
@@ -1249,7 +1339,9 @@ def triplet_margin_with_distance_loss(
 
     op = "triplet_margin_with_distance_loss"
     _check_reduction(reduction, op)
-    _check_same_rank(op, broadcast=False, anchor=anchor, positive=positive, negative=negative)
+    _check_same_rank(
+        op, broadcast=False, anchor=anchor, positive=positive, negative=negative
+    )
     df: object = distance_function
     if df is None:
         # A distance function of the caller's own decides which dtypes it
@@ -1270,8 +1362,11 @@ def triplet_margin_with_distance_loss(
 
 
 def cosine_embedding_loss(
-    input1: Tensor, input2: Tensor, target: Tensor,
-    margin: float = 0.0, reduction: Reduction = "mean",
+    input1: Tensor,
+    input2: Tensor,
+    target: Tensor,
+    margin: float = 0.0,
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Cosine embedding loss for pairwise similarity learning.
 
@@ -1364,8 +1459,11 @@ def cosine_embedding_loss(
 
 
 def margin_ranking_loss(
-    input1: Tensor, input2: Tensor, target: Tensor,
-    margin: float = 0.0, reduction: Reduction = "mean",
+    input1: Tensor,
+    input2: Tensor,
+    target: Tensor,
+    margin: float = 0.0,
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Pairwise ranking hinge loss.
 
@@ -1498,8 +1596,12 @@ def hinge_embedding_loss(
 
 
 def poisson_nll_loss(
-    input: Tensor, target: Tensor, log_input: bool = True,
-    full: bool = False, eps: float = 1e-8, reduction: Reduction = "mean",
+    input: Tensor,
+    target: Tensor,
+    log_input: bool = True,
+    full: bool = False,
+    eps: float = 1e-8,
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Poisson negative log-likelihood loss for count regression.
 
@@ -1628,8 +1730,12 @@ def _align_gaussian_var(x: Tensor, var: Tensor | float) -> Tensor:
 
 
 def gaussian_nll_loss(
-    input: Tensor, target: Tensor, var: Tensor | float,
-    full: bool = False, eps: float = 1e-6, reduction: Reduction = "mean",
+    input: Tensor,
+    target: Tensor,
+    var: Tensor | float,
+    full: bool = False,
+    eps: float = 1e-6,
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Gaussian negative log-likelihood for heteroscedastic regression.
 
@@ -1736,9 +1842,13 @@ def gaussian_nll_loss(
 
 
 def ctc_loss(
-    log_probs: Tensor, targets: Tensor,
-    input_lengths: Tensor | Sequence[int], target_lengths: Tensor | Sequence[int],
-    blank: int = 0, reduction: Reduction = "mean", zero_infinity: bool = False,
+    log_probs: Tensor,
+    targets: Tensor,
+    input_lengths: Tensor | Sequence[int],
+    target_lengths: Tensor | Sequence[int],
+    blank: int = 0,
+    reduction: Reduction = "mean",
+    zero_infinity: bool = False,
 ) -> Tensor:
     r"""Connectionist Temporal Classification (CTC) loss.
 
@@ -1839,7 +1949,11 @@ def ctc_loss(
     _check_dtypes(op, log_probs=log_probs)
 
     def _as_lengths(v: Tensor | Sequence[int]) -> Tensor:
-        return v if isinstance(v, _lucid.Tensor) else _lucid.tensor(list(v), dtype=_lucid.int64)
+        return (
+            v
+            if isinstance(v, _lucid.Tensor)
+            else _lucid.tensor(list(v), dtype=_lucid.int64)
+        )
 
     input_lengths = _as_lengths(input_lengths)
     target_lengths = _as_lengths(target_lengths)
@@ -1857,7 +1971,9 @@ def ctc_loss(
     # ``input_lengths`` past the input, a ``target_lengths`` past its row
     # and a label or ``blank`` outside the classes were all read as given,
     # past the end of their axis.
-    rows: list[int] = _check_ctc(log_probs, targets, input_lengths, target_lengths, blank, op)
+    rows: list[int] = _check_ctc(
+        log_probs, targets, input_lengths, target_lengths, blank, op
+    )
 
     tgt_impl = _unwrap(targets)
     if len(list(tgt_impl.shape)) > 1:
@@ -1872,7 +1988,11 @@ def ctc_loss(
 
     # Ensure integer dtype for lengths and targets.
     def _to_i32(impl: _C_engine.TensorImpl) -> _C_engine.TensorImpl:
-        return impl if getattr(impl, "dtype", None) == _C_engine.I32 else _C_engine.astype(impl, _C_engine.I32)
+        return (
+            impl
+            if getattr(impl, "dtype", None) == _C_engine.I32
+            else _C_engine.astype(impl, _C_engine.I32)
+        )
 
     tgt_impl = _to_i32(tgt_impl)
     il_impl = _to_i32(_unwrap(input_lengths))
@@ -1901,8 +2021,12 @@ def ctc_loss(
 
 
 def multi_margin_loss(
-    input: Tensor, target: Tensor, p: int = 1, margin: float = 1.0,
-    weight: Tensor | None = None, reduction: Reduction = "mean",
+    input: Tensor,
+    target: Tensor,
+    p: int = 1,
+    margin: float = 1.0,
+    weight: Tensor | None = None,
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Multi-class hinge (margin) loss — Crammer-Singer SVM objective.
 
@@ -2190,7 +2314,10 @@ def soft_margin_loss(
 
 
 def multilabel_soft_margin_loss(
-    input: Tensor, target: Tensor, weight: Tensor | None = None, reduction: Reduction = "mean"
+    input: Tensor,
+    target: Tensor,
+    weight: Tensor | None = None,
+    reduction: Reduction = "mean",
 ) -> Tensor:
     r"""Per-class logistic loss averaged over labels (multi-label BCE).
 

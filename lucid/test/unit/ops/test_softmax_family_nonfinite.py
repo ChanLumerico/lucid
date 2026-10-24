@@ -132,7 +132,12 @@ def test_gradient_matches_reference(ref, device, dtype, op, row, layout):
 def test_cross_entropy_nonfinite_and_parallel_layer_norm_determinism(ref) -> None:
     """Guard for LCD-154: cross_entropy on non-finite rows and bitwise-deterministic
     multi-chunk CPU layer_norm / rms_norm backward."""
-    logits = [[_INF, 1.0, 2.0], [-_INF, -_INF, -_INF], [-_INF, 1.0, 2.0], [1.0, 2.0, 3.0]]
+    logits = [
+        [_INF, 1.0, 2.0],
+        [-_INF, -_INF, -_INF],
+        [-_INF, 1.0, 2.0],
+        [1.0, 2.0, 3.0],
+    ]
     target = [1, 0, 2, 1]
     x = lucid.tensor(logits, dtype=lucid.float32, requires_grad=True)
     t = lucid.tensor(target, dtype=lucid.int64)

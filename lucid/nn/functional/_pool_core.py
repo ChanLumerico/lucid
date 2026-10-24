@@ -369,7 +369,9 @@ def _adaptive_pool(
         x = _wrap(xi)
         xb, unbatched = _add_batch_axis(x, n)
         if xb.ndim != n + 2:
-            raise ValueError(f"{op}: expected {n + 1}D or {n + 2}D input, got {x.ndim}D")
+            raise ValueError(
+                f"{op}: expected {n + 1}D or {n + 2}D input, got {x.ndim}D"
+            )
         spatial = tuple(int(s) for s in xb.shape[-n:])
         sizes = _adaptive_size(output_size, spatial, op)
         if 0 in sizes:

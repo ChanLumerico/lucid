@@ -1105,7 +1105,9 @@ class KLDivLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return kl_div(input, target, reduction=self.reduction, log_target=self.log_target)
+        return kl_div(
+            input, target, reduction=self.reduction, log_target=self.log_target
+        )
 
     @override
     def extra_repr(self) -> str:
@@ -1562,7 +1564,9 @@ class HingeEmbeddingLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return hinge_embedding_loss(input, target, self.margin, reduction=self.reduction)
+        return hinge_embedding_loss(
+            input, target, self.margin, reduction=self.reduction
+        )
 
     @override
     def extra_repr(self) -> str:
@@ -1806,7 +1810,9 @@ class GaussianNLLLoss(Module):
         Tensor
             Scalar loss (or unreduced tensor depending on ``reduction``).
         """
-        return gaussian_nll_loss(input, target, var, self.full, self.eps, self.reduction)
+        return gaussian_nll_loss(
+            input, target, var, self.full, self.eps, self.reduction
+        )
 
     @override
     def extra_repr(self) -> str:
