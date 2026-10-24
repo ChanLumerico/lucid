@@ -5,6 +5,7 @@ nn.Module: base class for all neural network layers.
 import warnings
 import weakref
 from collections import OrderedDict
+from collections.abc import Mapping
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -112,6 +113,19 @@ def _tensors_replaced(module: Module) -> None:
             wrapper._tensors_replaced()
 
 
+def _refuse_unless_none(value: object, name: str, kind: str, expected: str) -> None:
+    """Reject assigning ``value`` to the registered ``kind`` slot ``name``.
+
+    Only ``None`` — which empties the slot — or a value of the slot's own
+    kind may go there; the kind is checked by the caller first.
+    """
+    if value is not None:
+        raise TypeError(
+            f"cannot assign '{type(value).__name__}' as {kind} '{name}' "
+            f"({expected} or None expected)"
+        )
+
+
 class Module:
     """Base class for all neural network modules.
 
@@ -123,17 +137,23 @@ class Module:
     **Attribute routing**: Setting an attribute follows this priority order:
 
     1. If the value is a :class:`~lucid.nn.Parameter` → stored in ``_parameters``.
-    2. If the value is a :class:`Module` → stored in ``_modules``.
-    3. If the name is *already a registered buffer* and the value is a
-       :class:`~lucid.Tensor` or ``None`` → stays in ``_buffers``.
-    4. Otherwise → plain Python attribute.
+    2. If the name is a registered parameter → the value must be ``None``,
+       which empties the slot; anything else is a ``TypeError``.
+    3. If the value is a :class:`Module` → stored in ``_modules``.
+    4. If the name is a registered submodule → the value must be ``None``.
+    5. If the name is a registered buffer → the value must be a
+       :class:`~lucid.Tensor` or ``None``, and the buffer keeps its
+       persistence.
+    6. Otherwise → plain Python attribute.
 
     To register a non-parameter tensor (e.g. a running mean), call
-    :meth:`register_buffer` explicitly.  Rule 3 is what makes the
-    registration survive: assigning to a buffer updates it rather than
-    demoting it to a plain attribute, so it stays in ``state_dict`` and
-    keeps moving with :meth:`to`.  Assigning something that is neither a
-    tensor nor ``None`` does un-register it, which is the escape hatch.
+    :meth:`register_buffer` explicitly.  Assigning to a name that is
+    already registered replaces the value *in its slot*: the name keeps
+    its position in :meth:`named_parameters`, :meth:`named_buffers`,
+    :meth:`named_children` and :meth:`state_dict`, so
+    ``layer.weight += 1`` under :func:`lucid.no_grad` leaves the order an
+    optimizer or a position-paired average was built from untouched.  A
+    name leaves its registry through ``del``, not through assignment.
 
     Examples
     --------
@@ -428,21 +448,77 @@ class Module:
 
     @override
     def __setattr__(self, name: str, value: object) -> None:
-        """Attribute setter; routes Tensor / Parameter / Module assignments to the proper internal registries."""
+        """Attribute setter; routes Parameter / Module / buffer assignments into their registries.
+
+        The rules are *Attribute routing* on the class.  A name already in
+        a registry is written over in its slot, never deleted and re-added:
+        re-adding moved it to the end, so ``weight += 1`` under ``no_grad``
+        — which Python spells as assigning the same Parameter back — turned
+        a Linear's ``['weight', 'bias']`` into ``['bias', 'weight']``, and
+        whatever paired two modules' parameters by position (an EMA target,
+        an optimizer's per-parameter state, a checkpoint's key order) paired
+        the wrong tensors without a word (LCD-551).
+        """
         if not isinstance(name, str):
             raise TypeError("module attribute name must be a string")
         if "." in name:
             raise KeyError("module attribute name cannot contain '.'")
         if name == "":
             raise KeyError("module attribute name cannot be empty")
+        if self._write_traced_buffer(name, value):
+            return
 
-        # Under a compile trace, assigning a registered buffer writes into it
-        # instead of replacing it.  The executable reads the buffer it was
-        # traced against, so a replacement — spectral_norm's ``u`` / ``v``
-        # every forward, a running average kept by reassignment — left every
-        # compiled call reading the trace-time value.  Written in place, the
-        # trace records the write and the compiled call carries it back
-        # (``lucid/compile/_core/buffer_writes.py``).
+        if isinstance(value, Parameter):
+            self._vacate(name, keep=self._parameters)
+            self._parameters[name] = value
+        elif name in self._parameters:
+            _refuse_unless_none(value, name, "parameter", "Parameter")
+            self._parameters[name] = None
+        elif isinstance(value, Module):
+            self._vacate(name, keep=self._modules)
+            self._modules[name] = value
+        elif isinstance(value, _ModuleWrapper):
+            # The wrapped model joins the tree under this name — every walk
+            # (parameters, state_dict, ``.to()``, ``.train()``) reaches it as
+            # if it had been assigned bare — and the attribute, found in
+            # ``__dict__`` before ``__getattr__`` is consulted, answers with
+            # the wrapper.  Held only as a plain attribute, the model was
+            # outside the tree: an optimizer built from the parent missed
+            # its parameters and a checkpoint missed its weights.
+            self._vacate(name, keep=self._modules)
+            self._modules[name] = value.model
+            object.__setattr__(self, name, value)
+        elif name in self._modules:
+            _refuse_unless_none(value, name, "child module", "Module")
+            self.__dict__.pop(name, None)  # a compiled wrapper's
+            self._modules[name] = None
+        elif name in self._buffers:
+            # A buffer stays a buffer, with its persistence, until it is
+            # deleted: spectral_norm's power iteration and every running
+            # statistic are kept by assignment, and a buffer demoted to a
+            # plain attribute drops out of ``state_dict`` and ``.to()``.
+            # ``None`` empties the slot, the way optional statistics are
+            # spelled.
+            if value is not None and not isinstance(value, Tensor):
+                raise TypeError(
+                    f"cannot assign '{type(value).__name__}' as buffer "
+                    f"'{name}' (Tensor or None expected)"
+                )
+            self._buffers[name] = value
+        else:
+            object.__setattr__(self, name, value)
+        _tree_changed()
+
+    def _write_traced_buffer(self, name: str, value: object) -> bool:
+        """Under a compile trace, write ``value`` into buffer ``name`` in place.
+
+        The executable reads the buffer it was traced against, so a
+        replacement — spectral_norm's ``u`` / ``v`` every forward, a running
+        average kept by reassignment — left every compiled call reading the
+        trace-time value.  Written in place, the trace records the write and
+        the compiled call carries it back
+        (``lucid/compile/_core/buffer_writes.py``).  Returns whether it wrote.
+        """
         current = self._buffers.get(name)
         if (
             isinstance(value, Tensor)
@@ -454,62 +530,26 @@ class Module:
             and current.device == value.device
         ):
             current.copy_(value)
-            return
+            return True
+        return False
 
-        # Whether this name is *already* a buffer decides where a plain
-        # Tensor goes below, so it has to be read before the de-registration
-        # loop wipes the evidence.
-        was_buffer = name in self._buffers
-        was_non_persistent = name in self._non_persistent_buffers
+    def _vacate(self, name: str, keep: Mapping[str, object]) -> None:
+        """Clear ``name`` from ``__dict__`` and from every registry but ``keep``.
 
-        # Remove from existing dicts before re-routing
-        for d in (self._parameters, self._buffers, self._modules):
-            if name in d:
-                del d[name]
-        if name in self._non_persistent_buffers:
-            self._non_persistent_buffers.remove(name)
-
-        if isinstance(value, Parameter) and value._is_parameter:
-            # When promoting an attribute into ``_parameters``, also remove
-            # any plain entry from ``__dict__`` — otherwise ``self.<name>``
-            # short-circuits via ``__dict__`` and silently returns the old
-            # value.  This commonly bit ``Conv2d(bias=False)`` where
-            # ``self.bias`` was first set to ``None`` (landing in ``__dict__``)
-            # and a later ``self.bias = Parameter(...)`` failed to take effect.
-            self.__dict__.pop(name, None)
-            self._parameters[name] = value
-        elif isinstance(value, Module):
-            self.__dict__.pop(name, None)
-            self._modules[name] = value
-        elif isinstance(value, _ModuleWrapper):
-            # The wrapped model joins the tree under this name — every walk
-            # (parameters, state_dict, ``.to()``, ``.train()``) reaches it as
-            # if it had been assigned bare — and the attribute, found in
-            # ``__dict__`` before ``__getattr__`` is consulted, answers with
-            # the wrapper.  Held only as a plain attribute, the model was
-            # outside the tree: an optimizer built from the parent missed
-            # its parameters and a checkpoint missed its weights.
-            self._modules[name] = value.model
-            object.__setattr__(self, name, value)
-        elif was_buffer and (value is None or isinstance(value, Tensor)):
-            # Assigning to a registered buffer updates it; it does not
-            # un-register it.  Without this branch the de-registration
-            # above was permanent for buffers — the tensor landed in
-            # ``__dict__``, vanished from ``state_dict`` and from
-            # ``.to(device)``, and the next checkpoint silently omitted
-            # it.  ``spectral_norm`` hit exactly this: its power-iteration
-            # hook assigns ``<name>_u`` / ``<name>_v`` every forward, so
-            # the two buffers it registers were evicted immediately and
-            # ``remove_spectral_norm`` could not find them to clean up.
-            # ``None`` is allowed through because clearing a buffer while
-            # keeping the slot is how optional running stats are spelled.
-            self.__dict__.pop(name, None)
-            self._buffers[name] = value
-            if was_non_persistent:
-                self._non_persistent_buffers.add(name)
-        else:
-            object.__setattr__(self, name, value)
-        _tree_changed()
+        ``keep``'s own entry is left where it is, so the write that follows
+        replaces it in place.  ``__dict__`` is found before ``__getattr__``
+        is asked, so a plain entry left there — ``Conv2d(bias=False)`` sets
+        ``self.bias = None`` before any Parameter, a compiled submodule's
+        wrapper sits beside its model — would go on answering for the name.
+        """
+        self.__dict__.pop(name, None)
+        if keep is not self._parameters and name in self._parameters:
+            del self._parameters[name]
+        if keep is not self._buffers and name in self._buffers:
+            del self._buffers[name]
+            self._non_persistent_buffers.discard(name)
+        if keep is not self._modules and name in self._modules:
+            del self._modules[name]
 
     def __setstate__(self, state: object) -> None:
         """Restore a pickled or copied module, its registries tracked.
@@ -547,20 +587,22 @@ class Module:
 
     @override
     def __delattr__(self, name: str) -> None:
-        """Attribute deletion; mirrors :meth:`__setattr__` by removing the entry from the corresponding registry."""
+        """Attribute deletion; mirrors :meth:`__setattr__` by removing the entry from the corresponding registry.
+
+        This, not assignment, is how a name leaves its registry; assigning
+        it again afterwards registers it anew, at the end.
+        """
         if name in self._parameters:
             del self._parameters[name]
-            return
-        if name in self._buffers:
+        elif name in self._buffers:
             del self._buffers[name]
             self._non_persistent_buffers.discard(name)
-            return
-        if name in self._modules:
+        elif name in self._modules:
             del self._modules[name]
             # A wrapped model's wrapper sits in ``__dict__`` beside it.
             self.__dict__.pop(name, None)
-            return
-        object.__delattr__(self, name)
+        else:
+            object.__delattr__(self, name)
         _tree_changed()
 
     # ── parameter / module / buffer traversal ─────────────────────────────
@@ -845,10 +887,11 @@ class Module:
         if name in self._buffers:
             del self._buffers[name]
             self._non_persistent_buffers.discard(name)
-        if module is None:
-            self._modules[name] = None
-        else:
-            self._modules[name] = module
+        # Past the check above, an entry in ``__dict__`` can only be a
+        # compiled wrapper of the child being replaced, and it would go on
+        # answering for the name.
+        self.__dict__.pop(name, None)
+        self._modules[name] = module
 
     def register_module(self, name: str, module: Module | None) -> None:
         """Alias for add_module."""
