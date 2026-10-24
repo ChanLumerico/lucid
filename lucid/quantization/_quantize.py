@@ -327,8 +327,8 @@ def convert(model: nn.Module, inplace: bool = False) -> nn.Module:
     A submodule is convertible when calibration attached an
     ``activation_post_process`` to it; a small always-convert set
     (``DeQuantStub``, ``Embedding``, ``EmbeddingBag``) converts even without an
-    activation observer. Replacements are spliced in through ``_modules`` rather
-    than ``setattr`` so a ``Sequential``'s child order is preserved.
+    activation observer. Each replacement takes the slot of the child it
+    replaces, so a ``Sequential``'s child order is preserved.
 
     When ``lucid.backends.quantized.use_mlx()`` is true (the MLX quantized engine
     is present), the Linear family is routed to the real weight-only
@@ -728,9 +728,9 @@ def _convert_recursive(
             isinstance(child, always) or hasattr(child, "activation_post_process")
         )
         if convertible and build is not None:
-            # Assign through ``_modules`` (not ``setattr``) to preserve the
-            # child's position: ``Module.__setattr__`` deletes then re-adds the
-            # key, which would move it to the end and break ``Sequential`` order.
+            # Written into the child's slot, so a ``Sequential`` runs it in the
+            # same turn.  ``setattr`` keeps the slot as well since LCD-551; the
+            # direct write predates that.
             module._modules[name] = build(child)
         else:
             _convert_recursive(child, mapping, always)

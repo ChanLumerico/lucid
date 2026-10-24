@@ -703,10 +703,11 @@ class TVMForImageGeneration(ImageGenerationModel):
         decays = self._decays()
         if not decays:
             return
-        # Paired by name, not by position: re-assigning a parameter — which
-        # an in-place ``w += ...`` does through ``Module.__setattr__`` —
-        # moves it to the end of its module's registry, so two identically
-        # built networks need not list their parameters in the same order.
+        # Paired by name, not by position: the averages are separate
+        # networks, and a name is the one key both sides are sure to share —
+        # a position holds only while no edit to either tree has moved it.
+        # (An in-place ``w += ...`` once moved a parameter to the end of its
+        # registry; since LCD-551 it keeps its slot.)
         live = dict(self.tvm.named_parameters())
         with lucid.no_grad():
             for key, decay in decays.items():

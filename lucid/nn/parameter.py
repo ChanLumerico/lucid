@@ -14,9 +14,9 @@ class Parameter(Tensor):
     r"""A :class:`Tensor` subclass that :class:`Module` recognises as a learnable parameter.
 
     When an instance is bound as an attribute of a ``Module``, the module's
-    ``__setattr__`` hook detects the ``_is_parameter`` marker and routes it
-    into the module's ``_parameters`` registry instead of treating it as a
-    plain Tensor attribute.  This is what makes ``Module.parameters()`` and
+    ``__setattr__`` sees that it is a ``Parameter`` and routes it into the
+    module's ``_parameters`` registry instead of treating it as a plain
+    Tensor attribute.  This is what makes ``Module.parameters()`` and
     ``Module.named_parameters()`` discover the tensor automatically — no
     manual registration call is needed.
 
@@ -41,16 +41,18 @@ class Parameter(Tensor):
     Attributes
     ----------
     _is_parameter : bool
-        Class-level marker (always ``True``) consumed by ``Module``'s
-        attribute-binding logic.
+        Class-level marker (always ``True``; ``False`` on ``Tensor``) that
+        :mod:`lucid.serialization` reads to tell a parameter from a tensor
+        without importing :mod:`lucid.nn`.
 
     Notes
     -----
     Subclassing ``Tensor`` (rather than wrapping one) keeps every tensor
     operation usable on a ``Parameter`` without unwrap boilerplate — e.g.
     ``p + 1`` returns a ``Tensor``, while ``p.data`` and ``p.grad`` still
-    work.  The ``_is_parameter`` class attribute is the sole behavioural
-    difference visible to ``Module``.
+    work.  Being a ``Parameter`` is the sole difference visible to
+    ``Module``: a registered parameter name takes only a ``Parameter`` or
+    ``None``.
 
     Examples
     --------

@@ -36,9 +36,9 @@ def _get_module(root: nn.Module, dotted: str) -> nn.Module:
 def _set_module(root: nn.Module, dotted: str, value: nn.Module) -> None:
     """Assign ``value`` at a dotted submodule path, preserving child order.
 
-    Uses ``_modules`` directly rather than ``setattr``: ``Module.__setattr__``
-    deletes then re-adds the key (moving it to the end), which would scramble
-    ``Sequential`` execution order.
+    An existing child is written over in its slot, so ``Sequential``
+    execution order is unchanged.  ``setattr`` keeps the slot as well since
+    LCD-551; the direct ``_modules`` write predates that.
     """
     parts = dotted.split(".")
     parent: nn.Module = root
@@ -136,9 +136,8 @@ def fuse_modules(
 
     Notes
     -----
-    - Order-preserving: replacements are spliced in through ``_modules`` rather
-      than ``setattr``, so a ``Sequential``'s execution order is unchanged
-      (``setattr`` would move a re-added key to the end).
+    - Order-preserving: each replacement takes the slot of the module it
+      replaces, so a ``Sequential``'s execution order is unchanged.
     - The trailing members become ``Identity`` rather than being deleted, so any
       hand-written ``forward`` that still calls them keeps working.
     - This is the **eval / static-PTQ** fusion. For quantization-aware training
